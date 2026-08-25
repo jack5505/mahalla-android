@@ -80,11 +80,23 @@ jobs:
       - name: Gradle (кэш)
         uses: gradle/actions/setup-gradle@v5
 
+      # 🔧 Опционально: запустить эмулятор для инструментальных тестов
+      # (раскомментируйте, если планируете использовать connectedAndroidTest)
+      # - name: Run Android Emulator
+      #   uses: reactivecircus/android-emulator-runner@v2
+      #   with:
+      #     api-level: 35
+      #     target: google_apis
+      #     arch: x86_64
+      #     profile: Pixel 6
+      #     script: echo "Emulator is ready"
+
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Явно фиксируем модель Opus 5 (валидный id для API, без тега [1m]).
-          # Прошлый прогон падал сразу (is_error, $0), т.к. использовался
-          # claude-opus-5[1m] — тег [1m] невалиден для API.
-          claude_args: "--model claude-opus-5"
+          # Явно фиксируем модель Opus 5 (валидный id для API).
+          # Разрешаем только необходимые Gradle-команды для безопасности.
+          claude_args: |
+            --model "claude-opus-5"
+            --allowedTools "Bash(gradlew build),Bash(gradlew test),Bash(gradlew connectedAndroidTest),Bash(gradlew assembleDebug),Bash(gradlew lint),Bash(gradlew detekt),Bash(gradlew ktlintCheck)"
