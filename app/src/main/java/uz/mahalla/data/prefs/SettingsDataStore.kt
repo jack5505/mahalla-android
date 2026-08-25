@@ -1,0 +1,44 @@
+package uz.mahalla.data.prefs
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import uz.mahalla.core.locale.AppLanguage
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Настройки приложения в DataStore (эпик 1.4): язык, тема, флаг онбординга,
+ * признак настроенного PIN.
+ */
+@Singleton
+class SettingsDataStore @Inject constructor(
+    private val dataStore: DataStore<Preferences>,
+) {
+
+    val settings: Flow<AppSettings> = dataStore.data.map { preferences ->
+        AppSettings(
+            language = AppLanguage.fromTag(preferences[PreferenceKeys.Language]),
+            themeMode = ThemeMode.fromStoredValue(preferences[PreferenceKeys.ThemeMode]),
+            onboardingCompleted = preferences[PreferenceKeys.OnboardingCompleted] ?: false,
+            pinConfigured = preferences[PreferenceKeys.PinHash] != null,
+        )
+    }
+
+    suspend fun current(): AppSettings = settings.first()
+
+    suspend fun setLanguage(language: AppLanguage) {
+        dataStore.edit { it[PreferenceKeys.Language] = language.storedValue }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[PreferenceKeys.ThemeMode] = mode.name }
+    }
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        dataStore.edit { it[PreferenceKeys.OnboardingCompleted] = completed }
+    }
+}

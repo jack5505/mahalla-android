@@ -1,5 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Язык по умолчанию — узбекский (ТЗ §1: uz по умолчанию, ru переключением). -->
+<!--
+  Язык по умолчанию — узбекский (ТЗ §1: uz по умолчанию, ru переключением).
+  Набор ключей здесь и в values-ru/ обязан совпадать — это проверяет
+  StringResourceParityTest.
+-->
 <resources>
     <string name="app_name">Mahalla</string>
+    <string name="screen_skeleton_note">Ekran keyingi bosqichda maketga ko\'ra tayyorlanadi.</string>
+    <string name="action_back">Orqaga</string>
+    <string name="currency_uzs">so\'m</string>
+
+    <!-- Нижняя навигация -->
+    <string name="nav_discovery">Yaqin atrofda</string>
+    <string name="nav_orders">Buyurtmalar</string>
+    <string name="nav_wallet">Hamyon</string>
+    <string name="nav_profile">Profil</string>
+
+    <!-- Онбординг -->
+    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
+    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
+    <string name="onboarding_welcome_action">Boshlash</string>
+    <string name="onboarding_phone_title">Telefon raqamingiz</string>
+    <string name="onboarding_phone_label">Telefon raqami</string>
+    <string name="onboarding_phone_action">Kodni olish</string>
+    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_otp_title">Kod %1$s raqamiga yuborildi</string>
+    <string name="onboarding_otp_action">Tasdiqlash</string>
+    <string name="onboarding_pin_title">PIN-kod o\'rnating</string>
+    <string name="onboarding_pin_action">Saqlash</string>
+    <string name="onboarding_biometric_title">Biometrika bilan kirish</string>
+    <string name="onboarding_biometric_action">Yoqish</string>
+    <string name="onboarding_biometric_skip">Keyinroq</string>
+    <string name="onboarding_geo_title">Joylashuvga ruxsat</string>
+    <string name="onboarding_geo_subtitle">Joylashuv yaqin atrofdagi joylarni va yetkazib berish vaqtini aniqlash uchun kerak.</string>
+    <string name="onboarding_geo_action">Ruxsat berish</string>
+
+    <!-- Основные разделы -->
+    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_subtitle">Ovqat, dorixona, shifokor, kino va ustalar — yoningizda.</string>
+    <string name="discovery_open_demo_place">Namuna joyni ochish</string>
+    <string name="orders_title">Buyurtmalar</string>
+    <string name="orders_subtitle">Faol buyurtmalar, navbatlar va bandlovlar.</string>
+    <string name="wallet_title">Hamyon</string>
+    <string name="wallet_subtitle">Balans, to\'ldirish va to\'lovlar tarixi.</string>
+    <string name="profile_title">Profil</string>
+    <string name="profile_subtitle">Til, mavzu va hisob sozlamalari.</string>
+    <string name="profile_language">Til</string>
+    <string name="profile_theme">Mavzu</string>
+
+    <!-- Детали -->
+    <string name="place_title">Joy</string>
+    <string name="place_id_label">Joy identifikatori: %1$s</string>
+
+    <!-- Язык и тема -->
+    <string name="language_system">Tizim tili</string>
+    <string name="language_uz">O\'zbekcha</string>
+    <string name="language_ru">Ruscha</string>
+    <string name="theme_system">Tizim mavzusi</string>
+    <string name="theme_light">Yorug\'</string>
+    <string name="theme_dark">Qorong\'i</string>
+
+    <!-- Ошибки сетевого слоя -->
+    <string name="error_no_connection">Internet aloqasi yo\'q</string>
+    <string name="error_timeout">Server javob bermadi</string>
+    <string name="error_unauthorized">Sessiya tugadi, qaytadan kiring</string>
+    <string name="error_forbidden">Bu amal uchun ruxsat yo\'q</string>
+    <string name="error_not_found">Ma\'lumot topilmadi</string>
+    <string name="error_server">Serverda xatolik yuz berdi</string>
+    <string name="error_unknown">Nimadir xato ketdi</string>
 </resources>
