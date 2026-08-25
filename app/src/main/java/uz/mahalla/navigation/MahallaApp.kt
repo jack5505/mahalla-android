@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -43,7 +45,13 @@ fun MahallaApp(
                         )
                     },
                     selectedId = selectedItem.name,
-                    onSelect = { navController.navigateToTab(BottomNavItem.valueOf(it.id)) },
+                    onSelect = { selected ->
+                        // Ищем по name, а не valueOf: неизвестный id — это баг
+                        // сборки списка, а не повод уронить приложение.
+                        BottomNavItem.entries
+                            .firstOrNull { it.name == selected.id }
+                            ?.let(navController::navigateToTab)
+                    },
                 )
             }
         },
@@ -57,8 +65,12 @@ fun MahallaApp(
     }
 }
 
+/**
+ * Таб считается выбранным, если маршрут есть в иерархии текущего назначения:
+ * на вложенном экране таба подсветка не должна пропадать.
+ */
 private fun BottomNavItem.matches(destination: NavDestination?): Boolean =
-    destination?.hasRoute(route::class) == true
+    destination?.hierarchy?.any { it.hasRoute(route::class) } == true
 
 /**
  * Переключение таба: стек не растёт (`launchSingleTop`), состояние таба

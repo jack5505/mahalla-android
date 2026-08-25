@@ -22,7 +22,33 @@ object PhoneFieldFormatter {
 
     private const val SEPARATOR = ' '
 
-    fun digitsOf(raw: String): String = raw.filter(Char::isDigit).take(NATIONAL_LENGTH)
+    /** Код страны Узбекистана — приходит во вставке из SMS или буфера обмена. */
+    private const val COUNTRY_CODE = "998"
+
+    fun digitsOf(raw: String): String = nationalDigits(raw).digits
+
+    /**
+     * Цифры вставки без кода страны и ведущих нулей.
+     *
+     * Префикс снимается только когда цифр больше девяти: набранные вручную
+     * `998 12 34 56` — это валидный национальный номер оператора 99, а не код
+     * страны, и трогать его нельзя. [dropped] нужен, чтобы после снятия
+     * префикса каретка не уехала (см. [apply]).
+     */
+    private fun nationalDigits(raw: String): NationalDigits {
+        val all = raw.filter(Char::isDigit)
+        var digits = all
+        while (digits.length > NATIONAL_LENGTH) {
+            digits = when {
+                digits.startsWith(COUNTRY_CODE) -> digits.removePrefix(COUNTRY_CODE)
+                digits.startsWith('0') -> digits.drop(1)
+                else -> break
+            }
+        }
+        return NationalDigits(digits.take(NATIONAL_LENGTH), all.length - digits.length)
+    }
+
+    private data class NationalDigits(val digits: String, val dropped: Int)
 
     fun format(digits: String): String = buildString {
         val national = digitsOf(digits)
@@ -40,9 +66,10 @@ object PhoneFieldFormatter {
      * возвращает новую позицию каретки.
      */
     fun apply(raw: String, caret: Int): MaskedInput {
-        val digits = digitsOf(raw)
+        val (digits, dropped) = nationalDigits(raw)
         val safeCaret = caret.coerceIn(0, raw.length)
-        val digitsBeforeCaret = raw.take(safeCaret).count(Char::isDigit).coerceAtMost(digits.length)
+        val digitsBeforeCaret = (raw.take(safeCaret).count(Char::isDigit) - dropped)
+            .coerceIn(0, digits.length)
         val text = format(digits)
         return MaskedInput(text, caretAfterDigit(text, digitsBeforeCaret))
     }

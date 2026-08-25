@@ -18,13 +18,51 @@ private val Inter = FontFamily(
 
 // Значения — design/android/HANDOFF.md + DESIGN-SYSTEM.md §2.
 val MahallaTypography = Typography(
-    displaySmall = TextStyle(Inter, FontWeight.Bold, 24.sp, lineHeight = 28.sp, letterSpacing = (-0.6).sp),
-    headlineSmall = TextStyle(Inter, FontWeight.Bold, 18.sp, lineHeight = 23.sp, letterSpacing = (-0.3).sp),
-    titleMedium = TextStyle(Inter, FontWeight.SemiBold, 16.sp, lineHeight = 21.sp),
-    titleSmall = TextStyle(Inter, FontWeight.Bold, 15.sp, lineHeight = 20.sp),
-    bodyMedium = TextStyle(Inter, FontWeight.Normal, 13.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(Inter, FontWeight.SemiBold, 11.sp, lineHeight = 15.sp, letterSpacing = 0.2.sp),
-    labelSmall = TextStyle(Inter, FontWeight.Normal, 10.sp, lineHeight = 14.sp),
+    displaySmall = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.6).sp,
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Bold,
+        fontSize = 18.sp,
+        lineHeight = 23.sp,
+        letterSpacing = (-0.3).sp,
+    ),
+    titleMedium = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 21.sp,
+    ),
+    titleSmall = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Bold,
+        fontSize = 15.sp,
+        lineHeight = 20.sp,
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Normal,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        letterSpacing = 0.2.sp,
+    ),
+    labelSmall = TextStyle(
+        fontFamily = Inter,
+        fontWeight = FontWeight.Normal,
+        fontSize = 10.sp,
+        lineHeight = 14.sp,
+    ),
 )
 
 /** Суммы и номера талонов — моноширинные цифры, иначе прыгают при обновлении. */

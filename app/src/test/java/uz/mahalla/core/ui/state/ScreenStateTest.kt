@@ -27,7 +27,10 @@ class ScreenStateTest {
 
     @Test
     fun `failure carries the error to the retry screen`() {
-        val state = ApiResult.Failure(ApiError.NoConnection).toListScreenState()
+        // Failure : ApiResult<Nothing> — тип задаём явно, иначе T не выводится
+        // и из-за одной строки не компилируется весь тестовый сорсет.
+        val result: ApiResult<List<String>> = ApiResult.Failure(ApiError.NoConnection)
+        val state = result.toListScreenState()
 
         assertEquals(ApiError.NoConnection, state.errorOrNull())
     }

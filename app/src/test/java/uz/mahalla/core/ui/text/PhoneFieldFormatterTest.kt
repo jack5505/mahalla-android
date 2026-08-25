@@ -58,13 +58,26 @@ class PhoneFieldFormatterTest {
     }
 
     @Test
-    fun `paste of full number keeps caret at the end`() {
-        val pasted = "+998 90 123 45 67"
-        val result = PhoneFieldFormatter.apply(raw = pasted, caret = pasted.length)
+    fun `paste of full number strips the country code`() {
+        // Из SMS и буфера номер приходит целиком; поле рисует +998 префиксом,
+        // поэтому код страны надо снять, а не съесть первыми цифрами номера.
+        listOf("+998 90 123 45 67", "+998901234567", "998901234567").forEach { pasted ->
+            val result = PhoneFieldFormatter.apply(raw = pasted, caret = pasted.length)
 
-        // Первые три цифры вставки — код страны, поле хранит только 9 цифр.
-        assertEquals("99 890 12 34", result.text)
-        assertEquals(result.text.length, result.caret)
+            assertEquals("90 123 45 67", result.text)
+            assertEquals(result.text.length, result.caret)
+        }
+    }
+
+    @Test
+    fun `paste with leading zero drops it`() {
+        assertEquals("90 123 45 67", PhoneFieldFormatter.format("0901234567"))
+    }
+
+    @Test
+    fun `nine typed digits starting with 998 stay untouched`() {
+        // 99 — код оператора, это валидный национальный номер, а не код страны.
+        assertEquals("99 812 34 56", PhoneFieldFormatter.format("998123456"))
     }
 
     @Test

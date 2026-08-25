@@ -19,17 +19,21 @@ import org.junit.Test
  */
 class ContrastTest {
 
+    /**
+     * Compose упаковывает sRGB-цвет в **старшие** 32 бита `Color.value`, в
+     * младших лежит id цветового пространства. Поэтому каналы берём готовыми
+     * компонентами `red/green/blue` (Float 0..1), а не сдвигами по `value`:
+     * `(value shr 16) and 0xFF` читал нули и любая пара давала ровно 1.00.
+     */
     private fun luminance(color: Color): Double {
-        fun channel(value: Int): Double {
-            val v = value / 255.0
+        fun channel(value: Float): Double {
+            val v = value.toDouble()
             return if (v <= 0.03928) v / 12.92 else Math.pow((v + 0.055) / 1.055, 2.4)
         }
 
-        val argb = color.value.toLong()
-        val r = channel(((argb shr 16) and 0xFF).toInt())
-        val g = channel(((argb shr 8) and 0xFF).toInt())
-        val b = channel((argb and 0xFF).toInt())
-        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return 0.2126 * channel(color.red) +
+            0.7152 * channel(color.green) +
+            0.0722 * channel(color.blue)
     }
 
     private fun contrast(foreground: Color, background: Color): Double {
