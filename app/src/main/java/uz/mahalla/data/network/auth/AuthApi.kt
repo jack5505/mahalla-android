@@ -10,11 +10,16 @@ data class RefreshTokenRequest(
     @SerialName("refreshToken") val refreshToken: String,
 )
 
+/**
+ * @param expiresInSeconds `null`, если сервер не сообщил срок жизни. Именно
+ * `null`, а не `0`: ноль означал бы «токен уже истёк», и клиент начал бы
+ * обновлять свежий токен на каждом запросе.
+ */
 @Serializable
 data class TokenPairResponse(
     @SerialName("accessToken") val accessToken: String,
     @SerialName("refreshToken") val refreshToken: String,
-    @SerialName("expiresIn") val expiresInSeconds: Long = 0L,
+    @SerialName("expiresIn") val expiresInSeconds: Long? = null,
 )
 
 /**

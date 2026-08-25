@@ -65,9 +65,11 @@ class TokenAuthenticator @Inject constructor(
                         refreshToken = refreshed.refreshToken,
                         // Сервер отдаёт «через сколько истечёт», хранить
                         // полезно «когда истечёт» — иначе после перезапуска
-                        // приложения значение бессмысленно.
-                        expiresAtEpochSeconds = clock.instant().epochSecond +
-                            refreshed.expiresInSeconds,
+                        // приложения значение бессмысленно. Не сообщил —
+                        // срок неизвестен, а не «истёк сейчас».
+                        expiresAtEpochSeconds = refreshed.expiresInSeconds
+                            ?.let { clock.instant().epochSecond + it }
+                            ?: Session.UNKNOWN_EXPIRY,
                     ),
                 )
             }
@@ -79,11 +81,16 @@ class TokenAuthenticator @Inject constructor(
         .header(HEADER_AUTHORIZATION, AuthInterceptor.bearer(token))
         .build()
 
+    /**
+     * Сколько раз этот запрос уже упирался в 401. Считать всю цепочку
+     * `priorResponse` нельзя: туда попадают и редиректы, так что после одного
+     * 3xx лимит был бы исчерпан и refresh не случился бы вообще.
+     */
     private fun attemptCount(response: Response): Int {
         var count = 1
         var prior = response.priorResponse
         while (prior != null) {
-            count++
+            if (prior.code == HTTP_UNAUTHORIZED) count++
             prior = prior.priorResponse
         }
         return count
@@ -92,5 +99,7 @@ class TokenAuthenticator @Inject constructor(
     companion object {
         /** Один исходный запрос + один повтор после refresh. */
         const val MAX_ATTEMPTS = 2
+
+        private const val HTTP_UNAUTHORIZED = 401
     }
 }

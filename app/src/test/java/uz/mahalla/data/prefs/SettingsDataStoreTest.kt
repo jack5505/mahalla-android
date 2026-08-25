@@ -4,7 +4,10 @@ import android.app.Application
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -18,6 +21,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.locale.AppLanguage
 import java.io.File
+import java.io.IOException
 
 /**
  * DataStore (эпик 1.4): дефолты, запись и чтение языка, темы и флага
@@ -96,6 +100,33 @@ class SettingsDataStoreTest {
     }
 
     @Test
+    fun `pin counts as configured only with both hash and salt`() = runTest {
+        val dataStore = newDataStore()
+        val store = SettingsDataStore(dataStore)
+
+        dataStore.edit { it[PreferenceKeys.PinHash] = "encrypted" }
+        assertFalse("без соли хэш проверить нечем", store.current().pinConfigured)
+
+        dataStore.edit { it[PreferenceKeys.PinSalt] = "salt" }
+        assertTrue(store.current().pinConfigured)
+    }
+
+    /**
+     * Файл настроек может быть недоступен (нет места, права, битый restore).
+     * Раньше исключение улетало в `stateIn` внутри `viewModelScope` — краш на
+     * старте, причём под splash'ем, который держится до первой эмиссии.
+     */
+    @Test
+    fun `unreadable settings fall back to defaults instead of throwing`() = runTest {
+        assertEquals(AppSettings(), SettingsDataStore(FailingDataStore()).current())
+    }
+
+    @Test
+    fun `unreadable session reads as no session`() = runTest {
+        assertNull(DataStoreSessionStore(FailingDataStore()).current())
+    }
+
+    @Test
     fun `unknown stored theme falls back to the default`() = runTest {
         assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStoredValue("NEON"))
         assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStoredValue(null))
@@ -107,5 +138,14 @@ class SettingsDataStoreTest {
         assertFalse(ThemeMode.SYSTEM.isDark(systemInDarkTheme = false))
         assertTrue(ThemeMode.DARK.isDark(systemInDarkTheme = false))
         assertFalse(ThemeMode.LIGHT.isDark(systemInDarkTheme = true))
+    }
+
+    /** DataStore, у которого чтение и запись всегда падают. */
+    private class FailingDataStore : DataStore<Preferences> {
+        override val data: Flow<Preferences> = flow { throw IOException("storage is gone") }
+
+        override suspend fun updateData(
+            transform: suspend (Preferences) -> Preferences,
+        ): Preferences = throw IOException("storage is gone")
     }
 }

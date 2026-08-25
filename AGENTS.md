@@ -112,24 +112,64 @@ iOS вне скоупа, кроссплатформенные фреймворк
   (Asia/Tashkent), `TicketFormatter` (`A-042`).
 - **Splash**: `Theme.Mahalla.Splash` (Core SplashScreen API), splash держится
   до чтения настроек из DataStore (`RootViewModel`).
-- **Тесты (13 файлов)**: сборка графа (`di/GraphAssemblyTest`, включая проверку
+- **Тесты (14 файлов)**: сборка графа (`di/GraphAssemblyTest`, включая проверку
   кодогенерации Hilt), `PhoneInputViewModelTest`, `RoutesSerializationTest`
   (сериализация маршрутов + соответствие deep-link placeholder'ов),
   `NetworkStackTest` на MockWebServer (200 / unknown fields / Bearer /
   401 + refresh / провал refresh / таймаут / битый JSON), `MahallaDatabaseTest`
   (Robolectric, DAO), `SettingsDataStoreTest`, `KeystorePinStorageTest`,
   `PinHasherTest`, `StringResourceParityTest` (ключи и placeholder'ы
-  `values/` vs `values-ru/`), форматтеры, `AppLanguageTest`, `ApiResultTest`.
+  `values/` vs `values-ru/`), форматтеры, `AppLanguageTest`, `ApiResultTest`,
+  `RootViewModelTest` (фиксация стартового пункта графа).
+
+### Правки после код-ревью PR #19
+
+- **`ui/theme/Color.kt` не компилировался** (пришло ещё с initial commit, то
+  есть `main` тоже был красный): в KDoc стояла последовательность `/*`
+  (`success/warning/*Soft`), а блочные комментарии в Kotlin **вложенные** — файл
+  оставался незакрытым и `:app:kspDebugKotlin` падал с `Unclosed comment`.
+  Текст переписан без `/*`.
+- **PIN не блокирует Main**: `KeystorePinStorage.save/verify` уводят PBKDF2
+  (120 000 итераций) и Keystore на `Dispatchers.Default`.
+- **DataStore больше не роняет старт**: `ReplaceFileCorruptionHandler` в
+  `DataStoreModule` + `.catch {}` в `SettingsDataStore.settings` (дефолты) и
+  `DataStoreSessionStore.session` (нет сессии). Раньше исключение улетало в
+  `stateIn` внутри `viewModelScope` под держащимся splash'ем.
+- **`startDestination` фиксируется один раз** (`RootUiState.Ready.startWithOnboarding`):
+  пересчёт на каждой эмиссии настроек пересобирал граф и сбрасывал back stack.
+  Выход из онбординга остался только на `navigate(MainGraph) { popUpTo(...) }`.
+- **Токены не текут в logcat**: `redactHeader("Authorization")` у
+  `HttpLoggingInterceptor`.
+- **Файл prefs исключён из бэкапа** (`backup_rules.xml`,
+  `data_extraction_rules.xml`, `<device-transfer>` тоже): там токены сессии, а
+  ключ Keystore на новое устройство не переносится.
+- **`expiresIn` теперь nullable** (`Session.UNKNOWN_EXPIRY`): дефолт `0L`
+  означал «токен истёк в 1970».
+- **`attemptCount` в `TokenAuthenticator`** считает только 401-звенья цепочки
+  `priorResponse`; раньше один редирект исчерпывал лимит и refresh не случался.
+- **Один критерий «PIN настроен»**: `SettingsDataStore.pinConfigured` смотрит
+  `PinHash` **и** `PinSalt`, как `PinStorage.isConfigured()`.
 
 **Не сделано / риски:**
 
 - **Иконка (1.6)** — брендового ассета нет, лаунчер и splash используют
   прежнюю заглушку. Ждём логотип.
-- **Сборка и тесты в этом прогоне не запускались**: в workflow `claude.yml`
-  команда `./gradlew` не входит в разрешённые (`Bash(./gradlew…)` →
-  «requires approval»), поэтому `testDebugUnitTest` / `assembleDebug` прогонял
-  гейт `ci.yml` на PR. Чтобы агент мог собирать сам, нужно разрешение
-  `Bash(./gradlew*)` в `.claude/settings.json`.
+- **Сборка и тесты агентом по-прежнему не запускались**: в workflow
+  `claude.yml` команда `./gradlew` не входит в разрешённые
+  (`Bash(./gradlew…)` → «requires approval»), поэтому `testDebugUnitTest` /
+  `assembleDebug` прогоняет гейт `ci.yml` на PR. Чтобы агент мог собирать сам,
+  нужно разрешение `Bash(./gradlew*)` в `.claude/settings.json` — это блокер
+  для скорости работы над эпиком 2.
+- **Открытые замечания ревью** (оформить задачами, не блокеры мержа):
+  `synchronized` + четыре `runBlocking` в `TokenAuthenticator` (лучше `Mutex` +
+  кэш результата refresh); два независимых `OkHttpClient` с отдельными пулами;
+  `PhoneInputScreen` держит форматированную строку в `OutlinedTextField`
+  (каретка прыгает — нужен `TextFieldValue`/`VisualTransformation`);
+  блокирующее чтение DataStore в `attachBaseContext` на API 26–32;
+  `StringResourceParityTest` не ловит непозиционные `%s`/`%d`;
+  `BottomNavItem.route: Any`; `TicketFormatter.parse("A--42")`;
+  `GraphAssemblyTest` не закрывает созданные клиенты и DataStore;
+  `exportSchema = false` включить обратно до первого релиза.
 - Версии новых библиотек подобраны под связку AGP 8.7.3 / Kotlin 2.0.21 /
   KSP 2.0.21-1.0.25: Hilt 2.52, Navigation 2.8.5, Room 2.6.1, Retrofit 2.11.0,
   OkHttp 4.12.0, DataStore 1.1.1, Robolectric 4.14.1.

@@ -3,7 +3,9 @@ package uz.mahalla.data.security
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import uz.mahalla.data.prefs.PreferenceKeys
 import java.util.Base64
 import javax.inject.Inject
@@ -21,6 +23,10 @@ interface PinStorage {
  * PIN в DataStore (эпик 1.4): соль в открытом виде, хэш — зашифрован ключом
  * из Keystore. Даже с root-доступом к файлу настроек хэш без ключа устройства
  * бесполезен.
+ *
+ * PBKDF2 (120 000 итераций) и обращения к Keystore уходят на [Dispatchers.Default]:
+ * вызов приходит из `viewModelScope` (Main), а на слабых устройствах это сотни
+ * миллисекунд — на главном потоке это фриз ввода PIN и риск ANR.
  */
 @Singleton
 class KeystorePinStorage @Inject constructor(
@@ -36,7 +42,9 @@ class KeystorePinStorage @Inject constructor(
 
     override suspend fun save(pin: String) {
         val salt = PinHasher.newSalt()
-        val encryptedHash = cipher.encrypt(PinHasher.hash(pin, salt))
+        val encryptedHash = withContext(Dispatchers.Default) {
+            cipher.encrypt(PinHasher.hash(pin, salt))
+        }
         dataStore.edit { preferences ->
             preferences[PreferenceKeys.PinSalt] = salt.toBase64()
             preferences[PreferenceKeys.PinHash] = encryptedHash.toBase64()
@@ -47,10 +55,13 @@ class KeystorePinStorage @Inject constructor(
         val preferences = dataStore.data.first()
         val salt = preferences[PreferenceKeys.PinSalt]?.fromBase64() ?: return false
         val encryptedHash = preferences[PreferenceKeys.PinHash]?.fromBase64() ?: return false
-        // Ключ мог быть потерян (сброс биометрии, восстановление из бэкапа) —
-        // это не крэш, а «PIN не подходит», пользователь войдёт по SMS.
-        val storedHash = runCatching { cipher.decrypt(encryptedHash) }.getOrNull() ?: return false
-        return PinHasher.verify(pin, salt, storedHash)
+        return withContext(Dispatchers.Default) {
+            // Ключ мог быть потерян (сброс биометрии, восстановление из бэкапа) —
+            // это не крэш, а «PIN не подходит», пользователь войдёт по SMS.
+            val storedHash = runCatching { cipher.decrypt(encryptedHash) }.getOrNull()
+                ?: return@withContext false
+            PinHasher.verify(pin, salt, storedHash)
+        }
     }
 
     override suspend fun clear() {

@@ -20,7 +20,15 @@ import javax.inject.Inject
  */
 sealed interface RootUiState {
     data object Loading : RootUiState
-    data class Ready(val settings: AppSettings) : RootUiState
+
+    /**
+     * @param startWithOnboarding стартовый пункт графа навигации. Зафиксирован
+     * на первой эмиссии настроек и дальше не меняется — см. [RootViewModel].
+     */
+    data class Ready(
+        val settings: AppSettings,
+        val startWithOnboarding: Boolean,
+    ) : RootUiState
 }
 
 @HiltViewModel
@@ -29,8 +37,26 @@ class RootViewModel @Inject constructor(
     private val onboardingRepository: OnboardingRepository,
 ) : ViewModel() {
 
+    /**
+     * Стартовый пункт графа решается один раз за жизнь процесса.
+     *
+     * `NavHost` пересобирает граф при смене `startDestination` и сбрасывает
+     * back stack, а настройки — живой flow: смена темы/языка в профиле или
+     * запись флага онбординга обнуляли бы навигацию. Уход из онбординга — это
+     * `navigate(MainGraph) { popUpTo(...) }` в графе, флаг в DataStore нужен
+     * только следующему запуску.
+     *
+     * Поле безопасно: `stateIn` держит одну подписку на upstream, то есть
+     * `map` ниже исполняется в одной корутине.
+     */
+    private var startWithOnboarding: Boolean? = null
+
     val state: StateFlow<RootUiState> = settingsDataStore.settings
-        .map<AppSettings, RootUiState> { RootUiState.Ready(it) }
+        .map<AppSettings, RootUiState> { settings ->
+            val start = startWithOnboarding ?: !settings.onboardingCompleted
+            startWithOnboarding = start
+            RootUiState.Ready(settings = settings, startWithOnboarding = start)
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,

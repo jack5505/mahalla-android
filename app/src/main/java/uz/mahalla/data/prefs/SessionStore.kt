@@ -4,18 +4,28 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Пара токенов текущей сессии. */
+/**
+ * Пара токенов текущей сессии.
+ *
+ * @param expiresAtEpochSeconds [UNKNOWN_EXPIRY], если сервер не сообщил срок
+ * жизни: тогда о просроченности судить нельзя и решает 401 от сервера.
+ */
 data class Session(
     val accessToken: String,
     val refreshToken: String,
-    val expiresAtEpochSeconds: Long = 0L,
-)
+    val expiresAtEpochSeconds: Long = UNKNOWN_EXPIRY,
+) {
+    companion object {
+        const val UNKNOWN_EXPIRY = 0L
+    }
+}
 
 /**
  * Хранилище сессии (эпик 1.4). Вынесено за интерфейс: сетевой слой
@@ -44,11 +54,16 @@ class DataStoreSessionStore @Inject constructor(
                 Session(
                     accessToken = access,
                     refreshToken = refresh,
-                    expiresAtEpochSeconds = preferences[PreferenceKeys.SessionExpiresAt] ?: 0L,
+                    expiresAtEpochSeconds = preferences[PreferenceKeys.SessionExpiresAt]
+                        ?: Session.UNKNOWN_EXPIRY,
                 )
             }
         }
         .distinctUntilChanged()
+        // Прочитать файл не удалось — считаем, что сессии нет (пользователь
+        // залогинится заново). Кидать исключение в сетевой слой и в UI нельзя:
+        // этот flow читается из интерсептора и из состояния корня.
+        .catch { emit(null) }
 
     override suspend fun current(): Session? = session.first()
 

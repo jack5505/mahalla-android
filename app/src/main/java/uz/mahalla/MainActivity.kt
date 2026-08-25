@@ -50,10 +50,12 @@ class MainActivity : ComponentActivity() {
             val ready = state as? RootUiState.Ready ?: return@setContent
             MahallaTheme(darkTheme = ready.settings.themeMode.isDark(isSystemInDarkTheme())) {
                 MahallaApp(
-                    startDestination = if (ready.settings.onboardingCompleted) {
-                        MainGraph
-                    } else {
+                    // Зафиксировано во ViewModel: пересчёт на каждой эмиссии
+                    // настроек сбрасывал бы back stack (см. RootViewModel).
+                    startDestination = if (ready.startWithOnboarding) {
                         OnboardingGraph
+                    } else {
+                        MainGraph
                     },
                     onOnboardingFinished = viewModel::onOnboardingFinished,
                 )

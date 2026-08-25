@@ -41,7 +41,11 @@ object NetworkFactory {
         .apply {
             if (logBodies) {
                 addInterceptor(
-                    HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY),
+                    HttpLoggingInterceptor().apply {
+                        setLevel(HttpLoggingInterceptor.Level.BODY)
+                        // Иначе access/refresh-токены уезжают в logcat целиком.
+                        redactHeader(AuthInterceptor.HEADER_AUTHORIZATION)
+                    },
                 )
             }
         }
