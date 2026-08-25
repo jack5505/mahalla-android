@@ -64,7 +64,8 @@ iOS вне скоупа, кроссплатформенные фреймворк
   `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
   опасных git/docker-операций). Имя docker-образа бэкенда ещё не задано —
   взять из mahalla-репо (`MAHALLA-IMPLEMENTATION.md`) и положить в переменную
-  репо `BACKEND_IMAGE`; секрет `ANTHROPIC_API_KEY` — действие пользователя.
+  репо `BACKEND_IMAGE`; секрет `ANTHROPIC_OAUTH_TOKEN` (OAuth-токен Claude,
+  взять из `~/.claude/.credentials.json`) — действие пользователя.
 
 ## На чём остановились (BLOCKER)
 
@@ -91,7 +92,8 @@ iOS вне скоупа, кроссплатформенные фреймворк
 ## Что делать дальше (по порядку)
 
 **Перед первым CI-запуском (действия пользователя, git локально запрещён):**
-добавить секрет `ANTHROPIC_API_KEY` и переменные `BACKEND_IMAGE` /
+добавить секрет `ANTHROPIC_OAUTH_TOKEN` (OAuth-токен Claude из
+`~/.claude/.credentials.json`) и переменные `BACKEND_IMAGE` /
 `BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets and variables →
 Actions), закоммитить и запушить `.github/`, `CLAUDE.md`, `.claude/` и этот
 файл, затем запустить workflow «Claude Code Dev» вручную (workflow_dispatch).

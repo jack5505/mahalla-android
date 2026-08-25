@@ -6,7 +6,8 @@
 # и открывает PR с отчётом Claude в теле.
 #
 # Требования к репозиторию:
-#   - секрет  ANTHROPIC_API_KEY (Settings → Secrets and variables → Actions)
+#   - секрет  ANTHROPIC_OAUTH_TOKEN — OAuth-токен Claude (взять из локального
+#     ~/.claude/.credentials.json; Settings → Secrets and variables → Actions)
 #   - переменные репо (необязательные, с дефолтами):
 #       BACKEND_IMAGE       — docker-образ бэкенда (без него шаг пропускается)
 #       BACKEND_PORT        — порт бэкенда (по умолчанию 8080)
@@ -143,15 +144,15 @@ jobs:
       - name: Claude Code — разработка
         id: claude
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_OAUTH_TOKEN }}
           TASK: ${{ inputs.task }}
           MODEL: ${{ inputs.model }}
           MAX_TURNS: ${{ inputs.max_turns }}
           DISABLE_TELEMETRY: '1'
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
         run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "::error::Нет секрета ANTHROPIC_API_KEY. Добавь: repo → Settings → Secrets and variables → Actions → New repository secret."
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error::Нет секрета ANTHROPIC_OAUTH_TOKEN. Добавь: repo → Settings → Secrets and variables → Actions → New repository secret. Токен взять из ~/.claude/.credentials.json."
             exit 1
           fi
           BRANCH="claude-dev/${{ github.run_id }}-${{ github.run_attempt }}"
