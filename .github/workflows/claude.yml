@@ -50,11 +50,35 @@ jobs:
       issues: write          # ответы в issue
       id-token: write
       actions: read          # чтение логов упавшего CI
+
+    env:
+      # secrets нельзя читать в `if:` шага, поэтому наличие PAT переносим в env.
+      HAS_DESIGN_PAT: ${{ secrets.DESIGN_REPO_PAT != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
+      # репозиторий: токен этого job'а прав на него не даёт, а WebFetch
+      # приватный репо не откроет в принципе. Поэтому кладём файлами рядом,
+      # Claude читает их через Read/Glob.
+      # Нужен секрет DESIGN_REPO_PAT — fine-grained PAT с Contents: read
+      # на jack5505/mahalla. Без секрета шаг пропускается.
+      - name: Checkout дизайн-репо
+        if: env.HAS_DESIGN_PAT == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: jack5505/mahalla
+          path: design-repo
+          token: ${{ secrets.DESIGN_REPO_PAT }}
+          sparse-checkout: |
+            design/android
+            rules
+            AGENTS.md
+            MAHALLA-IMPLEMENTATION.md
 
       # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
       # Ставим до запуска Claude, чтобы ./gradlew шёл на нём.
@@ -84,6 +108,10 @@ jobs:
 
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
+        env:
+          # Без GH_TOKEN у Claude не работает `gh`: ни создать issue/PR, ни
+          # прочитать логи прогона. Права — из permissions этого job'а.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           # OAuth-токен подписки Pro/Max вместо API-ключа.
           # Поддержаны оба имени секрета: сначала каноническое
@@ -93,10 +121,15 @@ jobs:
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
           use_sticky_comment: 'true'
-          # Явно фиксируем модель Opus 5 (валидный id для API, без тега [1m]).
-          # Прошлый прогон падал сразу (is_error, $0), т.к. использовался
-          # claude-opus-5[1m] — тег [1m] невалиден для API.
+          # Модель фиксируем явно: валидный id для API, без тега [1m] —
+          # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
+          #
+          # --allowed-tools ОБЯЗАТЕЛЕН. Без него в CI у Claude нет ни Bash
+          # (значит ни `gh`, ни `./gradlew`), ни WebFetch — он сообщает
+          # «инструменты запрещены» и работает вслепую. Новый инструмент
+          # понадобился — дописывать сюда. Опасные операции по-прежнему
+          # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
           claude_args: |
             --model claude-opus-5
-            --max-turns 40
-            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch
+            --max-turns 60
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite

@@ -16,3 +16,6 @@ local.properties
 
 # локальные настройки Claude Code (git-запрет для локального агента)
 .claude/settings.local.json
+
+# дизайн-репо, подтягивается в CI (claude*.yml)
+design-repo/

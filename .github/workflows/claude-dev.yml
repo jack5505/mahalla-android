@@ -69,6 +69,10 @@ jobs:
       id-token: write
       actions: read          # чтение логов упавшего CI
 
+    env:
+      # secrets нельзя читать в `if:` шага, поэтому наличие PAT переносим в env.
+      HAS_DESIGN_PAT: ${{ secrets.DESIGN_REPO_PAT != '' }}
+
     # Зависимости бэкенда. Состав уточнить по mahalla-репо
     # (MAHALLA-IMPLEMENTATION.md): возможно, нужен ещё kafka и т.п.
     services:
@@ -100,6 +104,25 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
+      # репозиторий: токен этого job'а прав на него не даёт, а WebFetch
+      # приватный репо не откроет в принципе. Поэтому кладём файлами рядом,
+      # Claude читает их через Read/Glob.
+      # Нужен секрет DESIGN_REPO_PAT — fine-grained PAT с Contents: read
+      # на jack5505/mahalla. Без секрета шаг пропускается.
+      - name: Checkout дизайн-репо
+        if: env.HAS_DESIGN_PAT == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: jack5505/mahalla
+          path: design-repo
+          token: ${{ secrets.DESIGN_REPO_PAT }}
+          sparse-checkout: |
+            design/android
+            rules
+            AGENTS.md
+            MAHALLA-IMPLEMENTATION.md
 
       # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
       # Ставим до Claude, чтобы ./gradlew шёл на нём.
@@ -151,6 +174,9 @@ jobs:
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
         env:
+          # Без GH_TOKEN у Claude не работает `gh`: ни создать issue/PR, ни
+          # прочитать логи прогона. Права — из permissions этого job'а.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BACKEND_PORT: ${{ vars.BACKEND_PORT || '8080' }}
           BACKEND_HEALTH_PATH: ${{ vars.BACKEND_HEALTH_PATH || '/actuator/health' }}
         with:
@@ -164,7 +190,13 @@ jobs:
           branch_prefix: 'claude-dev/'
           # Модель фиксируем явно: валидный id для API, без тега [1m] —
           # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
+          #
+          # --allowed-tools ОБЯЗАТЕЛЕН. Без него в CI у Claude нет ни Bash
+          # (значит ни `gh`, ни `./gradlew`), ни WebFetch — он сообщает
+          # «инструменты запрещены» и работает вслепую. Новый инструмент
+          # понадобился — дописывать сюда. Опасные операции по-прежнему
+          # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns ${{ inputs.max_turns }}
-            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite

@@ -107,7 +107,9 @@ iOS вне скоупа, кроссплатформенные фреймворк
 **Перед первым CI-запуском (действия пользователя, git локально запрещён):**
 установить GitHub App «Claude» (`/install-github-app`), добавить секрет
 `CLAUDE_CODE_OAUTH_TOKEN` или `ANTHROPIC_OAUTH_TOKEN` (значение — из
-`claude setup-token`) и переменные
+`claude setup-token`), по желанию `DESIGN_REPO_PAT` (fine-grained PAT,
+Contents: read на `jack5505/mahalla` — тогда дизайн-репо подтягивается в CI
+в `design-repo/`, иначе агент работает без ТЗ и макетов) и переменные
 `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets
 and variables → Actions), закоммитить и запушить `.github/`, `CLAUDE.md`,
 `.claude/`, `.gitignore` и этот файл, затем запустить workflow «Claude Code
