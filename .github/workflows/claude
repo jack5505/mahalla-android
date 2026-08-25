@@ -1,0 +1,63 @@
+name: Claude Code
+
+# Интерактивный ассистент: упомяни @claude в комментарии PR/issue, в ревью
+# или в теле нового issue — он возьмёт задачу, поправит код, прогонит тесты
+# и по просьбе откроет Pull Request.
+#
+# Требуется до первого запуска (вручную, разово):
+#   1. Установить GitHub App «Claude» на репозиторий
+#      (проще всего: в Claude Code выполнить  /install-github-app ).
+#   2. Добавить секрет CLAUDE_CODE_OAUTH_TOKEN в Settings → Secrets and variables
+#      → Actions (значение — из `claude setup-token`; расходуется подписка
+#      Pro/Max, отдельной оплаты нет).
+#      Альтернатива: секрет ANTHROPIC_API_KEY
+#      (значение — ключ из console.anthropic.com, отдельный биллинг по токенам),
+#      тогда в шаге ниже заменить claude_code_oauth_token на anthropic_api_key.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened]
+
+jobs:
+  claude:
+    # Запуск только когда где-то упомянут @claude
+    if: >-
+      contains(github.event.comment.body, '@claude') ||
+      contains(github.event.review.body, '@claude') ||
+      contains(github.event.issue.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # коммиты, ветки
+      pull-requests: write   # создание/комментирование PR
+      issues: write          # ответы в issue
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # JDK 21 — сборка и тесты Maven. Lombok 1.18.32 не работает на новых
+      # JDK, поэтому фиксируем 21 до запуска Claude, чтобы `mvn test` шёл на нём.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Явно фиксируем модель Opus 5 (валидный id для API, без тега [1m]).
+          # Прошлый прогон падал сразу (is_error, $0), т.к. использовался
+          # claude-opus-5[1m] — тег [1m] невалиден для API.
+          claude_args: "--model claude-opus-5"
