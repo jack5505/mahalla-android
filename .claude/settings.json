@@ -1,5 +1,11 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(./gradlew)",
+      "Bash(./gradlew:*)",
+      "Bash(chmod +x ./gradlew)",
+      "Bash(chmod +x gradlew)"
+    ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f*)",
