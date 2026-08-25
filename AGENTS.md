@@ -118,6 +118,19 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
    (welcome → phone → otp → pin → biometric → geo), discovery/map/search,
    затем вертикали (food: place/menu/cart/checkout/order-status и т.д.).
 
+**Разбитый на задачи план — `docs/BACKLOG-ANDROID.md`** (issue #1, 2026-08-25):
+11 эпиков (E0 фундамент → E10 качество), ~50 задач с критериями приёмки и
+рекомендованным порядком. Issues по нему создаются скриптом
+`scripts/create-backlog-issues.sh` (`DRY_RUN=1 bash scripts/create-backlog-issues.sh`
+для проверки) — агенту в CI `gh` не разрешён, поэтому issues создаёт пользователь.
+
+**Ограничения агента в `claude.yml`** (замечено 2026-08-25): `--allowed-tools`
+не задан, поэтому агенту в этом workflow запрещены `gh`, `./gradlew` и `WebFetch`.
+Следствия: он не может ни собрать проект, ни прогнать тесты, ни создать issues,
+ни прочитать репозиторий дизайна. Пока это не поправлено (задача E0-2), задачи
+с кодом в `claude.yml` брать бессмысленно — используйте `claude-dev.yml` или
+добавьте `--allowed-tools`.
+
 ## Правила (не нарушать)
 
 - **Тесты обязательны** для любого реализованного функционала и входят в тот же
