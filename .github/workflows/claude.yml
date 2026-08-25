@@ -4,6 +4,9 @@ name: Claude Code
 # или в теле нового issue — он возьмёт задачу, поправит код, прогонит тесты
 # и по просьбе откроет Pull Request.
 #
+# Крупные задачи «с нуля» удобнее запускать вручную через claude-dev.yml
+# (там же поднимается docker-бэкенд + postgres/redis).
+#
 # Требуется до первого запуска (вручную, разово):
 #   1. Установить GitHub App «Claude» на репозиторий
 #      (проще всего: в Claude Code выполнить  /install-github-app ).
@@ -26,38 +29,69 @@ on:
 
 jobs:
   claude:
-    # Запуск только когда где-то упомянут @claude
+    # Запуск только когда реально упомянут @claude. Проверка привязана к типу
+    # события: без этого issue с «@claude» в теле дёргал бы workflow на каждый
+    # последующий комментарий (github.event.issue.body есть и в issue_comment).
     if: >-
-      contains(github.event.comment.body, '@claude') ||
-      contains(github.event.review.body, '@claude') ||
-      contains(github.event.issue.body, '@claude')
+      (github.event_name == 'issues' &&
+        contains(github.event.issue.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@claude')) ||
+      ((github.event_name == 'issue_comment' ||
+        github.event_name == 'pull_request_review_comment') &&
+        contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: write        # коммиты, ветки
       pull-requests: write   # создание/комментирование PR
       issues: write          # ответы в issue
       id-token: write
-      actions: read
+      actions: read          # чтение логов упавшего CI
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      # JDK 21 — сборка и тесты Maven. Lombok 1.18.32 не работает на новых
-      # JDK, поэтому фиксируем 21 до запуска Claude, чтобы `mvn test` шёл на нём.
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
+      # Ставим до запуска Claude, чтобы ./gradlew шёл на нём.
+      - name: JDK 17
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21'
-          cache: maven
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
+
+      - name: Android-лицензии (страховка)
+        run: |
+          for SDKROOT in "$ANDROID_HOME" "$ANDROID_SDK_ROOT"; do
+            if [ -x "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+              yes | "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            fi
+          done
+
+      # v5, не v6: в v6 кэширование вынесено в проприетарный
+      # gradle-actions-caching (отдельные Terms of Use Gradle).
+      - name: Gradle (кэш)
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
         with:
+          # OAuth-токен подписки Pro/Max вместо API-ключа.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
+          branch_prefix: 'claude/'
+          use_sticky_comment: 'true'
           # Явно фиксируем модель Opus 5 (валидный id для API, без тега [1m]).
           # Прошлый прогон падал сразу (is_error, $0), т.к. использовался
           # claude-opus-5[1m] — тег [1m] невалиден для API.
-          claude_args: "--model claude-opus-5"
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 40
+            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch

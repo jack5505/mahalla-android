@@ -1,17 +1,25 @@
-# Разработка через Claude Code внутри GitHub Actions.
+# Разработка через Claude Code внутри GitHub Actions (официальный action).
 #
-# Запуск: GitHub → Actions → "Claude Code Dev" → Run workflow (ввод: задача).
-# Что происходит: поднимается docker-бэкенд (+postgres/redis), Claude Code
-# headless выполняет задачу в свежей ветке, затем workflow коммитит, пушит
-# и открывает PR с отчётом Claude в теле.
+# Запуск: Actions → "Claude Code Dev" → Run workflow (ввод: задача).
+# Реакция на «@claude» в комментариях — в отдельном workflow claude.yml,
+# чтобы на одно упоминание не отвечали два прогона.
 #
-# Требования к репозиторию:
-#   - секрет  ANTHROPIC_OAUTH_TOKEN — OAuth-токен Claude (взять из локального
-#     ~/.claude/.credentials.json; Settings → Secrets and variables → Actions)
-#   - переменные репо (необязательные, с дефолтами):
-#       BACKEND_IMAGE       — docker-образ бэкенда (без него шаг пропускается)
-#       BACKEND_PORT        — порт бэкенда (по умолчанию 8080)
-#       BACKEND_HEALTH_PATH — health-endpoint (по умолчанию /actuator/health)
+# Коммиты, ветку и PR создаёт сам action (от имени claude[bot]) — отдельного
+# шага с git push больше нет.
+#
+# Требуется до первого запуска (вручную, разово):
+#   1. Установить GitHub App «Claude» на репозиторий
+#      (проще всего: локально в Claude Code выполнить  /install-github-app ).
+#   2. Секрет CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables →
+#      Actions). Значение — из `claude setup-token`; расходуется подписка
+#      Pro/Max, отдельной оплаты по токенам нет.
+#      Альтернатива — секрет ANTHROPIC_API_KEY (ключ из console.anthropic.com,
+#      отдельный биллинг): тогда ниже заменить claude_code_oauth_token на
+#      anthropic_api_key.
+#   3. Переменные репо (необязательные, с дефолтами):
+#        BACKEND_IMAGE       — docker-образ бэкенда (без него шаг пропускается)
+#        BACKEND_PORT        — порт бэкенда (по умолчанию 8080)
+#        BACKEND_HEALTH_PATH — health-endpoint (по умолчанию /actuator/health)
 
 name: Claude Code Dev
 
@@ -30,12 +38,12 @@ on:
       model:
         description: 'Модель Claude'
         required: false
-        default: 'sonnet'
+        default: 'claude-opus-5'
         type: choice
         options:
-          - sonnet
-          - opus
-          - haiku
+          - claude-opus-5
+          - claude-sonnet-5
+          - claude-haiku-4-5
       max_turns:
         description: 'Максимум ходов Claude Code (защита от зацикливания)'
         required: false
@@ -47,14 +55,17 @@ on:
         default: ''
         type: string
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
   claude-dev:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+
+    permissions:
+      contents: write        # коммиты, ветки
+      pull-requests: write   # создание/комментирование PR
+      issues: write          # ответы в issue
+      id-token: write
+      actions: read          # чтение логов упавшего CI
 
     # Зависимости бэкенда. Состав уточнить по mahalla-репо
     # (MAHALLA-IMPLEMENTATION.md): возможно, нужен ещё kafka и т.п.
@@ -84,23 +95,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
+      # Ставим до Claude, чтобы ./gradlew шёл на нём.
       - name: JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
 
@@ -112,8 +120,10 @@ jobs:
             fi
           done
 
+      # v5, не v6: в v6 кэширование вынесено в проприетарный
+      # gradle-actions-caching (отдельные Terms of Use Gradle).
       - name: Gradle (кэш)
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Поднять бэкенд (docker-образ)
         env:
@@ -136,62 +146,20 @@ jobs:
           done
           echo "::warning::Бэкенд не ответил за 120 c — продолжаю без него (диагностика: docker logs backend)"
 
-      - name: Установить Claude Code
-        run: |
-          npm install -g @anthropic-ai/claude-code@2.1.241 || npm install -g @anthropic-ai/claude-code
-          claude --version
-
-      - name: Claude Code — разработка
-        id: claude
+      - name: Claude Code
+        uses: anthropics/claude-code-action@v1
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.ANTHROPIC_OAUTH_TOKEN }}
-          TASK: ${{ inputs.task }}
-          MODEL: ${{ inputs.model }}
-          MAX_TURNS: ${{ inputs.max_turns }}
-          DISABLE_TELEMETRY: '1'
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
-        run: |
-          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
-            echo "::error::Нет секрета ANTHROPIC_OAUTH_TOKEN. Добавь: repo → Settings → Secrets and variables → Actions → New repository secret. Токен взять из ~/.claude/.credentials.json."
-            exit 1
-          fi
-          BRANCH="claude-dev/${{ github.run_id }}-${{ github.run_attempt }}"
-          git checkout -b "$BRANCH"
-          set +e
-          claude -p "$TASK" \
-            --model "$MODEL" \
-            --max-turns "$MAX_TURNS" \
-            --dangerously-skip-permissions \
-            --output-format json > /tmp/claude-output.json
-          CLAUDE_EXIT=$?
-          set -e
-          if [ -s /tmp/claude-output.json ]; then
-            jq -r '.result // "Отчёт недоступен"' /tmp/claude-output.json > /tmp/claude-result.md 2>/dev/null \
-              || echo "Отчёт недоступен" > /tmp/claude-result.md
-          else
-            echo "Отчёт недоступен" > /tmp/claude-result.md
-          fi
-          echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
-          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-
-      - name: Коммит, push, PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TASK: ${{ inputs.task }}
-        run: |
-          gh auth setup-git
-          git config user.name "claude[bot]"
-          git config user.email "claude[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --cached --quiet; then
-            echo "::notice::Claude не внёс изменений — PR не создаётся."
-            exit "${{ steps.claude.outputs.claude_exit }}"
-          fi
-          git commit -m "claude: $(echo "$TASK" | head -c 120)"
-          git push -u origin "${{ steps.claude.outputs.branch }}"
-          gh pr create \
-            --base "${{ inputs.base_branch }}" \
-            --head "${{ steps.claude.outputs.branch }}" \
-            --title "$(echo "$TASK" | head -c 80)" \
-            --body "$(cat /tmp/claude-result.md)"
-          exit "${{ steps.claude.outputs.claude_exit }}"
+          BACKEND_PORT: ${{ vars.BACKEND_PORT || '8080' }}
+          BACKEND_HEALTH_PATH: ${{ vars.BACKEND_HEALTH_PATH || '/actuator/health' }}
+        with:
+          # OAuth-токен подписки Pro/Max вместо API-ключа.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ inputs.task }}
+          base_branch: ${{ inputs.base_branch }}
+          branch_prefix: 'claude-dev/'
+          # Модель фиксируем явно: валидный id для API, без тега [1m] —
+          # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
+          claude_args: |
+            --model ${{ inputs.model }}
+            --max-turns ${{ inputs.max_turns }}
+            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch
