@@ -1,0 +1,15 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+# Android SDK, установленный локально в проекте (песочница блокирует ~/Library).
+/.sdk
+# Локальное состояние инструментов (не коммитить).
+/.kotlin
+/.codewhale

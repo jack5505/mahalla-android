@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- background тёмной темы варианта B «Focus» (design/android/HANDOFF.md). -->
+    <color name="mahalla_background_dark">#120C1A</color>
+    <color name="ic_launcher_background">#120C1A</color>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Язык по умолчанию — узбекский (ТЗ §1: uz по умолчанию, ru переключением). -->
+<resources>
+    <string name="app_name">Mahalla</string>
+</resources>
