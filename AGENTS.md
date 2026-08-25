@@ -68,7 +68,9 @@ iOS вне скоупа, кроссплатформенные фреймворк
   - `claude.yml` — интерактивный ассистент на `@claude` в комментарии
     issue/PR, в ревью или в теле нового issue: то же Android-окружение,
     но без бэкенда и сервисов; ветки `claude/*`.
-  - `ci.yml` — гейт на каждый PR: `testDebugUnitTest` + `assembleDebug`.
+  - `ci.yml` — `testDebugUnitTest` + `assembleDebug`. **Только ручной запуск**
+    (Actions → CI → Run workflow, решение пользователя от 2026-08-25):
+    автозапуска на PR нет, прогонять перед мержем самому.
 
   Плюс `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
   опасных операций: force-push, `reset --hard`, `sudo`, `rm -rf /`, docker).
