@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Языки для per-app languages (API 33+, эпик 1.5). Первый — язык по
+  умолчанию: uz живёт в values/, ru — в values-ru/.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="uz" />
+    <locale android:name="ru" />
+</locale-config>

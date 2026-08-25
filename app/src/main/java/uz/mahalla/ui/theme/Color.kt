@@ -9,7 +9,7 @@ import androidx.compose.ui.graphics.Color
 
 /**
  * Семантические цвета варианта B «Focus» (design/android/HANDOFF.md).
- * Material 3 ColorScheme не покрывает success/warning/*Soft — они живут здесь
+ * Material 3 ColorScheme не покрывает success, warning и Soft-варианты — они живут здесь
  * и раздаются через CompositionLocal.
  */
 @Immutable

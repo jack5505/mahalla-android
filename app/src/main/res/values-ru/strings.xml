@@ -1,4 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Русская локаль. Набор ключей обязан совпадать с values/strings.xml. -->
 <resources>
     <string name="app_name">Mahalla</string>
+    <string name="screen_skeleton_note">Экран будет свёрстан по макету на следующем этапе.</string>
+    <string name="action_back">Назад</string>
+    <string name="currency_uzs">сум</string>
+
+    <!-- Нижняя навигация -->
+    <string name="nav_discovery">Рядом</string>
+    <string name="nav_orders">Заказы</string>
+    <string name="nav_wallet">Кошелёк</string>
+    <string name="nav_profile">Профиль</string>
+
+    <!-- Онбординг -->
+    <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
+    <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>
+    <string name="onboarding_welcome_action">Начать</string>
+    <string name="onboarding_phone_title">Ваш номер телефона</string>
+    <string name="onboarding_phone_label">Номер телефона</string>
+    <string name="onboarding_phone_action">Получить код</string>
+    <string name="onboarding_phone_error">Неверный номер телефона</string>
+    <string name="onboarding_otp_title">Код отправлен на %1$s</string>
+    <string name="onboarding_otp_action">Подтвердить</string>
+    <string name="onboarding_pin_title">Установите PIN-код</string>
+    <string name="onboarding_pin_action">Сохранить</string>
+    <string name="onboarding_biometric_title">Вход по биометрии</string>
+    <string name="onboarding_biometric_action">Включить</string>
+    <string name="onboarding_biometric_skip">Позже</string>
+    <string name="onboarding_geo_title">Доступ к геолокации</string>
+    <string name="onboarding_geo_subtitle">Геолокация нужна, чтобы показать места рядом и посчитать время доставки.</string>
+    <string name="onboarding_geo_action">Разрешить</string>
+
+    <!-- Основные разделы -->
+    <string name="discovery_title">Рядом</string>
+    <string name="discovery_subtitle">Еда, аптеки, врачи, кино и мастера — рядом с вами.</string>
+    <string name="discovery_open_demo_place">Открыть демо-место</string>
+    <string name="orders_title">Заказы</string>
+    <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
+    <string name="wallet_title">Кошелёк</string>
+    <string name="wallet_subtitle">Баланс, пополнение и история платежей.</string>
+    <string name="profile_title">Профиль</string>
+    <string name="profile_subtitle">Язык, тема и настройки аккаунта.</string>
+    <string name="profile_language">Язык</string>
+    <string name="profile_theme">Тема</string>
+
+    <!-- Детали -->
+    <string name="place_title">Место</string>
+    <string name="place_id_label">Идентификатор места: %1$s</string>
+
+    <!-- Язык и тема -->
+    <string name="language_system">Системный</string>
+    <string name="language_uz">Узбекский</string>
+    <string name="language_ru">Русский</string>
+    <string name="theme_system">Системная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+
+    <!-- Ошибки сетевого слоя -->
+    <string name="error_no_connection">Нет подключения к интернету</string>
+    <string name="error_timeout">Сервер не ответил</string>
+    <string name="error_unauthorized">Сессия истекла, войдите снова</string>
+    <string name="error_forbidden">Нет доступа к этому действию</string>
+    <string name="error_not_found">Данные не найдены</string>
+    <string name="error_server">Ошибка на сервере</string>
+    <string name="error_unknown">Что-то пошло не так</string>
 </resources>

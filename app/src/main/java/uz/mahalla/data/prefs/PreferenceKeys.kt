@@ -1,0 +1,22 @@
+package uz.mahalla.data.prefs
+
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+
+/**
+ * Ключи DataStore в одном месте (эпик 1.4): их легко пересматривать при
+ * миграциях и невозможно случайно объявить дважды с разным типом.
+ */
+internal object PreferenceKeys {
+    val Language = stringPreferencesKey("settings_language")
+    val ThemeMode = stringPreferencesKey("settings_theme_mode")
+    val OnboardingCompleted = booleanPreferencesKey("settings_onboarding_completed")
+
+    val SessionAccessToken = stringPreferencesKey("session_access_token")
+    val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
+    val SessionExpiresAt = longPreferencesKey("session_expires_at")
+
+    val PinHash = stringPreferencesKey("pin_hash_encrypted")
+    val PinSalt = stringPreferencesKey("pin_salt")
+}

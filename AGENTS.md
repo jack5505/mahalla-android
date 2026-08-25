@@ -77,11 +77,102 @@ iOS вне скоупа, кроссплатформенные фреймворк
   mahalla-репо (`MAHALLA-IMPLEMENTATION.md`) и положить в переменную репо
   `BACKEND_IMAGE`.
 
-## На чём остановились (BLOCKER)
+## Этап: архитектурный фундамент (эпик 1, issue #5, ветка claude/issue-5-*)
 
-**Проект ещё ни разу не собран.** Android SDK на машине не установлен.
-Сборку и прогон тестов сделать нельзя до установки SDK (нужно явное
-подтверждение пользователя — установка вне рабочей папки).
+Сделано (реализация, снимок 2026-08-25):
+
+- **DI (Hilt)**: `MahallaApplication` (`@HiltAndroidApp`), `MainActivity`
+  (`@AndroidEntryPoint`), модули `core/di/AppModule` (Clock),
+  `data/network/di/NetworkModule`, `data/prefs/di/DataStoreModule`
+  (+ `StorageBindingsModule`), `data/db/di/DatabaseModule`,
+  `data/security/di/SecurityModule`, `feature/discovery/data/di/…`.
+  База MVI — `core/ui/Mvi.kt` (`UiState`/`UiEvent`/`UiEffect`/`MviViewModel`).
+- **Структура**: `core/{ui,result,format,locale,di}`,
+  `data/{network,prefs,db,security}`,
+  `feature/<name>/{ui,domain,data}` (onboarding — полный срез, остальные фичи
+  пока только `ui`).
+- **Навигация (Navigation Compose 2.8, typed routes)**: `navigation/Routes.kt`
+  (`@Serializable`-маршруты), `MahallaNavHost` (onboarding → main → детали),
+  `MahallaApp` (bottom nav), deep link `mahalla://place/{placeId}`
+  (`navigation/DeepLinks.kt` + intent-filter в манифесте).
+- **Сеть**: `NetworkFactory` (сборка стека без Hilt — её же используют тесты),
+  `AuthInterceptor` (Bearer), `TokenAuthenticator` (refresh по 401, один
+  повтор, отдельный `@RefreshClient` без authenticator'а),
+  `core/result/{ApiResult,ApiError}` + `apiCall {}`, baseUrl из
+  `BuildConfig.API_BASE_URL` (debug → `10.0.2.2:8080`, release → прод).
+- **Хранилище**: DataStore Preferences (`SettingsDataStore` — язык/тема/флаг
+  онбординга, `DataStoreSessionStore` — токены), Room `MahallaDatabase`
+  (places / orders / cart_draft_items, `version = 1`, `exportSchema = false`),
+  PIN — PBKDF2 (`PinHasher`) + шифрование хэша ключом из AndroidKeyStore
+  (`AndroidKeystorePinCipher`, за интерфейсом `PinCipher` ради тестов).
+- **Локализация**: все строки в `values/` (uz) и `values-ru/`,
+  `res/xml/locales_config.xml`, per-app languages через `LocaleManager`
+  (API 33+) с фолбэком `LocaleContextWrapper` в `attachBaseContext` для 26–32;
+  форматтеры `MoneyFormatter` (NBSP-разряды), `DateTimeFormatters`
+  (Asia/Tashkent), `TicketFormatter` (`A-042`).
+- **Splash**: `Theme.Mahalla.Splash` (Core SplashScreen API), splash держится
+  до чтения настроек из DataStore (`RootViewModel`).
+- **Тесты (14 файлов)**: сборка графа (`di/GraphAssemblyTest`, включая проверку
+  кодогенерации Hilt), `PhoneInputViewModelTest`, `RoutesSerializationTest`
+  (сериализация маршрутов + соответствие deep-link placeholder'ов),
+  `NetworkStackTest` на MockWebServer (200 / unknown fields / Bearer /
+  401 + refresh / провал refresh / таймаут / битый JSON), `MahallaDatabaseTest`
+  (Robolectric, DAO), `SettingsDataStoreTest`, `KeystorePinStorageTest`,
+  `PinHasherTest`, `StringResourceParityTest` (ключи и placeholder'ы
+  `values/` vs `values-ru/`), форматтеры, `AppLanguageTest`, `ApiResultTest`,
+  `RootViewModelTest` (фиксация стартового пункта графа).
+
+### Правки после код-ревью PR #19
+
+- **`ui/theme/Color.kt` не компилировался** (пришло ещё с initial commit, то
+  есть `main` тоже был красный): в KDoc стояла последовательность `/*`
+  (`success/warning/*Soft`), а блочные комментарии в Kotlin **вложенные** — файл
+  оставался незакрытым и `:app:kspDebugKotlin` падал с `Unclosed comment`.
+  Текст переписан без `/*`.
+- **PIN не блокирует Main**: `KeystorePinStorage.save/verify` уводят PBKDF2
+  (120 000 итераций) и Keystore на `Dispatchers.Default`.
+- **DataStore больше не роняет старт**: `ReplaceFileCorruptionHandler` в
+  `DataStoreModule` + `.catch {}` в `SettingsDataStore.settings` (дефолты) и
+  `DataStoreSessionStore.session` (нет сессии). Раньше исключение улетало в
+  `stateIn` внутри `viewModelScope` под держащимся splash'ем.
+- **`startDestination` фиксируется один раз** (`RootUiState.Ready.startWithOnboarding`):
+  пересчёт на каждой эмиссии настроек пересобирал граф и сбрасывал back stack.
+  Выход из онбординга остался только на `navigate(MainGraph) { popUpTo(...) }`.
+- **Токены не текут в logcat**: `redactHeader("Authorization")` у
+  `HttpLoggingInterceptor`.
+- **Файл prefs исключён из бэкапа** (`backup_rules.xml`,
+  `data_extraction_rules.xml`, `<device-transfer>` тоже): там токены сессии, а
+  ключ Keystore на новое устройство не переносится.
+- **`expiresIn` теперь nullable** (`Session.UNKNOWN_EXPIRY`): дефолт `0L`
+  означал «токен истёк в 1970».
+- **`attemptCount` в `TokenAuthenticator`** считает только 401-звенья цепочки
+  `priorResponse`; раньше один редирект исчерпывал лимит и refresh не случался.
+- **Один критерий «PIN настроен»**: `SettingsDataStore.pinConfigured` смотрит
+  `PinHash` **и** `PinSalt`, как `PinStorage.isConfigured()`.
+
+**Не сделано / риски:**
+
+- **Иконка (1.6)** — брендового ассета нет, лаунчер и splash используют
+  прежнюю заглушку. Ждём логотип.
+- **Сборка и тесты агентом по-прежнему не запускались**: в workflow
+  `claude.yml` команда `./gradlew` не входит в разрешённые
+  (`Bash(./gradlew…)` → «requires approval»), поэтому `testDebugUnitTest` /
+  `assembleDebug` прогоняет гейт `ci.yml` на PR. Чтобы агент мог собирать сам,
+  нужно разрешение `Bash(./gradlew*)` в `.claude/settings.json` — это блокер
+  для скорости работы над эпиком 2.
+- **Открытые замечания ревью** (оформить задачами, не блокеры мержа):
+  `synchronized` + четыре `runBlocking` в `TokenAuthenticator` (лучше `Mutex` +
+  кэш результата refresh); два независимых `OkHttpClient` с отдельными пулами;
+  `PhoneInputScreen` держит форматированную строку в `OutlinedTextField`
+  (каретка прыгает — нужен `TextFieldValue`/`VisualTransformation`);
+  блокирующее чтение DataStore в `attachBaseContext` на API 26–32;
+  `StringResourceParityTest` не ловит непозиционные `%s`/`%d`;
+  `BottomNavItem.route: Any`; `TicketFormatter.parse("A--42")`;
+  `GraphAssemblyTest` не закрывает созданные клиенты и DataStore;
+  `exportSchema = false` включить обратно до первого релиза.
+- Версии новых библиотек подобраны под связку AGP 8.7.3 / Kotlin 2.0.21 /
+  KSP 2.0.21-1.0.25: Hilt 2.52, Navigation 2.8.5, Room 2.6.1, Retrofit 2.11.0,
+  OkHttp 4.12.0, DataStore 1.1.1, Robolectric 4.14.1.
 
 ## Окружение (важно, иначе градиент не стартует)
 
@@ -109,14 +200,17 @@ and variables → Actions), закоммитить и запушить `.github/
 `.claude/`, `.gitignore` и этот файл, затем запустить workflow «Claude Code
 Dev» вручную (workflow_dispatch) либо написать `@claude ...` в issue.
 
-1. Установка SDK идёт/проверена: cmdline-tools, platform-tools,
-   `platforms;android-35`, `build-tools;35.0.0`, лицензии приняты (`yes | sdkmanager --licenses`).
-   Если пакетов не хватает — `sdkmanager` в `.sdk/cmdline-tools/latest/bin/`.
-2. `./gradlew assembleDebug` — первая сборка (долгая: качает зависимости).
-3. `./gradlew testDebugUnitTest` — прогон тестов темы.
-4. Дальше — экраны по ТЗ §7 в порядке макета: онбординг
-   (welcome → phone → otp → pin → biometric → geo), discovery/map/search,
-   затем вертикали (food: place/menu/cart/checkout/order-status и т.д.).
+1. Локально (если нужен прогон на машине): SDK в `.sdk/`, cmdline-tools,
+   platform-tools, `platforms;android-35`, `build-tools;35.0.0`, лицензии
+   приняты (`yes | sdkmanager --licenses`); дальше `./gradlew assembleDebug`
+   и `./gradlew testDebugUnitTest`. В облаке это делает `ci.yml` на PR.
+2. Дождаться зелёного `ci.yml` на PR эпика 1; если что-то падает — правки
+   в ту же ветку.
+3. Эпик 2 — онбординг и авторизация: экраны welcome → phone → otp → pin →
+   biometric → geo по макету, OTP-эндпоинты в `AuthApi`, PIN через уже готовый
+   `PinStorage`, биометрия (`androidx.biometric`).
+4. Дальше — discovery/map/search, затем вертикали (food:
+   place/menu/cart/checkout/order-status и т.д.).
 
 ## Правила (не нарушать)
 
