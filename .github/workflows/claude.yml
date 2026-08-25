@@ -10,9 +10,11 @@ name: Claude Code
 # Требуется до первого запуска (вручную, разово):
 #   1. Установить GitHub App «Claude» на репозиторий
 #      (проще всего: в Claude Code выполнить  /install-github-app ).
-#   2. Добавить секрет CLAUDE_CODE_OAUTH_TOKEN в Settings → Secrets and variables
-#      → Actions (значение — из `claude setup-token`; расходуется подписка
-#      Pro/Max, отдельной оплаты нет).
+#   2. Добавить секрет CLAUDE_CODE_OAUTH_TOKEN (или ANTHROPIC_OAUTH_TOKEN —
+#      поддержаны оба) в Settings → Secrets and variables → Actions.
+#      Значение — из `claude setup-token` (долгоживущий токен вида sk-ant-oat...),
+#      НЕ access_token из ~/.claude/.credentials.json: тот живёт часы.
+#      Расходуется подписка Pro/Max, отдельной оплаты по токенам нет.
 #      Альтернатива: секрет ANTHROPIC_API_KEY
 #      (значение — ключ из console.anthropic.com, отдельный биллинг по токенам),
 #      тогда в шаге ниже заменить claude_code_oauth_token на anthropic_api_key.
@@ -84,7 +86,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           # OAuth-токен подписки Pro/Max вместо API-ключа.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Поддержаны оба имени секрета: сначала каноническое
+          # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
+          # Незаданный секрет даёт пустую строку, поэтому || работает.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
           use_sticky_comment: 'true'

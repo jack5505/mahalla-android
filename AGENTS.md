@@ -58,8 +58,9 @@ iOS вне скоупа, кроссплатформенные фреймворк
 - Лаунчер-иконка — временная заглушка (круг в accent-цвете), ждёт брендовый логотип.
 - CI/Cloud-разработка (решение пользователя): `.github/workflows/` — три
   workflow, все на официальном `anthropics/claude-code-action@v1` с авторизацией
-  по OAuth-токену подписки (секрет `CLAUDE_CODE_OAUTH_TOKEN`, значение из
-  `claude setup-token`):
+  по OAuth-токену подписки (секрет `CLAUDE_CODE_OAUTH_TOKEN` либо
+  `ANTHROPIC_OAUTH_TOKEN` — workflow принимает оба; значение — из
+  `claude setup-token`, а не access_token из `~/.claude/.credentials.json`):
   - `claude-dev.yml` — ручной запуск (`workflow_dispatch`, ввод: задача, модель,
     max-turns): docker-бэкенд + postgres/redis + JDK 17 + Android SDK +
     gradle-кэш → Claude делает задачу, коммитит в ветку `claude-dev/*` и
@@ -103,7 +104,8 @@ iOS вне скоупа, кроссплатформенные фреймворк
 
 **Перед первым CI-запуском (действия пользователя, git локально запрещён):**
 установить GitHub App «Claude» (`/install-github-app`), добавить секрет
-`CLAUDE_CODE_OAUTH_TOKEN` (значение — из `claude setup-token`) и переменные
+`CLAUDE_CODE_OAUTH_TOKEN` или `ANTHROPIC_OAUTH_TOKEN` (значение — из
+`claude setup-token`) и переменные
 `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets
 and variables → Actions), закоммитить и запушить `.github/`, `CLAUDE.md`,
 `.claude/`, `.gitignore` и этот файл, затем запустить workflow «Claude Code
