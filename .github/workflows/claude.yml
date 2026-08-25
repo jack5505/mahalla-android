@@ -99,4 +99,4 @@ jobs:
           # Разрешаем только необходимые Gradle-команды для безопасности.
           claude_args: |
             --model "claude-opus-5"
-            --allowedTools "Bash(gradlew build),Bash(gradlew test),Bash(gradlew connectedAndroidTest),Bash(gradlew assembleDebug),Bash(gradlew lint),Bash(gradlew detekt),Bash(gradlew ktlintCheck)"
+            --allowedTools "Bash(./gradlew:*)"
