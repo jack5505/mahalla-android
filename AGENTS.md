@@ -56,16 +56,26 @@ iOS вне скоупа, кроссплатформенные фреймворк
 - Юнит-тесты темы: `ThemeSelectionTest` (выбор схемы по darkTheme),
   `ContrastTest` (WCAG-контраст onPrimary/primary ≥ 4.5) — как требует HANDOFF.
 - Лаунчер-иконка — временная заглушка (круг в accent-цвете), ждёт брендовый логотип.
-- CI/Cloud-разработка (решение пользователя): `.github/workflows/` —
-  `claude-dev.yml` (Claude Code headless в GitHub Actions: docker-бэкенд +
-  postgres/redis + JDK 17 + Android SDK + gradle-кэш → Claude выполняет задачу
-  → ветка `claude-dev/<run_id>` → коммит → push → PR с отчётом Claude) и
-  `ci.yml` (на каждый PR: `testDebugUnitTest` + `assembleDebug`). Плюс
-  `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
-  опасных git/docker-операций). Имя docker-образа бэкенда ещё не задано —
-  взять из mahalla-репо (`MAHALLA-IMPLEMENTATION.md`) и положить в переменную
-  репо `BACKEND_IMAGE`; секрет `ANTHROPIC_OAUTH_TOKEN` (OAuth-токен Claude,
-  взять из `~/.claude/.credentials.json`) — действие пользователя.
+- CI/Cloud-разработка (решение пользователя): `.github/workflows/` — три
+  workflow, все на официальном `anthropics/claude-code-action@v1` с авторизацией
+  по OAuth-токену подписки (секрет `CLAUDE_CODE_OAUTH_TOKEN`, значение из
+  `claude setup-token`):
+  - `claude-dev.yml` — ручной запуск (`workflow_dispatch`, ввод: задача, модель,
+    max-turns): docker-бэкенд + postgres/redis + JDK 17 + Android SDK +
+    gradle-кэш → Claude делает задачу, коммитит в ветку `claude-dev/*` и
+    открывает PR (всё внутри action, ручного git-шага нет).
+  - `claude.yml` — интерактивный ассистент на `@claude` в комментарии
+    issue/PR, в ревью или в теле нового issue: то же Android-окружение,
+    но без бэкенда и сервисов; ветки `claude/*`.
+  - `ci.yml` — гейт на каждый PR: `testDebugUnitTest` + `assembleDebug`.
+
+  Плюс `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
+  опасных операций: force-push, `reset --hard`, `sudo`, `rm -rf /`, docker).
+  Запрет `git commit`/`git push` для локального агента вынесен в
+  `.claude/settings.local.json` (в `.gitignore`) — в репо-настройках он ломал бы
+  коммиты Claude в CI. Имя docker-образа бэкенда ещё не задано — взять из
+  mahalla-репо (`MAHALLA-IMPLEMENTATION.md`) и положить в переменную репо
+  `BACKEND_IMAGE`.
 
 ## На чём остановились (BLOCKER)
 
@@ -92,11 +102,12 @@ iOS вне скоупа, кроссплатформенные фреймворк
 ## Что делать дальше (по порядку)
 
 **Перед первым CI-запуском (действия пользователя, git локально запрещён):**
-добавить секрет `ANTHROPIC_OAUTH_TOKEN` (OAuth-токен Claude из
-`~/.claude/.credentials.json`) и переменные `BACKEND_IMAGE` /
-`BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets and variables →
-Actions), закоммитить и запушить `.github/`, `CLAUDE.md`, `.claude/` и этот
-файл, затем запустить workflow «Claude Code Dev» вручную (workflow_dispatch).
+установить GitHub App «Claude» (`/install-github-app`), добавить секрет
+`CLAUDE_CODE_OAUTH_TOKEN` (значение — из `claude setup-token`) и переменные
+`BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets
+and variables → Actions), закоммитить и запушить `.github/`, `CLAUDE.md`,
+`.claude/`, `.gitignore` и этот файл, затем запустить workflow «Claude Code
+Dev» вручную (workflow_dispatch) либо написать `@claude ...` в issue.
 
 1. Установка SDK идёт/проверена: cmdline-tools, platform-tools,
    `platforms;android-35`, `build-tools;35.0.0`, лицензии приняты (`yes | sdkmanager --licenses`).
@@ -111,7 +122,14 @@ Actions), закоммитить и запушить `.github/`, `CLAUDE.md`, `.
 
 - **Тесты обязательны** для любого реализованного функционала и входят в тот же
   коммит; результат прогона указывать в отчёте (`./gradlew test`).
-- **Git-команды локальному агенту запрещены** (no init/add/commit/push) — правила проекта. Единственное исключение (решение пользователя): коммиты/push/PR в облаке делает workflow `claude-dev.yml` от имени `claude[bot]`; локального агента это исключение не касается.
+- **Git локальному агенту — только по явной команде пользователя** (решение
+  пользователя от 2026-08-25, смягчает прежний полный запрет). Сам, без
+  просьбы, `add`/`commit`/`push` не делать. Force-push и `reset --hard`
+  запрещены всегда (`.claude/settings.json`). Разрешения на git живут в
+  `.claude/settings.local.json` (в `.gitignore`) — этот файл правит только
+  пользователь: агент не может выдавать права сам себе.
+  В облаке коммиты/push/PR делает `claude-code-action` от имени `claude[bot]`
+  (workflow `claude-dev.yml` и `claude.yml`).
 - `rm -rf`, `sudo`, изменения вне рабочей папки — только по явной команде пользователя.
 - Минимум кода сверх запроса; непонятно — спросить, не додумывать.
 - Секреты — только через env/.env, в код не писать.
