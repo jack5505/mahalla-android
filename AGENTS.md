@@ -154,12 +154,17 @@ iOS вне скоупа, кроссплатформенные фреймворк
 
 - **Иконка (1.6)** — брендового ассета нет, лаунчер и splash используют
   прежнюю заглушку. Ждём логотип.
-- **Сборка и тесты агентом по-прежнему не запускались**: в workflow
-  `claude.yml` команда `./gradlew` не входит в разрешённые
-  (`Bash(./gradlew…)` → «requires approval»), поэтому `testDebugUnitTest` /
-  `assembleDebug` прогоняет гейт `ci.yml` на PR. Чтобы агент мог собирать сам,
-  нужно разрешение `Bash(./gradlew*)` в `.claude/settings.json` — это блокер
-  для скорости работы над эпиком 2.
+- **Сборка и тесты агентом в `claude.yml`** (issue #20): причина была не в
+  качестве кода, а в правах — в `claude_args` стоял список
+  `Bash(gradlew build)`, `Bash(gradlew test)`, …, который не совпадает ни с
+  одной реальной командой (`./gradlew testDebugUnitTest`), плюс паттерны Bash
+  в Claude Code требуют `:*` для префикса. Заменено на
+  `Bash(./gradlew),Bash(./gradlew:*),Bash(chmod +x ./gradlew),Bash(chmod +x gradlew)`.
+  В `claude-dev.yml` разрешён bare `Bash`, там ограничения не было.
+  Правку в `.github/workflows/` пушит только пользователь: у GitHub App
+  «Claude» нет права `workflows`. `.claude/settings.json` агент себе тоже не
+  правит (нельзя выдавать права самому себе) — при желании дублировать разрешение
+  туда это делает пользователь.
 - **Открытые замечания ревью** (оформить задачами, не блокеры мержа):
   `synchronized` + четыре `runBlocking` в `TokenAuthenticator` (лучше `Mutex` +
   кэш результата refresh); два независимых `OkHttpClient` с отдельными пулами;
