@@ -1,11 +1,7 @@
 package uz.mahalla.navigation
 
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -14,6 +10,8 @@ import androidx.navigation.NavDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import uz.mahalla.core.ui.components.MahallaBottomNav
+import uz.mahalla.core.ui.components.NavItemUi
 
 /**
  * Корневой каркас приложения: нижняя навигация показывается только внутри
@@ -34,16 +32,19 @@ fun MahallaApp(
         modifier = modifier,
         bottomBar = {
             if (selectedItem != null) {
-                NavigationBar {
-                    BottomNavItem.entries.forEach { item ->
-                        NavigationBarItem(
-                            selected = item == selectedItem,
-                            onClick = { navController.navigateToTab(item) },
-                            icon = { Icon(item.icon, contentDescription = null) },
-                            label = { Text(stringResource(item.labelRes)) },
+                // Нижняя навигация — компонент UI-кита (эпик 2.2): цвета,
+                // подписи и цель нажатия 48dp заданы там, а не на каждом экране.
+                MahallaBottomNav(
+                    items = BottomNavItem.entries.map { item ->
+                        NavItemUi(
+                            id = item.name,
+                            label = stringResource(item.labelRes),
+                            icon = item.icon,
                         )
-                    }
-                }
+                    },
+                    selectedId = selectedItem.name,
+                    onSelect = { navController.navigateToTab(BottomNavItem.valueOf(it.id)) },
+                )
             }
         },
     ) { innerPadding ->

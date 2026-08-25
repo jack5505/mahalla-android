@@ -174,6 +174,46 @@ iOS вне скоупа, кроссплатформенные фреймворк
   KSP 2.0.21-1.0.25: Hilt 2.52, Navigation 2.8.5, Room 2.6.1, Retrofit 2.11.0,
   OkHttp 4.12.0, DataStore 1.1.1, Robolectric 4.14.1.
 
+## Этап: UI-кит (эпик 2, issue #6, ветка claude/issue-6-*)
+
+Библиотека компонентов живёт в `core/ui/`:
+
+- **Токены и доступность**: `components/ComponentDefaults.kt` — все цели
+  нажатия ≥ 48dp отдельными значениями (визуальная высота из `Spacing`
+  меньше, и это разные величины); `components/MahallaTone.kt` — смысловые
+  тоны (neutral/accent/success/warning/info/error) с парами цветов.
+- **2.1 базовые**: `Buttons.kt` (primary/secondary/ghost/destructive +
+  `ButtonState` enabled/loading, `MahallaIconButton`), `TextFields.kt`
+  (текст, телефон `+998` с маской и удержанием каретки, OTP-ячейки поверх
+  одного скрытого поля, поиск), `Chips.kt` (фильтры + бейджи),
+  `Toggles.kt` (строка-переключатель, сегментированный контрол).
+- **2.2 контейнеры**: `Cards.kt` (`PlaceCard`, `OrderCard`, `TicketCard`,
+  `BookingCard`, `MahallaListItem`, `SectionHeader`), `Bars.kt`
+  (`MahallaTopBar`, `MahallaBottomNav` — им пользуется `MahallaApp`),
+  `Sheets.kt` (bottom sheet + диалог).
+- **2.3 состояния**: `state/ScreenState.kt` (Loading/Empty/Error/Content +
+  `toScreenState`), `ScreenStates.kt` (скелетоны, empty, error c retry,
+  `ScreenStateHost`), `Refresh.kt` (pull-to-refresh), `snackbar/` +
+  `Snackbars.kt` (единый снекбар через канал).
+- **Превью**: `preview/Previews.kt` — multipreview `@ThemeLanguagePreviews`
+  (light/dark × uz/ru) и `@LargeFontPreviews` (fontScale 1.5).
+- **Тесты**: `ContrastTest` расширен на все семантические пары (текст 4.5:1,
+  нетекстовые элементы 3.0:1), `PhoneFieldFormatterTest`, `OtpFieldStateTest`,
+  `ScreenStateTest`, `ComponentStateTest`, `TouchTargetTest`,
+  `SnackbarControllerTest`.
+
+Найдено тестом контраста (в код не правил — палитра приходит из
+design-репозитория): в светлой теме `onSecondary` на `secondary` = 4.48:1,
+`accent` на `surface` = 4.17:1, `accent` на `accentSoft` = 3.65:1. Поэтому
+accent в ките — цвет иконок/границ, а текст акцентного бейджа берёт
+`onSecondaryContainer`. Нужно решение дизайна, править ли `secondary`.
+
+**Не сделано / риски эпика 2:** сборку и тесты агент снова не прогонял
+(`Bash(./gradlew*)` не разрешён в `claude.yml`) — проверяет `ci.yml` на PR;
+скриншот-тестов нет, соответствие макету проверяется глазами по превью;
+экраны, кроме `PhoneInputScreen` и нижней навигации, на кит ещё не переведены
+(это эпики 3+).
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`
@@ -204,13 +244,17 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
    platform-tools, `platforms;android-35`, `build-tools;35.0.0`, лицензии
    приняты (`yes | sdkmanager --licenses`); дальше `./gradlew assembleDebug`
    и `./gradlew testDebugUnitTest`. В облаке это делает `ci.yml` на PR.
-2. Дождаться зелёного `ci.yml` на PR эпика 1; если что-то падает — правки
-   в ту же ветку.
-3. Эпик 2 — онбординг и авторизация: экраны welcome → phone → otp → pin →
-   biometric → geo по макету, OTP-эндпоинты в `AuthApi`, PIN через уже готовый
-   `PinStorage`, биометрия (`androidx.biometric`).
+2. Дождаться зелёного `ci.yml` на PR эпика 2 (UI-кит); если что-то падает —
+   правки в ту же ветку.
+3. Эпик 3 — онбординг и авторизация: экраны welcome → phone → otp → pin →
+   biometric → geo по макету **из компонентов кита**, OTP-эндпоинты в
+   `AuthApi`, PIN через уже готовый `PinStorage`, биометрия
+   (`androidx.biometric`).
 4. Дальше — discovery/map/search, затем вертикали (food:
    place/menu/cart/checkout/order-status и т.д.).
+5. Просьба к пользователю: добавить `Bash(./gradlew*)` в allow-list
+   `.claude/settings.json` — без него агент не может собрать проект и прогнать
+   тесты сам, и каждая ошибка компиляции всплывает только на PR.
 
 ## Правила (не нарушать)
 

@@ -56,6 +56,42 @@
     <string name="theme_light">Светлая</string>
     <string name="theme_dark">Тёмная</string>
 
+    <!-- UI-кит: действия -->
+    <string name="action_retry">Повторить</string>
+    <string name="action_clear">Очистить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_see_all">Все</string>
+
+    <!-- UI-кит: поиск и OTP -->
+    <string name="search_hint">Поиск</string>
+    <string name="search_clear">Очистить поиск</string>
+    <string name="otp_input_description">Код подтверждения, %1$d цифр</string>
+    <string name="otp_input_progress">Введено %1$d из %2$d цифр</string>
+
+    <!-- UI-кит: состояния для TalkBack -->
+    <string name="chip_state_selected">выбрано</string>
+    <string name="chip_state_not_selected">не выбрано</string>
+    <string name="switch_state_on">включено</string>
+    <string name="switch_state_off">выключено</string>
+
+    <!-- UI-кит: состояния экрана -->
+    <string name="state_loading">Загрузка</string>
+    <string name="state_empty_title">Пока пусто</string>
+    <string name="state_empty_description">Здесь пока нет данных</string>
+    <string name="state_error_title">Произошла ошибка</string>
+
+    <!-- UI-кит: карточки -->
+    <string name="filter_food">Еда</string>
+    <string name="filter_pharmacy">Аптека</string>
+    <string name="place_open_now">Открыто</string>
+    <string name="place_closed_now">Закрыто</string>
+    <string name="place_rating_description">Рейтинг %1$s</string>
+    <string name="ticket_number_description">Номер талона %1$s</string>
+    <string name="order_status_pending">Ожидает</string>
+    <string name="order_status_confirmed">Подтверждено</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Нет подключения к интернету</string>
     <string name="error_timeout">Сервер не ответил</string>
