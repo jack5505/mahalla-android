@@ -1,0 +1,196 @@
+# Разработка через Claude Code внутри GitHub Actions.
+#
+# Запуск: GitHub → Actions → "Claude Code Dev" → Run workflow (ввод: задача).
+# Что происходит: поднимается docker-бэкенд (+postgres/redis), Claude Code
+# headless выполняет задачу в свежей ветке, затем workflow коммитит, пушит
+# и открывает PR с отчётом Claude в теле.
+#
+# Требования к репозиторию:
+#   - секрет  ANTHROPIC_API_KEY (Settings → Secrets and variables → Actions)
+#   - переменные репо (необязательные, с дефолтами):
+#       BACKEND_IMAGE       — docker-образ бэкенда (без него шаг пропускается)
+#       BACKEND_PORT        — порт бэкенда (по умолчанию 8080)
+#       BACKEND_HEALTH_PATH — health-endpoint (по умолчанию /actuator/health)
+
+name: Claude Code Dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Задача для Claude Code (что разработать)'
+        required: true
+        type: string
+      base_branch:
+        description: 'Ветка-основа для PR'
+        required: false
+        default: 'main'
+        type: string
+      model:
+        description: 'Модель Claude'
+        required: false
+        default: 'sonnet'
+        type: choice
+        options:
+          - sonnet
+          - opus
+          - haiku
+      max_turns:
+        description: 'Максимум ходов Claude Code (защита от зацикливания)'
+        required: false
+        default: '80'
+        type: string
+      backend_image:
+        description: 'Переопределить docker-образ бэкенда (пусто = переменная BACKEND_IMAGE)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  claude-dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    # Зависимости бэкенда. Состав уточнить по mahalla-репо
+    # (MAHALLA-IMPLEMENTATION.md): возможно, нужен ещё kafka и т.п.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mahalla
+          POSTGRES_PASSWORD: mahalla
+          POSTGRES_DB: mahalla
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mahalla"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-35 build-tools;35.0.0'
+
+      - name: Android-лицензии (страховка)
+        run: |
+          for SDKROOT in "$ANDROID_HOME" "$ANDROID_SDK_ROOT"; do
+            if [ -x "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+              yes | "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+            fi
+          done
+
+      - name: Gradle (кэш)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Поднять бэкенд (docker-образ)
+        env:
+          BACKEND_IMAGE: ${{ inputs.backend_image || vars.BACKEND_IMAGE }}
+          BACKEND_PORT: ${{ vars.BACKEND_PORT || '8080' }}
+          BACKEND_HEALTH_PATH: ${{ vars.BACKEND_HEALTH_PATH || '/actuator/health' }}
+        run: |
+          if [ -z "$BACKEND_IMAGE" ]; then
+            echo "::warning::BACKEND_IMAGE не задан — бэкенд пропущен. Задай переменную репо BACKEND_IMAGE или input backend_image."
+            exit 0
+          fi
+          docker pull "$BACKEND_IMAGE"
+          docker run -d --name backend -p "${BACKEND_PORT}:${BACKEND_PORT}" "$BACKEND_IMAGE"
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null "http://localhost:${BACKEND_PORT}${BACKEND_HEALTH_PATH}"; then
+              echo "::notice::Бэкенд готов: http://localhost:${BACKEND_PORT}"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::warning::Бэкенд не ответил за 120 c — продолжаю без него (диагностика: docker logs backend)"
+
+      - name: Установить Claude Code
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.241 || npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Claude Code — разработка
+        id: claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TASK: ${{ inputs.task }}
+          MODEL: ${{ inputs.model }}
+          MAX_TURNS: ${{ inputs.max_turns }}
+          DISABLE_TELEMETRY: '1'
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::Нет секрета ANTHROPIC_API_KEY. Добавь: repo → Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          BRANCH="claude-dev/${{ github.run_id }}-${{ github.run_attempt }}"
+          git checkout -b "$BRANCH"
+          set +e
+          claude -p "$TASK" \
+            --model "$MODEL" \
+            --max-turns "$MAX_TURNS" \
+            --dangerously-skip-permissions \
+            --output-format json > /tmp/claude-output.json
+          CLAUDE_EXIT=$?
+          set -e
+          if [ -s /tmp/claude-output.json ]; then
+            jq -r '.result // "Отчёт недоступен"' /tmp/claude-output.json > /tmp/claude-result.md 2>/dev/null \
+              || echo "Отчёт недоступен" > /tmp/claude-result.md
+          else
+            echo "Отчёт недоступен" > /tmp/claude-result.md
+          fi
+          echo "claude_exit=${CLAUDE_EXIT}" >> "$GITHUB_OUTPUT"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Коммит, push, PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TASK: ${{ inputs.task }}
+        run: |
+          gh auth setup-git
+          git config user.name "claude[bot]"
+          git config user.email "claude[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice::Claude не внёс изменений — PR не создаётся."
+            exit "${{ steps.claude.outputs.claude_exit }}"
+          fi
+          git commit -m "claude: $(echo "$TASK" | head -c 120)"
+          git push -u origin "${{ steps.claude.outputs.branch }}"
+          gh pr create \
+            --base "${{ inputs.base_branch }}" \
+            --head "${{ steps.claude.outputs.branch }}" \
+            --title "$(echo "$TASK" | head -c 80)" \
+            --body "$(cat /tmp/claude-result.md)"
+          exit "${{ steps.claude.outputs.claude_exit }}"

@@ -56,6 +56,15 @@ iOS вне скоупа, кроссплатформенные фреймворк
 - Юнит-тесты темы: `ThemeSelectionTest` (выбор схемы по darkTheme),
   `ContrastTest` (WCAG-контраст onPrimary/primary ≥ 4.5) — как требует HANDOFF.
 - Лаунчер-иконка — временная заглушка (круг в accent-цвете), ждёт брендовый логотип.
+- CI/Cloud-разработка (решение пользователя): `.github/workflows/` —
+  `claude-dev.yml` (Claude Code headless в GitHub Actions: docker-бэкенд +
+  postgres/redis + JDK 17 + Android SDK + gradle-кэш → Claude выполняет задачу
+  → ветка `claude-dev/<run_id>` → коммит → push → PR с отчётом Claude) и
+  `ci.yml` (на каждый PR: `testDebugUnitTest` + `assembleDebug`). Плюс
+  `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
+  опасных git/docker-операций). Имя docker-образа бэкенда ещё не задано —
+  взять из mahalla-репо (`MAHALLA-IMPLEMENTATION.md`) и положить в переменную
+  репо `BACKEND_IMAGE`; секрет `ANTHROPIC_API_KEY` — действие пользователя.
 
 ## На чём остановились (BLOCKER)
 
@@ -81,6 +90,12 @@ iOS вне скоупа, кроссплатформенные фреймворк
 
 ## Что делать дальше (по порядку)
 
+**Перед первым CI-запуском (действия пользователя, git локально запрещён):**
+добавить секрет `ANTHROPIC_API_KEY` и переменные `BACKEND_IMAGE` /
+`BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets and variables →
+Actions), закоммитить и запушить `.github/`, `CLAUDE.md`, `.claude/` и этот
+файл, затем запустить workflow «Claude Code Dev» вручную (workflow_dispatch).
+
 1. Установка SDK идёт/проверена: cmdline-tools, platform-tools,
    `platforms;android-35`, `build-tools;35.0.0`, лицензии приняты (`yes | sdkmanager --licenses`).
    Если пакетов не хватает — `sdkmanager` в `.sdk/cmdline-tools/latest/bin/`.
@@ -94,7 +109,7 @@ iOS вне скоупа, кроссплатформенные фреймворк
 
 - **Тесты обязательны** для любого реализованного функционала и входят в тот же
   коммит; результат прогона указывать в отчёте (`./gradlew test`).
-- **Git-команды запрещены** (no init/add/commit/push) — правила проекта.
+- **Git-команды локальному агенту запрещены** (no init/add/commit/push) — правила проекта. Единственное исключение (решение пользователя): коммиты/push/PR в облаке делает workflow `claude-dev.yml` от имени `claude[bot]`; локального агента это исключение не касается.
 - `rm -rf`, `sudo`, изменения вне рабочей папки — только по явной команде пользователя.
 - Минимум кода сверх запроса; непонятно — спросить, не додумывать.
 - Секреты — только через env/.env, в код не писать.

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push*)",
+      "Bash(git commit*)",
+      "Bash(git reset --hard*)",
+      "Bash(sudo*)",
+      "Bash(rm -rf /*)",
+      "Bash(docker system prune*)",
+      "Bash(docker rm -f backend)"
+    ]
+  }
+}
