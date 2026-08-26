@@ -507,6 +507,8 @@ merge-коммитом (`git merge` не в allow-list workflow `claude.yml`). �
 (`RatingFormatter.format(0.0).orEmpty()`); `CategoryTile` использует
 `Modifier.clickable` на `Surface` вместо `Surface(onClick = …)`.
 
+=======
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`
@@ -546,6 +548,8 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
 4. Закрыть блокер 4.2 — выбрать картографический SDK (Yandex MapKit или
    Google Maps) и заменить заглушку полотна в `MapScreen`; дальше вертикали
    (food: place/menu/cart/checkout/order-status и т.д.).
+4. Дальше — discovery/map/search, затем вертикали (food:
+   place/menu/cart/checkout/order-status и т.д.).
 5. `./gradlew` агенту в CI разрешён — **прогонять `testDebugUnitTest` и
    `assembleDebug` до пуша обязательно**. Три эпика подряд `main` оставался
    некомпилируемым (`Color.kt`, потом `Type.kt` + `MahallaApp.kt`) именно
