@@ -19,6 +19,16 @@
   работай без него и укажи это в отчёте.
 - **Окружение**: JDK 17, Android SDK (platform 35 + build-tools 35.0.0),
   `ANDROID_HOME` настроен. Сборка — только через `./gradlew`.
+- **Инструменты**: разрешены Bash, Read/Write/Edit, Glob/Grep, WebFetch,
+  WebSearch, Task/Agent, TodoWrite (список в `claude_args: --allowed-tools`).
+  `gh` работает — `GH_TOKEN` проброшен, права по `permissions` job'а:
+  issues/PR создавать и комментировать можно. Если инструмент реально нужен,
+  а он запрещён — не обходи, напиши об этом в отчёте: список правится в
+  workflow.
+- **Дизайн-репо**: если задан секрет `DESIGN_REPO_PAT`, `jack5505/mahalla`
+  лежит в `design-repo/` — ТЗ (`design-repo/design/android/TZ-ANDROID.md`),
+  DESIGN-SYSTEM, SCREENS, прототип, `rules/`. Каталога нет — значит секрет
+  не задан: работай по AGENTS.md и коду и укажи это в отчёте.
 - **Эмулятора в CI нет**: проверки — только `./gradlew testDebugUnitTest`
   и `./gradlew assembleDebug`. Instrumentation-тесты не запускать.
 - **Тесты обязательны** (правило проекта): для любого функционала пиши тесты

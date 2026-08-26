@@ -10,9 +10,11 @@ name: Claude Code
 # Требуется до первого запуска (вручную, разово):
 #   1. Установить GitHub App «Claude» на репозиторий
 #      (проще всего: в Claude Code выполнить  /install-github-app ).
-#   2. Добавить секрет CLAUDE_CODE_OAUTH_TOKEN в Settings → Secrets and variables
-#      → Actions (значение — из `claude setup-token`; расходуется подписка
-#      Pro/Max, отдельной оплаты нет).
+#   2. Добавить секрет CLAUDE_CODE_OAUTH_TOKEN (или ANTHROPIC_OAUTH_TOKEN —
+#      поддержаны оба) в Settings → Secrets and variables → Actions.
+#      Значение — из `claude setup-token` (долгоживущий токен вида sk-ant-oat...),
+#      НЕ access_token из ~/.claude/.credentials.json: тот живёт часы.
+#      Расходуется подписка Pro/Max, отдельной оплаты по токенам нет.
 #      Альтернатива: секрет ANTHROPIC_API_KEY
 #      (значение — ключ из console.anthropic.com, отдельный биллинг по токенам),
 #      тогда в шаге ниже заменить claude_code_oauth_token на anthropic_api_key.
@@ -48,11 +50,35 @@ jobs:
       issues: write          # ответы в issue
       id-token: write
       actions: read          # чтение логов упавшего CI
+
+    env:
+      # secrets нельзя читать в `if:` шага, поэтому наличие PAT переносим в env.
+      HAS_DESIGN_PAT: ${{ secrets.DESIGN_REPO_PAT != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
+      # репозиторий: токен этого job'а прав на него не даёт, а WebFetch
+      # приватный репо не откроет в принципе. Поэтому кладём файлами рядом,
+      # Claude читает их через Read/Glob.
+      # Нужен секрет DESIGN_REPO_PAT — fine-grained PAT с Contents: read
+      # на jack5505/mahalla. Без секрета шаг пропускается.
+      - name: Checkout дизайн-репо
+        if: env.HAS_DESIGN_PAT == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: jack5505/mahalla
+          path: design-repo
+          token: ${{ secrets.DESIGN_REPO_PAT }}
+          sparse-checkout: |
+            design/android
+            rules
+            AGENTS.md
+            MAHALLA-IMPLEMENTATION.md
 
       # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
       # Ставим до запуска Claude, чтобы ./gradlew шёл на нём.
@@ -93,8 +119,31 @@ jobs:
 
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
+        env:
+          # Без GH_TOKEN у Claude не работает `gh`: ни создать issue/PR, ни
+          # прочитать логи прогона. Права — из permissions этого job'а.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # OAuth-токен подписки Pro/Max вместо API-ключа.
+          # Поддержаны оба имени секрета: сначала каноническое
+          # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
+          # Незаданный секрет даёт пустую строку, поэтому || работает.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
+          # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
+          branch_prefix: 'claude/'
+          use_sticky_comment: 'true'
+          # Модель фиксируем явно: валидный id для API, без тега [1m] —
+          # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
+          #
+          # --allowed-tools ОБЯЗАТЕЛЕН. Без него в CI у Claude нет ни Bash
+          # (значит ни `gh`, ни `./gradlew`), ни WebFetch — он сообщает
+          # «инструменты запрещены» и работает вслепую. Новый инструмент
+          # понадобился — дописывать сюда. Опасные операции по-прежнему
+          # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 60
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite
           # Явно фиксируем модель Opus 5 (валидный id для API).
           # Разрешаем только необходимые Gradle-команды для безопасности.
           claude_args: |

@@ -58,8 +58,9 @@ iOS вне скоупа, кроссплатформенные фреймворк
 - Лаунчер-иконка — временная заглушка (круг в accent-цвете), ждёт брендовый логотип.
 - CI/Cloud-разработка (решение пользователя): `.github/workflows/` — три
   workflow, все на официальном `anthropics/claude-code-action@v1` с авторизацией
-  по OAuth-токену подписки (секрет `CLAUDE_CODE_OAUTH_TOKEN`, значение из
-  `claude setup-token`):
+  по OAuth-токену подписки (секрет `CLAUDE_CODE_OAUTH_TOKEN` либо
+  `ANTHROPIC_OAUTH_TOKEN` — workflow принимает оба; значение — из
+  `claude setup-token`, а не access_token из `~/.claude/.credentials.json`):
   - `claude-dev.yml` — ручной запуск (`workflow_dispatch`, ввод: задача, модель,
     max-turns): docker-бэкенд + postgres/redis + JDK 17 + Android SDK +
     gradle-кэш → Claude делает задачу, коммитит в ветку `claude-dev/*` и
@@ -67,7 +68,9 @@ iOS вне скоупа, кроссплатформенные фреймворк
   - `claude.yml` — интерактивный ассистент на `@claude` в комментарии
     issue/PR, в ревью или в теле нового issue: то же Android-окружение,
     но без бэкенда и сервисов; ветки `claude/*`.
-  - `ci.yml` — гейт на каждый PR: `testDebugUnitTest` + `assembleDebug`.
+  - `ci.yml` — `testDebugUnitTest` + `assembleDebug`. **Только ручной запуск**
+    (Actions → CI → Run workflow, решение пользователя от 2026-08-25):
+    автозапуска на PR нет, прогонять перед мержем самому.
 
   Плюс `CLAUDE.md` (инструкции Claude в CI) и `.claude/settings.json` (deny для
   опасных операций: force-push, `reset --hard`, `sudo`, `rm -rf /`, docker).
@@ -529,7 +532,10 @@ merge-коммитом (`git merge` не в allow-list workflow `claude.yml`). �
 
 **Перед первым CI-запуском (действия пользователя, git локально запрещён):**
 установить GitHub App «Claude» (`/install-github-app`), добавить секрет
-`CLAUDE_CODE_OAUTH_TOKEN` (значение — из `claude setup-token`) и переменные
+`CLAUDE_CODE_OAUTH_TOKEN` или `ANTHROPIC_OAUTH_TOKEN` (значение — из
+`claude setup-token`), по желанию `DESIGN_REPO_PAT` (fine-grained PAT,
+Contents: read на `jack5505/mahalla` — тогда дизайн-репо подтягивается в CI
+в `design-repo/`, иначе агент работает без ТЗ и макетов) и переменные
 `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` (Settings → Secrets
 and variables → Actions), закоммитить и запушить `.github/`, `CLAUDE.md`,
 `.claude/`, `.gitignore` и этот файл, затем запустить workflow «Claude Code

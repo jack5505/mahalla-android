@@ -10,9 +10,11 @@
 # Требуется до первого запуска (вручную, разово):
 #   1. Установить GitHub App «Claude» на репозиторий
 #      (проще всего: локально в Claude Code выполнить  /install-github-app ).
-#   2. Секрет CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables →
-#      Actions). Значение — из `claude setup-token`; расходуется подписка
-#      Pro/Max, отдельной оплаты по токенам нет.
+#   2. Секрет CLAUDE_CODE_OAUTH_TOKEN — или ANTHROPIC_OAUTH_TOKEN, поддержаны
+#      оба (Settings → Secrets and variables → Actions). Значение — из
+#      `claude setup-token` (долгоживущий токен вида sk-ant-oat...), НЕ
+#      access_token из ~/.claude/.credentials.json: тот живёт часы.
+#      Расходуется подписка Pro/Max, отдельной оплаты по токенам нет.
 #      Альтернатива — секрет ANTHROPIC_API_KEY (ключ из console.anthropic.com,
 #      отдельный биллинг): тогда ниже заменить claude_code_oauth_token на
 #      anthropic_api_key.
@@ -67,6 +69,10 @@ jobs:
       id-token: write
       actions: read          # чтение логов упавшего CI
 
+    env:
+      # secrets нельзя читать в `if:` шага, поэтому наличие PAT переносим в env.
+      HAS_DESIGN_PAT: ${{ secrets.DESIGN_REPO_PAT != '' }}
+
     # Зависимости бэкенда. Состав уточнить по mahalla-репо
     # (MAHALLA-IMPLEMENTATION.md): возможно, нужен ещё kafka и т.п.
     services:
@@ -98,6 +104,25 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
+      # репозиторий: токен этого job'а прав на него не даёт, а WebFetch
+      # приватный репо не откроет в принципе. Поэтому кладём файлами рядом,
+      # Claude читает их через Read/Glob.
+      # Нужен секрет DESIGN_REPO_PAT — fine-grained PAT с Contents: read
+      # на jack5505/mahalla. Без секрета шаг пропускается.
+      - name: Checkout дизайн-репо
+        if: env.HAS_DESIGN_PAT == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: jack5505/mahalla
+          path: design-repo
+          token: ${{ secrets.DESIGN_REPO_PAT }}
+          sparse-checkout: |
+            design/android
+            rules
+            AGENTS.md
+            MAHALLA-IMPLEMENTATION.md
 
       # JDK 17 — проверенная связка с AGP 8.7.3 / Gradle 8.11.1 (см. AGENTS.md).
       # Ставим до Claude, чтобы ./gradlew шёл на нём.
@@ -149,17 +174,29 @@ jobs:
       - name: Claude Code
         uses: anthropics/claude-code-action@v1
         env:
+          # Без GH_TOKEN у Claude не работает `gh`: ни создать issue/PR, ни
+          # прочитать логи прогона. Права — из permissions этого job'а.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BACKEND_PORT: ${{ vars.BACKEND_PORT || '8080' }}
           BACKEND_HEALTH_PATH: ${{ vars.BACKEND_HEALTH_PATH || '/actuator/health' }}
         with:
           # OAuth-токен подписки Pro/Max вместо API-ключа.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Поддержаны оба имени секрета: сначала каноническое
+          # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
+          # Незаданный секрет даёт пустую строку, поэтому || работает.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
           prompt: ${{ inputs.task }}
           base_branch: ${{ inputs.base_branch }}
           branch_prefix: 'claude-dev/'
           # Модель фиксируем явно: валидный id для API, без тега [1m] —
           # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
+          #
+          # --allowed-tools ОБЯЗАТЕЛЕН. Без него в CI у Claude нет ни Bash
+          # (значит ни `gh`, ни `./gradlew`), ни WebFetch — он сообщает
+          # «инструменты запрещены» и работает вслепую. Новый инструмент
+          # понадобился — дописывать сюда. Опасные операции по-прежнему
+          # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
           claude_args: |
             --model ${{ inputs.model }}
             --max-turns ${{ inputs.max_turns }}
-            --allowedTools Bash,Read,Write,Edit,Glob,Grep,WebFetch
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite
