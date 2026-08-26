@@ -128,7 +128,7 @@ jobs:
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
           # Незаданный секрет даёт пустую строку, поэтому || работает.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
           use_sticky_comment: 'true'
@@ -139,8 +139,7 @@ jobs:
           # (значит ни `gh`, ни `./gradlew`), ни WebFetch — он сообщает
           # «инструменты запрещены» и работает вслепую. Новый инструмент
           # понадобился — дописывать сюда. Опасные операции по-прежнему
-          # Явно фиксируем модель Opus 5 (валидный id для API).
-          # Разрешаем только необходимые Gradle-команды для безопасности.
+          # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
           claude_args: |
-            --model "claude-opus-5"
-            --allowedTools "Bash(./gradlew:*)"
+            --model claude-opus-5
+            --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite
