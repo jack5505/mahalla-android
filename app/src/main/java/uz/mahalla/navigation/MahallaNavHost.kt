@@ -26,6 +26,10 @@ import uz.mahalla.feature.wallet.ui.WalletScreen
  * Маршруты типизированные ([Routes.kt]); карточка заведения дополнительно
  * достижима по deep link'у `mahalla://place/{placeId}` и лежит вне обоих
  * графов — на неё можно прийти и из онбординга (по ссылке), и из main.
+ *
+ * @param onboardingStartDestination где продолжается прерванный онбординг.
+ * Сессия уже получена — начинать снова с welcome значит запросить второй
+ * платный SMS-код; решение принимает `RootViewModel`.
  */
 @Composable
 fun MahallaNavHost(
@@ -33,35 +37,59 @@ fun MahallaNavHost(
     startDestination: Any,
     onOnboardingFinished: () -> Unit,
     modifier: Modifier = Modifier,
+    onboardingStartDestination: Any = WelcomeRoute,
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
     ) {
-        navigation<OnboardingGraph>(startDestination = WelcomeRoute) {
+        navigation<OnboardingGraph>(startDestination = onboardingStartDestination) {
             composable<WelcomeRoute> {
                 WelcomeScreen(onContinue = { navController.navigate(PhoneRoute) })
             }
             composable<PhoneRoute> {
                 PhoneInputScreen(
-                    onCodeRequested = { phone -> navController.navigate(OtpRoute(phone)) },
+                    onCodeRequested = { phone, challenge ->
+                        navController.navigate(
+                            OtpRoute(
+                                phone = phone,
+                                resendAfterSeconds = challenge.resendAfterSeconds,
+                                codeLength = challenge.codeLength,
+                            ),
+                        )
+                    },
+                    onBack = { navController.navigateUp() },
                 )
             }
-            composable<OtpRoute> { entry ->
+            composable<OtpRoute> {
                 OtpScreen(
-                    phone = entry.toRoute<OtpRoute>().phone,
-                    onVerified = { navController.navigate(PinRoute) },
+                    // Код принят — возвращаться к его вводу больше некуда,
+                    // поэтому экран OTP уходит из стека.
+                    onVerified = {
+                        navController.navigate(PinRoute) {
+                            popUpTo(PhoneRoute) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.navigateUp() },
                 )
             }
             composable<PinRoute> {
-                PinScreen(onPinSet = { navController.navigate(BiometricRoute) })
+                PinScreen(
+                    onPinReady = { navController.navigate(BiometricRoute) },
+                    // Сессия сброшена (лимит попыток или «забыли PIN») — вход
+                    // начинается с номера телефона. Стек чистится целиком:
+                    // возвращаться «назад» на экран PIN, которого больше нет,
+                    // некуда — тем более когда граф стартовал с него.
+                    onAuthRestartRequired = {
+                        navController.navigate(WelcomeRoute) {
+                            popUpTo(OnboardingGraph) { inclusive = true }
+                        }
+                    },
+                )
             }
             composable<BiometricRoute> {
-                BiometricScreen(
-                    onEnabled = { navController.navigate(GeoRoute) },
-                    onSkipped = { navController.navigate(GeoRoute) },
-                )
+                BiometricScreen(onFinished = { navController.navigate(GeoRoute) })
             }
             composable<GeoRoute> {
                 GeoScreen(

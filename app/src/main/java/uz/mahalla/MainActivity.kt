@@ -3,10 +3,10 @@ package uz.mahalla
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,10 +23,20 @@ import uz.mahalla.feature.root.ui.RootViewModel
 import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
 import uz.mahalla.navigation.OnboardingGraph
+import uz.mahalla.navigation.PinRoute
+import uz.mahalla.navigation.WelcomeRoute
 import uz.mahalla.ui.theme.MahallaTheme
 
+/**
+ * Единственная Activity приложения.
+ *
+ * Наследуется от [FragmentActivity], а не от `ComponentActivity`:
+ * `BiometricPrompt` (эпик 3.5) умеет работать только с ней — внутри он
+ * показывает свой фрагмент. Для Compose разницы нет, `FragmentActivity` сама
+ * наследник `ComponentActivity`.
+ */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: RootViewModel by viewModels()
 
@@ -58,6 +68,13 @@ class MainActivity : ComponentActivity() {
                         MainGraph
                     },
                     onOnboardingFinished = viewModel::onOnboardingFinished,
+                    // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
+                    // иначе пользователь получит второй платный SMS-код.
+                    onboardingStartDestination = if (ready.resumeOnboardingAtPin) {
+                        PinRoute
+                    } else {
+                        WelcomeRoute
+                    },
                 )
             }
         }

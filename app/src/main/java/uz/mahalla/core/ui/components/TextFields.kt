@@ -27,6 +27,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -157,6 +159,10 @@ fun MahallaPhoneField(
  * Поле OTP: одно скрытое поле ввода + нарисованные ячейки. Так работают
  * автоподстановка кода из SMS и вставка «123456» целиком — набор из шести
  * независимых полей это ломает.
+ *
+ * @param masked ячейки показывают точки вместо цифр — режим ввода PIN (3.4).
+ * @param focusRequester вешается на само поле ввода, а не на контейнер:
+ * автофокус на экране кода должен открывать клавиатуру (3.3).
  */
 @Composable
 fun MahallaOtpField(
@@ -165,8 +171,14 @@ fun MahallaOtpField(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     errorText: String? = null,
+    masked: Boolean = false,
+    focusRequester: FocusRequester? = null,
 ) {
-    val description = stringResource(R.string.otp_input_description, state.length)
+    val description = if (masked) {
+        stringResource(R.string.pin_input_description, state.length)
+    } else {
+        stringResource(R.string.otp_input_description, state.length)
+    }
     val progress = stringResource(R.string.otp_input_progress, state.filledCount, state.length)
     val colors = MaterialTheme.colorScheme
     val mahalla = LocalMahallaColors.current
@@ -177,6 +189,13 @@ fun MahallaOtpField(
             onValueChange = { onCodeChange(it.filter(Char::isDigit).take(state.length)) },
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (focusRequester != null) {
+                        Modifier.focusRequester(focusRequester)
+                    } else {
+                        Modifier
+                    },
+                )
                 .semantics {
                     contentDescription = description
                     stateDescription = progress
@@ -222,7 +241,11 @@ fun MahallaOtpField(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
-                                    text = digit?.toString().orEmpty(),
+                                    text = when {
+                                        digit == null -> ""
+                                        masked -> MASK_CHARACTER
+                                        else -> digit.toString()
+                                    },
                                     style = MaterialTheme.typography.titleMedium.merge(TabularNums),
                                     color = colors.onSurface,
                                     textAlign = TextAlign.Center,
@@ -298,6 +321,9 @@ private fun FieldSupportingText(supportingText: String?, errorText: String?) {
 }
 
 private const val COUNTRY_CODE = "998"
+
+/** Точка вместо цифры PIN: сам код не должен читаться с экрана через плечо. */
+private const val MASK_CHARACTER = "•"
 
 @ThemeLanguagePreviews
 @Composable

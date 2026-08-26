@@ -4,7 +4,9 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import uz.mahalla.data.security.AndroidBiometricAvailability
 import uz.mahalla.data.security.AndroidKeystorePinCipher
+import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.data.security.PinCipher
 import uz.mahalla.data.security.PinStorage
@@ -18,4 +20,7 @@ interface SecurityModule {
 
     @Binds
     fun bindPinStorage(impl: KeystorePinStorage): PinStorage
+
+    @Binds
+    fun bindBiometricAvailability(impl: AndroidBiometricAvailability): BiometricAvailability
 }

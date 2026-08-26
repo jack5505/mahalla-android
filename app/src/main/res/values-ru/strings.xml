@@ -12,24 +12,71 @@
     <string name="nav_wallet">Кошелёк</string>
     <string name="nav_profile">Профиль</string>
 
-    <!-- Онбординг -->
+    <!-- Онбординг: welcome -->
     <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
     <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>
-    <string name="onboarding_welcome_action">Начать</string>
+    <string name="onboarding_welcome_action">Войти или зарегистрироваться</string>
+    <string name="onboarding_welcome_language">Язык приложения</string>
+
+    <!-- Онбординг: телефон -->
     <string name="onboarding_phone_title">Ваш номер телефона</string>
+    <string name="onboarding_phone_subtitle">Пришлём код подтверждения в SMS.</string>
     <string name="onboarding_phone_label">Номер телефона</string>
     <string name="onboarding_phone_action">Получить код</string>
     <string name="onboarding_phone_error">Неверный номер телефона</string>
-    <string name="onboarding_otp_title">Код отправлен на %1$s</string>
+    <string name="onboarding_phone_consent">Согласен с условиями публичной оферты</string>
+    <string name="onboarding_phone_consent_link">Читать оферту</string>
+    <string name="onboarding_phone_consent_required">Чтобы продолжить, примите оферту</string>
+
+    <!-- Онбординг: код из SMS -->
+    <string name="onboarding_otp_title">Код подтверждения</string>
+    <string name="onboarding_otp_sent_to">Код отправлен на %1$s</string>
     <string name="onboarding_otp_action">Подтвердить</string>
+    <string name="onboarding_otp_resend">Отправить код снова</string>
+    <string name="onboarding_otp_resend_timer">Повторная отправка через %1$d сек</string>
+    <string name="onboarding_otp_error_invalid">Неверный код, введите заново</string>
+    <string name="onboarding_otp_error_expired">Срок действия кода истёк, запросите новый</string>
+    <string name="onboarding_otp_error_attempts">Попытки исчерпаны, запросите новый код</string>
+
+    <!-- Онбординг: PIN -->
     <string name="onboarding_pin_title">Установите PIN-код</string>
-    <string name="onboarding_pin_action">Сохранить</string>
+    <string name="onboarding_pin_confirm_title">Повторите PIN-код</string>
+    <string name="onboarding_pin_unlock_title">Введите PIN-код</string>
+    <string name="onboarding_pin_subtitle">PIN нужен для быстрого и безопасного входа в приложение.</string>
+    <string name="onboarding_pin_error_mismatch">PIN-коды не совпали, установите заново</string>
+    <string name="onboarding_pin_error_wrong">Неверный PIN-код. Осталось попыток: %1$d</string>
+    <string name="onboarding_pin_error_attempts">Попытки исчерпаны. Войдите заново по номеру телефона</string>
+    <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
+    <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
+
+    <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Вход по биометрии</string>
+    <string name="onboarding_biometric_subtitle">Отпечаток или лицо быстрее PIN-кода. PIN останется резервным способом входа.</string>
     <string name="onboarding_biometric_action">Включить</string>
     <string name="onboarding_biometric_skip">Позже</string>
+    <string name="onboarding_biometric_unavailable">На этом устройстве биометрия недоступна</string>
+    <string name="onboarding_biometric_not_enrolled">Добавьте отпечаток или лицо в настройках устройства</string>
+    <string name="onboarding_biometric_failed">Не удалось подтвердить, попробуйте ещё раз</string>
+    <string name="onboarding_biometric_prompt_title">Подтвердите вход</string>
+    <string name="onboarding_biometric_prompt_subtitle">Вход в Mahalla по биометрии</string>
+
+    <!-- Онбординг: геолокация -->
     <string name="onboarding_geo_title">Доступ к геолокации</string>
     <string name="onboarding_geo_subtitle">Геолокация нужна, чтобы показать места рядом и посчитать время доставки.</string>
     <string name="onboarding_geo_action">Разрешить</string>
+    <string name="onboarding_geo_manual">Выбрать город вручную</string>
+    <string name="onboarding_geo_city_title">Выберите город</string>
+    <string name="onboarding_geo_denied">Доступ к геолокации не выдан — выберите город</string>
+
+    <!-- Города для ручного выбора -->
+    <string name="city_tashkent">Ташкент</string>
+    <string name="city_samarkand">Самарканд</string>
+    <string name="city_bukhara">Бухара</string>
+    <string name="city_andijan">Андижан</string>
+    <string name="city_namangan">Наманган</string>
+    <string name="city_fergana">Фергана</string>
+    <string name="city_nukus">Нукус</string>
+    <string name="city_qarshi">Карши</string>
 
     <!-- Основные разделы -->
     <string name="discovery_title">Рядом</string>
@@ -69,12 +116,15 @@
     <string name="search_clear">Очистить поиск</string>
     <string name="otp_input_description">Код подтверждения, %1$d цифр</string>
     <string name="otp_input_progress">Введено %1$d из %2$d цифр</string>
+    <string name="pin_input_description">PIN-код, %1$d цифр</string>
 
     <!-- UI-кит: состояния для TalkBack -->
     <string name="chip_state_selected">выбрано</string>
     <string name="chip_state_not_selected">не выбрано</string>
     <string name="switch_state_on">включено</string>
     <string name="switch_state_off">выключено</string>
+    <string name="checkbox_state_checked">отмечено</string>
+    <string name="checkbox_state_unchecked">не отмечено</string>
 
     <!-- UI-кит: состояния экрана -->
     <string name="state_loading">Загрузка</string>

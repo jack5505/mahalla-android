@@ -24,7 +24,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
-import uz.mahalla.feature.onboarding.data.OnboardingRepository
+import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.testutil.FakeAuthRepository
 import java.io.File
 
 /**
@@ -59,7 +60,37 @@ class RootViewModelTest {
     fun `fresh install starts with onboarding`() = runTest {
         val viewModel = viewModel(SettingsDataStore(newDataStore()))
 
-        assertTrue(viewModel.awaitReady().startWithOnboarding)
+        val ready = viewModel.awaitReady()
+        assertTrue(ready.startWithOnboarding)
+        assertFalse("сессии нет — начинаем с welcome", ready.resumeOnboardingAtPin)
+    }
+
+    @Test
+    fun `an interrupted onboarding with a session resumes at the pin`() = runTest {
+        // Пользователь прошёл SMS и убил приложение на биометрии: повторный
+        // код стоит денег, а сессия уже лежит в хранилище.
+        val viewModel = viewModel(
+            settings = SettingsDataStore(newDataStore()),
+            authRepository = FakeAuthRepository(initialAuthorized = true),
+        )
+
+        val ready = viewModel.awaitReady()
+        assertTrue(ready.startWithOnboarding)
+        assertTrue(ready.resumeOnboardingAtPin)
+    }
+
+    @Test
+    fun `a completed onboarding never resumes at the pin`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        settings.setOnboardingCompleted(true)
+
+        val ready = viewModel(
+            settings = settings,
+            authRepository = FakeAuthRepository(initialAuthorized = true),
+        ).awaitReady()
+
+        assertFalse(ready.startWithOnboarding)
+        assertFalse("основной граф начинается с каталога", ready.resumeOnboardingAtPin)
     }
 
     @Test
@@ -91,8 +122,10 @@ class RootViewModelTest {
         assertTrue("стартовый пункт зафиксирован на первой эмиссии", latest.startWithOnboarding)
     }
 
-    private fun viewModel(settings: SettingsDataStore) =
-        RootViewModel(settings, OnboardingRepository(settings))
+    private fun viewModel(
+        settings: SettingsDataStore,
+        authRepository: FakeAuthRepository = FakeAuthRepository(),
+    ) = RootViewModel(settings, DataStoreOnboardingRepository(settings), authRepository)
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =
         state.first { it is RootUiState.Ready } as RootUiState.Ready

@@ -32,4 +32,8 @@ data class AppSettings(
     val themeMode: ThemeMode = ThemeMode.Default,
     val onboardingCompleted: Boolean = false,
     val pinConfigured: Boolean = false,
+    /** Вход по биометрии включён пользователем (эпик 3.5). */
+    val biometricEnabled: Boolean = false,
+    /** Город, выбранный вручную при отказе от геолокации; `null` — не выбран. */
+    val cityId: String? = null,
 )
