@@ -69,6 +69,7 @@ import java.util.Locale
 fun PlaceDetailsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOrderClick: (String) -> Unit = {},
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -95,8 +96,12 @@ fun PlaceDetailsScreen(
                     ),
                 )
 
-                // Очередь, бронь и заказ — вертикали следующих эпиков.
-                is PlaceDetailsEffect.OpenVertical -> Unit
+                // Заказ — вертикаль «Еда» (эпик 5); очередь и бронь ждут
+                // своих эпиков.
+                is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
+                    PlaceAction.Order -> onOrderClick(effect.placeId)
+                    else -> Unit
+                }
             }
         }
     }

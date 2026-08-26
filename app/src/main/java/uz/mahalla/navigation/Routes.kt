@@ -94,3 +94,21 @@ data object MapRoute
 
 @Serializable
 data class PlaceRoute(val placeId: String)
+
+// --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
+
+@Serializable
+data class MenuRoute(val placeId: String)
+
+@Serializable
+data class CartRoute(val placeId: String)
+
+@Serializable
+data class CheckoutRoute(val placeId: String)
+
+/**
+ * Статус заказа. Экран достижим и сразу после оформления, и из списка заказов,
+ * поэтому знает только id — всё остальное грузит сам.
+ */
+@Serializable
+data class OrderStatusRoute(val orderId: String)

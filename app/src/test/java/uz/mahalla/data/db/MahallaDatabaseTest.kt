@@ -104,9 +104,9 @@ class MahallaDatabaseTest {
     @Test
     fun `cart draft survives per place and counts the total`() = runTest {
         val dao = database.cartDraftDao()
-        dao.upsert(CartDraftItemEntity("place-1", "osh", "Osh", priceSum = 30_000, quantity = 2))
-        dao.upsert(CartDraftItemEntity("place-1", "cola", "Cola", priceSum = 8_000, quantity = 1))
-        dao.upsert(CartDraftItemEntity("place-2", "somsa", "Somsa", priceSum = 12_000, quantity = 3))
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 2))
+        dao.upsert(draft("place-1", "cola", priceSum = 8_000, quantity = 1))
+        dao.upsert(draft("place-2", "somsa", priceSum = 12_000, quantity = 3))
 
         assertEquals(68_000L, dao.total("place-1"))
         assertEquals(36_000L, dao.total("place-2"))
@@ -116,19 +116,35 @@ class MahallaDatabaseTest {
     @Test
     fun `changing quantity does not add a second row`() = runTest {
         val dao = database.cartDraftDao()
-        dao.upsert(CartDraftItemEntity("place-1", "osh", "Osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
 
-        dao.upsert(CartDraftItemEntity("place-1", "osh", "Osh", priceSum = 30_000, quantity = 4))
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 4))
 
         assertEquals(1, dao.observe("place-1").first().size)
         assertEquals(120_000L, dao.total("place-1"))
     }
 
+    /**
+     * Эпик 5.2: строка ключуется позицией **и** модификаторами — одно и то же
+     * блюдо с разными добавками стоит по-разному и живёт двумя строками.
+     */
+    @Test
+    fun `the same dish with different options is stored as two rows`() = runTest {
+        val dao = database.cartDraftDao()
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(
+            draft("place-1", "osh", priceSum = 40_000, quantity = 1, options = "large"),
+        )
+
+        assertEquals(2, dao.observe("place-1").first().size)
+        assertEquals(70_000L, dao.total("place-1"))
+    }
+
     @Test
     fun `draft is cleared only for the requested place`() = runTest {
         val dao = database.cartDraftDao()
-        dao.upsert(CartDraftItemEntity("place-1", "osh", "Osh", priceSum = 30_000, quantity = 1))
-        dao.upsert(CartDraftItemEntity("place-2", "somsa", "Somsa", priceSum = 12_000, quantity = 1))
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(draft("place-2", "somsa", priceSum = 12_000, quantity = 1))
 
         dao.clear("place-1")
 
@@ -139,13 +155,41 @@ class MahallaDatabaseTest {
     @Test
     fun `removing a single item keeps the rest of the draft`() = runTest {
         val dao = database.cartDraftDao()
-        dao.upsert(CartDraftItemEntity("place-1", "osh", "Osh", priceSum = 30_000, quantity = 1))
-        dao.upsert(CartDraftItemEntity("place-1", "cola", "Cola", priceSum = 8_000, quantity = 1))
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(draft("place-1", "cola", priceSum = 8_000, quantity = 1))
 
         dao.remove("place-1", "osh")
 
         assertEquals(listOf("cola"), dao.observe("place-1").first().map { it.productId })
     }
+
+    @Test
+    fun `the active place is the one with a started draft`() = runTest {
+        val dao = database.cartDraftDao()
+        assertNull(dao.activePlaceId())
+
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+
+        assertEquals("place-1", dao.activePlaceId())
+    }
+
+    private fun draft(
+        placeId: String,
+        productId: String,
+        priceSum: Long,
+        quantity: Int,
+        options: String = "",
+    ) = CartDraftItemEntity(
+        placeId = placeId,
+        lineId = if (options.isEmpty()) productId else "$productId|$options",
+        productId = productId,
+        name = productId.replaceFirstChar(Char::uppercase),
+        priceSum = priceSum,
+        quantity = quantity,
+        placeName = "Place $placeId",
+        deliverySum = 15_000,
+        optionIds = options,
+    )
 
     private fun place(
         id: String,

@@ -22,7 +22,8 @@ import uz.mahalla.data.db.entity.PlaceEntity
         CartDraftItemEntity::class,
     ],
     // v2 — эпик 4: в кэш мест добавлены адрес, координаты, фото и контакты.
-    version = 2,
+    // v3 — эпик 5: строка черновика корзины ключуется позицией + модификаторами.
+    version = 3,
     exportSchema = false,
 )
 abstract class MahallaDatabase : RoomDatabase() {

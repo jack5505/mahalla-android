@@ -26,6 +26,11 @@ import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
+import uz.mahalla.feature.food.data.DefaultCartRepository
+import uz.mahalla.feature.food.data.DefaultMenuRepository
+import uz.mahalla.feature.food.data.DefaultOrderRepository
+import uz.mahalla.feature.food.data.DefaultWalletRepository
+import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 
 /**
@@ -106,6 +111,33 @@ class GraphAssemblyTest {
                 ),
             )
             assertNotNull(DataStoreSearchHistoryStore(sharedDataStore(context)))
+        } finally {
+            database.close()
+        }
+    }
+
+    /** Вертикаль «Еда» (эпик 5): API, корзина в Room, заказы и кошелёк. */
+    @Test
+    fun `food graph assembles over the api, the database and the cart`() {
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val retrofit = NetworkModule.provideRetrofit(
+                NetworkModule.provideRefreshClient(),
+                NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                NetworkModule.provideBaseUrl(),
+            )
+            val api = FoodDataModule.provideFoodApi(retrofit)
+            val cartRepository = DefaultCartRepository(DatabaseModule.provideCartDraftDao(database))
+
+            assertNotNull(DefaultMenuRepository(api))
+            assertNotNull(DefaultWalletRepository(api))
+            assertNotNull(
+                DefaultOrderRepository(
+                    api = api,
+                    orderDao = DatabaseModule.provideOrderDao(database),
+                    cartRepository = cartRepository,
+                ),
+            )
         } finally {
             database.close()
         }

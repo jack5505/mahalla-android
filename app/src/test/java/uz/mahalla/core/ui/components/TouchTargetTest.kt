@@ -62,6 +62,9 @@ class TouchTargetTest {
             "categoryTile",
             "searchEntry",
             "mapMarker",
+            // Эпик 5: степпер количества и строка позиции меню.
+            "stepper",
+            "menuItem",
         )
 
         assertEquals(expected, MahallaComponentDefaults.touchTargets.keys)
