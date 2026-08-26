@@ -36,4 +36,9 @@ data class AppSettings(
     val biometricEnabled: Boolean = false,
     /** Город, выбранный вручную при отказе от геолокации; `null` — не выбран. */
     val cityId: String? = null,
+    /**
+     * Адрес бэкенда, введённый пользователем (issue #26); `null` — не вводился,
+     * работаем по адресу из сборки. От `null` зависит первый экран приложения.
+     */
+    val backendBaseUrl: String? = null,
 )

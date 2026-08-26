@@ -1,5 +1,6 @@
 package uz.mahalla.data.network.di
 
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -10,8 +11,11 @@ import retrofit2.Converter
 import retrofit2.Retrofit
 import uz.mahalla.BuildConfig
 import uz.mahalla.data.network.AuthInterceptor
+import uz.mahalla.data.network.BackendReachability
+import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BaseUrl
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.data.network.OkHttpBackendReachability
 import uz.mahalla.data.network.RefreshClient
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
@@ -37,7 +41,11 @@ object NetworkModule {
     fun provideConverterFactory(json: Json): Converter.Factory =
         NetworkFactory.converterFactory(json)
 
-    /** baseUrl задаётся buildType'ом — см. `app/build.gradle.kts`. */
+    /**
+     * baseUrl сборки — см. `app/build.gradle.kts`. Это адрес по умолчанию и
+     * шаблон пути: фактический адрес пользователь задаёт на первом экране, и
+     * запросы на него переводит [BackendUrlInterceptor] (issue #26).
+     */
     @Provides
     @BaseUrl
     fun provideBaseUrl(): String = BuildConfig.API_BASE_URL
@@ -45,8 +53,11 @@ object NetworkModule {
     @Provides
     @Singleton
     @RefreshClient
-    fun provideRefreshClient(): OkHttpClient =
-        NetworkFactory.clientBuilder(logBodies = BuildConfig.DEBUG).build()
+    fun provideRefreshClient(backendUrlInterceptor: BackendUrlInterceptor): OkHttpClient =
+        NetworkFactory.clientBuilder(logBodies = BuildConfig.DEBUG)
+            // Refresh обязан ходить на тот же сервер, что и остальные запросы.
+            .addInterceptor(backendUrlInterceptor)
+            .build()
 
     @Provides
     @Singleton
@@ -67,7 +78,9 @@ object NetworkModule {
     fun provideOkHttpClient(
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator,
+        backendUrlInterceptor: BackendUrlInterceptor,
     ): OkHttpClient = NetworkFactory.clientBuilder(logBodies = BuildConfig.DEBUG)
+        .addInterceptor(backendUrlInterceptor)
         .addInterceptor(authInterceptor)
         .authenticator(tokenAuthenticator)
         .build()
@@ -79,4 +92,12 @@ object NetworkModule {
         converterFactory: Converter.Factory,
         @BaseUrl baseUrl: String,
     ): Retrofit = NetworkFactory.retrofit(baseUrl, client, converterFactory)
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+interface NetworkBindingsModule {
+
+    @Binds
+    fun bindBackendReachability(impl: OkHttpBackendReachability): BackendReachability
 }

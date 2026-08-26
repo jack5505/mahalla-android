@@ -20,6 +20,7 @@ import uz.mahalla.core.locale.LocaleContextWrapper
 import uz.mahalla.core.locale.LocaleEntryPoint
 import uz.mahalla.feature.root.ui.RootUiState
 import uz.mahalla.feature.root.ui.RootViewModel
+import uz.mahalla.navigation.BackendUrlRoute
 import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
 import uz.mahalla.navigation.OnboardingGraph
@@ -58,15 +59,19 @@ class MainActivity : FragmentActivity() {
             }
 
             val ready = state as? RootUiState.Ready ?: return@setContent
+            // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
+            // сбрасывал бы back stack (см. RootViewModel).
+            val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
             MahallaTheme(darkTheme = ready.settings.themeMode.isDark(isSystemInDarkTheme())) {
                 MahallaApp(
-                    // Зафиксировано во ViewModel: пересчёт на каждой эмиссии
-                    // настроек сбрасывал бы back stack (см. RootViewModel).
-                    startDestination = if (ready.startWithOnboarding) {
-                        OnboardingGraph
+                    // Адрес бэкенда не задан (issue #26) — до него приложение
+                    // всё равно никуда не сходит, поэтому он первый.
+                    startDestination = if (ready.needsBackendUrl) {
+                        BackendUrlRoute
                     } else {
-                        MainGraph
+                        appStart
                     },
+                    afterBackendUrl = appStart,
                     onOnboardingFinished = viewModel::onOnboardingFinished,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
                     // иначе пользователь получит второй платный SMS-код.

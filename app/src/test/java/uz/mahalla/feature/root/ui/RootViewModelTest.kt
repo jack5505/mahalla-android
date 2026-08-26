@@ -22,6 +22,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
@@ -63,6 +64,42 @@ class RootViewModelTest {
         val ready = viewModel.awaitReady()
         assertTrue(ready.startWithOnboarding)
         assertFalse("сессии нет — начинаем с welcome", ready.resumeOnboardingAtPin)
+    }
+
+    @Test
+    fun `fresh install asks for the backend address first`() = runTest {
+        // Без адреса бэкенда (issue #26) ни один запрос не уйдёт, поэтому
+        // ввод адреса стоит перед онбордингом.
+        val ready = viewModel(SettingsDataStore(newDataStore())).awaitReady()
+
+        assertTrue(ready.needsBackendUrl)
+    }
+
+    @Test
+    fun `a saved backend address is not asked again`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        settings.setBackendBaseUrl("http://192.168.0.10:8080/")
+
+        val ready = viewModel(settings).awaitReady()
+
+        assertFalse(ready.needsBackendUrl)
+    }
+
+    @Test
+    fun `saving the backend address does not move the start destination`() = runTest {
+        // Экран адреса уходит навигацией; пересчёт стартового пункта на новой
+        // эмиссии настроек пересобрал бы граф и сбросил стек.
+        val settings = SettingsDataStore(newDataStore())
+        val viewModel = viewModel(settings)
+        assertTrue(viewModel.awaitReady().needsBackendUrl)
+
+        settings.setBackendBaseUrl("http://192.168.0.10:8080/")
+
+        val latest = viewModel.state
+            .first {
+                (it as? RootUiState.Ready)?.settings?.backendBaseUrl != null
+            } as RootUiState.Ready
+        assertTrue("стартовый пункт зафиксирован", latest.needsBackendUrl)
     }
 
     @Test
@@ -125,7 +162,12 @@ class RootViewModelTest {
     private fun viewModel(
         settings: SettingsDataStore,
         authRepository: FakeAuthRepository = FakeAuthRepository(),
-    ) = RootViewModel(settings, DataStoreOnboardingRepository(settings), authRepository)
+    ) = RootViewModel(
+        settings,
+        DataStoreOnboardingRepository(settings),
+        authRepository,
+        BackendUrlStore(settings, BUILD_URL),
+    )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =
         state.first { it is RootUiState.Ready } as RootUiState.Ready
@@ -134,4 +176,8 @@ class RootViewModelTest {
     private fun newDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.create(
         produceFile = { File(temporaryFolder.root, "root.preferences_pb") },
     )
+
+    private companion object {
+        const val BUILD_URL = "http://10.0.2.2:8080/api/v1/"
+    }
 }

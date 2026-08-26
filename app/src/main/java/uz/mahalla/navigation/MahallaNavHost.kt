@@ -10,6 +10,7 @@ import androidx.navigation.navDeepLink
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
 import uz.mahalla.feature.map.ui.MapScreen
+import uz.mahalla.feature.onboarding.ui.BackendUrlScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
 import uz.mahalla.feature.onboarding.ui.GeoScreen
 import uz.mahalla.feature.onboarding.ui.OtpScreen
@@ -31,6 +32,8 @@ import uz.mahalla.feature.wallet.ui.WalletScreen
  * @param onboardingStartDestination где продолжается прерванный онбординг.
  * Сессия уже получена — начинать снова с welcome значит запросить второй
  * платный SMS-код; решение принимает `RootViewModel`.
+ * @param afterBackendUrl куда уходить с экрана адреса бэкенда, когда он был
+ * стартовым (issue #26): дальше начинается обычный старт приложения.
  */
 @Composable
 fun MahallaNavHost(
@@ -39,15 +42,40 @@ fun MahallaNavHost(
     onOnboardingFinished: () -> Unit,
     modifier: Modifier = Modifier,
     onboardingStartDestination: Any = WelcomeRoute,
+    afterBackendUrl: Any = OnboardingGraph,
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
     ) {
+        // Адрес бэкенда (issue #26) — вне графов: без него ни один запрос не
+        // уйдёт, поэтому экран стоит перед онбордингом, а вернуться на него
+        // можно и позже, с welcome.
+        composable<BackendUrlRoute> {
+            // Стек пуст — экран стартовый, значит дальше начинается приложение.
+            // Пришли с welcome — возвращаемся туда же.
+            val openedAtStart = navController.previousBackStackEntry == null
+            BackendUrlScreen(
+                onSaved = {
+                    if (openedAtStart) {
+                        navController.navigate(afterBackendUrl) {
+                            popUpTo(BackendUrlRoute) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigateUp()
+                    }
+                },
+                onBack = if (openedAtStart) null else ({ navController.navigateUp() }),
+            )
+        }
+
         navigation<OnboardingGraph>(startDestination = onboardingStartDestination) {
             composable<WelcomeRoute> {
-                WelcomeScreen(onContinue = { navController.navigate(PhoneRoute) })
+                WelcomeScreen(
+                    onContinue = { navController.navigate(PhoneRoute) },
+                    onChangeServer = { navController.navigate(BackendUrlRoute) },
+                )
             }
             composable<PhoneRoute> {
                 PhoneInputScreen(

@@ -16,6 +16,19 @@
     <string name="nav_wallet">Hamyon</string>
     <string name="nav_profile">Profil</string>
 
+    <!-- Server manzili (issue #26) -->
+    <string name="backend_url_title">Server manzili</string>
+    <string name="backend_url_subtitle">Ilova so\'rovlarni shu manzilga yuboradi.</string>
+    <string name="backend_url_label">Backend manzili</string>
+    <string name="backend_url_placeholder" translatable="false">http://192.168.0.10:8080/api/v1/</string>
+    <string name="backend_url_hint">Masalan: 192.168.0.10:8080 yoki api.mahalla.uz. Sxema ko\'rsatilmasa http qo\'shiladi.</string>
+    <string name="backend_url_action">Davom etish</string>
+    <string name="backend_url_default">Standart manzilni tiklash</string>
+    <string name="backend_url_change">Server manzilini o\'zgartirish</string>
+    <string name="backend_url_invalid">Manzil noto\'g\'ri: http yoki https manzilini kiriting</string>
+    <string name="backend_url_unreachable">Server javob bermadi. Manzilni tekshiring yoki shunday saqlang.</string>
+    <string name="backend_url_save_anyway">Baribir saqlash</string>
+
     <!-- Онбординг: welcome -->
     <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
     <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>

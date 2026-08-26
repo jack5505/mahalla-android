@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
@@ -27,6 +28,7 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 @Composable
 fun WelcomeScreen(
     onContinue: () -> Unit,
+    onChangeServer: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
@@ -45,6 +47,7 @@ fun WelcomeScreen(
         state = state,
         onLanguageSelected = { viewModel.onEvent(WelcomeEvent.LanguageSelected(it)) },
         onContinue = onContinue,
+        onChangeServer = onChangeServer,
         modifier = modifier,
     )
 }
@@ -54,6 +57,7 @@ private fun WelcomeContent(
     state: WelcomeState,
     onLanguageSelected: (AppLanguage) -> Unit,
     onContinue: () -> Unit,
+    onChangeServer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val languages = AppLanguage.entries
@@ -65,6 +69,13 @@ private fun WelcomeContent(
             MahallaButton(
                 text = stringResource(R.string.onboarding_welcome_action),
                 onClick = onContinue,
+            )
+            // Адрес бэкенда (issue #26) вводится до входа, но опечатку в нём
+            // видно только здесь — иначе исправить её было бы негде.
+            MahallaButton(
+                text = stringResource(R.string.backend_url_change),
+                onClick = onChangeServer,
+                variant = MahallaButtonVariant.Ghost,
             )
         },
     ) {
@@ -95,6 +106,7 @@ private fun WelcomeScreenPreview() {
             state = WelcomeState(language = AppLanguage.UZBEK),
             onLanguageSelected = {},
             onContinue = {},
+            onChangeServer = {},
         )
     }
 }

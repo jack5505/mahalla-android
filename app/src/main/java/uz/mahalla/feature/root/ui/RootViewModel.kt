@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.runCatchingCancellable
+import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
@@ -29,11 +30,14 @@ sealed interface RootUiState {
      * на первой эмиссии настроек и дальше не меняется — см. [RootViewModel].
      * @param resumeOnboardingAtPin онбординг продолжается с PIN: сессия уже
      * получена, повторный SMS-код не нужен.
+     * @param needsBackendUrl адрес бэкенда ещё не задан (issue #26) — начинаем
+     * с его ввода, иначе первый же запрос уйдёт в никуда.
      */
     data class Ready(
         val settings: AppSettings,
         val startWithOnboarding: Boolean,
         val resumeOnboardingAtPin: Boolean = false,
+        val needsBackendUrl: Boolean = false,
     ) : RootUiState
 }
 
@@ -42,6 +46,7 @@ class RootViewModel @Inject constructor(
     settingsDataStore: SettingsDataStore,
     private val onboardingRepository: OnboardingRepository,
     private val authRepository: AuthRepository,
+    private val backendUrlStore: BackendUrlStore,
 ) : ViewModel() {
 
     /**
@@ -65,6 +70,7 @@ class RootViewModel @Inject constructor(
                 settings = settings,
                 startWithOnboarding = start.withOnboarding,
                 resumeOnboardingAtPin = start.atPin,
+                needsBackendUrl = start.needsBackendUrl,
             )
         }
         .stateIn(
@@ -87,13 +93,22 @@ class RootViewModel @Inject constructor(
      * welcome → телефон → новый код.
      */
     private suspend fun resolveStart(settings: AppSettings): Start {
+        // Адрес бэкенда должен лежать в кэше до первого запроса: интерцептор
+        // читает его синхронно, на потоке OkHttp. Здесь это безопасно —
+        // splash висит, пока корень не готов.
+        backendUrlStore.hydrate()
         val withOnboarding = !settings.onboardingCompleted
         return Start(
             withOnboarding = withOnboarding,
             atPin = withOnboarding && authRepository.isAuthorized.first(),
+            needsBackendUrl = settings.backendBaseUrl == null,
         )
     }
 
     /** Решение о старте графа, принимаемое один раз за жизнь процесса. */
-    private data class Start(val withOnboarding: Boolean, val atPin: Boolean)
+    private data class Start(
+        val withOnboarding: Boolean,
+        val atPin: Boolean,
+        val needsBackendUrl: Boolean,
+    )
 }
