@@ -51,6 +51,7 @@
     <string name="onboarding_pin_error_mismatch">PIN-kodlar mos kelmadi, qaytadan o\'rnating</string>
     <string name="onboarding_pin_error_wrong">PIN-kod noto\'g\'ri. Qolgan urinishlar: %1$d</string>
     <string name="onboarding_pin_error_attempts">Urinishlar tugadi. Telefon raqami bilan qaytadan kiring</string>
+    <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
 
     <!-- Онбординг: биометрия -->

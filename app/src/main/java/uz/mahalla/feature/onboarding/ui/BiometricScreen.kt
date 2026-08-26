@@ -12,6 +12,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.ButtonState
@@ -38,6 +40,12 @@ fun BiometricScreen(
     val promptTitle = stringResource(R.string.onboarding_biometric_prompt_title)
     val promptSubtitle = stringResource(R.string.onboarding_biometric_prompt_subtitle)
     val promptNegative = stringResource(R.string.action_cancel)
+
+    // Возврат из настроек устройства с только что добавленным отпечатком не
+    // должен оставлять кнопку выключенной — статус перечитывается.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.onEvent(BiometricEvent.ScreenResumed)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->

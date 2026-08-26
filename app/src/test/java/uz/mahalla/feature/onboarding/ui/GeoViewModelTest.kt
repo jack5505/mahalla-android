@@ -13,6 +13,7 @@ import org.junit.Test
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.MainDispatcherRule
+import java.io.IOException
 
 /**
  * Геолокация (3.6). Главное требование ТЗ: отказ в разрешении не должен быть
@@ -98,6 +99,20 @@ class GeoViewModelTest {
         assertEquals(GeoEffect.Finished, effect)
         assertEquals("samarkand", onboardingRepository.current.cityId)
         assertEquals(City.SAMARKAND, viewModel.state.value.selectedCity)
+        assertFalse(viewModel.state.value.busy)
+    }
+
+    @Test
+    fun `a failed city write still finishes the step`() = runTest(mainDispatcherRule.dispatcher) {
+        onboardingRepository.writeFailure = IOException("нет места")
+        val viewModel = viewModel()
+
+        viewModel.onEvent(GeoEvent.CitySelected(City.SAMARKAND))
+        val effect = viewModel.effects.first()
+
+        // Последний шаг онбординга не должен запирать пользователя из-за
+        // настройки: город меняется и в профиле.
+        assertEquals(GeoEffect.Finished, effect)
         assertFalse(viewModel.state.value.busy)
     }
 

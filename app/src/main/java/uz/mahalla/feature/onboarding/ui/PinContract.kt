@@ -26,6 +26,9 @@ enum class PinError {
 
     /** Попытки исчерпаны: PIN сброшен, нужен вход заново. */
     TOO_MANY_ATTEMPTS,
+
+    /** Хранилище (Keystore) не смогло сохранить или проверить код. */
+    STORAGE,
 }
 
 data class PinState(

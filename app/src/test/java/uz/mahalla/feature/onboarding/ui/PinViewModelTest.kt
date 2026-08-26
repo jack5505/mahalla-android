@@ -11,6 +11,7 @@ import org.junit.Test
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.MainDispatcherRule
+import java.security.GeneralSecurityException
 
 /**
  * PIN (3.4): установка с повтором, ввод сохранённого кода и лимит попыток.
@@ -183,6 +184,63 @@ class PinViewModelTest {
         assertEquals(PinEffect.AuthRestartRequired, effect)
         assertNull(storage.storedPin)
         assertEquals(1, authRepository.logoutCount)
+    }
+
+    @Test
+    fun `a keystore failure on save shows an error instead of crashing`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        advanceUntilIdle()
+        storage.failure = GeneralSecurityException("ключ инвалидирован")
+        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals(PinError.STORAGE, state.error)
+        assertEquals("установка начинается заново", PinStage.Create, state.stage)
+        assertEquals(false, state.busy)
+        assertNull(storage.storedPin)
+    }
+
+    @Test
+    fun `a keystore failure on verify does not spend an attempt`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val storage = FakePinStorage(initialPin = "1234")
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+        storage.failure = GeneralSecurityException("хранилище недоступно")
+
+        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals(PinError.STORAGE, state.error)
+        // Пользователь не виноват: лимит попыток сбросил бы сессию на ровном месте.
+        assertEquals(PinState.MAX_ATTEMPTS, state.attemptsLeft)
+        assertEquals(PinStage.Unlock, state.stage)
+        assertEquals(false, state.busy)
+    }
+
+    @Test
+    fun `forgotten pin restarts the authorization even if clearing fails`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val storage = FakePinStorage(initialPin = "1234")
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+        storage.failure = GeneralSecurityException("хранилище недоступно")
+
+        viewModel.onEvent(PinEvent.ForgotPin)
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.AuthRestartRequired, effect)
+        assertEquals(false, viewModel.state.value.busy)
     }
 
     @Test

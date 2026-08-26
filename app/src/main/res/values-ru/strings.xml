@@ -46,6 +46,7 @@
     <string name="onboarding_pin_error_mismatch">PIN-коды не совпали, установите заново</string>
     <string name="onboarding_pin_error_wrong">Неверный PIN-код. Осталось попыток: %1$d</string>
     <string name="onboarding_pin_error_attempts">Попытки исчерпаны. Войдите заново по номеру телефона</string>
+    <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
     <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
 
     <!-- Онбординг: биометрия -->

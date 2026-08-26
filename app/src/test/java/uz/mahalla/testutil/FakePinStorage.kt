@@ -17,16 +17,30 @@ class FakePinStorage(initialPin: String? = null) : PinStorage {
     var clearCount: Int = 0
         private set
 
-    override suspend fun isConfigured(): Boolean = storedPin != null
+    /**
+     * Отказ хранилища. Настоящий Keystore кидает `KeyStoreException` и
+     * `KeyPermanentlyInvalidatedException` — приложение обязано это пережить.
+     */
+    var failure: Exception? = null
+
+    override suspend fun isConfigured(): Boolean {
+        failure?.let { throw it }
+        return storedPin != null
+    }
 
     override suspend fun save(pin: String) {
+        failure?.let { throw it }
         storedPin = pin
         saveCount++
     }
 
-    override suspend fun verify(pin: String): Boolean = storedPin != null && storedPin == pin
+    override suspend fun verify(pin: String): Boolean {
+        failure?.let { throw it }
+        return storedPin != null && storedPin == pin
+    }
 
     override suspend fun clear() {
+        failure?.let { throw it }
         storedPin = null
         clearCount++
     }

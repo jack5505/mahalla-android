@@ -23,6 +23,8 @@ import uz.mahalla.feature.root.ui.RootViewModel
 import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
 import uz.mahalla.navigation.OnboardingGraph
+import uz.mahalla.navigation.PinRoute
+import uz.mahalla.navigation.WelcomeRoute
 import uz.mahalla.ui.theme.MahallaTheme
 
 /**
@@ -66,6 +68,13 @@ class MainActivity : FragmentActivity() {
                         MainGraph
                     },
                     onOnboardingFinished = viewModel::onOnboardingFinished,
+                    // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
+                    // иначе пользователь получит второй платный SMS-код.
+                    onboardingStartDestination = if (ready.resumeOnboardingAtPin) {
+                        PinRoute
+                    } else {
+                        WelcomeRoute
+                    },
                 )
             }
         }

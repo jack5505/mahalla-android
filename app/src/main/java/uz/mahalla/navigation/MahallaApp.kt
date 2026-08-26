@@ -24,6 +24,7 @@ fun MahallaApp(
     startDestination: Any,
     onOnboardingFinished: () -> Unit,
     modifier: Modifier = Modifier,
+    onboardingStartDestination: Any = WelcomeRoute,
     navController: NavHostController = rememberNavController(),
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
@@ -61,6 +62,7 @@ fun MahallaApp(
             startDestination = startDestination,
             onOnboardingFinished = onOnboardingFinished,
             modifier = Modifier.padding(innerPadding),
+            onboardingStartDestination = onboardingStartDestination,
         )
     }
 }

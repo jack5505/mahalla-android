@@ -3,6 +3,7 @@ package uz.mahalla.feature.onboarding.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.data.security.PinStorage
@@ -29,7 +30,11 @@ class PinViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            if (pinStorage.isConfigured()) {
+            // Хранилище недоступно — считаем, что PIN не настроен: установка
+            // сработает и перезапишет его, а падение на старте экрана нет.
+            val configured = runCatchingCancellable { pinStorage.isConfigured() }
+                .getOrDefault(false)
+            if (configured) {
                 updateState { copy(stage = PinStage.Unlock) }
             }
         }
@@ -74,7 +79,20 @@ class PinViewModel @Inject constructor(
     private fun savePin(pin: String) {
         updateState { copy(busy = true) }
         viewModelScope.launch {
-            pinStorage.save(pin)
+            // Keystore умеет отказать (ключ инвалидирован сменой блокировки
+            // экрана, хранилище недоступно) — это ошибка шага, а не крэш.
+            if (runCatchingCancellable { pinStorage.save(pin) }.isFailure) {
+                firstEntry = null
+                updateState {
+                    copy(
+                        stage = PinStage.Create,
+                        busy = false,
+                        pin = pin(),
+                        error = PinError.STORAGE,
+                    )
+                }
+                return@launch
+            }
             firstEntry = null
             updateState { copy(busy = false, pin = pin()) }
             emitEffect(PinEffect.PinReady)
@@ -84,7 +102,14 @@ class PinViewModel @Inject constructor(
     private fun verifyPin(pin: String) {
         updateState { copy(busy = true) }
         viewModelScope.launch {
-            if (pinStorage.verify(pin)) {
+            val matches = runCatchingCancellable { pinStorage.verify(pin) }.getOrElse {
+                // Хранилище не ответило — попытку не тратим: пользователь не
+                // виноват, а лимит привёл бы к сбросу сессии на ровном месте.
+                updateState { copy(busy = false, pin = pin(), error = PinError.STORAGE) }
+                return@launch
+            }
+
+            if (matches) {
                 updateState { copy(busy = false, pin = pin(), attemptsLeft = PinState.MAX_ATTEMPTS) }
                 emitEffect(PinEffect.PinReady)
                 return@launch
@@ -105,8 +130,9 @@ class PinViewModel @Inject constructor(
 
             // Попытки исчерпаны: PIN сбрасывается вместе с сессией — иначе
             // подбор продолжался бы бесконечно, просто с перезапуском экрана.
-            pinStorage.clear()
-            authRepository.logout()
+            // Даже если сброс упал, экран уходит на повторный вход: там же
+            // сессия будет перезаписана.
+            clearCredentials()
             firstEntry = null
             updateState {
                 copy(
@@ -126,14 +152,23 @@ class PinViewModel @Inject constructor(
         viewModelScope.launch {
             // Забытый PIN восстановить нечем: он стирается, вход идёт заново
             // по SMS. Сессию тоже сбрасываем — она защищалась этим PIN'ом.
-            pinStorage.clear()
-            authRepository.logout()
+            clearCredentials()
             firstEntry = null
             updateState {
                 copy(stage = PinStage.Create, busy = false, pin = pin(), error = null)
             }
             emitEffect(PinEffect.AuthRestartRequired)
         }
+    }
+
+    /**
+     * Сброс PIN и сессии. Обе операции пишут (Keystore и DataStore) и обе
+     * могут упасть — уронить приложение на выходе из аккаунта нельзя, а
+     * дальнейший сценарий один и тот же: вход заново по SMS.
+     */
+    private suspend fun clearCredentials() {
+        runCatchingCancellable { pinStorage.clear() }
+        runCatchingCancellable { authRepository.logout() }
     }
 
     /** Пустое поле нужной длины: длина приходит из [PinState.PIN_LENGTH]. */

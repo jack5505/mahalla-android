@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +29,11 @@ import uz.mahalla.ui.theme.Spacing
  * расхождение отступов между ними — самая заметная глазом ошибка вёрстки.
  * `imePadding` обязателен: на экранах телефона и кода клавиатура иначе
  * накрывает кнопку.
+ *
+ * Отступ под системную навигацию здесь не добавляется: `Scaffold` в
+ * `MahallaApp` уже отдаёт его в `innerPadding`, и второй `navigationBarsPadding`
+ * поднимал бы кнопки на высоту навбара — а с открытой клавиатурой ещё и
+ * подвешивал бы футер над ней.
  */
 @Composable
 fun OnboardingStep(
@@ -76,7 +80,6 @@ fun OnboardingStep(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
                 .padding(horizontal = Spacing.gutter, vertical = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {

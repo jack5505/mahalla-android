@@ -26,6 +26,10 @@ import uz.mahalla.feature.wallet.ui.WalletScreen
  * Маршруты типизированные ([Routes.kt]); карточка заведения дополнительно
  * достижима по deep link'у `mahalla://place/{placeId}` и лежит вне обоих
  * графов — на неё можно прийти и из онбординга (по ссылке), и из main.
+ *
+ * @param onboardingStartDestination где продолжается прерванный онбординг.
+ * Сессия уже получена — начинать снова с welcome значит запросить второй
+ * платный SMS-код; решение принимает `RootViewModel`.
  */
 @Composable
 fun MahallaNavHost(
@@ -33,13 +37,14 @@ fun MahallaNavHost(
     startDestination: Any,
     onOnboardingFinished: () -> Unit,
     modifier: Modifier = Modifier,
+    onboardingStartDestination: Any = WelcomeRoute,
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
     ) {
-        navigation<OnboardingGraph>(startDestination = WelcomeRoute) {
+        navigation<OnboardingGraph>(startDestination = onboardingStartDestination) {
             composable<WelcomeRoute> {
                 WelcomeScreen(onContinue = { navController.navigate(PhoneRoute) })
             }
@@ -73,10 +78,12 @@ fun MahallaNavHost(
                 PinScreen(
                     onPinReady = { navController.navigate(BiometricRoute) },
                     // Сессия сброшена (лимит попыток или «забыли PIN») — вход
-                    // начинается с номера телефона.
+                    // начинается с номера телефона. Стек чистится целиком:
+                    // возвращаться «назад» на экран PIN, которого больше нет,
+                    // некуда — тем более когда граф стартовал с него.
                     onAuthRestartRequired = {
                         navController.navigate(WelcomeRoute) {
-                            popUpTo(OnboardingGraph) { inclusive = false }
+                            popUpTo(OnboardingGraph) { inclusive = true }
                         }
                     },
                 )

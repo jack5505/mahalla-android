@@ -16,6 +16,14 @@ data class BiometricState(
 
 sealed interface BiometricEvent : UiEvent {
     data object Enable : BiometricEvent
+
+    /**
+     * Экран снова на переднем плане. Пользователь мог уйти в настройки
+     * устройства и добавить отпечаток — статус надо перечитать, иначе кнопка
+     * «Включить» останется выключенной навсегда: ViewModel переживает уход в
+     * настройки вместе с записью в back stack.
+     */
+    data object ScreenResumed : BiometricEvent
     data object PromptSucceeded : BiometricEvent
     data object PromptFailed : BiometricEvent
 

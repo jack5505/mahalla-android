@@ -18,6 +18,9 @@ class FakeOnboardingRepository(
     /** История записей флага биометрии: важен и сам факт записи, и значение. */
     val biometricWrites = mutableListOf<Boolean>()
 
+    /** Отказ записи: DataStore кидает `IOException` при нехватке места. */
+    var writeFailure: Exception? = null
+
     override val settings: Flow<AppSettings> = state
 
     override val completed: Flow<Boolean> = state.map { it.onboardingCompleted }
@@ -25,19 +28,23 @@ class FakeOnboardingRepository(
     val current: AppSettings get() = state.value
 
     override suspend fun setLanguage(language: AppLanguage) {
+        writeFailure?.let { throw it }
         state.update { it.copy(language = language) }
     }
 
     override suspend fun setBiometricEnabled(enabled: Boolean) {
+        writeFailure?.let { throw it }
         biometricWrites += enabled
         state.update { it.copy(biometricEnabled = enabled) }
     }
 
     override suspend fun setCity(cityId: String) {
+        writeFailure?.let { throw it }
         state.update { it.copy(cityId = cityId) }
     }
 
     override suspend fun markCompleted() {
+        writeFailure?.let { throw it }
         state.update { it.copy(onboardingCompleted = true) }
     }
 }

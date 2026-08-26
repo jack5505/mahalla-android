@@ -3,6 +3,7 @@ package uz.mahalla.feature.onboarding.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
 import javax.inject.Inject
@@ -35,7 +36,10 @@ class GeoViewModel @Inject constructor(
             is GeoEvent.CitySelected -> {
                 updateState { copy(selectedCity = event.city, busy = true) }
                 viewModelScope.launch {
-                    onboardingRepository.setCity(event.city.id)
+                    // Город не записался (нет места, битый файл) — держать
+                    // пользователя на последнем шаге онбординга из-за
+                    // настройки нельзя: город меняется и в профиле.
+                    runCatchingCancellable { onboardingRepository.setCity(event.city.id) }
                     updateState { copy(busy = false) }
                     emitEffect(GeoEffect.Finished)
                 }

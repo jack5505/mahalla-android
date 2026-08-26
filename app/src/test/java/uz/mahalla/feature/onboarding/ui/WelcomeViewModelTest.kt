@@ -12,6 +12,7 @@ import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.MainDispatcherRule
+import java.io.IOException
 
 /**
  * Welcome (3.1): выбор языка до входа. Он должен и сохраняться, и
@@ -59,6 +60,23 @@ class WelcomeViewModelTest {
         viewModel.onEvent(WelcomeEvent.LanguageSelected(AppLanguage.RUSSIAN))
 
         assertEquals(WelcomeEffect.RecreateActivity, viewModel.effects.first())
+    }
+
+    @Test
+    fun `a failed write does not crash and still applies the language`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val repository = FakeOnboardingRepository()
+        repository.writeFailure = IOException("нет места")
+        val localeManager = FakeLocaleManager(needsRecreate = false)
+        val viewModel = WelcomeViewModel(repository, localeManager)
+
+        viewModel.onEvent(WelcomeEvent.LanguageSelected(AppLanguage.RUSSIAN))
+        advanceUntilIdle()
+
+        // Язык просили сейчас; не сохранился — потеряется только на следующем
+        // запуске, но приложение обязано остаться живым.
+        assertEquals(listOf(AppLanguage.RUSSIAN), localeManager.applied)
     }
 
     private class FakeLocaleManager(private val needsRecreate: Boolean) : AppLocaleManager {

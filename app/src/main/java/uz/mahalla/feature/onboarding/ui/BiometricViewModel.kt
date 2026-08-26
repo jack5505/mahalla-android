@@ -3,6 +3,7 @@ package uz.mahalla.feature.onboarding.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
@@ -21,7 +22,7 @@ import javax.inject.Inject
 @HiltViewModel
 class BiometricViewModel @Inject constructor(
     private val onboardingRepository: OnboardingRepository,
-    biometricAvailability: BiometricAvailability,
+    private val biometricAvailability: BiometricAvailability,
 ) : MviViewModel<BiometricState, BiometricEvent, BiometricEffect>(
     BiometricState(status = biometricAvailability.status()),
 ) {
@@ -34,6 +35,12 @@ class BiometricViewModel @Inject constructor(
                 emitEffect(BiometricEffect.ShowPrompt)
             }
 
+            // Статус читается заново, а не один раз в конструкторе: отпечаток
+            // могли добавить в настройках устройства и вернуться на этот экран.
+            BiometricEvent.ScreenResumed -> updateState {
+                copy(status = biometricAvailability.status())
+            }
+
             BiometricEvent.PromptSucceeded -> setEnabled(true)
             BiometricEvent.PromptFailed -> updateState { copy(busy = false, promptFailed = true) }
             BiometricEvent.PromptCancelled -> updateState { copy(busy = false) }
@@ -44,7 +51,10 @@ class BiometricViewModel @Inject constructor(
     private fun setEnabled(enabled: Boolean) {
         updateState { copy(busy = true, promptFailed = false) }
         viewModelScope.launch {
-            onboardingRepository.setBiometricEnabled(enabled)
+            // Запись в DataStore может упасть (нет места, битый файл). Флаг —
+            // не повод оставлять пользователя запертым на шаге: без него
+            // биометрия просто выключена, PIN уже настроен и остаётся входом.
+            runCatchingCancellable { onboardingRepository.setBiometricEnabled(enabled) }
             updateState { copy(busy = false) }
             emitEffect(BiometricEffect.Finished)
         }

@@ -313,6 +313,41 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
   `WelcomeViewModelTest`; фейки в `testutil/` (`FakeAuthRepository`,
   `FakePinStorage`, `FakeOnboardingRepository`, `MainDispatcherRule`).
 
+### Правки после код-ревью PR #22
+
+- **Прерванный онбординг больше не стоит второго платного SMS**: `RootViewModel`
+  один раз за процесс решает не только «онбординг или main», но и где онбординг
+  продолжается — если сессия уже в `SessionStore` (`AuthRepository.isAuthorized`,
+  до этого объявлен и не использован), граф стартует с `PinRoute`, а не с
+  welcome → телефон → новый код. Стартовый пункт онбординга протянут параметром
+  `onboardingStartDestination` (MainActivity → `MahallaApp` → `MahallaNavHost`).
+  Заодно `onAuthRestartRequired` чистит стек целиком (`popUpTo(OnboardingGraph)
+  { inclusive = true }`): «назад» на экран PIN, которого больше нет, вести
+  некуда — тем более когда граф стартовал с него.
+- **Биометрия перечитывает статус на `ON_RESUME`** (`BiometricEvent.ScreenResumed`
+  + `LifecycleEventEffect` в `BiometricScreen`): раньше `status()` читался
+  один раз в конструкторе, и пользователь, ушедший добавлять отпечаток в
+  настройки устройства, возвращался к навсегда выключенной кнопке.
+- **Убран двойной нижний инсет**: `OnboardingStep` больше не навешивает
+  `navigationBarsPadding()` поверх `innerPadding` из `Scaffold` — кнопки на всех
+  шести экранах отъезжали на высоту навбара, а с открытой клавиатурой футер
+  висел над ней с тем же зазором.
+- **Записи прикрыты от падения** (`core/result/runCatchingCancellable` —
+  `runCatching`, который не глотает `CancellationException`): PIN
+  (`save`/`verify`/`clear`/`isConfigured` — Keystore кидает `KeyStoreException`
+  и `KeyPermanentlyInvalidatedException`) и записи в DataStore из
+  Welcome/Geo/Biometric/`RootViewModel.onOnboardingFinished`. Поведение при
+  отказе разное и осмысленное: PIN показывает ошибку
+  (`PinError.STORAGE`, новая строка `onboarding_pin_error_storage`) и **не
+  тратит попытку**; язык применяется, даже если не сохранился; город и флаг
+  биометрии не запирают пользователя на шаге — онбординг заканчивается.
+- Тесты: 230 в 32 классах, 0 падений (`assembleDebug` — BUILD SUCCESSFUL).
+  Новые — перечит статуса биометрии, отказ Keystore на save/verify/clear,
+  отказ DataStore в Welcome/Geo/Biometric, старт с PIN при живой сессии,
+  `RunCatchingCancellableTest` (отмена не проглатывается). Фейки
+  `FakePinStorage`/`FakeOnboardingRepository` умеют отказывать (`failure`,
+  `writeFailure`).
+
 **Не сделано / риски эпика 3:**
 
 - **Design-репозиторий в этом прогоне был недоступен** (`git clone` и `gh api`
@@ -331,7 +366,17 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
 - Разблокировки по биометрии/PIN на старте приложения ещё нет: флаги
   сохраняются, но app-lock — отдельная задача (эпик профиля/безопасности).
 - Скриншот-тестов по-прежнему нет; соответствие макету проверяется глазами по
-  `@ThemeLanguagePreviews`.
+  `@ThemeLanguagePreviews`. Снятый `navigationBarsPadding()` и перечит статуса
+  биометрии на `ON_RESUME` юнит-тестами не покрыть — проверить на устройстве.
+- Открытые замечания ревью PR #22 (задачами, не блокеры): лимит попыток PIN
+  живёт только в памяти (к app-lock переносить в DataStore); мигание заголовка
+  на экране PIN (стадия читается асинхронно, стартовое значение `Create`);
+  `PinRoute` не выталкивается при переходе на биометрию; `refresh()` при 401
+  чистит сессию, но не PIN; голый `(context as? Activity)?.recreate()` в
+  `WelcomeScreen` при аккуратной развёртке `ContextWrapper` в `BiometricScreen`;
+  `City.Default`/`City.fromId` пока не используются; `pin_input_description` и
+  `otp_input_description` просят `<plurals>`; `RoutesSerializationTest` шумит
+  семью warning'ами `ExperimentalSerializationApi`.
 
 ## Окружение (важно, иначе градиент не стартует)
 

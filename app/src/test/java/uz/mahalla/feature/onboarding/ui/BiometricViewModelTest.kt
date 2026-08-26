@@ -13,6 +13,7 @@ import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.MainDispatcherRule
+import java.io.IOException
 
 /**
  * Биометрия (3.5): флаг включается только после успешного промпта, пропуск —
@@ -30,11 +31,43 @@ class BiometricViewModelTest {
         BiometricViewModel(onboardingRepository, FakeBiometricAvailability(status))
 
     @Test
-    fun `availability is read once at start`() {
+    fun `availability is read at start`() {
         assertTrue(viewModel(BiometricStatus.Available).state.value.canEnable)
         assertFalse(viewModel(BiometricStatus.NotEnrolled).state.value.canEnable)
         assertFalse(viewModel(BiometricStatus.NoHardware).state.value.canEnable)
         assertFalse(viewModel(BiometricStatus.Unavailable).state.value.canEnable)
+    }
+
+    @Test
+    fun `returning to the screen re-reads availability`() {
+        // Сценарий: «отпечаток не добавлен» → пользователь уходит в настройки
+        // устройства, добавляет его и возвращается. ViewModel та же (запись в
+        // back stack жива), и статус обязан перечитаться — иначе кнопка
+        // «Включить» останется выключенной навсегда.
+        val availability = FakeBiometricAvailability(BiometricStatus.NotEnrolled)
+        val viewModel = BiometricViewModel(onboardingRepository, availability)
+        assertFalse(viewModel.state.value.canEnable)
+
+        availability.status = BiometricStatus.Available
+        viewModel.onEvent(BiometricEvent.ScreenResumed)
+
+        assertTrue(viewModel.state.value.canEnable)
+    }
+
+    @Test
+    fun `a datastore failure does not crash the step`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        onboardingRepository.writeFailure = IOException("нет места")
+        val viewModel = viewModel(BiometricStatus.Available)
+
+        viewModel.onEvent(BiometricEvent.Skip)
+        val effect = viewModel.effects.first()
+
+        // Шаг заканчивается: без флага биометрия просто выключена, а PIN уже
+        // настроен и остаётся входом.
+        assertEquals(BiometricEffect.Finished, effect)
+        assertFalse(viewModel.state.value.busy)
     }
 
     @Test
@@ -118,7 +151,7 @@ class BiometricViewModelTest {
     }
 
     private class FakeBiometricAvailability(
-        private val status: BiometricStatus,
+        var status: BiometricStatus,
     ) : BiometricAvailability {
         override fun status(): BiometricStatus = status
     }
