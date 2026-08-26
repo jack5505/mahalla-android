@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug-сборка: cleartext разрешён куда угодно (issue #26).
+
+    Сервер разработчика в локальной сети (`http://192.168.…:8080`) без TLS —
+    норма, а без этого файла Android с API 28 режет такие запросы молча, и
+    экран ввода адреса был бы бесполезен. Файл перекрывает одноимённый из
+    main/ только в debug: релиз остаётся с жёстким конфигом.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

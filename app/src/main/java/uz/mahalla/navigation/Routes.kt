@@ -20,6 +20,15 @@ data object OnboardingGraph
 @Serializable
 data object MainGraph
 
+/**
+ * Ввод адреса бэкенда (issue #26). Лежит вне обоих графов: экран нужен и до
+ * онбординга (первый запуск), и после него (сменить сервер из профиля), а
+ * частью флоу входа он не является. Регистрируется только в сборках, которым
+ * разрешено менять адрес (`BuildConfig.BACKEND_URL_OVERRIDE`).
+ */
+@Serializable
+data object BackendUrlRoute
+
 // --- Онбординг: welcome → phone → otp → pin → biometric → geo ---
 
 @Serializable

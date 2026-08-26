@@ -14,3 +14,12 @@ annotation class BaseUrl
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class RefreshClient
+
+/**
+ * Разрешает ли сборка менять адрес бэкенда (issue #26) —
+ * `BuildConfig.BACKEND_URL_OVERRIDE`. В обычном релизе выключено: экран ввода
+ * адреса не показывается и сохранённый адрес не применяется.
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class BackendUrlOverride

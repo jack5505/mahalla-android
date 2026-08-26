@@ -14,6 +14,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
@@ -23,11 +24,15 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
  *
  * Вход и регистрация — одна кнопка: сценарий один и тот же (номер → код), а
  * есть ли уже аккаунт, знает сервер, не пользователь.
+ *
+ * @param onChangeServer открыть экран адреса бэкенда (issue #26); `null` —
+ * сборке менять адрес не разрешено, кнопки нет.
  */
 @Composable
 fun WelcomeScreen(
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
+    onChangeServer: (() -> Unit)? = null,
     viewModel: WelcomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -46,6 +51,7 @@ fun WelcomeScreen(
         onLanguageSelected = { viewModel.onEvent(WelcomeEvent.LanguageSelected(it)) },
         onContinue = onContinue,
         modifier = modifier,
+        onChangeServer = onChangeServer,
     )
 }
 
@@ -55,6 +61,7 @@ private fun WelcomeContent(
     onLanguageSelected: (AppLanguage) -> Unit,
     onContinue: () -> Unit,
     modifier: Modifier = Modifier,
+    onChangeServer: (() -> Unit)? = null,
 ) {
     val languages = AppLanguage.entries
     OnboardingStep(
@@ -66,6 +73,15 @@ private fun WelcomeContent(
                 text = stringResource(R.string.onboarding_welcome_action),
                 onClick = onContinue,
             )
+            // Адрес бэкенда (issue #26) вводится до входа, но опечатку в нём
+            // видно только здесь — иначе исправить её было бы негде.
+            if (onChangeServer != null) {
+                MahallaButton(
+                    text = stringResource(R.string.backend_url_change),
+                    onClick = onChangeServer,
+                    variant = MahallaButtonVariant.Ghost,
+                )
+            }
         },
     ) {
         Text(
@@ -95,6 +111,7 @@ private fun WelcomeScreenPreview() {
             state = WelcomeState(language = AppLanguage.UZBEK),
             onLanguageSelected = {},
             onContinue = {},
+            onChangeServer = {},
         )
     }
 }
