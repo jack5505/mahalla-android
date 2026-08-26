@@ -418,7 +418,7 @@ private fun MahallaCardsPreview() {
                 place = PlaceCardUi(
                     id = "1",
                     title = "Choyxona Registon",
-                    category = stringResource(R.string.filter_food),
+                    category = stringResource(R.string.category_food),
                     ratingLabel = "4,8",
                     distanceLabel = "450 m",
                     priceLabel = "25 000",

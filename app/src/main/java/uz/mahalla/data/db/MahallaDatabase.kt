@@ -21,7 +21,8 @@ import uz.mahalla.data.db.entity.PlaceEntity
         OrderEntity::class,
         CartDraftItemEntity::class,
     ],
-    version = 1,
+    // v2 — эпик 4: в кэш мест добавлены адрес, координаты, фото и контакты.
+    version = 2,
     exportSchema = false,
 )
 abstract class MahallaDatabase : RoomDatabase() {

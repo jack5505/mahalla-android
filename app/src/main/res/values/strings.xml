@@ -86,7 +86,6 @@
     <!-- Основные разделы -->
     <string name="discovery_title">Yaqin atrofda</string>
     <string name="discovery_subtitle">Ovqat, dorixona, shifokor, kino va ustalar — yoningizda.</string>
-    <string name="discovery_open_demo_place">Namuna joyni ochish</string>
     <string name="orders_title">Buyurtmalar</string>
     <string name="orders_subtitle">Faol buyurtmalar, navbatlar va bandlovlar.</string>
     <string name="wallet_title">Hamyon</string>
@@ -98,7 +97,6 @@
 
     <!-- Детали -->
     <string name="place_title">Joy</string>
-    <string name="place_id_label">Joy identifikatori: %1$s</string>
 
     <!-- Язык и тема -->
     <string name="language_system">Tizim tili</string>
@@ -138,8 +136,6 @@
     <string name="state_error_title">Xatolik yuz berdi</string>
 
     <!-- UI-кит: карточки -->
-    <string name="filter_food">Ovqat</string>
-    <string name="filter_pharmacy">Dorixona</string>
     <string name="place_open_now">Ochiq</string>
     <string name="place_closed_now">Yopiq</string>
     <string name="place_rating_description">Reyting %1$s</string>
@@ -163,4 +159,79 @@
     <string name="error_not_found">Ma\'lumot topilmadi</string>
     <string name="error_server">Serverda xatolik yuz berdi</string>
     <string name="error_unknown">Nimadir xato ketdi</string>
+
+    <!-- Discovery: категории (эпик 4.1) -->
+    <string name="category_food">Ovqat</string>
+    <string name="category_pharmacy">Dorixona</string>
+    <string name="category_hospital">Shifoxona</string>
+    <string name="category_cinema">Kino</string>
+    <string name="category_playground">O\'yin maydoni</string>
+    <string name="category_master">Ustalar</string>
+    <string name="category_other">Boshqa</string>
+
+    <!-- Discovery: главная (эпик 4.1) -->
+    <string name="discovery_section_nearby">Yaqin atrofda</string>
+    <string name="discovery_section_recommended">Tavsiya etamiz</string>
+    <string name="discovery_open_map">Xaritada ochish</string>
+    <string name="distance_meters">%1$s m</string>
+    <string name="distance_kilometers">%1$s km</string>
+    <string name="state_offline_cache">Saqlangan ma\'lumot ko\'rsatilmoqda</string>
+
+    <!-- Discovery: поиск и фильтры (эпик 4.3) -->
+    <string name="search_title">Qidiruv</string>
+    <string name="search_empty_title">Hech narsa topilmadi</string>
+    <string name="search_empty_description">So\'rovni o\'zgartiring yoki filtrlarni tozalang</string>
+    <string name="search_history_title">Qidiruv tarixi</string>
+    <string name="search_history_clear">Tozalash</string>
+    <string name="search_history_remove">%1$s so\'rovini o\'chirish</string>
+    <string name="filters_title">Filtrlar</string>
+    <string name="filters_category">Turkum</string>
+    <string name="filters_distance">Masofa</string>
+    <string name="filters_rating">Reyting</string>
+    <string name="filters_open_now">Hozir ochiq</string>
+    <string name="filters_sort">Saralash</string>
+    <string name="filters_reset">Filtrlarni tozalash</string>
+    <string name="filters_any">Har qanday</string>
+    <string name="filters_distance_up_to_m">%1$s m gacha</string>
+    <string name="filters_distance_up_to_km">%1$s km gacha</string>
+    <string name="filters_rating_from">%1$s dan yuqori</string>
+    <string name="sort_relevance">Mos kelishi</string>
+    <string name="sort_distance">Masofa</string>
+    <string name="sort_rating">Reyting</string>
+
+    <!-- Discovery: карта (эпик 4.2) -->
+    <string name="map_title">Xarita</string>
+    <string name="map_sdk_pending">Xarita SDK hali tanlanmagan: bu yerda belgilar ro\'yxati ko\'rsatilmoqda.</string>
+    <string name="map_markers_count">%1$d ta belgi, masshtab %2$d</string>
+    <string name="map_cluster_places">%1$d ta joy</string>
+    <string name="map_zoom_in">Yaqinlashtirish</string>
+    <string name="map_zoom_out">Uzoqlashtirish</string>
+    <string name="map_my_location">Mening joylashuvim</string>
+
+    <!-- Карточка места (эпик 4.4) -->
+    <string name="place_hours_title">Ish vaqti</string>
+    <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
+    <string name="place_hours_around_the_clock">Kunu tun</string>
+    <string name="place_hours_day_off">Dam olish kuni</string>
+    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_reviews_title">Sharhlar</string>
+    <string name="place_reviews_show_all">Barcha sharhlar</string>
+    <string name="place_review_anonymous">Mehmon</string>
+    <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
+    <string name="place_no_rating">Baholanmagan</string>
+    <string name="place_action_queue">Navbatga yozilish</string>
+    <string name="place_action_booking">Joy band qilish</string>
+    <string name="place_action_order">Buyurtma berish</string>
+    <string name="place_action_call">Qo\'ng\'iroq qilish</string>
+    <string name="place_action_route">Yo\'nalish</string>
+    <string name="action_collapse">Yig\'ish</string>
+
+    <!-- Дни недели -->
+    <string name="day_monday">Dushanba</string>
+    <string name="day_tuesday">Seshanba</string>
+    <string name="day_wednesday">Chorshanba</string>
+    <string name="day_thursday">Payshanba</string>
+    <string name="day_friday">Juma</string>
+    <string name="day_saturday">Shanba</string>
+    <string name="day_sunday">Yakshanba</string>
 </resources>

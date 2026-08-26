@@ -1,5 +1,6 @@
 package uz.mahalla.navigation
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -12,7 +13,12 @@ import org.junit.Test
  * Typed routes держатся на kotlinx.serialization: если маршрут перестанет
  * сериализоваться или поле переименуют — сломается навигация и deep link,
  * причём только в рантайме. Эти тесты ловят такое на сборке.
+ *
+ * Опт-ин осознанный: проверять состав полей маршрута можно только через
+ * `descriptor`, а он экспериментальный. Двадцать предупреждений в логе сборки
+ * прятали бы настоящие.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class RoutesSerializationTest {
 
     private val json = Json
@@ -24,6 +30,24 @@ class RoutesSerializationTest {
 
         val otp = OtpRoute(phone = "+998901234567")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
+
+        val search = SearchRoute(categoryId = "pharmacy", query = "osh")
+        assertEquals(search, json.decodeFromString<SearchRoute>(json.encodeToString(search)))
+    }
+
+    @Test
+    fun `search route arguments are optional`() {
+        // С главной сюда приходят и «просто поиск», и поиск с категорией —
+        // оба аргумента должны быть необязательными.
+        val empty = SearchRoute()
+
+        assertEquals(empty, json.decodeFromString<SearchRoute>(json.encodeToString(empty)))
+        assertEquals(
+            listOf("categoryId", "query"),
+            serializer<SearchRoute>().descriptor.let { descriptor ->
+                (0 until descriptor.elementsCount).map(descriptor::getElementName)
+            },
+        )
     }
 
     @Test
@@ -40,6 +64,7 @@ class RoutesSerializationTest {
             serializer<OrdersRoute>().descriptor.serialName,
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
+            serializer<MapRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
