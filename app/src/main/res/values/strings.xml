@@ -147,9 +147,6 @@
     <string name="map_unavailable_title">Xarita ochilmadi</string>
     <string name="map_missing_key_description">Ilova xarita kalitisiz yig\'ilgan. Ro\'yxatni ishlatishingiz mumkin.</string>
     <string name="map_engine_failed_description">Xaritani yuklab bo\'lmadi. Internetni tekshiring va qaytadan urinib ko\'ring.</string>
-    <string name="map_my_location">Mening joylashuvim</string>
-    <string name="map_zoom_in">Yaqinlashtirish</string>
-    <string name="map_zoom_out">Uzoqlashtirish</string>
 
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Internet aloqasi yo\'q</string>

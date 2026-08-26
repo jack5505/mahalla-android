@@ -1,5 +1,7 @@
 package uz.mahalla.feature.map.data
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,6 +15,7 @@ import org.junit.Test
  * вообще, иначе сборка без `MAPKIT_API_KEY` падала бы при первом же нажатии
  * на кнопку «моё местоположение».
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class MapKitLocationProviderTest {
 
     private class NeverCalledSdk : MapKitSdk {
@@ -26,7 +29,13 @@ class MapKitLocationProviderTest {
     fun `without api key there is no location and no sdk call`() = runTest {
         val sdk = NeverCalledSdk()
         val provider = MapKitLocationProvider(
-            initializer = MapKitInitializer(apiKey = "", locale = "ru_RU", sdk = sdk),
+            initializer = MapKitInitializer(
+                apiKey = "",
+                locale = "ru_RU",
+                sdk = sdk,
+                mainDispatcher = UnconfinedTestDispatcher(),
+            ),
+            mainDispatcher = UnconfinedTestDispatcher(),
         )
 
         assertNull(provider.currentLocation())
@@ -38,10 +47,16 @@ class MapKitLocationProviderTest {
         val failing = object : MapKitSdk {
             override fun setApiKey(apiKey: String) = Unit
             override fun setLocale(locale: String) = Unit
-            override fun initialize(): Unit = error("MapKit не поднялся")
+            override fun initialize(): Unit = throw AssertionError("MapKit не поднялся")
         }
         val provider = MapKitLocationProvider(
-            initializer = MapKitInitializer(apiKey = "key", locale = "ru_RU", sdk = failing),
+            initializer = MapKitInitializer(
+                apiKey = "key",
+                locale = "ru_RU",
+                sdk = failing,
+                mainDispatcher = UnconfinedTestDispatcher(),
+            ),
+            mainDispatcher = UnconfinedTestDispatcher(),
         )
 
         assertNull(provider.currentLocation())

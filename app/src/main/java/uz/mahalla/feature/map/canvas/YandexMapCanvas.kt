@@ -1,5 +1,6 @@
 package uz.mahalla.feature.map.canvas
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -35,11 +36,10 @@ import com.yandex.mapkit.map.ClusterTapListener
 import com.yandex.mapkit.map.ClusterizedPlacemarkCollection
 import com.yandex.mapkit.map.MapObject
 import com.yandex.mapkit.map.MapObjectTapListener
+import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
 import com.yandex.mapkit.user_location.UserLocationLayer
 import com.yandex.runtime.image.ImageProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.ErrorState
 import uz.mahalla.feature.map.data.MapEngineState
@@ -141,8 +141,8 @@ fun YandexMapCanvas(
  * объяснение, а не пустой серый прямоугольник.
  *
  * [initializer] приходит из DI через ViewModel экрана: композиция не должна
- * знать про Hilt, а инициализация ходит на диск и обязана быть вне главного
- * потока.
+ * знать про Hilt. Поток инициализации выбирает сам `MapKitInitializer` —
+ * MapKit требует главного, и уводить его в фон нельзя.
  */
 @Composable
 fun MapCanvas(
@@ -156,14 +156,19 @@ fun MapCanvas(
 ) {
     var retryKey by remember { mutableIntStateOf(0) }
     val engineState by produceState(initialValue = null as MapEngineState?, initializer, retryKey) {
-        value = withContext(Dispatchers.IO) { initializer.ensureInitialized() }
+        value = initializer.ensureInitialized()
     }
 
     Box(modifier = modifier) {
         when (engineState) {
-            // null — инициализация ещё идёт. Скелетон здесь лишний: карта
-            // поднимается за десятки миллисекунд, мигание хуже пустоты.
-            null -> Unit
+            // null — инициализация ещё идёт. Первый раз она грузит нативную
+            // библиотеку и заметна, поэтому под картой — ровная заглушка
+            // цвета скелетона, а не белая дыра.
+            null -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(LocalMahallaColors.current.skeleton),
+            )
 
             MapEngineState.Ready -> YandexMapCanvas(
                 markers = markers,
@@ -203,7 +208,12 @@ private class MarkerIconCache(
     private val strokeColor: Int,
     private val textColor: Int,
 ) {
-    private val clusters = mutableMapOf<Int, ImageProvider>()
+    /**
+     * Ключ — подпись, а не число мест: всё, что больше сотни, рисуется как
+     * «99+», и по числу кэш хранил бы попиксельно одинаковые битмапы на каждый
+     * размер кучи (100, 101, 102…).
+     */
+    private val clusters = mutableMapOf<String, ImageProvider>()
 
     val marker: ImageProvider = ImageProvider.fromBitmap(
         MarkerIcons.place(markerSizePx, fillColor, strokeColor, selected = false),
@@ -215,7 +225,7 @@ private class MarkerIconCache(
 
     fun forMarker(selected: Boolean): ImageProvider = if (selected) selectedMarker else marker
 
-    fun forCluster(size: Int): ImageProvider = clusters.getOrPut(size) {
+    fun forCluster(size: Int): ImageProvider = clusters.getOrPut(MarkerIcons.clusterLabel(size)) {
         ImageProvider.fromBitmap(
             MarkerIcons.cluster(clusterSizePx, fillColor, strokeColor, textColor, size),
         )
@@ -240,10 +250,23 @@ private class MapCanvasController(
     private var appliedMarkers: List<MapMarkerUi> = emptyList()
 
     /**
-     * Последняя камера, **пришедшая сверху**. Отдельно от фактического
-     * положения карты: пользователь двигает карту пальцем постоянно, а
-     * возвращать его на место можно только когда экран действительно попросил
-     * другую позицию, — иначе любая рекомпозиция отматывала бы карту назад.
+     * Метки по id маркера — для быстрого пути [applyMarkers]: сменить иконку
+     * готовой метки дешевле, чем пересобрать кластеризованную коллекцию.
+     */
+    private val placemarks = mutableMapOf<String, PlacemarkMapObject>()
+
+    /**
+     * Было ли положение камеры выставлено хоть раз. Нужно только затем, чтобы
+     * первый кадр не анимировался: сама позиция сверяется с фактическим
+     * положением карты, а не с последним запросом: иначе повторный запрос той же
+     * камеры («моё местоположение» после того, как пользователь отпанорамировал
+     * в сторону) не сработал бы.
+     */
+    private var cameraApplied = false
+
+    /**
+     * Последняя камера, пришедшая сверху. Нужна только слушателю: подтверждение
+     * своего же движения наверх не отдаём.
      */
     private var requestedCamera: MapCameraPosition? = null
     private var userLocationLayer: UserLocationLayer? = null
@@ -270,34 +293,48 @@ private class MapCanvasController(
 
     private val clusterListener = ClusterListener { cluster: Cluster ->
         cluster.appearance.setIcon(icons?.forCluster(cluster.size) ?: return@ClusterListener)
-        cluster.addClusterTapListener(WeakReference(clusterTapListener))
+        cluster.addClusterTapListener(clusterTapListenerRef)
     }
 
     private val cameraListener = CameraListener {
             _, position: CameraPosition, _: CameraUpdateReason, finished: Boolean ->
         if (!finished) return@CameraListener
-        val moved = MapCameraPosition(
-            target = MapCoordinates(position.target.latitude, position.target.longitude),
-            zoom = position.zoom,
-        )
+        val moved = position.toCanvasPosition()
         // Своё же движение камеры обратно наверх не отдаём — иначе экран и
         // карта будут по кругу подтверждать друг другу одну и ту же позицию.
-        if (moved != requestedCamera) onCameraChanged(moved)
+        val requested = requestedCamera
+        if (requested == null || !MapCameraFit.isSamePosition(moved, requested)) {
+            onCameraChanged(moved)
+        }
     }
+
+    /**
+     * Обёртки для подписок держатся полями и переиспользуются при отписке:
+     * сравнивает MapKit сам `WeakReference` или его referent — из API не
+     * следует, а одна и та же ссылка верна при любом из двух вариантов.
+     */
+    private val tapListenerRef = WeakReference(tapListener)
+    private val clusterTapListenerRef = WeakReference(clusterTapListener)
+    private val clusterListenerRef = WeakReference(clusterListener)
+    private val cameraListenerRef = WeakReference(cameraListener)
 
     private var icons: MarkerIconCache? = null
     private var collection: ClusterizedPlacemarkCollection? = null
 
     init {
-        map.addCameraListener(WeakReference(cameraListener))
+        map.addCameraListener(cameraListenerRef)
     }
 
     fun applyCamera(camera: MapCameraPosition) {
-        if (requestedCamera == camera) return
+        val current = map.cameraPosition.toCanvasPosition()
+        requestedCamera = camera
+        // Карта уже там: либо экран прислал ту же позицию, либо это отражение
+        // собственного жеста пользователя, вернувшегося через onCameraChanged.
+        if (cameraApplied && MapCameraFit.isSamePosition(current, camera)) return
         // Первый кадр — без анимации: полёт от нулевого меридиана к городу
         // пользователя не информация, а секунда ожидания.
-        val animated = requestedCamera != null
-        requestedCamera = camera
+        val animated = cameraApplied
+        cameraApplied = true
         moveCamera(camera, animated)
     }
 
@@ -306,13 +343,25 @@ private class MapCanvasController(
         icons = iconCache
         val diff = diffMarkers(appliedMarkers, markers)
         if (diff.isEmpty && !iconsChanged && collection != null) return
-        appliedMarkers = markers
 
         val target = collection ?: map.mapObjects
-            .addClusterizedPlacemarkCollection(WeakReference(clusterListener))
+            .addClusterizedPlacemarkCollection(clusterListenerRef)
             .also { collection = it }
 
+        // Быстрый путь: состав и координаты те же, поменялся только вид. Тап по
+        // маркеру приходит именно так, а полная пересборка на нём заставила бы
+        // моргнуть всю выдачу и пересчитать кластеры.
+        if (diff.isAppearanceOnly && !iconsChanged) {
+            appliedMarkers = markers
+            diff.changed.forEach { marker ->
+                placemarks[marker.id]?.setIcon(iconCache.forMarker(marker.selected))
+            }
+            return
+        }
+
+        appliedMarkers = markers
         target.clear()
+        placemarks.clear()
         markers.forEach { marker ->
             // Метка настраивается внутри коллбэка: MapKit 4.x пересчитывает
             // кластеры на каждом изменении готовой метки, а так она приезжает
@@ -321,7 +370,8 @@ private class MapCanvasController(
                 placemark.geometry = Point(marker.point.latitude, marker.point.longitude)
                 placemark.setIcon(iconCache.forMarker(marker.selected))
                 placemark.userData = marker.id
-                placemark.addTapListener(WeakReference(tapListener))
+                placemark.addTapListener(tapListenerRef)
+                placemarks[marker.id] = placemark
             }
         }
         target.clusterPlacemarks(CLUSTER_RADIUS_DP, CLUSTER_MIN_ZOOM)
@@ -339,9 +389,10 @@ private class MapCanvasController(
     }
 
     fun dispose() {
-        map.removeCameraListener(WeakReference(cameraListener))
+        map.removeCameraListener(cameraListenerRef)
         collection?.clear()
         collection = null
+        placemarks.clear()
         userLocationLayer?.isVisible = false
         userLocationLayer = null
     }
@@ -360,6 +411,12 @@ private class MapCanvasController(
         }
     }
 }
+
+/** Позиция камеры MapKit в модель полотна: наклон и азимут карта не использует. */
+private fun CameraPosition.toCanvasPosition() = MapCameraPosition(
+    target = MapCoordinates(target.latitude, target.longitude),
+    zoom = zoom,
+)
 
 private val MARKER_SIZE = 20.dp
 private val CLUSTER_SIZE = 36.dp

@@ -24,6 +24,12 @@ object MapCameraFit {
     /** Один маркер: улица с домами, дальше приближать нечего. */
     const val SINGLE_MARKER_ZOOM = 16f
 
+    /**
+     * «Моё местоположение»: на шаг мельче одиночного маркера — дом различим, но
+     * в кадр попадает и соседняя улица, иначе непонятно, куда идти.
+     */
+    const val FOCUS_ZOOM = 15f
+
     const val MIN_ZOOM = 3f
     const val MAX_ZOOM = 18f
 
@@ -93,7 +99,26 @@ object MapCameraFit {
         point: MapCoordinates,
         current: MapCameraPosition = DEFAULT,
     ): MapCameraPosition =
-        MapCameraPosition(point, clampZoom(max(current.zoom, SINGLE_MARKER_ZOOM - 1f)))
+        MapCameraPosition(point, clampZoom(max(current.zoom, FOCUS_ZOOM)))
 
     fun clampZoom(zoom: Float): Float = min(MAX_ZOOM, max(MIN_ZOOM, zoom))
+
+    /**
+     * Стоит ли карта уже там, куда её просят.
+     *
+     * Сравнение с допуском, а не по `equals`: положение возвращает SDK после
+     * анимации, и оно отличается от заказанного в последних знаках. По этому
+     * ответу полотно решает, двигать карту или нет, — строгое сравнение
+     * заставляло бы её дёргаться на каждой рекомпозиции.
+     */
+    fun isSamePosition(first: MapCameraPosition, second: MapCameraPosition): Boolean =
+        abs(first.target.latitude - second.target.latitude) < POSITION_EPSILON_DEGREES &&
+            abs(first.target.longitude - second.target.longitude) < POSITION_EPSILON_DEGREES &&
+            abs(first.zoom - second.zoom) < ZOOM_EPSILON
+
+    /** ~1 метр: меньше половины маркера, глазом такое смещение не видно. */
+    private const val POSITION_EPSILON_DEGREES = 1e-5
+
+    /** Зум меняется шагами не мельче 0.1 — сотой доли хватает с запасом. */
+    private const val ZOOM_EPSILON = 0.01f
 }

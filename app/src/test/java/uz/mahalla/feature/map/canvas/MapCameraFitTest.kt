@@ -1,6 +1,7 @@
 package uz.mahalla.feature.map.canvas
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -103,6 +104,28 @@ class MapCameraFitTest {
 
         assertEquals(tashkent, position.target)
         assertEquals(18f, position.zoom, 0f)
+    }
+
+    /**
+     * По этому сравнению полотно решает, двигать карту или нет: строгое
+     * равенство отматывало бы её назад после каждого жеста пользователя (SDK
+     * возвращает позицию, отличающуюся в последних знаках), а повторный запрос
+     * той же камеры («моё местоположение» после панорамирования) — наоборот,
+     * обязан сработать.
+     */
+    @Test
+    fun `same position tolerates sdk rounding but sees a real move`() {
+        val requested = MapCameraPosition(tashkent, 14f)
+        val echo = MapCameraPosition(
+            MapCoordinates(tashkent.latitude + 1e-8, tashkent.longitude - 1e-8),
+            14.001f,
+        )
+        val panned = MapCameraPosition(samarkand, 14f)
+        val zoomed = MapCameraPosition(tashkent, 15f)
+
+        assertTrue(MapCameraFit.isSamePosition(requested, echo))
+        assertFalse(MapCameraFit.isSamePosition(requested, panned))
+        assertFalse(MapCameraFit.isSamePosition(requested, zoomed))
     }
 
     @Test

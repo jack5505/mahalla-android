@@ -142,9 +142,6 @@
     <string name="map_unavailable_title">Карта не открылась</string>
     <string name="map_missing_key_description">Приложение собрано без ключа карты. Списком пользоваться можно.</string>
     <string name="map_engine_failed_description">Не удалось загрузить карту. Проверьте интернет и попробуйте снова.</string>
-    <string name="map_my_location">Моё местоположение</string>
-    <string name="map_zoom_in">Приблизить</string>
-    <string name="map_zoom_out">Отдалить</string>
 
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Нет подключения к интернету</string>

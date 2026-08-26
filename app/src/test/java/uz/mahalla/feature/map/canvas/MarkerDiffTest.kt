@@ -44,6 +44,7 @@ class MarkerDiffTest {
         assertEquals(listOf("b"), diff.added.map { it.id })
         assertTrue(diff.removed.isEmpty())
         assertTrue(diff.changed.isEmpty())
+        assertTrue(diff.moved.isEmpty())
         assertFalse(diff.isEmpty)
     }
 
@@ -56,12 +57,15 @@ class MarkerDiffTest {
     }
 
     @Test
-    fun `moved marker counts as changed`() {
+    fun `moved marker is not an appearance change`() {
         val diff = diffMarkers(listOf(marker("a")), listOf(marker("a", lat = 41.5)))
 
-        assertEquals(listOf("a"), diff.changed.map { it.id })
+        assertEquals(listOf("a"), diff.moved.map { it.id })
+        assertTrue(diff.changed.isEmpty())
         assertTrue(diff.added.isEmpty())
         assertTrue(diff.removed.isEmpty())
+        // Новые координаты меняют состав кластеров — иконкой не отделаться.
+        assertFalse(diff.isAppearanceOnly)
     }
 
     @Test
@@ -80,6 +84,17 @@ class MarkerDiffTest {
         val diff = diffMarkers(listOf(marker("a")), listOf(marker("a", selected = true), marker("b")))
 
         assertFalse(diff.isAppearanceOnly)
+    }
+
+    @Test
+    fun `title change is an appearance change`() {
+        val before = listOf(marker("a"))
+        val after = listOf(before.first().copy(title = "Другое имя"))
+
+        val diff = diffMarkers(before, after)
+
+        assertTrue(diff.isAppearanceOnly)
+        assertEquals(listOf("a"), diff.changed.map { it.id })
     }
 
     @Test

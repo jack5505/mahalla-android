@@ -2,7 +2,11 @@ package uz.mahalla.feature.map.data
 
 import android.content.Context
 import com.yandex.mapkit.MapKitFactory
-import uz.mahalla.core.result.runCatchingCancellable
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Тонкая обёртка над статикой `MapKitFactory` (эпик 4.2).
@@ -27,13 +31,23 @@ class YandexMapKitSdk(private val context: Context) : MapKitSdk {
 
 /** Почему карта не показывается — состояние движка для UI. */
 enum class MapEngineState {
-    /** Готов: ключ есть, `initialize` прошёл. */
+    /**
+     * Движок поднялся: ключ непустой, `initialize` прошёл.
+     *
+     * Про **валидность** ключа это не говорит ничего: MapKit проверяет ключ на
+     * своём сервере уже после инициализации, при первой загрузке тайлов, и
+     * отозванный ключ виден только как пустая карта. Отдельное состояние для
+     * этого случая появится вместе с подпиской на ошибки слоя — сейчас его нет.
+     */
     Ready,
 
     /** Ключа нет (сборка без `MAPKIT_API_KEY`) — карту показывать нечем. */
     MissingApiKey,
 
-    /** SDK не поднялся (ключ отозван, нет ресурсов) — на экране ошибка с retry. */
+    /**
+     * `initialize` не прошёл: нет нативной библиотеки под ABI устройства, не
+     * хватило места под кэш, нарушен контракт SDK. На экране — ошибка с retry.
+     */
     Failed,
 }
 
@@ -51,13 +65,29 @@ class MapKitInitializer(
     private val apiKey: String,
     private val locale: String,
     private val sdk: MapKitSdk,
+    /**
+     * MapKit требует главного потока: `setApiKey`/`setLocale`/`initialize` из
+     * фонового кидают `AssertionError` внутри SDK. Диспетчер параметром —
+     * чтобы тест мог подставить свой, а не потому, что его кто-то меняет.
+     */
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
 ) {
 
     /** Собрано ли приложение с ключом. Проверяется до всякой работы с SDK. */
     val hasApiKey: Boolean get() = apiKey.isNotBlank()
 
+    /**
+     * `Mutex`, а не `@Synchronized`: метод suspend'ится (уходит на главный
+     * поток), а блокировать чужой поток на время загрузки нативной библиотеки
+     * нельзя — вызывающий приходит из `produceState` композиции.
+     */
+    private val mutex = Mutex()
+
+    @Volatile
     private var state: MapEngineState =
         if (hasApiKey) MapEngineState.Failed else MapEngineState.MissingApiKey
+
+    @Volatile
     private var initialized = false
 
     /**
@@ -65,12 +95,19 @@ class MapKitInitializer(
      * Провал не кэшируется: у пользователя мог просто не быть доступен диск или
      * сеть, и кнопка «Повторить» должна давать второй шанс.
      */
-    @Synchronized
-    fun ensureInitialized(): MapEngineState {
+    suspend fun ensureInitialized(): MapEngineState {
         if (!hasApiKey) return MapEngineState.MissingApiKey
         if (initialized) return state
 
-        val result = runCatchingCancellable {
+        return mutex.withLock {
+            // Пока ждали замок, инициализировать мог соседний вызов.
+            if (initialized) return@withLock state
+            withContext(mainDispatcher) { initializeOnMainThread() }
+        }
+    }
+
+    private fun initializeOnMainThread(): MapEngineState {
+        val result = runCatchingMapKit {
             sdk.setApiKey(apiKey)
             sdk.setLocale(locale)
             sdk.initialize()

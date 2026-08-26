@@ -19,12 +19,22 @@ plugins {
  * Иначе один незаполненный секрет ронял бы сборку всем.
  */
 fun mapkitApiKey(): String {
-    System.getenv("MAPKIT_API_KEY")?.takeIf { it.isNotBlank() }?.let { return it.trim() }
-    val localProperties = rootProject.file("local.properties")
-    if (!localProperties.exists()) return ""
-    val properties = Properties().apply { localProperties.inputStream().use(::load) }
+    // providers.*, а не System.getenv/File.readText: иначе значение читается в
+    // обход Gradle, и configuration cache не пересобирается при смене ключа.
+    val fromEnvironment = providers.environmentVariable("MAPKIT_API_KEY").orNull
+    if (!fromEnvironment.isNullOrBlank()) return fromEnvironment.trim()
+
+    val localProperties = providers.fileContents(
+        rootProject.layout.projectDirectory.file("local.properties"),
+    ).asText.orNull ?: return ""
+
+    val properties = Properties().apply { load(localProperties.reader()) }
     return properties.getProperty("mapkit.apiKey").orEmpty().trim()
 }
+
+/** Строковый литерал для `buildConfigField`: ключ едет в генерируемый .java. */
+fun stringLiteral(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
     namespace = "uz.mahalla"
@@ -39,7 +49,7 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "MAPKIT_API_KEY", "\"${mapkitApiKey()}\"")
+        buildConfigField("String", "MAPKIT_API_KEY", stringLiteral(mapkitApiKey()))
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }

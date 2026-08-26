@@ -4,11 +4,11 @@ import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.location.Location
 import com.yandex.mapkit.location.LocationListener
 import com.yandex.mapkit.location.LocationStatus
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.feature.map.canvas.MapCoordinates
 import java.lang.ref.WeakReference
 import kotlin.coroutines.resume
@@ -39,15 +39,24 @@ interface UserLocationProvider {
 class MapKitLocationProvider(
     private val initializer: MapKitInitializer,
     private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS,
+    /** См. [MapKitInitializer]: весь MapKit живёт на главном потоке. */
+    private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
 ) : UserLocationProvider {
 
+    /**
+     * Сильная ссылка на слушателя, пока идёт ожидание: `requestSingleUpdate`
+     * принимает `WeakReference` и сам ничего не удерживает — без этого поля
+     * слушателя могло бы собрать GC, и координаты не приходили бы никогда.
+     */
+    private var pendingListener: LocationListener? = null
+
     override suspend fun currentLocation(): MapCoordinates? {
+        // ensureInitialized сам уходит на главный поток и не блокирует чужой.
         if (initializer.ensureInitialized() != MapEngineState.Ready) return null
 
-        // MapKit требует главного потока: вызов из фонового падает внутри SDK.
-        return withContext(Dispatchers.Main) {
+        return withContext(mainDispatcher) {
             withTimeoutOrNull(timeoutMillis) {
-                runCatchingCancellable { awaitSingleUpdate() }.getOrNull()
+                runCatchingMapKit { awaitSingleUpdate() }.getOrNull()
             }
         }
     }
@@ -55,9 +64,16 @@ class MapKitLocationProvider(
     private suspend fun awaitSingleUpdate(): MapCoordinates? =
         suspendCancellableCoroutine { continuation ->
             val locationManager = MapKitFactory.getInstance().createLocationManager()
+
+            // Отписываемся ровно той обёрткой, которой подписывались: сравнивает
+            // MapKit сам WeakReference или его referent — из API не следует, а
+            // одна и та же ссылка верна при любом из двух вариантов.
+            lateinit var listenerRef: WeakReference<LocationListener>
+
             val listener = object : LocationListener {
                 override fun onLocationUpdated(location: Location) {
-                    locationManager.unsubscribe(WeakReference(this))
+                    locationManager.unsubscribe(listenerRef)
+                    pendingListener = null
                     if (continuation.isActive) {
                         continuation.resume(
                             MapCoordinates(
@@ -70,16 +86,21 @@ class MapKitLocationProvider(
 
                 override fun onLocationStatusUpdated(status: LocationStatus) {
                     if (status == LocationStatus.NOT_AVAILABLE) {
-                        locationManager.unsubscribe(WeakReference(this))
+                        locationManager.unsubscribe(listenerRef)
+                        pendingListener = null
                         if (continuation.isActive) continuation.resume(null)
                     }
                 }
             }
 
-            // MapKit держит слушателя слабой ссылкой: сильную держит сама
-            // корутина (замыкание invokeOnCancellation), пока ждёт ответа.
-            locationManager.requestSingleUpdate(WeakReference(listener))
-            continuation.invokeOnCancellation { locationManager.unsubscribe(WeakReference(listener)) }
+            listenerRef = WeakReference(listener)
+            pendingListener = listener
+
+            locationManager.requestSingleUpdate(listenerRef)
+            continuation.invokeOnCancellation {
+                locationManager.unsubscribe(listenerRef)
+                pendingListener = null
+            }
         }
 
     private companion object {
