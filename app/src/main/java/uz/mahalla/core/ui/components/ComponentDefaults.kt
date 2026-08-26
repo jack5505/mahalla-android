@@ -32,6 +32,17 @@ object MahallaComponentDefaults {
     val otpCellWidth: Dp = 44.dp
     val otpCellHeight: Dp = minTouchTarget
 
+    // --- Discovery (эпик 4) ---
+
+    /** Плитка категории на главной: квадратная, иконка над подписью. */
+    val categoryTileMinHeight: Dp = 88.dp
+
+    /** Строка-кнопка «Поиск» на главной — открывает экран поиска. */
+    val searchEntryMinHeight: Dp = fieldMinHeight
+
+    /** Метка на карте: тапают по ней пальцем, а не курсором. */
+    val mapMarkerMinSize: Dp = minTouchTarget
+
     val progressIndicatorSize: Dp = 18.dp
     val progressStrokeWidth: Dp = 2.dp
     val cardIconSize: Dp = 20.dp
@@ -54,5 +65,8 @@ object MahallaComponentDefaults {
         "segment" to segmentMinHeight,
         "navItem" to navItemMinHeight,
         "otpCell" to otpCellHeight,
+        "categoryTile" to categoryTileMinHeight,
+        "searchEntry" to searchEntryMinHeight,
+        "mapMarker" to mapMarkerMinSize,
     )
 }

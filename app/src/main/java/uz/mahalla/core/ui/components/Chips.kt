@@ -174,8 +174,8 @@ private fun MahallaChipsPreview() {
     PreviewSurface {
         MahallaFilterRow(
             items = listOf(
-                FilterChipUi(id = "food", label = stringResource(R.string.filter_food)),
-                FilterChipUi(id = "pharmacy", label = stringResource(R.string.filter_pharmacy)),
+                FilterChipUi(id = "food", label = stringResource(R.string.category_food)),
+                FilterChipUi(id = "pharmacy", label = stringResource(R.string.category_pharmacy)),
                 FilterChipUi(id = "open", label = stringResource(R.string.place_open_now)),
             ),
             selectedId = "food",

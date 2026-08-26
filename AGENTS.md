@@ -378,6 +378,137 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
   `otp_input_description` просят `<plurals>`; `RoutesSerializationTest` шумит
   семью warning'ами `ExperimentalSerializationApi`.
 
+## Этап: discovery (эпик 4, issue #8, ветка claude/issue-8-*)
+
+Главная, карта, поиск с фильтрами и карточка места. Экраны собраны из кита
+эпика 2, вся логика — в чистых функциях домена и MVI-ViewModel'ях.
+
+- **Домен** `feature/discovery/domain/`: `PlaceCategory` (шесть категорий ТЗ +
+  `Other` для значений, которых ещё нет в приложении), `Place`/`GeoPoint`,
+  `DiscoveryFilters` (+ `PlaceSort`), `PlaceFilterEngine` (фильтрация,
+  сортировка, ранг релевантности, нормализация узбекского апострофа),
+  `HomeSections` (блоки «рядом»/«рекомендуем»), `SearchHistory` (порядок,
+  дедупликация, кодирование в одну строку). `feature/place/domain/`:
+  `PlaceDetails`, `OpeningHours` + `OpeningHoursCalculator` (ночные смены,
+  круглосуточно, «неизвестно» ≠ «закрыто»), `PlaceActions`.
+  `feature/map/domain/MarkerClusterer` — сеточная кластеризация, от SDK не
+  зависит.
+- **Данные**: `CatalogApi` (пагинация `PlacePageDto`, карточка, отзывы),
+  `PlaceMappers` (мягкий разбор: битое поле не роняет список),
+  `CatalogRepository`/`DefaultCatalogRepository` — сеть с фоллбэком на Room.
+  Правила: кэш отдаётся только на первой странице, фильтры к нему применяются
+  теми же `PlaceFilterEngine`, пустой кэш — обычная ошибка, `PlacePage.fromCache`
+  доезжает до UI; перезаписывается кэш только на запросе без единого
+  ограничения (`DiscoveryFilters.isUnfiltered`). `SearchHistoryStore`
+  (интерфейс + DataStore-реализация). `PlaceEntity` расширена (адрес,
+  координаты, фото, контакты), БД — `version = 2`.
+- **UI**: `feature/discovery/ui/home/` (главная: строка-кнопка поиска, плитка
+  категорий, две секции, pull-to-refresh), `feature/discovery/ui/search/`
+  (поиск с debounce 300 мс, история, шторка фильтров, пагинация по достижению
+  конца списка), `feature/place/ui/` (галерея, описание, часы, контакты,
+  действия, отзывы; `tel:` и `geo:` через intent'ы), `feature/map/ui/`.
+  Маршруты `SearchRoute(categoryId?, query?)` и `MapRoute` — вне графа табов.
+- **Тесты**: `PlaceFilterEngineTest`,
+  `DiscoveryFiltersTest`, `HomeSectionsTest`, `SearchHistoryTest`,
+  `PlaceCategoryTest`, `MarkerClustererTest`, `OpeningHoursCalculatorTest`,
+  `PlaceActionsTest`, `PlaceMappersTest`, `PlaceFormattersTest`,
+  `CatalogRepositoryTest` (MockWebServer + фейковый DAO: фоллбэк, пагинация,
+  параметры запроса, TTL), `SearchHistoryStoreTest` (Robolectric + DataStore),
+  `DiscoveryHomeViewModelTest`, `SearchViewModelTest`, `MapViewModelTest`,
+  `PlaceDetailsViewModelTest`.
+
+**Блокер 4.2 не закрыт**: картографический SDK (Yandex MapKit vs Google Maps)
+не выбран, поэтому полотно карты — заглушка со списком маркеров. Всё, что от
+SDK не зависит (загрузка, кластеризация, выбор маркера, «моё
+местоположение»), сделано и покрыто тестами; подключение SDK меняет только
+слой отрисовки `MapScreen`.
+
+**Грабли, стоившие времени:** `SavedStateHandle.toRoute()` разбирает
+типизированный маршрут через настоящий `Bundle`, а в юнит-тестах android.jar
+заглушен (`isReturnDefaultValues = true`) — все аргументы читаются как `null`,
+причём молча. Поэтому `SearchViewModelTest` и `PlaceDetailsViewModelTest`
+идут под Robolectric.
+
+**Не сделано / риски эпика 4:** картинок нет (загрузчика изображений в
+проекте пока нет — вместо фото скелетоны), геолокация на карте только просит
+разрешение эффектом, скриншот-тестов по-прежнему нет, вертикали
+(очередь/бронь/заказ) из карточки — эффект `OpenVertical` без экрана.
+
+### Слияние с эпиком 3 (онбординг)
+
+Эпики 3 и 4 писались параллельно от одного коммита, поэтому ветка эпика 4
+доносит в себе слияние с `main`:
+
+- `MahallaNavHost` — граф онбординга берётся из эпика 3 (включая
+  `onboardingStartDestination` и новые подписи экранов), main-граф и маршруты
+  `SearchRoute`/`MapRoute` — из эпика 4.
+- `MainDispatcherRule` объявлен в обеих ветках. Оставлена версия эпика 3
+  (публичный `dispatcher`, по умолчанию `StandardTestDispatcher` — иначе
+  таймер OTP не двигался бы виртуальным временем), а тесты discovery, которым
+  нужна немедленная отправка корутин, передают `UnconfinedTestDispatcher()`
+  явно.
+- Строки, ключи DataStore, `MahallaComponentDefaults.touchTargets` и три
+  общих теста (`GraphAssemblyTest`, `RoutesSerializationTest`,
+  `TouchTargetTest`) содержат добавления обеих сторон.
+
+**Важно про историю ветки:** слияние воспроизведено обычным коммитом, а не
+merge-коммитом (`git merge` не в allow-list workflow `claude.yml`). Дерево
+совпадает с `main` + эпик 4, но `origin/main` **не является предком** ветки,
+поэтому GitHub мержит её 3-way от общего предка `daf9af5` и может показать
+конфликт в файлах, куда добавляли обе стороны. Лечится одной командой локально:
+`git merge -s ours origin/main` на ветке (дерево не меняется, main становится
+вторым родителем) — либо разрешением конфликтов в пользу ветки.
+
+### Правки после код-ревью PR #23
+
+- **Тап по категории на главной вёл в историю поиска, а не в выдачу**:
+  `SearchState.showHistory` смотрел только на пустоту запроса, а с главной по
+  плитке приходят с пустым запросом и активным фильтром категории. Теперь
+  история показывается только когда `filters.activeCount == 0`. Баг был не
+  виден на пустой истории — то есть у всех, кроме живого пользователя.
+- **Ответ сервера больше не фильтруется повторно**: `PlaceFilterEngine.apply`
+  ищет по названию и адресу, а сервер — по описанию, меню и тегам. Выдача по
+  «osh» вырезалась локально целиком → `ScreenState.Empty` при `hasMore = true`,
+  а `loadMore()` выходит по `ScreenState.Content` — до следующих страниц было
+  уже не добраться. Появился `PlaceFilterEngine.applyRemote`: сортировка та же
+  (порядок онлайна и офлайна обязан совпадать) плюс досекание категорий,
+  которые не поместились в запрос (`apiCategory()` отдаёт одну);
+  `PlaceCategory.Other` при этом остаётся — иначе новые разделы каталога были
+  бы невидимы до следующего релиза. Полный `apply` остался за кэшем: кроме
+  этих правил у Room ничего нет.
+- **Вечный спиннер после провала догрузки**: индикатор рисовался по `hasMore`,
+  а не по `isLoadingMore`, и после ошибки крутился навсегда (список не вырос →
+  `LaunchedEffect(places.size)` больше не срабатывает). Добавлено
+  `SearchState.loadMoreFailed`: провал показывает кнопку «Повторить», крутилка
+  живёт ровно столько, сколько идёт запрос, место под неё держится всегда,
+  чтобы список не дёргался.
+- **404 больше не маскируется кэшем**: `placeDetails` поднимает запись из Room
+  только когда место не доехало (сеть, таймаут, 5xx). На `NotFound`/`Forbidden`
+  возвращается ошибка, а запись из кэша удаляется (`PlaceDao.delete`) — иначе
+  удалённое заведение всплывало бы ещё и в офлайн-выдаче.
+- **Номер страницы считается локально** (`loadedPage = nextPage`): сервер, не
+  вернувший поле `page`, отдаёт дефолтный `0`, и «следующей» навсегда
+  оставалась бы первая.
+- **`SearchHistory.decode` дедуплицирует** (`distinctBy` по нижнему регистру):
+  список рисуется `items(key = { it })`, дубликат ключа роняет LazyColumn, а
+  строку в DataStore мог записать прежний формат.
+- `RoutesSerializationTest` получил `@OptIn(ExperimentalSerializationApi::class)` —
+  двадцать предупреждений в логе сборки прятали бы настоящие.
+
+Проверено: `./gradlew testDebugUnitTest` — **424 теста в 48 классах, 0 падений,
+0 ошибок**; `./gradlew assembleDebug` — BUILD SUCCESSFUL, предупреждений
+компилятора нет.
+
+Открытые мелочи ревью PR #23 (задачами, не блокеры): `SearchEvent.QueryCleared`
+обрабатывается, но UI его не шлёт (крестик идёт через `onQueryChange("")` и
+попадает под debounce); `map_markers_count`/`map_cluster_places` просят
+`<plurals>`; `OpeningHoursCalculator.isOpenAt` говорит «неизвестно» там, где
+`weekSchedule` рисует «выходной»; пустой бейдж рейтинга в отзыве
+(`RatingFormatter.format(0.0).orEmpty()`); `CategoryTile` использует
+`Modifier.clickable` на `Surface` вместо `Surface(onClick = …)`.
+
+=======
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`
@@ -408,12 +539,15 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
    platform-tools, `platforms;android-35`, `build-tools;35.0.0`, лицензии
    приняты (`yes | sdkmanager --licenses`); дальше `./gradlew assembleDebug`
    и `./gradlew testDebugUnitTest`. В облаке это делает `ci.yml` на PR.
-2. Дождаться зелёного `ci.yml` на PR эпика 3 (онбординг); если что-то падает —
+2. Дождаться зелёного `ci.yml` на PR эпика 4 (discovery); если что-то падает —
    правки в ту же ветку.
 3. Сверить онбординг с design-репозиторием (`TZ-ANDROID.md`, `SCREENS.md`,
    прототип) и с реальным контрактом OTP-эндпоинтов бэкенда — см. риски
    эпика 3. Для этого агенту нужен доступ к клонированию mahalla-репо
    (`git clone` / `gh api` в allow-list workflow).
+4. Закрыть блокер 4.2 — выбрать картографический SDK (Yandex MapKit или
+   Google Maps) и заменить заглушку полотна в `MapScreen`; дальше вертикали
+   (food: place/menu/cart/checkout/order-status и т.д.).
 4. Дальше — discovery/map/search, затем вертикали (food:
    place/menu/cart/checkout/order-status и т.д.).
 5. `./gradlew` агенту в CI разрешён — **прогонять `testDebugUnitTest` и

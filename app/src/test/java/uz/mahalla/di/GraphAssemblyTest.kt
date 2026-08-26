@@ -23,6 +23,8 @@ import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
+import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
+import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 
@@ -82,6 +84,28 @@ class GraphAssemblyTest {
             assertNotNull(DatabaseModule.providePlaceDao(database))
             assertNotNull(DatabaseModule.provideOrderDao(database))
             assertNotNull(DatabaseModule.provideCartDraftDao(database))
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun `discovery graph assembles over the api, the dao and the clock`() {
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val retrofit = NetworkModule.provideRetrofit(
+                NetworkModule.provideRefreshClient(),
+                NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                NetworkModule.provideBaseUrl(),
+            )
+            assertNotNull(
+                DefaultCatalogRepository(
+                    api = DiscoveryDataModule.provideCatalogApi(retrofit),
+                    placeDao = DatabaseModule.providePlaceDao(database),
+                    clock = AppModule.provideClock(),
+                ),
+            )
+            assertNotNull(DataStoreSearchHistoryStore(sharedDataStore(context)))
         } finally {
             database.close()
         }
