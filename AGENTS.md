@@ -378,6 +378,69 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
   `otp_input_description` просят `<plurals>`; `RoutesSerializationTest` шумит
   семью warning'ами `ExperimentalSerializationApi`.
 
+## Этап: картографический SDK (эпик 4.2, issue #8, ветка claude/issue-8-20260826-1256)
+
+**Блокер закрыт решением пользователя от 2026-08-26: карты — Yandex MapKit.**
+Google Maps больше не рассматривается.
+
+- Зависимость: `com.yandex.android:maps.mobile:4.42.0-lite` (Maven Central,
+  каталог — `yandexMapkit`). Вариант **lite**: карта, маркеры, кластеризация,
+  слой «моё местоположение». Search / Routing / Panorama живут в `-full` и
+  приложению пока не нужны — это лишние мегабайты и лишняя лицензия.
+- **Ключ в репозиторий не кладём.** `app/build.gradle.kts` читает его из
+  переменной окружения `MAPKIT_API_KEY`, иначе из `local.properties`
+  (`mapkit.apiKey=…`), и кладёт в `BuildConfig.MAPKIT_API_KEY`. Пустое
+  значение сборку не ломает: `MapKitInitializer` вернёт `MissingApiKey`, и на
+  месте карты будет объяснение. **Действие пользователя:** получить ключ в
+  кабинете Yandex MapKit и добавить секрет `MAPKIT_API_KEY` в Settings →
+  Secrets and variables → Actions, а в `ci.yml` / `claude*.yml` пробросить его
+  в env шага сборки (workflow'ы правит пользователь — GitHub App агента не
+  имеет прав на `.github/workflows`).
+- Код (`feature/map/`):
+  - `data/MapKitInitializer` — ленивая инициализация (не в `Application`:
+    MapKit поднимает свои потоки, а карта — один экран из 35), порядок
+    «ключ → локаль → initialize», идемпотентность, состояния
+    `Ready / MissingApiKey / Failed`; провал не кэшируется, retry работает.
+    Статика SDK спрятана за интерфейсом `MapKitSdk` ради JVM-тестов.
+  - `data/UserLocationProvider` + `MapKitLocationProvider` — координаты через
+    `LocationManager` MapKit (свой клиент GMS не тянем: устройства без сервисов
+    Google в Узбекистане обычны), таймаут 5 сек, отсутствие координат — норма.
+  - `canvas/` — SDK-зависимое полотно: `YandexMapCanvas` (MapView в
+    `AndroidView`, жизненный цикл `onStart`/`onStop`, родная
+    `ClusterizedPlacemarkCollection`, тап по маркеру и по кластеру, слой
+    «моё местоположение»), `MapCanvas` (то же плюс экран-объяснение, когда
+    движок не поднялся), `MapCameraFit` (центр и зум под набор точек — чистая
+    математика, тестируется без Android), `MarkerDiff` (пересобирать полотно
+    или нет), `MarkerIcons` (иконки рисуются кодом: цвет обязан следовать
+    теме, два набора PNG разъезжались бы с палитрой).
+- **Особенности MapKit 4.42, на которые уходит время**: слушатели принимаются
+  только в `java.lang.ref.WeakReference` и SDK их не удерживает — сильную
+  ссылку обязан держать вызывающий (иначе тап тихо перестаёт работать);
+  `addPlacemark(Point)` и `addEmptyPlacemark(Point)` объявлены deprecated,
+  живой вариант — `addPlacemark { placemark -> … }` c `PlacemarkCreatedCallback`;
+  `UserLocationLayer.isHeadingEnabled` из API исчез.
+- Тесты: `MapKitInitializerTest`, `MapKitLocationProviderTest`,
+  `MapCameraFitTest`, `MarkerDiffTest`, `MarkerIconsTest` — 29 тестов.
+  `./gradlew testDebugUnitTest` — **259 тестов, 0 падений**;
+  `./gradlew assembleDebug` — BUILD SUCCESSFUL (в APK приезжает
+  `libmaps-mobile.so`).
+
+**Не сделано / риски:**
+
+- **Ветка эпика 4 (`claude/issue-8-20260826-0311`) в `main` не влита**, а в
+  allow-list `claude.yml` нет ни `git merge`/`checkout <ref>`/`cherry-pick`, ни
+  `gh` — затянуть тот код в эту ветку агент не смог. Поэтому `MapScreen` из
+  эпика 4 здесь **не подключён к полотну**: после слияния веток нужно заменить
+  заглушку на `MapCanvas(initializer, markers, camera, …)` и отобразить домен в
+  `MapMarkerUi`/`MapCameraPosition`. Это единственный оставшийся шаг 4.2.
+- **На устройстве не проверено** (эмулятора в CI нет, ключа нет): тайлы,
+  кластеры, слой местоположения и лицензионная плашка Yandex.
+- **Сеточный `MarkerClusterer` эпика 4 при родной кластеризации MapKit
+  становится лишним** — решить при слиянии: либо выкинуть, либо оставить для
+  экранов без карты.
+- Требования лицензии Yandex (плашка «Яндекс», условия бесплатного тарифа,
+  лимиты) не проверялись — это вопрос к продукту до релиза.
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`

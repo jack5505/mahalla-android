@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,23 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+}
+
+/**
+ * Ключ Yandex MapKit (эпик 4.2). В репозиторий он не попадает — берётся из
+ * переменной окружения `MAPKIT_API_KEY` (CI) или из `local.properties`,
+ * строка `mapkit.apiKey=…` (машина разработчика; файл в .gitignore).
+ *
+ * Пустое значение — не ошибка сборки: без ключа приложение собирается и
+ * работает, а на месте карты показывается объяснение (см. `MapKitInitializer`).
+ * Иначе один незаполненный секрет ронял бы сборку всем.
+ */
+fun mapkitApiKey(): String {
+    System.getenv("MAPKIT_API_KEY")?.takeIf { it.isNotBlank() }?.let { return it.trim() }
+    val localProperties = rootProject.file("local.properties")
+    if (!localProperties.exists()) return ""
+    val properties = Properties().apply { localProperties.inputStream().use(::load) }
+    return properties.getProperty("mapkit.apiKey").orEmpty().trim()
 }
 
 android {
@@ -20,6 +39,7 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "MAPKIT_API_KEY", "\"${mapkitApiKey()}\"")
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
@@ -100,6 +120,9 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+
+    // Карта (эпик 4.2). Инициализация — ленивая, из MapKitInitializer.
+    implementation(libs.yandex.mapkit)
 
     implementation(libs.androidx.datastore.preferences)
 
