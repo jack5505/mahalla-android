@@ -138,6 +138,11 @@
     <string name="order_status_pending">Ожидает</string>
     <string name="order_status_confirmed">Подтверждено</string>
 
+    <!-- Карта (эпик 4.2) -->
+    <string name="map_unavailable_title">Карта не открылась</string>
+    <string name="map_missing_key_description">Приложение собрано без ключа карты. Списком пользоваться можно.</string>
+    <string name="map_engine_failed_description">Не удалось загрузить карту. Проверьте интернет и попробуйте снова.</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Нет подключения к интернету</string>
     <string name="error_timeout">Сервер не ответил</string>

@@ -143,6 +143,11 @@
     <string name="order_status_pending">Kutilmoqda</string>
     <string name="order_status_confirmed">Tasdiqlangan</string>
 
+    <!-- Карта (эпик 4.2) -->
+    <string name="map_unavailable_title">Xarita ochilmadi</string>
+    <string name="map_missing_key_description">Ilova xarita kalitisiz yig\'ilgan. Ro\'yxatni ishlatishingiz mumkin.</string>
+    <string name="map_engine_failed_description">Xaritani yuklab bo\'lmadi. Internetni tekshiring va qaytadan urinib ko\'ring.</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Internet aloqasi yo\'q</string>
     <string name="error_timeout">Server javob bermadi</string>
