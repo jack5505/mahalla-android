@@ -19,4 +19,7 @@ internal object PreferenceKeys {
 
     val PinHash = stringPreferencesKey("pin_hash_encrypted")
     val PinSalt = stringPreferencesKey("pin_salt")
+
+    /** История поиска (эпик 4.3) — одна строка, порядок значим. */
+    val SearchHistory = stringPreferencesKey("discovery_search_history")
 }

@@ -8,7 +8,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
-import uz.mahalla.feature.discovery.ui.DiscoveryScreen
+import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
+import uz.mahalla.feature.discovery.ui.search.SearchScreen
+import uz.mahalla.feature.map.ui.MapScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
 import uz.mahalla.feature.onboarding.ui.GeoScreen
 import uz.mahalla.feature.onboarding.ui.OtpScreen
@@ -78,8 +80,12 @@ fun MahallaNavHost(
 
         navigation<MainGraph>(startDestination = DiscoveryRoute) {
             composable<DiscoveryRoute> {
-                DiscoveryScreen(
+                DiscoveryHomeScreen(
                     onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                    onSearchClick = { category ->
+                        navController.navigate(SearchRoute(categoryId = category?.apiValue))
+                    },
+                    onMapClick = { navController.navigate(MapRoute) },
                 )
             }
             composable<OrdersRoute> { OrdersScreen() }
@@ -87,13 +93,29 @@ fun MahallaNavHost(
             composable<ProfileRoute> { ProfileScreen() }
         }
 
-        composable<PlaceRoute>(
-            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.PLACE_PATTERN }),
-        ) { entry ->
-            PlaceDetailsScreen(
-                placeId = entry.toRoute<PlaceRoute>().placeId,
+        // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,
+        // а возврат ведёт обратно на главную.
+        composable<SearchRoute> {
+            SearchScreen(
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        composable<MapRoute> {
+            MapScreen(
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<PlaceRoute>(
+            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.PLACE_PATTERN }),
+        ) {
+            // placeId читает сама ViewModel из SavedStateHandle — экран о
+            // маршруте ничего не знает и открывается одинаково из списка и из
+            // deep link'а.
+            PlaceDetailsScreen(onBack = { navController.navigateUp() })
         }
     }
 }

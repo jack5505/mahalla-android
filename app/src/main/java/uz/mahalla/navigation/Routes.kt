@@ -53,6 +53,22 @@ data object WalletRoute
 @Serializable
 data object ProfileRoute
 
+// --- Discovery (эпик 4) ---
+
+/**
+ * Поиск с фильтрами. Оба аргумента необязательны: с главной сюда приходят
+ * либо «просто поиск», либо поиск с предвыбранной категорией
+ * ([PlaceCategory.apiValue][uz.mahalla.feature.discovery.domain.PlaceCategory]).
+ */
+@Serializable
+data class SearchRoute(
+    val categoryId: String? = null,
+    val query: String? = null,
+)
+
+@Serializable
+data object MapRoute
+
 // --- Детали ---
 
 @Serializable

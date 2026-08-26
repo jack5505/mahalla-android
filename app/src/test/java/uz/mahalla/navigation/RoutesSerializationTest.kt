@@ -24,6 +24,24 @@ class RoutesSerializationTest {
 
         val otp = OtpRoute(phone = "+998901234567")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
+
+        val search = SearchRoute(categoryId = "pharmacy", query = "osh")
+        assertEquals(search, json.decodeFromString<SearchRoute>(json.encodeToString(search)))
+    }
+
+    @Test
+    fun `search route arguments are optional`() {
+        // С главной сюда приходят и «просто поиск», и поиск с категорией —
+        // оба аргумента должны быть необязательными.
+        val empty = SearchRoute()
+
+        assertEquals(empty, json.decodeFromString<SearchRoute>(json.encodeToString(empty)))
+        assertEquals(
+            listOf("categoryId", "query"),
+            serializer<SearchRoute>().descriptor.let { descriptor ->
+                (0 until descriptor.elementsCount).map(descriptor::getElementName)
+            },
+        )
     }
 
     @Test
@@ -40,6 +58,7 @@ class RoutesSerializationTest {
             serializer<OrdersRoute>().descriptor.serialName,
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
+            serializer<MapRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.

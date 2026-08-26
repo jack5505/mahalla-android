@@ -57,6 +57,10 @@ class TouchTargetTest {
             "segment",
             "navItem",
             "otpCell",
+            // Эпик 4: плитка категории, строка поиска на главной, метка карты.
+            "categoryTile",
+            "searchEntry",
+            "mapMarker",
         )
 
         assertEquals(expected, MahallaComponentDefaults.touchTargets.keys)

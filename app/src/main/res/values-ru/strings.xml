@@ -34,7 +34,6 @@
     <!-- Основные разделы -->
     <string name="discovery_title">Рядом</string>
     <string name="discovery_subtitle">Еда, аптеки, врачи, кино и мастера — рядом с вами.</string>
-    <string name="discovery_open_demo_place">Открыть демо-место</string>
     <string name="orders_title">Заказы</string>
     <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
     <string name="wallet_title">Кошелёк</string>
@@ -46,7 +45,6 @@
 
     <!-- Детали -->
     <string name="place_title">Место</string>
-    <string name="place_id_label">Идентификатор места: %1$s</string>
 
     <!-- Язык и тема -->
     <string name="language_system">Системный</string>
@@ -83,8 +81,6 @@
     <string name="state_error_title">Произошла ошибка</string>
 
     <!-- UI-кит: карточки -->
-    <string name="filter_food">Еда</string>
-    <string name="filter_pharmacy">Аптека</string>
     <string name="place_open_now">Открыто</string>
     <string name="place_closed_now">Закрыто</string>
     <string name="place_rating_description">Рейтинг %1$s</string>
@@ -100,4 +96,79 @@
     <string name="error_not_found">Данные не найдены</string>
     <string name="error_server">Ошибка на сервере</string>
     <string name="error_unknown">Что-то пошло не так</string>
+
+    <!-- Discovery: категории (эпик 4.1) -->
+    <string name="category_food">Еда</string>
+    <string name="category_pharmacy">Аптеки</string>
+    <string name="category_hospital">Больницы</string>
+    <string name="category_cinema">Кино</string>
+    <string name="category_playground">Игровые зоны</string>
+    <string name="category_master">Мастера</string>
+    <string name="category_other">Другое</string>
+
+    <!-- Discovery: главная (эпик 4.1) -->
+    <string name="discovery_section_nearby">Рядом</string>
+    <string name="discovery_section_recommended">Рекомендуем</string>
+    <string name="discovery_open_map">Открыть карту</string>
+    <string name="distance_meters">%1$s м</string>
+    <string name="distance_kilometers">%1$s км</string>
+    <string name="state_offline_cache">Показаны сохранённые данные</string>
+
+    <!-- Discovery: поиск и фильтры (эпик 4.3) -->
+    <string name="search_title">Поиск</string>
+    <string name="search_empty_title">Ничего не найдено</string>
+    <string name="search_empty_description">Измените запрос или сбросьте фильтры</string>
+    <string name="search_history_title">История поиска</string>
+    <string name="search_history_clear">Очистить</string>
+    <string name="search_history_remove">Удалить запрос %1$s</string>
+    <string name="filters_title">Фильтры</string>
+    <string name="filters_category">Категория</string>
+    <string name="filters_distance">Расстояние</string>
+    <string name="filters_rating">Рейтинг</string>
+    <string name="filters_open_now">Открыто сейчас</string>
+    <string name="filters_sort">Сортировка</string>
+    <string name="filters_reset">Сбросить фильтры</string>
+    <string name="filters_any">Любое</string>
+    <string name="filters_distance_up_to_m">до %1$s м</string>
+    <string name="filters_distance_up_to_km">до %1$s км</string>
+    <string name="filters_rating_from">от %1$s</string>
+    <string name="sort_relevance">По совпадению</string>
+    <string name="sort_distance">По расстоянию</string>
+    <string name="sort_rating">По рейтингу</string>
+
+    <!-- Discovery: карта (эпик 4.2) -->
+    <string name="map_title">Карта</string>
+    <string name="map_sdk_pending">SDK карты ещё не выбран: здесь показан список маркеров.</string>
+    <string name="map_markers_count">Маркеров: %1$d, масштаб %2$d</string>
+    <string name="map_cluster_places">Мест: %1$d</string>
+    <string name="map_zoom_in">Приблизить</string>
+    <string name="map_zoom_out">Отдалить</string>
+    <string name="map_my_location">Моё местоположение</string>
+
+    <!-- Карточка места (эпик 4.4) -->
+    <string name="place_hours_title">Часы работы</string>
+    <string name="place_hours_unknown">Часы работы неизвестны</string>
+    <string name="place_hours_around_the_clock">Круглосуточно</string>
+    <string name="place_hours_day_off">Выходной</string>
+    <string name="place_contacts_title">Контакты</string>
+    <string name="place_reviews_title">Отзывы</string>
+    <string name="place_reviews_show_all">Все отзывы</string>
+    <string name="place_review_anonymous">Гость</string>
+    <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
+    <string name="place_no_rating">Нет оценок</string>
+    <string name="place_action_queue">Встать в очередь</string>
+    <string name="place_action_booking">Забронировать</string>
+    <string name="place_action_order">Заказать</string>
+    <string name="place_action_call">Позвонить</string>
+    <string name="place_action_route">Маршрут</string>
+    <string name="action_collapse">Свернуть</string>
+
+    <!-- Дни недели -->
+    <string name="day_monday">Понедельник</string>
+    <string name="day_tuesday">Вторник</string>
+    <string name="day_wednesday">Среда</string>
+    <string name="day_thursday">Четверг</string>
+    <string name="day_friday">Пятница</string>
+    <string name="day_saturday">Суббота</string>
+    <string name="day_sunday">Воскресенье</string>
 </resources>

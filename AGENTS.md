@@ -258,6 +258,62 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
 `ComponentStateTest` наполовину сверяют константы сами с собой — реальные
 цели нажатия закрыл бы Compose-тест под Robolectric (`ui-test-junit4`).
 
+## Этап: discovery (эпик 4, issue #8, ветка claude/issue-8-*)
+
+Главная, карта, поиск с фильтрами и карточка места. Экраны собраны из кита
+эпика 2, вся логика — в чистых функциях домена и MVI-ViewModel'ях.
+
+- **Домен** `feature/discovery/domain/`: `PlaceCategory` (шесть категорий ТЗ +
+  `Other` для значений, которых ещё нет в приложении), `Place`/`GeoPoint`,
+  `DiscoveryFilters` (+ `PlaceSort`), `PlaceFilterEngine` (фильтрация,
+  сортировка, ранг релевантности, нормализация узбекского апострофа),
+  `HomeSections` (блоки «рядом»/«рекомендуем»), `SearchHistory` (порядок,
+  дедупликация, кодирование в одну строку). `feature/place/domain/`:
+  `PlaceDetails`, `OpeningHours` + `OpeningHoursCalculator` (ночные смены,
+  круглосуточно, «неизвестно» ≠ «закрыто»), `PlaceActions`.
+  `feature/map/domain/MarkerClusterer` — сеточная кластеризация, от SDK не
+  зависит.
+- **Данные**: `CatalogApi` (пагинация `PlacePageDto`, карточка, отзывы),
+  `PlaceMappers` (мягкий разбор: битое поле не роняет список),
+  `CatalogRepository`/`DefaultCatalogRepository` — сеть с фоллбэком на Room.
+  Правила: кэш отдаётся только на первой странице, фильтры к нему применяются
+  теми же `PlaceFilterEngine`, пустой кэш — обычная ошибка, `PlacePage.fromCache`
+  доезжает до UI; перезаписывается кэш только на запросе без единого
+  ограничения (`DiscoveryFilters.isUnfiltered`). `SearchHistoryStore`
+  (интерфейс + DataStore-реализация). `PlaceEntity` расширена (адрес,
+  координаты, фото, контакты), БД — `version = 2`.
+- **UI**: `feature/discovery/ui/home/` (главная: строка-кнопка поиска, плитка
+  категорий, две секции, pull-to-refresh), `feature/discovery/ui/search/`
+  (поиск с debounce 300 мс, история, шторка фильтров, пагинация по достижению
+  конца списка), `feature/place/ui/` (галерея, описание, часы, контакты,
+  действия, отзывы; `tel:` и `geo:` через intent'ы), `feature/map/ui/`.
+  Маршруты `SearchRoute(categoryId?, query?)` и `MapRoute` — вне графа табов.
+- **Тесты (331 всего, было 151)**: `PlaceFilterEngineTest`,
+  `DiscoveryFiltersTest`, `HomeSectionsTest`, `SearchHistoryTest`,
+  `PlaceCategoryTest`, `MarkerClustererTest`, `OpeningHoursCalculatorTest`,
+  `PlaceActionsTest`, `PlaceMappersTest`, `PlaceFormattersTest`,
+  `CatalogRepositoryTest` (MockWebServer + фейковый DAO: фоллбэк, пагинация,
+  параметры запроса, TTL), `SearchHistoryStoreTest` (Robolectric + DataStore),
+  `DiscoveryHomeViewModelTest`, `SearchViewModelTest`, `MapViewModelTest`,
+  `PlaceDetailsViewModelTest`.
+
+**Блокер 4.2 не закрыт**: картографический SDK (Yandex MapKit vs Google Maps)
+не выбран, поэтому полотно карты — заглушка со списком маркеров. Всё, что от
+SDK не зависит (загрузка, кластеризация, выбор маркера, «моё
+местоположение»), сделано и покрыто тестами; подключение SDK меняет только
+слой отрисовки `MapScreen`.
+
+**Грабли, стоившие времени:** `SavedStateHandle.toRoute()` разбирает
+типизированный маршрут через настоящий `Bundle`, а в юнит-тестах android.jar
+заглушен (`isReturnDefaultValues = true`) — все аргументы читаются как `null`,
+причём молча. Поэтому `SearchViewModelTest` и `PlaceDetailsViewModelTest`
+идут под Robolectric.
+
+**Не сделано / риски эпика 4:** картинок нет (загрузчика изображений в
+проекте пока нет — вместо фото скелетоны), геолокация на карте только просит
+разрешение эффектом, скриншот-тестов по-прежнему нет, вертикали
+(очередь/бронь/заказ) из карточки — эффект `OpenVertical` без экрана.
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`
@@ -294,8 +350,9 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
    biometric → geo по макету **из компонентов кита**, OTP-эндпоинты в
    `AuthApi`, PIN через уже готовый `PinStorage`, биометрия
    (`androidx.biometric`).
-4. Дальше — discovery/map/search, затем вертикали (food:
-   place/menu/cart/checkout/order-status и т.д.).
+4. Закрыть блокер 4.2 — выбрать картографический SDK (Yandex MapKit или
+   Google Maps) и заменить заглушку полотна в `MapScreen`; дальше вертикали
+   (food: place/menu/cart/checkout/order-status и т.д.).
 5. `./gradlew` агенту в CI разрешён — **прогонять `testDebugUnitTest` и
    `assembleDebug` до пуша обязательно**. Три эпика подряд `main` оставался
    некомпилируемым (`Color.kt`, потом `Type.kt` + `MahallaApp.kt`) именно
