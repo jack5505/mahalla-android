@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -138,20 +139,7 @@ fun SearchContent(
                     }
                     if (state.hasMore) {
                         item(key = "load-more") {
-                            // Догрузка по достижению конца списка: отдельная
-                            // кнопка «ещё» на длинной выдаче раздражает.
-                            LaunchedEffect(places.size) { onEvent(SearchEvent.LoadMore) }
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(Spacing.gap),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(LOADER_SIZE),
-                                    strokeWidth = MahallaComponentDefaults.progressStrokeWidth,
-                                )
-                            }
+                            LoadMoreItem(state = state, itemCount = places.size, onEvent = onEvent)
                         }
                     }
                 }
@@ -165,6 +153,57 @@ fun SearchContent(
             onEvent = onEvent,
             onDismiss = { onEvent(SearchEvent.FiltersClosed) },
         )
+    }
+}
+
+/**
+ * Хвост списка. Догрузка идёт по достижению конца — отдельная кнопка «ещё» на
+ * длинной выдаче раздражает, — но после ошибки автотриггер бесполезен: список
+ * не вырос, `LaunchedEffect(itemCount)` больше не сработает. Поэтому провал
+ * показывает кнопку повтора, а крутилка живёт ровно столько, сколько идёт
+ * запрос.
+ */
+@Composable
+private fun LoadMoreItem(
+    state: SearchState,
+    itemCount: Int,
+    onEvent: (SearchEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (state.loadMoreFailed) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(Spacing.gap),
+            contentAlignment = Alignment.Center,
+        ) {
+            MahallaButton(
+                text = stringResource(R.string.action_retry),
+                onClick = { onEvent(SearchEvent.LoadMore) },
+                variant = MahallaButtonVariant.Secondary,
+                fillWidth = false,
+            )
+        }
+        return
+    }
+
+    LaunchedEffect(itemCount) { onEvent(SearchEvent.LoadMore) }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(Spacing.gap),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (state.isLoadingMore) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(LOADER_SIZE),
+                strokeWidth = MahallaComponentDefaults.progressStrokeWidth,
+            )
+        } else {
+            // Место под крутилку держится всегда: иначе список дёргается на
+            // высоту индикатора каждый раз, когда страница догрузилась.
+            Spacer(modifier = Modifier.size(LOADER_SIZE))
+        }
     }
 }
 

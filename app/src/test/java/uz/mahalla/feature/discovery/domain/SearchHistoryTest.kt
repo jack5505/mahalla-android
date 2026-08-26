@@ -69,6 +69,13 @@ class SearchHistoryTest {
     }
 
     @Test
+    fun `decoding drops duplicates that came from disk`() {
+        // Список рисуется `items(key = { it })` — дубликат ключа роняет
+        // LazyColumn, а строку мог записать прежний формат хранения.
+        assertEquals(listOf("osh", "kino"), SearchHistory.decode("osh\nOsh\nkino\nosh"))
+    }
+
+    @Test
     fun `decoding never returns more than the cap`() {
         val stored = (1..50).joinToString(separator = SearchHistory.SEPARATOR.toString()) { "q$it" }
 

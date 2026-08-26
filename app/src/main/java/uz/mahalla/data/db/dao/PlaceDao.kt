@@ -34,6 +34,10 @@ interface PlaceDao {
     @Query("DELETE FROM places")
     suspend fun clear()
 
+    /** Место удалили на сервере — держать его копию в офлайн-выдаче незачем. */
+    @Query("DELETE FROM places WHERE id = :id")
+    suspend fun delete(id: String)
+
     /** Чистка протухшего кэша: строки старше порога больше не показываем. */
     @Query("DELETE FROM places WHERE updatedAtEpochSeconds < :updatedBeforeEpochSeconds")
     suspend fun deleteStale(updatedBeforeEpochSeconds: Long)

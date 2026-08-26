@@ -97,6 +97,46 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `server results are not re-filtered by the query`() = runTest {
+        // Сервер ищет по описанию, меню и тегам, matchesQuery — только по
+        // названию и адресу. Прогнать ответ через полный фильтр значит
+        // показать «ничего не найдено» при непустом ответе, да ещё и с
+        // hasMore = true, до которого потом не добраться.
+        server.enqueue(json(PAGE_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "osh"))
+
+        val page = (result as ApiResult.Success).data
+        assertEquals(listOf("near", "far"), page.items.map(Place::id))
+    }
+
+    @Test
+    fun `server results are not re-filtered by the rating threshold`() = runTest {
+        // reviewCount в кратком ответе нет, hasRating = false — локальный порог
+        // вырезал бы всю выдачу.
+        server.enqueue(json(PAGE_BODY))
+
+        val result = repository().places(DiscoveryFilters(minRating = 4.0))
+
+        assertEquals(2, (result as ApiResult.Success).data.items.size)
+    }
+
+    @Test
+    fun `only the categories that did not fit the request are cut locally`() = runTest {
+        // В запрос уходит одна категория; если сервер прислал чужую — она
+        // лишняя. Категория, которой ещё нет в приложении (Other), остаётся:
+        // иначе новые разделы каталога были бы невидимы до следующего релиза.
+        server.enqueue(json(MIXED_PAGE_BODY))
+
+        val result = repository().places(
+            DiscoveryFilters(categories = setOf(PlaceCategory.Pharmacy)),
+        )
+
+        val ids = (result as ApiResult.Success).data.items.map(Place::id)
+        assertEquals(listOf("pharmacy", "unknown"), ids)
+    }
+
+    @Test
     fun `first page falls back to the cache when the network fails`() = runTest {
         dao.seed(listOf(entity("cached", distanceMeters = 200)))
         server.enqueue(MockResponse().setResponseCode(500))
@@ -224,6 +264,29 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `a deleted place is not resurrected from the cache`() = runTest {
+        // 404 — это не «не доехало», а «места больше нет». Показать копию из
+        // Room значит отправить человека по адресу, которого не существует.
+        dao.seed(listOf(entity("p-1")))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(ApiResult.Failure(ApiError.NotFound), result)
+        assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
+    }
+
+    @Test
+    fun `a place that just did not arrive still comes from the cache`() = runTest {
+        dao.seed(listOf(entity("p-1", name = "Osh markazi")))
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        val result = repository().placeDetails("p-1")
+
+        assertTrue((result as ApiResult.Success).data.fromCache)
+    }
+
+    @Test
     fun `details without a cached copy report the error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(404))
 
@@ -269,6 +332,14 @@ class CatalogRepositoryTest {
     private companion object {
         const val NOW = 1_774_000_000L
         const val CACHE_TTL_SECONDS = 7L * 24 * 60 * 60
+
+        const val MIXED_PAGE_BODY = """
+            {"items":[
+              {"id":"food","name":"Food","category":"food","rating":4.1,"distanceMeters":300,"isOpenNow":true},
+              {"id":"pharmacy","name":"Pharmacy","category":"pharmacy","rating":4.2,"distanceMeters":100,"isOpenNow":true},
+              {"id":"unknown","name":"Barber","category":"barbershop","rating":4.3,"distanceMeters":200,"isOpenNow":true}
+            ],"page":0,"totalPages":1,"totalElements":3}
+        """
 
         const val PAGE_BODY = """
             {"items":[

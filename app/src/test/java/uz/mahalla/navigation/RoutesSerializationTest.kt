@@ -1,5 +1,6 @@
 package uz.mahalla.navigation
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -12,7 +13,12 @@ import org.junit.Test
  * Typed routes держатся на kotlinx.serialization: если маршрут перестанет
  * сериализоваться или поле переименуют — сломается навигация и deep link,
  * причём только в рантайме. Эти тесты ловят такое на сборке.
+ *
+ * Опт-ин осознанный: проверять состав полей маршрута можно только через
+ * `descriptor`, а он экспериментальный. Двадцать предупреждений в логе сборки
+ * прятали бы настоящие.
  */
+@OptIn(ExperimentalSerializationApi::class)
 class RoutesSerializationTest {
 
     private val json = Json

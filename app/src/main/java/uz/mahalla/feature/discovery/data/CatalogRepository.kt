@@ -42,8 +42,13 @@ interface CatalogRepository {
 /**
  * Правила фоллбэка:
  *
- * - первая страница при сетевой ошибке отдаётся из кэша, отфильтрованная теми
- *   же [PlaceFilterEngine], что и онлайн-выдача;
+ * - первая страница при сетевой ошибке отдаётся из кэша, отфильтрованная
+ *   [PlaceFilterEngine] целиком: кроме этих правил у кэша ничего нет;
+ * - ответ сервера повторно не фильтруется — только сортируется
+ *   ([PlaceFilterEngine.applyRemote]);
+ * - карточка поднимается из кэша только когда место просто не доехало
+ *   (сеть, таймаут, 5xx). На [ApiError.NotFound] кэш не спасает: место
+ *   удалили, и показать его копию значит соврать;
  * - вторая и дальше — не отдаются: дорисовать «хвост» списка из кэша значит
  *   показать вперемешку свежие и старые данные, а этого пользователь не
  *   различит;
@@ -81,10 +86,13 @@ class DefaultCatalogRepository @Inject constructor(
                 if (page == 0 && filters.isUnfiltered) cache(dto.items)
                 ApiResult.Success(
                     PlacePage(
-                        // Сервер уже отфильтровал и отсортировал, но прогоняем
-                        // и локально: контракт выдачи один, и расхождение
-                        // между источниками не должно доезжать до экрана.
-                        items = PlaceFilterEngine.apply(dto.items.map(PlaceDto::toDomain), filters),
+                        // Порядок задаём сами — он должен совпадать с офлайновым.
+                        // А вот фильтровать ответ повторно нельзя: критерии у
+                        // сервера шире (см. PlaceFilterEngine.applyRemote).
+                        items = PlaceFilterEngine.applyRemote(
+                            dto.items.map(PlaceDto::toDomain),
+                            filters,
+                        ),
                         page = dto.page,
                         hasMore = dto.page < dto.totalPages - 1,
                     ),
@@ -98,6 +106,13 @@ class DefaultCatalogRepository @Inject constructor(
     override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> {
         val place = apiCall { api.place(placeId) }
         if (place is ApiResult.Failure) {
+            // Место удалили или скрыли — своя копия из Room тут не помощь, а
+            // выдумка: человек пойдёт по адресу, которого больше нет. Заодно
+            // чистим кэш, чтобы оно не всплыло в офлайн-выдаче.
+            if (place.error in GONE_ERRORS) {
+                placeDao.delete(placeId)
+                return place
+            }
             val cached = placeDao.byId(placeId) ?: return place
             return ApiResult.Success(cached.toCachedDetails())
         }
@@ -137,6 +152,9 @@ class DefaultCatalogRepository @Inject constructor(
     }
 
     private companion object {
+        /** Ответы, после которых кэшу верить нельзя: места больше нет. */
+        val GONE_ERRORS = setOf(ApiError.NotFound, ApiError.Forbidden)
+
         /** Сколько мест держим в офлайн-выдаче — один экран прокрутки. */
         const val CACHE_PAGE_SIZE = 50
 

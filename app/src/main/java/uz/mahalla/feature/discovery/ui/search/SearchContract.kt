@@ -21,6 +21,8 @@ data class SearchState(
     val history: List<String> = emptyList(),
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
+    /** Догрузка страницы провалилась — дальше только по кнопке «повторить». */
+    val loadMoreFailed: Boolean = false,
     val fromCache: Boolean = false,
     val filtersVisible: Boolean = false,
 ) : UiState {
@@ -30,8 +32,13 @@ data class SearchState(
     /**
      * История заменяет выдачу, пока пользователь ничего не искал: показывать
      * «ничего не найдено» до первого запроса нечестно.
+     *
+     * Активный фильтр — уже поиск, даже с пустой строкой: с главной по плитке
+     * категории сюда приходят как раз так, и подменять готовую выдачу списком
+     * прошлых запросов нельзя.
      */
-    val showHistory: Boolean get() = filters.query.isBlank() && history.isNotEmpty()
+    val showHistory: Boolean
+        get() = filters.query.isBlank() && filters.activeCount == 0 && history.isNotEmpty()
 
     val activeFilterCount: Int get() = filters.activeCount
 }

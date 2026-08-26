@@ -17,7 +17,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.discovery.data.PlacePage
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -215,6 +217,36 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun `a preselected category shows the results, not the history`() = runTest {
+        // С главной по плитке категории приходят с пустым запросом и активным
+        // фильтром. Подменить готовую выдачу списком прошлых запросов — это то,
+        // что видит живой пользователь с непустой историей.
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel(
+            categoryId = "pharmacy",
+            history = FakeSearchHistoryStore(listOf("osh")),
+        )
+
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.showHistory)
+        assertTrue(viewModel.state.value.results is ScreenState.Content)
+    }
+
+    @Test
+    fun `any active filter hides the history`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel(history = FakeSearchHistoryStore(listOf("osh")))
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.showHistory)
+
+        viewModel.onEvent(SearchEvent.OpenNowToggled)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.showHistory)
+    }
+
+    @Test
     fun `removing and clearing the history reach the store`() = runTest {
         repository.respondWith(listOf(place("p")))
         val store = FakeSearchHistoryStore(listOf("osh", "kino"))
@@ -300,6 +332,45 @@ class SearchViewModelTest {
         val results = viewModel.state.value.results as ScreenState.Content
         assertEquals(listOf("a"), results.data.map(Place::id))
         assertFalse(viewModel.state.value.isLoadingMore)
+        assertTrue("хвост списка должен предложить повтор", viewModel.state.value.loadMoreFailed)
+    }
+
+    @Test
+    fun `a retry after a failed page loads it`() = runTest {
+        // Автотриггер по концу списка больше не сработает — список не вырос,
+        // — поэтому повтор идёт кнопкой и обязан пройти.
+        repository.respondWith(listOf(place("a")), page = 0, hasMore = true)
+        repository.failWith(ApiError.NoConnection, page = 1)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onEvent(SearchEvent.LoadMore)
+        advanceUntilIdle()
+
+        repository.respondWith(listOf(place("b")), page = 1)
+        viewModel.onEvent(SearchEvent.LoadMore)
+        advanceUntilIdle()
+
+        val results = viewModel.state.value.results as ScreenState.Content
+        assertEquals(listOf("a", "b"), results.data.map(Place::id))
+        assertFalse(viewModel.state.value.loadMoreFailed)
+    }
+
+    @Test
+    fun `next page number is counted locally, not echoed by the server`() = runTest {
+        // Сервер, не вернувший поле `page`, отдаёт дефолтный 0 — и «следующей»
+        // навсегда осталась бы первая страница.
+        repository.respondWith(listOf(place("a")), page = 0, hasMore = true)
+        repository.pages[1] = ApiResult.Success(PlacePage(listOf(place("b")), page = 0, hasMore = true))
+        repository.respondWith(listOf(place("c")), page = 2)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SearchEvent.LoadMore)
+        advanceUntilIdle()
+        viewModel.onEvent(SearchEvent.LoadMore)
+        advanceUntilIdle()
+
+        assertEquals(listOf(0, 1, 2), repository.requestedFilters.map { it.second })
     }
 
     @Test

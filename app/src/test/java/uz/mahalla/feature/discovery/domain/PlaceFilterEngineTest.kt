@@ -32,6 +32,47 @@ class PlaceFilterEngineTest {
     }
 
     @Test
+    fun `remote results keep everything the server matched`() {
+        // Сервер ищет по описанию, меню и тегам — совпадения по названию может
+        // не быть вовсе. Локальный фильтр вырезал бы всю выдачу.
+        val places = listOf(place("a", name = "Chorsu", rating = 0.0, reviewCount = 0))
+
+        val result = PlaceFilterEngine.applyRemote(
+            places,
+            DiscoveryFilters(query = "osh", minRating = 4.0, openNowOnly = true),
+        )
+
+        assertEquals(listOf("a"), result.map(Place::id))
+    }
+
+    @Test
+    fun `remote results are still sorted the same way as the cache`() {
+        val places = listOf(place("far", distanceMeters = 900), place("near", distanceMeters = 100))
+
+        val result = PlaceFilterEngine.applyRemote(places, DiscoveryFilters())
+
+        assertEquals(listOf("near", "far"), result.map(Place::id))
+    }
+
+    @Test
+    fun `remote results drop only the categories that did not fit the request`() {
+        val places = listOf(
+            place("food", category = PlaceCategory.Food),
+            place("pharmacy", category = PlaceCategory.Pharmacy),
+            // Категория, которой ещё нет в приложении: скрывать её значит
+            // прятать новые разделы каталога до следующего релиза.
+            place("other", category = PlaceCategory.Other),
+        )
+
+        val result = PlaceFilterEngine.applyRemote(
+            places,
+            DiscoveryFilters(categories = setOf(PlaceCategory.Pharmacy)),
+        )
+
+        assertEquals(setOf("pharmacy", "other"), result.map(Place::id).toSet())
+    }
+
+    @Test
     fun `unknown category never matches a category filter`() {
         val places = listOf(place("other", category = PlaceCategory.Other))
 

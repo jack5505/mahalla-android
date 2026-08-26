@@ -113,6 +113,10 @@ class FakePlaceDao : PlaceDao {
         rows.value = emptyMap()
     }
 
+    override suspend fun delete(id: String) {
+        rows.value = rows.value - id
+    }
+
     override suspend fun deleteStale(updatedBeforeEpochSeconds: Long) {
         deleteStaleThreshold = updatedBeforeEpochSeconds
         rows.value = rows.value.filterValues { it.updatedAtEpochSeconds >= updatedBeforeEpochSeconds }

@@ -39,11 +39,17 @@ object SearchHistory {
         .take(MAX_SIZE)
         .joinToString(separator = SEPARATOR.toString())
 
+    /**
+     * `distinctBy` — страховка от диска, а не от [add]: строку в DataStore мог
+     * записать прежний формат или другая версия приложения, а список рисуется
+     * `items(key = { it })` — дубликат ключа роняет LazyColumn.
+     */
     fun decode(stored: String?): List<String> = stored
         .orEmpty()
         .split(SEPARATOR)
         .map(String::trim)
         .filter(String::isNotEmpty)
+        .distinctBy { it.lowercase(Locale.ROOT) }
         .take(MAX_SIZE)
 
     private fun String.equalsIgnoringCase(other: String): Boolean =

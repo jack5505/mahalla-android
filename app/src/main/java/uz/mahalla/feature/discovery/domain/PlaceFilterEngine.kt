@@ -11,8 +11,31 @@ import java.util.Locale
  */
 object PlaceFilterEngine {
 
+    /** Полный фильтр: годится там, где кроме этих правил ничего нет — то есть для кэша. */
     fun apply(places: List<Place>, filters: DiscoveryFilters): List<Place> =
         places.filter { matches(it, filters) }.sortedWith(comparator(filters))
+
+    /**
+     * Ответ сервера. Прогонять его через [apply] нельзя: сервер ищет по своему
+     * индексу (описание, меню, теги), а [matchesQuery] знает только название и
+     * адрес — выдача по запросу «osh» вырезалась бы целиком, и экран показывал
+     * бы «ничего не найдено» при непустом ответе. То же с [DiscoveryFilters.minRating]:
+     * порог «есть хотя бы один отзыв» — локальное правило, серверное может
+     * отличаться.
+     *
+     * Локально досекается ровно то, что в запрос не поместилось: вторая и
+     * последующие категории ([DiscoveryFilters.apiCategory] отдаёт одну).
+     * [PlaceCategory.Other] при этом остаётся — это «категория, которой ещё нет
+     * в приложении», и выбрасывать по ней найденное значит скрывать новые
+     * разделы каталога до следующего релиза.
+     */
+    fun applyRemote(places: List<Place>, filters: DiscoveryFilters): List<Place> =
+        places.filter { matchesRemoteCategories(it, filters) }.sortedWith(comparator(filters))
+
+    private fun matchesRemoteCategories(place: Place, filters: DiscoveryFilters): Boolean =
+        filters.categories.isEmpty() ||
+            place.category == PlaceCategory.Other ||
+            place.category in filters.categories
 
     fun matches(place: Place, filters: DiscoveryFilters): Boolean {
         if (filters.categories.isNotEmpty() && place.category !in filters.categories) return false
