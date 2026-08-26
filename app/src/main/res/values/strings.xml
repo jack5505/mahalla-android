@@ -1,5 +1,229 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Язык по умолчанию — узбекский (ТЗ §1: uz по умолчанию, ru переключением). -->
+<!--
+  Язык по умолчанию — узбекский (ТЗ §1: uz по умолчанию, ru переключением).
+  Набор ключей здесь и в values-ru/ обязан совпадать — это проверяет
+  StringResourceParityTest.
+-->
 <resources>
     <string name="app_name">Mahalla</string>
+    <string name="screen_skeleton_note">Ekran keyingi bosqichda maketga ko\'ra tayyorlanadi.</string>
+    <string name="action_back">Orqaga</string>
+    <string name="currency_uzs">so\'m</string>
+
+    <!-- Нижняя навигация -->
+    <string name="nav_discovery">Yaqin atrofda</string>
+    <string name="nav_orders">Buyurtmalar</string>
+    <string name="nav_wallet">Hamyon</string>
+    <string name="nav_profile">Profil</string>
+
+    <!-- Онбординг: welcome -->
+    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
+    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
+    <string name="onboarding_welcome_action">Kirish yoki ro\'yxatdan o\'tish</string>
+    <string name="onboarding_welcome_language">Ilova tili</string>
+
+    <!-- Онбординг: телефон -->
+    <string name="onboarding_phone_title">Telefon raqamingiz</string>
+    <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
+    <string name="onboarding_phone_label">Telefon raqami</string>
+    <string name="onboarding_phone_action">Kodni olish</string>
+    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
+    <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
+    <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
+    <string name="onboarding_offer_url" translatable="false">https://mahalla.uz/offer</string>
+
+    <!-- Онбординг: код из SMS -->
+    <string name="onboarding_otp_title">Tasdiqlash kodi</string>
+    <string name="onboarding_otp_sent_to">Kod %1$s raqamiga yuborildi</string>
+    <string name="onboarding_otp_action">Tasdiqlash</string>
+    <string name="onboarding_otp_resend">Kodni qayta yuborish</string>
+    <string name="onboarding_otp_resend_timer">Qayta yuborish %1$d sekunddan keyin</string>
+    <string name="onboarding_otp_error_invalid">Kod noto\'g\'ri, qaytadan kiriting</string>
+    <string name="onboarding_otp_error_expired">Kod muddati tugadi, yangisini so\'rang</string>
+    <string name="onboarding_otp_error_attempts">Urinishlar tugadi, yangi kod so\'rang</string>
+
+    <!-- Онбординг: PIN -->
+    <string name="onboarding_pin_title">PIN-kod o\'rnating</string>
+    <string name="onboarding_pin_confirm_title">PIN-kodni takrorlang</string>
+    <string name="onboarding_pin_unlock_title">PIN-kodni kiriting</string>
+    <string name="onboarding_pin_subtitle">PIN ilovaga tez va xavfsiz kirish uchun kerak.</string>
+    <string name="onboarding_pin_error_mismatch">PIN-kodlar mos kelmadi, qaytadan o\'rnating</string>
+    <string name="onboarding_pin_error_wrong">PIN-kod noto\'g\'ri. Qolgan urinishlar: %1$d</string>
+    <string name="onboarding_pin_error_attempts">Urinishlar tugadi. Telefon raqami bilan qaytadan kiring</string>
+    <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
+    <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
+
+    <!-- Онбординг: биометрия -->
+    <string name="onboarding_biometric_title">Biometrika bilan kirish</string>
+    <string name="onboarding_biometric_subtitle">Barmoq izi yoki yuz bilan kirish PIN-koddan tezroq. PIN esa zaxira usul bo\'lib qoladi.</string>
+    <string name="onboarding_biometric_action">Yoqish</string>
+    <string name="onboarding_biometric_skip">Keyinroq</string>
+    <string name="onboarding_biometric_unavailable">Bu qurilmada biometrika mavjud emas</string>
+    <string name="onboarding_biometric_not_enrolled">Qurilma sozlamalarida barmoq izi yoki yuzni qo\'shing</string>
+    <string name="onboarding_biometric_failed">Tasdiqlanmadi, qayta urinib ko\'ring</string>
+    <string name="onboarding_biometric_prompt_title">Kirishni tasdiqlang</string>
+    <string name="onboarding_biometric_prompt_subtitle">Mahalla ilovasiga biometrika bilan kirish</string>
+
+    <!-- Онбординг: геолокация -->
+    <string name="onboarding_geo_title">Joylashuvga ruxsat</string>
+    <string name="onboarding_geo_subtitle">Joylashuv yaqin atrofdagi joylarni va yetkazib berish vaqtini aniqlash uchun kerak.</string>
+    <string name="onboarding_geo_action">Ruxsat berish</string>
+    <string name="onboarding_geo_manual">Shaharni qo\'lda tanlash</string>
+    <string name="onboarding_geo_city_title">Shaharni tanlang</string>
+    <string name="onboarding_geo_denied">Joylashuvga ruxsat berilmadi — shaharni tanlang</string>
+
+    <!-- Города для ручного выбора -->
+    <string name="city_tashkent">Toshkent</string>
+    <string name="city_samarkand">Samarqand</string>
+    <string name="city_bukhara">Buxoro</string>
+    <string name="city_andijan">Andijon</string>
+    <string name="city_namangan">Namangan</string>
+    <string name="city_fergana">Farg\'ona</string>
+    <string name="city_nukus">Nukus</string>
+    <string name="city_qarshi">Qarshi</string>
+
+    <!-- Основные разделы -->
+    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_subtitle">Ovqat, dorixona, shifokor, kino va ustalar — yoningizda.</string>
+    <string name="orders_title">Buyurtmalar</string>
+    <string name="orders_subtitle">Faol buyurtmalar, navbatlar va bandlovlar.</string>
+    <string name="wallet_title">Hamyon</string>
+    <string name="wallet_subtitle">Balans, to\'ldirish va to\'lovlar tarixi.</string>
+    <string name="profile_title">Profil</string>
+    <string name="profile_subtitle">Til, mavzu va hisob sozlamalari.</string>
+    <string name="profile_language">Til</string>
+    <string name="profile_theme">Mavzu</string>
+
+    <!-- Детали -->
+    <string name="place_title">Joy</string>
+
+    <!-- Язык и тема -->
+    <string name="language_system">Tizim tili</string>
+    <string name="language_uz">O\'zbekcha</string>
+    <string name="language_ru">Ruscha</string>
+    <string name="theme_system">Tizim mavzusi</string>
+    <string name="theme_light">Yorug\'</string>
+    <string name="theme_dark">Qorong\'i</string>
+
+    <!-- UI-кит: действия -->
+    <string name="action_retry">Qayta urinish</string>
+    <string name="action_clear">Tozalash</string>
+    <string name="action_close">Yopish</string>
+    <string name="action_cancel">Bekor qilish</string>
+    <string name="action_delete">O\'chirish</string>
+    <string name="action_see_all">Hammasi</string>
+
+    <!-- UI-кит: поиск и OTP -->
+    <string name="search_hint">Qidirish</string>
+    <string name="search_clear">Qidiruvni tozalash</string>
+    <string name="otp_input_description">Tasdiqlash kodi, %1$d ta raqam</string>
+    <string name="otp_input_progress">%1$d / %2$d raqam kiritildi</string>
+    <string name="pin_input_description">PIN-kod, %1$d ta raqam</string>
+
+    <!-- UI-кит: состояния для TalkBack -->
+    <string name="chip_state_selected">tanlangan</string>
+    <string name="chip_state_not_selected">tanlanmagan</string>
+    <string name="switch_state_on">yoqilgan</string>
+    <string name="switch_state_off">o\'chirilgan</string>
+    <string name="checkbox_state_checked">belgilangan</string>
+    <string name="checkbox_state_unchecked">belgilanmagan</string>
+
+    <!-- UI-кит: состояния экрана -->
+    <string name="state_loading">Yuklanmoqda</string>
+    <string name="state_empty_title">Hozircha bo\'sh</string>
+    <string name="state_empty_description">Bu yerda hali ma\'lumot yo\'q</string>
+    <string name="state_error_title">Xatolik yuz berdi</string>
+
+    <!-- UI-кит: карточки -->
+    <string name="place_open_now">Ochiq</string>
+    <string name="place_closed_now">Yopiq</string>
+    <string name="place_rating_description">Reyting %1$s</string>
+    <string name="ticket_number_description">Navbat raqami %1$s</string>
+    <string name="order_status_pending">Kutilmoqda</string>
+    <string name="order_status_confirmed">Tasdiqlangan</string>
+
+    <!-- Ошибки сетевого слоя -->
+    <string name="error_no_connection">Internet aloqasi yo\'q</string>
+    <string name="error_timeout">Server javob bermadi</string>
+    <string name="error_unauthorized">Sessiya tugadi, qaytadan kiring</string>
+    <string name="error_forbidden">Bu amal uchun ruxsat yo\'q</string>
+    <string name="error_not_found">Ma\'lumot topilmadi</string>
+    <string name="error_server">Serverda xatolik yuz berdi</string>
+    <string name="error_unknown">Nimadir xato ketdi</string>
+
+    <!-- Discovery: категории (эпик 4.1) -->
+    <string name="category_food">Ovqat</string>
+    <string name="category_pharmacy">Dorixona</string>
+    <string name="category_hospital">Shifoxona</string>
+    <string name="category_cinema">Kino</string>
+    <string name="category_playground">O\'yin maydoni</string>
+    <string name="category_master">Ustalar</string>
+    <string name="category_other">Boshqa</string>
+
+    <!-- Discovery: главная (эпик 4.1) -->
+    <string name="discovery_section_nearby">Yaqin atrofda</string>
+    <string name="discovery_section_recommended">Tavsiya etamiz</string>
+    <string name="discovery_open_map">Xaritada ochish</string>
+    <string name="distance_meters">%1$s m</string>
+    <string name="distance_kilometers">%1$s km</string>
+    <string name="state_offline_cache">Saqlangan ma\'lumot ko\'rsatilmoqda</string>
+
+    <!-- Discovery: поиск и фильтры (эпик 4.3) -->
+    <string name="search_title">Qidiruv</string>
+    <string name="search_empty_title">Hech narsa topilmadi</string>
+    <string name="search_empty_description">So\'rovni o\'zgartiring yoki filtrlarni tozalang</string>
+    <string name="search_history_title">Qidiruv tarixi</string>
+    <string name="search_history_clear">Tozalash</string>
+    <string name="search_history_remove">%1$s so\'rovini o\'chirish</string>
+    <string name="filters_title">Filtrlar</string>
+    <string name="filters_category">Turkum</string>
+    <string name="filters_distance">Masofa</string>
+    <string name="filters_rating">Reyting</string>
+    <string name="filters_open_now">Hozir ochiq</string>
+    <string name="filters_sort">Saralash</string>
+    <string name="filters_reset">Filtrlarni tozalash</string>
+    <string name="filters_any">Har qanday</string>
+    <string name="filters_distance_up_to_m">%1$s m gacha</string>
+    <string name="filters_distance_up_to_km">%1$s km gacha</string>
+    <string name="filters_rating_from">%1$s dan yuqori</string>
+    <string name="sort_relevance">Mos kelishi</string>
+    <string name="sort_distance">Masofa</string>
+    <string name="sort_rating">Reyting</string>
+
+    <!-- Discovery: карта (эпик 4.2) -->
+    <string name="map_title">Xarita</string>
+    <string name="map_sdk_pending">Xarita SDK hali tanlanmagan: bu yerda belgilar ro\'yxati ko\'rsatilmoqda.</string>
+    <string name="map_markers_count">%1$d ta belgi, masshtab %2$d</string>
+    <string name="map_cluster_places">%1$d ta joy</string>
+    <string name="map_zoom_in">Yaqinlashtirish</string>
+    <string name="map_zoom_out">Uzoqlashtirish</string>
+    <string name="map_my_location">Mening joylashuvim</string>
+
+    <!-- Карточка места (эпик 4.4) -->
+    <string name="place_hours_title">Ish vaqti</string>
+    <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
+    <string name="place_hours_around_the_clock">Kunu tun</string>
+    <string name="place_hours_day_off">Dam olish kuni</string>
+    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_reviews_title">Sharhlar</string>
+    <string name="place_reviews_show_all">Barcha sharhlar</string>
+    <string name="place_review_anonymous">Mehmon</string>
+    <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
+    <string name="place_no_rating">Baholanmagan</string>
+    <string name="place_action_queue">Navbatga yozilish</string>
+    <string name="place_action_booking">Joy band qilish</string>
+    <string name="place_action_order">Buyurtma berish</string>
+    <string name="place_action_call">Qo\'ng\'iroq qilish</string>
+    <string name="place_action_route">Yo\'nalish</string>
+    <string name="action_collapse">Yig\'ish</string>
+
+    <!-- Дни недели -->
+    <string name="day_monday">Dushanba</string>
+    <string name="day_tuesday">Seshanba</string>
+    <string name="day_wednesday">Chorshanba</string>
+    <string name="day_thursday">Payshanba</string>
+    <string name="day_friday">Juma</string>
+    <string name="day_saturday">Shanba</string>
+    <string name="day_sunday">Yakshanba</string>
 </resources>

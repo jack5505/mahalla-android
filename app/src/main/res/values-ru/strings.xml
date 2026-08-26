@@ -1,4 +1,224 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Русская локаль. Набор ключей обязан совпадать с values/strings.xml. -->
 <resources>
     <string name="app_name">Mahalla</string>
+    <string name="screen_skeleton_note">Экран будет свёрстан по макету на следующем этапе.</string>
+    <string name="action_back">Назад</string>
+    <string name="currency_uzs">сум</string>
+
+    <!-- Нижняя навигация -->
+    <string name="nav_discovery">Рядом</string>
+    <string name="nav_orders">Заказы</string>
+    <string name="nav_wallet">Кошелёк</string>
+    <string name="nav_profile">Профиль</string>
+
+    <!-- Онбординг: welcome -->
+    <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
+    <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>
+    <string name="onboarding_welcome_action">Войти или зарегистрироваться</string>
+    <string name="onboarding_welcome_language">Язык приложения</string>
+
+    <!-- Онбординг: телефон -->
+    <string name="onboarding_phone_title">Ваш номер телефона</string>
+    <string name="onboarding_phone_subtitle">Пришлём код подтверждения в SMS.</string>
+    <string name="onboarding_phone_label">Номер телефона</string>
+    <string name="onboarding_phone_action">Получить код</string>
+    <string name="onboarding_phone_error">Неверный номер телефона</string>
+    <string name="onboarding_phone_consent">Согласен с условиями публичной оферты</string>
+    <string name="onboarding_phone_consent_link">Читать оферту</string>
+    <string name="onboarding_phone_consent_required">Чтобы продолжить, примите оферту</string>
+
+    <!-- Онбординг: код из SMS -->
+    <string name="onboarding_otp_title">Код подтверждения</string>
+    <string name="onboarding_otp_sent_to">Код отправлен на %1$s</string>
+    <string name="onboarding_otp_action">Подтвердить</string>
+    <string name="onboarding_otp_resend">Отправить код снова</string>
+    <string name="onboarding_otp_resend_timer">Повторная отправка через %1$d сек</string>
+    <string name="onboarding_otp_error_invalid">Неверный код, введите заново</string>
+    <string name="onboarding_otp_error_expired">Срок действия кода истёк, запросите новый</string>
+    <string name="onboarding_otp_error_attempts">Попытки исчерпаны, запросите новый код</string>
+
+    <!-- Онбординг: PIN -->
+    <string name="onboarding_pin_title">Установите PIN-код</string>
+    <string name="onboarding_pin_confirm_title">Повторите PIN-код</string>
+    <string name="onboarding_pin_unlock_title">Введите PIN-код</string>
+    <string name="onboarding_pin_subtitle">PIN нужен для быстрого и безопасного входа в приложение.</string>
+    <string name="onboarding_pin_error_mismatch">PIN-коды не совпали, установите заново</string>
+    <string name="onboarding_pin_error_wrong">Неверный PIN-код. Осталось попыток: %1$d</string>
+    <string name="onboarding_pin_error_attempts">Попытки исчерпаны. Войдите заново по номеру телефона</string>
+    <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
+    <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
+
+    <!-- Онбординг: биометрия -->
+    <string name="onboarding_biometric_title">Вход по биометрии</string>
+    <string name="onboarding_biometric_subtitle">Отпечаток или лицо быстрее PIN-кода. PIN останется резервным способом входа.</string>
+    <string name="onboarding_biometric_action">Включить</string>
+    <string name="onboarding_biometric_skip">Позже</string>
+    <string name="onboarding_biometric_unavailable">На этом устройстве биометрия недоступна</string>
+    <string name="onboarding_biometric_not_enrolled">Добавьте отпечаток или лицо в настройках устройства</string>
+    <string name="onboarding_biometric_failed">Не удалось подтвердить, попробуйте ещё раз</string>
+    <string name="onboarding_biometric_prompt_title">Подтвердите вход</string>
+    <string name="onboarding_biometric_prompt_subtitle">Вход в Mahalla по биометрии</string>
+
+    <!-- Онбординг: геолокация -->
+    <string name="onboarding_geo_title">Доступ к геолокации</string>
+    <string name="onboarding_geo_subtitle">Геолокация нужна, чтобы показать места рядом и посчитать время доставки.</string>
+    <string name="onboarding_geo_action">Разрешить</string>
+    <string name="onboarding_geo_manual">Выбрать город вручную</string>
+    <string name="onboarding_geo_city_title">Выберите город</string>
+    <string name="onboarding_geo_denied">Доступ к геолокации не выдан — выберите город</string>
+
+    <!-- Города для ручного выбора -->
+    <string name="city_tashkent">Ташкент</string>
+    <string name="city_samarkand">Самарканд</string>
+    <string name="city_bukhara">Бухара</string>
+    <string name="city_andijan">Андижан</string>
+    <string name="city_namangan">Наманган</string>
+    <string name="city_fergana">Фергана</string>
+    <string name="city_nukus">Нукус</string>
+    <string name="city_qarshi">Карши</string>
+
+    <!-- Основные разделы -->
+    <string name="discovery_title">Рядом</string>
+    <string name="discovery_subtitle">Еда, аптеки, врачи, кино и мастера — рядом с вами.</string>
+    <string name="orders_title">Заказы</string>
+    <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
+    <string name="wallet_title">Кошелёк</string>
+    <string name="wallet_subtitle">Баланс, пополнение и история платежей.</string>
+    <string name="profile_title">Профиль</string>
+    <string name="profile_subtitle">Язык, тема и настройки аккаунта.</string>
+    <string name="profile_language">Язык</string>
+    <string name="profile_theme">Тема</string>
+
+    <!-- Детали -->
+    <string name="place_title">Место</string>
+
+    <!-- Язык и тема -->
+    <string name="language_system">Системный</string>
+    <string name="language_uz">Узбекский</string>
+    <string name="language_ru">Русский</string>
+    <string name="theme_system">Системная</string>
+    <string name="theme_light">Светлая</string>
+    <string name="theme_dark">Тёмная</string>
+
+    <!-- UI-кит: действия -->
+    <string name="action_retry">Повторить</string>
+    <string name="action_clear">Очистить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_see_all">Все</string>
+
+    <!-- UI-кит: поиск и OTP -->
+    <string name="search_hint">Поиск</string>
+    <string name="search_clear">Очистить поиск</string>
+    <string name="otp_input_description">Код подтверждения, %1$d цифр</string>
+    <string name="otp_input_progress">Введено %1$d из %2$d цифр</string>
+    <string name="pin_input_description">PIN-код, %1$d цифр</string>
+
+    <!-- UI-кит: состояния для TalkBack -->
+    <string name="chip_state_selected">выбрано</string>
+    <string name="chip_state_not_selected">не выбрано</string>
+    <string name="switch_state_on">включено</string>
+    <string name="switch_state_off">выключено</string>
+    <string name="checkbox_state_checked">отмечено</string>
+    <string name="checkbox_state_unchecked">не отмечено</string>
+
+    <!-- UI-кит: состояния экрана -->
+    <string name="state_loading">Загрузка</string>
+    <string name="state_empty_title">Пока пусто</string>
+    <string name="state_empty_description">Здесь пока нет данных</string>
+    <string name="state_error_title">Произошла ошибка</string>
+
+    <!-- UI-кит: карточки -->
+    <string name="place_open_now">Открыто</string>
+    <string name="place_closed_now">Закрыто</string>
+    <string name="place_rating_description">Рейтинг %1$s</string>
+    <string name="ticket_number_description">Номер талона %1$s</string>
+    <string name="order_status_pending">Ожидает</string>
+    <string name="order_status_confirmed">Подтверждено</string>
+
+    <!-- Ошибки сетевого слоя -->
+    <string name="error_no_connection">Нет подключения к интернету</string>
+    <string name="error_timeout">Сервер не ответил</string>
+    <string name="error_unauthorized">Сессия истекла, войдите снова</string>
+    <string name="error_forbidden">Нет доступа к этому действию</string>
+    <string name="error_not_found">Данные не найдены</string>
+    <string name="error_server">Ошибка на сервере</string>
+    <string name="error_unknown">Что-то пошло не так</string>
+
+    <!-- Discovery: категории (эпик 4.1) -->
+    <string name="category_food">Еда</string>
+    <string name="category_pharmacy">Аптеки</string>
+    <string name="category_hospital">Больницы</string>
+    <string name="category_cinema">Кино</string>
+    <string name="category_playground">Игровые зоны</string>
+    <string name="category_master">Мастера</string>
+    <string name="category_other">Другое</string>
+
+    <!-- Discovery: главная (эпик 4.1) -->
+    <string name="discovery_section_nearby">Рядом</string>
+    <string name="discovery_section_recommended">Рекомендуем</string>
+    <string name="discovery_open_map">Открыть карту</string>
+    <string name="distance_meters">%1$s м</string>
+    <string name="distance_kilometers">%1$s км</string>
+    <string name="state_offline_cache">Показаны сохранённые данные</string>
+
+    <!-- Discovery: поиск и фильтры (эпик 4.3) -->
+    <string name="search_title">Поиск</string>
+    <string name="search_empty_title">Ничего не найдено</string>
+    <string name="search_empty_description">Измените запрос или сбросьте фильтры</string>
+    <string name="search_history_title">История поиска</string>
+    <string name="search_history_clear">Очистить</string>
+    <string name="search_history_remove">Удалить запрос %1$s</string>
+    <string name="filters_title">Фильтры</string>
+    <string name="filters_category">Категория</string>
+    <string name="filters_distance">Расстояние</string>
+    <string name="filters_rating">Рейтинг</string>
+    <string name="filters_open_now">Открыто сейчас</string>
+    <string name="filters_sort">Сортировка</string>
+    <string name="filters_reset">Сбросить фильтры</string>
+    <string name="filters_any">Любое</string>
+    <string name="filters_distance_up_to_m">до %1$s м</string>
+    <string name="filters_distance_up_to_km">до %1$s км</string>
+    <string name="filters_rating_from">от %1$s</string>
+    <string name="sort_relevance">По совпадению</string>
+    <string name="sort_distance">По расстоянию</string>
+    <string name="sort_rating">По рейтингу</string>
+
+    <!-- Discovery: карта (эпик 4.2) -->
+    <string name="map_title">Карта</string>
+    <string name="map_sdk_pending">SDK карты ещё не выбран: здесь показан список маркеров.</string>
+    <string name="map_markers_count">Маркеров: %1$d, масштаб %2$d</string>
+    <string name="map_cluster_places">Мест: %1$d</string>
+    <string name="map_zoom_in">Приблизить</string>
+    <string name="map_zoom_out">Отдалить</string>
+    <string name="map_my_location">Моё местоположение</string>
+
+    <!-- Карточка места (эпик 4.4) -->
+    <string name="place_hours_title">Часы работы</string>
+    <string name="place_hours_unknown">Часы работы неизвестны</string>
+    <string name="place_hours_around_the_clock">Круглосуточно</string>
+    <string name="place_hours_day_off">Выходной</string>
+    <string name="place_contacts_title">Контакты</string>
+    <string name="place_reviews_title">Отзывы</string>
+    <string name="place_reviews_show_all">Все отзывы</string>
+    <string name="place_review_anonymous">Гость</string>
+    <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
+    <string name="place_no_rating">Нет оценок</string>
+    <string name="place_action_queue">Встать в очередь</string>
+    <string name="place_action_booking">Забронировать</string>
+    <string name="place_action_order">Заказать</string>
+    <string name="place_action_call">Позвонить</string>
+    <string name="place_action_route">Маршрут</string>
+    <string name="action_collapse">Свернуть</string>
+
+    <!-- Дни недели -->
+    <string name="day_monday">Понедельник</string>
+    <string name="day_tuesday">Вторник</string>
+    <string name="day_wednesday">Среда</string>
+    <string name="day_thursday">Четверг</string>
+    <string name="day_friday">Пятница</string>
+    <string name="day_saturday">Суббота</string>
+    <string name="day_sunday">Воскресенье</string>
 </resources>
