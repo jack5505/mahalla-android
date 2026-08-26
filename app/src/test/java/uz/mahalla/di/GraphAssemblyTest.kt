@@ -22,8 +22,9 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.KeystorePinStorage
+import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
-import uz.mahalla.feature.onboarding.data.OnboardingRepository
+import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 
 /**
  * Сборка графа (эпик 1.1).
@@ -90,10 +91,38 @@ class GraphAssemblyTest {
     fun `storage graph assembles on top of a single data store`() {
         val dataStore = sharedDataStore(context)
 
-        assertNotNull(OnboardingRepository(SettingsDataStore(dataStore)))
+        assertNotNull(DataStoreOnboardingRepository(SettingsDataStore(dataStore)))
         // Конструктор шифра не должен трогать Keystore — иначе граф не
         // собрался бы ни в тестах, ни на устройствах без AndroidKeyStore.
         assertNotNull(KeystorePinStorage(dataStore, AndroidKeystorePinCipher()))
+    }
+
+    /**
+     * Авторизация (эпик 3) собирается на «голом» refresh-клиенте: 401 на
+     * запросе кода или на logout не должен запускать обновление токена.
+     */
+    @Test
+    fun `auth repository assembles on the bare refresh client`() {
+        val converterFactory = NetworkModule.provideConverterFactory(NetworkModule.provideJson())
+        val refreshClient = NetworkModule.provideRefreshClient()
+        val authApi = NetworkModule.provideAuthApi(
+            NetworkModule.provideRefreshRetrofit(
+                refreshClient,
+                converterFactory,
+                NetworkModule.provideBaseUrl(),
+            ),
+        )
+        val dataStore = sharedDataStore(context)
+
+        val repository = DefaultAuthRepository(
+            authApi = authApi,
+            sessionStore = DataStoreSessionStore(dataStore),
+            pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
+            clock = AppModule.provideClock(),
+        )
+
+        assertNotNull(repository)
+        assertFalse(refreshClient.authenticator is TokenAuthenticator)
     }
 
     @Test

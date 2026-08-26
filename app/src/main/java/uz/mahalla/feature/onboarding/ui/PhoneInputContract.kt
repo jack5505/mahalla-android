@@ -1,11 +1,16 @@
 package uz.mahalla.feature.onboarding.ui
 
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
+import uz.mahalla.feature.auth.domain.OtpChallenge
 
 enum class PhoneInputError {
     INVALID_NUMBER,
+
+    /** Оферта не отмечена — код не отправляем (3.2). */
+    CONSENT_REQUIRED,
 }
 
 data class PhoneInputState(
@@ -13,17 +18,36 @@ data class PhoneInputState(
     val nationalDigits: String = "",
     /** То, что видит пользователь: `+998 90 123 45 67`. */
     val formatted: String = "+998",
-    val canSubmit: Boolean = false,
+    /** Номер прошёл валидацию (проверяет ViewModel, состояние только хранит). */
+    val numberValid: Boolean = false,
+    val consentAccepted: Boolean = false,
+    val submitting: Boolean = false,
     val error: PhoneInputError? = null,
-) : UiState
+    /** Ошибка запроса кода: сеть, лимит, 5xx. Текст — из `messageRes()`. */
+    val apiError: ApiError? = null,
+) : UiState {
+    /**
+     * Кнопка активна только когда запрос действительно можно отправить:
+     * неполный номер и неотмеченная оферта её не разблокируют.
+     */
+    val canSubmit: Boolean get() = numberValid && consentAccepted && !submitting
+}
 
 sealed interface PhoneInputEvent : UiEvent {
     data class PhoneChanged(val raw: String) : PhoneInputEvent
+    data class ConsentChanged(val accepted: Boolean) : PhoneInputEvent
     data object Submit : PhoneInputEvent
+    data object OfferRequested : PhoneInputEvent
     data object ErrorDismissed : PhoneInputEvent
 }
 
 sealed interface PhoneInputEffect : UiEffect {
-    /** Номер принят — можно запрашивать SMS-код (эпик 2). */
-    data class CodeRequested(val phoneE164: String) : PhoneInputEffect
+    /** Код отправлен — можно открывать экран ввода OTP. */
+    data class CodeRequested(
+        val phoneE164: String,
+        val challenge: OtpChallenge,
+    ) : PhoneInputEffect
+
+    /** Открыть текст оферты во внешнем браузере. */
+    data object OpenOffer : PhoneInputEffect
 }

@@ -45,23 +45,44 @@ fun MahallaNavHost(
             }
             composable<PhoneRoute> {
                 PhoneInputScreen(
-                    onCodeRequested = { phone -> navController.navigate(OtpRoute(phone)) },
+                    onCodeRequested = { phone, challenge ->
+                        navController.navigate(
+                            OtpRoute(
+                                phone = phone,
+                                resendAfterSeconds = challenge.resendAfterSeconds,
+                                codeLength = challenge.codeLength,
+                            ),
+                        )
+                    },
+                    onBack = { navController.navigateUp() },
                 )
             }
-            composable<OtpRoute> { entry ->
+            composable<OtpRoute> {
                 OtpScreen(
-                    phone = entry.toRoute<OtpRoute>().phone,
-                    onVerified = { navController.navigate(PinRoute) },
+                    // Код принят — возвращаться к его вводу больше некуда,
+                    // поэтому экран OTP уходит из стека.
+                    onVerified = {
+                        navController.navigate(PinRoute) {
+                            popUpTo(PhoneRoute) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.navigateUp() },
                 )
             }
             composable<PinRoute> {
-                PinScreen(onPinSet = { navController.navigate(BiometricRoute) })
+                PinScreen(
+                    onPinReady = { navController.navigate(BiometricRoute) },
+                    // Сессия сброшена (лимит попыток или «забыли PIN») — вход
+                    // начинается с номера телефона.
+                    onAuthRestartRequired = {
+                        navController.navigate(WelcomeRoute) {
+                            popUpTo(OnboardingGraph) { inclusive = false }
+                        }
+                    },
+                )
             }
             composable<BiometricRoute> {
-                BiometricScreen(
-                    onEnabled = { navController.navigate(GeoRoute) },
-                    onSkipped = { navController.navigate(GeoRoute) },
-                )
+                BiometricScreen(onFinished = { navController.navigate(GeoRoute) })
             }
             composable<GeoRoute> {
                 GeoScreen(

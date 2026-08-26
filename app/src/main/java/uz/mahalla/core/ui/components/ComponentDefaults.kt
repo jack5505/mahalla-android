@@ -24,6 +24,7 @@ object MahallaComponentDefaults {
     val listItemMinHeight: Dp = 56.dp
     val iconButtonSize: Dp = minTouchTarget
     val switchRowMinHeight: Dp = minTouchTarget
+    val checkboxRowMinHeight: Dp = minTouchTarget
     val segmentMinHeight: Dp = minTouchTarget
     val navItemMinHeight: Dp = minTouchTarget
 
@@ -49,6 +50,7 @@ object MahallaComponentDefaults {
         "listItem" to listItemMinHeight,
         "iconButton" to iconButtonSize,
         "switchRow" to switchRowMinHeight,
+        "checkboxRow" to checkboxRowMinHeight,
         "segment" to segmentMinHeight,
         "navItem" to navItemMinHeight,
         "otpCell" to otpCellHeight,

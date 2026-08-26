@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -73,6 +74,69 @@ fun MahallaSwitchRow(
         }
         // null: клик обрабатывает вся строка, иначе TalkBack найдёт два объекта.
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/**
+ * Строка с флажком — согласие с офертой и подобные обязательные отметки
+ * (3.2). Отдельно от [MahallaSwitchRow]: переключатель означает «настройка
+ * включена», флажок — «пользователь подтвердил», и роль в TalkBack тоже
+ * разная (Checkbox против Switch).
+ *
+ * Ссылка на документ вынесена отдельной кнопкой: клик по тексту с флажком
+ * одновременно и открывал бы оферту, и переключал согласие.
+ */
+@Composable
+fun MahallaCheckboxRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    isError: Boolean = false,
+    linkLabel: String? = null,
+    onLinkClick: (() -> Unit)? = null,
+) {
+    val stateLabel = stringResource(
+        if (checked) R.string.checkbox_state_checked else R.string.checkbox_state_unchecked,
+    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = MahallaComponentDefaults.checkboxRowMinHeight)
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Checkbox,
+                    onValueChange = onCheckedChange,
+                )
+                .semantics { stateDescription = stateLabel }
+                .padding(vertical = Spacing.item, horizontal = Spacing.card),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // null: клик обрабатывает вся строка, иначе TalkBack найдёт два объекта.
+            Checkbox(checked = checked, onCheckedChange = null, enabled = enabled)
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
+        if (linkLabel != null && onLinkClick != null) {
+            MahallaButton(
+                text = linkLabel,
+                onClick = onLinkClick,
+                variant = MahallaButtonVariant.Ghost,
+                fillWidth = false,
+            )
+        }
     }
 }
 
@@ -153,6 +217,13 @@ private fun MahallaTogglesPreview() {
                 title = stringResource(R.string.profile_theme),
                 checked = false,
                 onCheckedChange = {},
+            )
+            MahallaCheckboxRow(
+                title = stringResource(R.string.onboarding_phone_consent),
+                checked = false,
+                onCheckedChange = {},
+                linkLabel = stringResource(R.string.onboarding_phone_consent_link),
+                onLinkClick = {},
             )
             MahallaSegmentedControl(
                 options = listOf(

@@ -24,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
-import uz.mahalla.feature.onboarding.data.OnboardingRepository
+import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import java.io.File
 
 /**
@@ -92,7 +92,7 @@ class RootViewModelTest {
     }
 
     private fun viewModel(settings: SettingsDataStore) =
-        RootViewModel(settings, OnboardingRepository(settings))
+        RootViewModel(settings, DataStoreOnboardingRepository(settings))
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =
         state.first { it is RootUiState.Ready } as RootUiState.Ready

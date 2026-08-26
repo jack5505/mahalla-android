@@ -30,6 +30,8 @@ class SettingsDataStore @Inject constructor(
                 // хэш проверить нечем, значит PIN не настроен.
                 pinConfigured = preferences[PreferenceKeys.PinHash] != null &&
                     preferences[PreferenceKeys.PinSalt] != null,
+                biometricEnabled = preferences[PreferenceKeys.BiometricEnabled] ?: false,
+                cityId = preferences[PreferenceKeys.CityId],
             )
         }
         // Файл настроек может быть недоступен (нет места, права, IO-ошибка).
@@ -49,5 +51,13 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { it[PreferenceKeys.OnboardingCompleted] = completed }
+    }
+
+    suspend fun setBiometricEnabled(enabled: Boolean) {
+        dataStore.edit { it[PreferenceKeys.BiometricEnabled] = enabled }
+    }
+
+    suspend fun setCityId(cityId: String) {
+        dataStore.edit { it[PreferenceKeys.CityId] = cityId }
     }
 }
