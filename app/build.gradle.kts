@@ -32,6 +32,20 @@ fun mapkitApiKey(): String {
     return properties.getProperty("mapkit.apiKey").orEmpty().trim()
 }
 
+/**
+ * Разрешено ли сборке менять адрес бэкенда прямо в приложении (issue #26).
+ *
+ * В debug — всегда: разработчик и тестировщик каждый день ходят на свой стенд.
+ * В release — только если сборку собрали с `BACKEND_URL_OVERRIDE=true`
+ * (переменная окружения или `-PBACKEND_URL_OVERRIDE=true`): в магазинной
+ * сборке экран адреса увёл бы приложение любого пользователя на чужой сервер.
+ */
+fun backendUrlOverrideEnabled(): Boolean {
+    val fromEnvironment = providers.environmentVariable("BACKEND_URL_OVERRIDE").orNull
+    val fromProperty = providers.gradleProperty("BACKEND_URL_OVERRIDE").orNull
+    return (fromEnvironment ?: fromProperty).orEmpty().trim().equals("true", ignoreCase = true)
+}
+
 /** Строковый литерал для `buildConfigField`: ключ едет в генерируемый .java. */
 fun stringLiteral(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -59,10 +73,19 @@ android {
         // localhost хоста через 10.0.2.2 (эмулятор), release — на прод.
         getByName("debug") {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/api/v1/\"")
+            // Адрес бэкенда меняется прямо в приложении (issue #26).
+            buildConfigField("boolean", "BACKEND_URL_OVERRIDE", "true")
         }
         getByName("release") {
             isMinifyEnabled = false
             buildConfigField("String", "API_BASE_URL", "\"https://api.mahalla.uz/api/v1/\"")
+            // Экран адреса в релизе спрятан, пока сборку не попросили обратное:
+            // иначе увести приложение на чужой сервер может кто угодно.
+            buildConfigField(
+                "boolean",
+                "BACKEND_URL_OVERRIDE",
+                backendUrlOverrideEnabled().toString(),
+            )
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

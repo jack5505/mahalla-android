@@ -14,6 +14,7 @@ import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
 import uz.mahalla.feature.map.ui.MapScreen
+import uz.mahalla.feature.onboarding.ui.BackendUrlScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
 import uz.mahalla.feature.onboarding.ui.GeoScreen
 import uz.mahalla.feature.onboarding.ui.OtpScreen
@@ -35,6 +36,11 @@ import uz.mahalla.feature.wallet.ui.WalletScreen
  * @param onboardingStartDestination где продолжается прерванный онбординг.
  * Сессия уже получена — начинать снова с welcome значит запросить второй
  * платный SMS-код; решение принимает `RootViewModel`.
+ * @param afterBackendUrl куда уходить с экрана адреса бэкенда, когда он был
+ * стартовым (issue #26): дальше начинается обычный старт приложения.
+ * @param backendUrlOverrideEnabled разрешено ли этой сборке менять адрес
+ * бэкенда. Выключено — маршрута и всех входов на него в графе нет: в релизе
+ * увести приложение на чужой сервер не должен никто.
  */
 @Composable
 fun MahallaNavHost(
@@ -43,15 +49,49 @@ fun MahallaNavHost(
     onOnboardingFinished: () -> Unit,
     modifier: Modifier = Modifier,
     onboardingStartDestination: Any = WelcomeRoute,
+    afterBackendUrl: Any = OnboardingGraph,
+    backendUrlOverrideEnabled: Boolean = false,
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
         modifier = modifier,
     ) {
+        // Адрес бэкенда (issue #26) — вне графов: без него ни один запрос не
+        // уйдёт, поэтому экран стоит перед онбордингом, а вернуться на него
+        // можно и позже — с welcome или из профиля.
+        if (backendUrlOverrideEnabled) {
+            composable<BackendUrlRoute> {
+                // Стек пуст — экран стартовый, значит дальше начинается
+                // приложение. Пришли с другого экрана — возвращаемся туда же.
+                val openedAtStart = navController.previousBackStackEntry == null
+                BackendUrlScreen(
+                    onSaved = {
+                        if (openedAtStart) {
+                            navController.navigate(afterBackendUrl) {
+                                popUpTo(BackendUrlRoute) { inclusive = true }
+                            }
+                        } else {
+                            navController.navigateUp()
+                        }
+                    },
+                    onBack = if (openedAtStart) null else ({ navController.navigateUp() }),
+                )
+            }
+        }
+
         navigation<OnboardingGraph>(startDestination = onboardingStartDestination) {
             composable<WelcomeRoute> {
-                WelcomeScreen(onContinue = { navController.navigate(PhoneRoute) })
+                WelcomeScreen(
+                    onContinue = { navController.navigate(PhoneRoute) },
+                    // Опечатку в адресе видно только здесь: исправить её
+                    // иначе было бы негде.
+                    onChangeServer = if (backendUrlOverrideEnabled) {
+                        { navController.navigate(BackendUrlRoute) }
+                    } else {
+                        null
+                    },
+                )
             }
             composable<PhoneRoute> {
                 PhoneInputScreen(
@@ -121,7 +161,17 @@ fun MahallaNavHost(
             }
             composable<OrdersRoute> { OrdersScreen() }
             composable<WalletRoute> { WalletScreen() }
-            composable<ProfileRoute> { ProfileScreen() }
+            composable<ProfileRoute> {
+                ProfileScreen(
+                    // Сменить сервер после входа (issue #26): онбординг уже
+                    // пройден, и welcome, где стояла та же кнопка, недостижим.
+                    onChangeServer = if (backendUrlOverrideEnabled) {
+                        { navController.navigate(BackendUrlRoute) }
+                    } else {
+                        null
+                    },
+                )
+            }
         }
 
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,

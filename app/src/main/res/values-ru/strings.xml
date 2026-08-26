@@ -12,6 +12,20 @@
     <string name="nav_wallet">Кошелёк</string>
     <string name="nav_profile">Профиль</string>
 
+    <!-- Адрес сервера (issue #26) -->
+    <string name="backend_url_title">Адрес сервера</string>
+    <string name="backend_url_subtitle">Приложение будет отправлять запросы на этот адрес.</string>
+    <string name="backend_url_label">Адрес бэкенда</string>
+    <string name="backend_url_hint">Например: 192.168.0.10:8080 или api.mahalla.uz. Без схемы подставим http.</string>
+    <string name="backend_url_action">Продолжить</string>
+    <string name="backend_url_default">Вернуть адрес по умолчанию</string>
+    <string name="backend_url_default_value">Адрес по умолчанию</string>
+    <string name="backend_url_change">Изменить адрес сервера</string>
+    <string name="backend_url_invalid">Адрес неверный: введите http- или https-адрес</string>
+    <string name="backend_url_cleartext_blocked">Эта сборка запрещает незашифрованный http — введите https-адрес</string>
+    <string name="backend_url_unreachable">Сервер не ответил. Проверьте адрес или сохраните как есть.</string>
+    <string name="backend_url_save_anyway">Всё равно сохранить</string>
+
     <!-- Онбординг: welcome -->
     <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
     <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>

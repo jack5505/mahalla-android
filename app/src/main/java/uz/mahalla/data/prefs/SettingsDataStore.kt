@@ -32,6 +32,7 @@ class SettingsDataStore @Inject constructor(
                     preferences[PreferenceKeys.PinSalt] != null,
                 biometricEnabled = preferences[PreferenceKeys.BiometricEnabled] ?: false,
                 cityId = preferences[PreferenceKeys.CityId],
+                backendBaseUrl = preferences[PreferenceKeys.BackendBaseUrl],
             )
         }
         // Файл настроек может быть недоступен (нет места, права, IO-ошибка).
@@ -59,5 +60,10 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setCityId(cityId: String) {
         dataStore.edit { it[PreferenceKeys.CityId] = cityId }
+    }
+
+    /** Адрес уже нормализован (`BackendUrl.normalize`) — здесь только запись. */
+    suspend fun setBackendBaseUrl(baseUrl: String) {
+        dataStore.edit { it[PreferenceKeys.BackendBaseUrl] = baseUrl }
     }
 }

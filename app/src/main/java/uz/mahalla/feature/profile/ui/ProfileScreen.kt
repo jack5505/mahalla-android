@@ -17,14 +17,23 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.locale.AppLanguage
+import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.ScreenSkeleton
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.ui.theme.Spacing
 
+/**
+ * Профиль: язык, тема и — в сборках, которым это разрешено, — адрес сервера.
+ *
+ * @param onChangeServer открыть экран адреса бэкенда (issue #26); `null` —
+ * сборке менять адрес не разрешено, строки нет. После входа welcome с той же
+ * кнопкой недостижим, а сервер сменить бывает нужно (переехал стенд).
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
+    onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -71,6 +80,17 @@ fun ProfileScreen(
                     label = { Text(stringResource(mode.labelRes())) },
                 )
             }
+        }
+
+        if (onChangeServer != null) {
+            MahallaListItem(
+                title = stringResource(R.string.backend_url_change),
+                // Показываем адрес, на который приложение ходит сейчас: без
+                // него строка не отвечает на главный вопрос «а куда сейчас?».
+                subtitle = state.settings.backendBaseUrl
+                    ?: stringResource(R.string.backend_url_default_value),
+                onClick = onChangeServer,
+            )
         }
     }
 }
