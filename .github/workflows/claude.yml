@@ -128,7 +128,7 @@ jobs:
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
           # Незаданный секрет даёт пустую строку, поэтому || работает.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
           use_sticky_comment: 'true'
