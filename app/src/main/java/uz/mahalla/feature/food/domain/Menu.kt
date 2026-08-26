@@ -49,6 +49,16 @@ data class MenuItem(
     val optionGroups: List<OptionGroup> = emptyList(),
 ) {
     val hasOptions: Boolean get() = optionGroups.isNotEmpty()
+
+    /**
+     * Позицию реально можно заказать. Кроме стоп-листа самой позиции сюда
+     * попадает случай, когда обязательная группа модификаторов целиком уехала в
+     * стоп-лист: выбрать в ней нечего, значит собрать позицию невозможно.
+     * Раньше такая позиция открывала шторку с кнопкой, которая не включалась
+     * никогда, и объяснить это человеку было нечем.
+     */
+    val isOrderable: Boolean
+        get() = isAvailable && optionGroups.none { it.availableOptions.size < it.minChoices }
 }
 
 /**

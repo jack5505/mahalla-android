@@ -110,7 +110,9 @@ class MenuViewModel @Inject constructor(
 
     private fun onItemClicked(itemId: String) {
         val item = currentState.data?.item(itemId) ?: return
-        if (!item.isAvailable) return
+        // Не `isAvailable`: позиция с невыполнимой обязательной группой тоже
+        // недоступна, и открывать шторку с кнопкой, которая не включится, незачем.
+        if (!item.isOrderable) return
 
         if (item.hasOptions) {
             updateState {

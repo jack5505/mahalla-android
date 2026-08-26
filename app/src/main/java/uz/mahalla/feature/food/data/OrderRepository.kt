@@ -3,6 +3,7 @@ package uz.mahalla.feature.food.data
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.db.dao.OrderDao
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartLine
@@ -26,8 +27,12 @@ interface OrderRepository {
 
     suspend fun cancel(orderId: String): ApiResult<Order>
 
-    /** Повтор заказа: позиции старого заказа возвращаются в корзину. */
-    suspend fun repeat(order: Order): List<CartLine>
+    /**
+     * Повтор заказа: позиции старого заказа возвращаются в корзину. `null` —
+     * собрать корзину не удалось (база недоступна), прежний черновик при этом
+     * остался на месте.
+     */
+    suspend fun repeat(order: Order): List<CartLine>?
 }
 
 @Singleton
@@ -73,18 +78,19 @@ class DefaultOrderRepository @Inject constructor(
      * из меню: меню могло измениться, а положить в корзину нечего иначе —
      * сверку с актуальным меню делает экран корзины при следующем открытии.
      */
-    override suspend fun repeat(order: Order): List<CartLine> {
-        cartRepository.clearAll()
-        order.lines.forEach { line ->
-            cartRepository.add(
+    override suspend fun repeat(order: Order): List<CartLine>? =
+        runCatchingCancellable {
+            // Одной транзакцией: прежний черновик исчезает только вместе с
+            // появлением нового. Раньше `clearAll()` шёл первым, и падение на
+            // добавлении оставляло человека с половиной корзины вместо двух.
+            cartRepository.replace(
                 placeId = order.placeId,
                 placeName = order.placeName,
                 deliverySum = order.totals.deliverySum,
-                line = line,
+                lines = order.lines,
             )
-        }
-        return order.lines
-    }
+            order.lines
+        }.getOrNull()
 
     private suspend fun ApiResult<Order>.alsoCache(): ApiResult<Order> = also {
         if (it is ApiResult.Success) cache(it.data)

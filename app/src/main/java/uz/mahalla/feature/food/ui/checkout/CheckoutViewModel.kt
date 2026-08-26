@@ -48,7 +48,7 @@ class CheckoutViewModel @Inject constructor(
     private var cart: Cart = Cart(placeId = placeId, placeName = "")
 
     init {
-        updateState { copy(placeId = placeId, slots = DeliverySlots.next(now())) }
+        updateState { copy(placeId = placeId).revalidated() }
         viewModelScope.launch {
             cartRepository.cart(placeId).collect { updated ->
                 cart = updated
@@ -91,23 +91,41 @@ class CheckoutViewModel @Inject constructor(
     )
 
     /**
-     * Итог и ошибки считаются вместе: доставка входит в сумму только при
-     * доставке, а от суммы зависит проверка баланса — считать их по отдельности
-     * значит однажды показать итог, не совпадающий с причиной отказа.
+     * Итог, слоты и ошибки считаются вместе от одного «сейчас»: доставка входит
+     * в сумму только при доставке, а от суммы зависит проверка баланса —
+     * считать их по отдельности значит однажды показать итог, не совпадающий с
+     * причиной отказа.
+     *
+     * Слоты пересчитываются здесь, а не один раз в `init`: список, посчитанный
+     * при открытии экрана, к моменту нажатия «оформить» протухает, и валидатор
+     * начинает отвергать время, которое экран сам же и предлагает. Выбранный
+     * слот, до которого кухня уже не успевает, снимается вместе со списком —
+     * молча передвинуть заказ на полчаса вперёд нельзя, а «слишком рано» на
+     * предложенном слоте объяснить невозможно.
      */
     private fun CheckoutState.revalidated(): CheckoutState {
+        val now = now()
+        val slots = DeliverySlots.next(now)
+        val form = form.withoutStaleSlot(slots.first())
         val deliverySum = if (form.method == DeliveryMethod.Delivery) cart.deliverySum else 0
         val totals = CartCalculator.totals(cart.copy(lines = lines), deliverySum)
         return copy(
+            form = form,
+            slots = slots,
             totals = totals,
             errors = CheckoutValidator.validate(
                 form = form,
                 totals = totals,
                 cartIsEmpty = lines.isEmpty(),
                 walletBalanceSum = walletBalanceSum,
-                now = now(),
+                now = now,
             ),
         )
+    }
+
+    private fun CheckoutForm.withoutStaleSlot(earliest: LocalDateTime): CheckoutForm {
+        val at = scheduledAt ?: return this
+        return if (at.isBefore(earliest)) copy(scheduledAt = null) else this
     }
 
     private fun loadBalance() {

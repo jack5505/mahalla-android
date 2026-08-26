@@ -5,6 +5,7 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.feature.food.domain.Menu
 import uz.mahalla.feature.food.domain.PromoCode
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +38,11 @@ class DefaultMenuRepository @Inject constructor(
         subtotalSum: Long,
     ): ApiResult<PromoCode> =
         apiCall {
-            api.promo(placeId, PromoRequestDto(code = code.trim().uppercase(), subtotal = subtotalSum))
+            // Locale.ROOT обязателен: на турецкой локали устройства `i` уехал бы
+            // в `İ` и правильный код улетел бы на сервер испорченным.
+            api.promo(
+                placeId,
+                PromoRequestDto(code = code.trim().uppercase(Locale.ROOT), subtotal = subtotalSum),
+            )
         }.map(PromoDto::toDomain)
 }

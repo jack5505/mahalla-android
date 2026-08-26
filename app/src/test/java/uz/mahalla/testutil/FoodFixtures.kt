@@ -169,6 +169,26 @@ class FakeCartRepository : CartRepository {
         )
     }
 
+    /** Room недоступен: замена черновика падает, прежний остаётся на месте. */
+    var replaceFails: Boolean = false
+
+    override suspend fun replace(
+        placeId: String,
+        placeName: String,
+        deliverySum: Long,
+        lines: List<CartLine>,
+    ) {
+        if (replaceFails) error("cart draft is not writable")
+        carts.value = mapOf(
+            placeId to Cart(
+                placeId = placeId,
+                placeName = placeName,
+                lines = lines,
+                deliverySum = deliverySum,
+            ),
+        )
+    }
+
     override suspend fun setQuantity(placeId: String, lineId: String, quantity: Int) {
         val cart = current(placeId)
         seed(cart.copy(lines = CartCalculator.setQuantity(cart.lines, lineId, quantity)))
@@ -224,9 +244,12 @@ class FakeOrderRepository : OrderRepository {
 
     override suspend fun cancel(orderId: String): ApiResult<Order> = cancelled
 
-    override suspend fun repeat(order: Order): List<CartLine> {
+    /** `null` — база недоступна: проверяем, что экран остаётся на месте. */
+    var repeatFails: Boolean = false
+
+    override suspend fun repeat(order: Order): List<CartLine>? {
         repeatedOrderId = order.id
-        return order.lines
+        return order.lines.takeUnless { repeatFails }
     }
 }
 

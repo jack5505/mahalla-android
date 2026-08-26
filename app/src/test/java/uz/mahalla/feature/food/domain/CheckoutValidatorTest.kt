@@ -129,6 +129,26 @@ class CheckoutValidatorTest {
         assertTrue(validate(pickup().copy(asap = false, scheduledAt = first)).isEmpty())
     }
 
+    @Test
+    fun `seconds are rounded up too, so the first slot is never half a minute early`() {
+        // `withSecond(0)` после прибавления запаса отдавал в 12:00:30 слот
+        // 12:30:00 — на полминуты раньше допустимого, и первый же предложенный
+        // слот отвергался как «слишком рано».
+        val withSeconds = LocalDateTime.of(2026, 8, 26, 12, 0, 30)
+        val first = DeliverySlots.next(withSeconds, count = 1).single()
+
+        assertEquals(LocalDateTime.of(2026, 8, 26, 13, 0), first)
+        assertTrue(
+            CheckoutValidator.validate(
+                form = pickup().copy(asap = false, scheduledAt = first),
+                totals = totals,
+                cartIsEmpty = false,
+                walletBalanceSum = 1_000_000,
+                now = withSeconds,
+            ).isEmpty(),
+        )
+    }
+
     private fun pickup() = CheckoutForm(method = DeliveryMethod.Pickup)
 
     private fun validate(

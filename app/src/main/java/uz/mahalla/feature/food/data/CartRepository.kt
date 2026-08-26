@@ -35,6 +35,18 @@ interface CartRepository {
      */
     suspend fun add(placeId: String, placeName: String, deliverySum: Long, line: CartLine)
 
+    /**
+     * Полная замена корзины (повтор заказа): прежний черновик исчезает, новый
+     * появляется целиком — одной транзакцией, а не «сначала почистить, потом
+     * добавить».
+     */
+    suspend fun replace(
+        placeId: String,
+        placeName: String,
+        deliverySum: Long,
+        lines: List<CartLine>,
+    )
+
     suspend fun setQuantity(placeId: String, lineId: String, quantity: Int)
 
     suspend fun remove(placeId: String, lineId: String)
@@ -81,6 +93,26 @@ class DefaultCartRepository @Inject constructor(
                 deliverySum = deliverySum,
             ),
         )
+    }
+
+    /**
+     * Замена корзины целиком. Промокод снимается: он был выдан под прежний
+     * состав.
+     */
+    override suspend fun replace(
+        placeId: String,
+        placeName: String,
+        deliverySum: Long,
+        lines: List<CartLine>,
+    ) {
+        dao.replaceAll(
+            lines.distinctBy(CartLine::id).map { line ->
+                line
+                    .copy(quantity = line.quantity.coerceIn(1, CartCalculator.MAX_QUANTITY))
+                    .toEntity(placeId = placeId, placeName = placeName, deliverySum = deliverySum)
+            },
+        )
+        promoState.value = null
     }
 
     /**

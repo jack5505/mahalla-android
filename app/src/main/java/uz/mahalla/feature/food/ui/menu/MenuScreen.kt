@@ -171,7 +171,7 @@ private fun MenuItemRow(
     val mahalla = LocalMahallaColors.current
     MahallaCard(
         modifier = modifier.heightIn(min = MahallaComponentDefaults.menuItemMinHeight),
-        onClick = onClick.takeIf { item.isAvailable },
+        onClick = onClick.takeIf { item.isOrderable },
     ) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -181,7 +181,7 @@ private fun MenuItemRow(
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (item.isAvailable) {
+                    color = if (item.isOrderable) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
                         mahalla.fgMuted
@@ -207,7 +207,7 @@ private fun MenuItemRow(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
-            if (!item.isAvailable) {
+            if (!item.isOrderable) {
                 MahallaBadge(
                     text = stringResource(R.string.menu_item_unavailable),
                     tone = MahallaTone.Neutral,

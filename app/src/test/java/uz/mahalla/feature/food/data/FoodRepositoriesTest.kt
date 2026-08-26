@@ -28,6 +28,7 @@ import uz.mahalla.testutil.cartLine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.time.LocalDateTime
+import java.util.Locale
 
 /**
  * Репозитории вертикали «Еда» (эпик 5) на настоящем сетевом стеке
@@ -105,6 +106,24 @@ class FoodRepositoriesTest {
         assertTrue(body, body.contains("\"subtotal\":90000"))
         assertEquals(PromoKind.Percent, promo.kind)
         assertEquals(10L, promo.value)
+    }
+
+    @Test
+    fun `the promo code is upper-cased by root rules, not by the device locale`() = runTest {
+        // На турецкой локали `i` уходит в `İ`, и правильный код улетел бы на
+        // сервер испорченным.
+        val previous = Locale.getDefault()
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+        try {
+            server.enqueue(json(PROMO_BODY))
+
+            menuRepository().promo("place-1", "mahalli", 90_000)
+
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body, body.contains("\"code\":\"MAHALLI\""))
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 
     @Test
@@ -216,6 +235,35 @@ class FoodRepositoriesTest {
         val lines = cart.current("place-1").lines
         assertEquals(listOf("osh"), lines.map(CartLine::itemId))
         assertEquals(2, lines.single().quantity)
+    }
+
+    @Test
+    fun `repeating replaces the draft of another place, not merges into it`() = runTest {
+        server.enqueue(json(ORDER_BODY))
+        val cart = FakeCartRepository()
+        cart.seed(Cart("place-2", "Boshqa joy", lines = listOf(cartLine("lagman"))))
+        val repository = orderRepository(cart)
+        val order = (repository.order("o-1") as ApiResult.Success).data
+
+        repository.repeat(order)
+
+        assertTrue(cart.current("place-2").isEmpty)
+        assertEquals(listOf("osh"), cart.current("place-1").lines.map(CartLine::itemId))
+    }
+
+    @Test
+    fun `a failed repeat keeps the current draft and reports the failure`() = runTest {
+        // Раньше корзина чистилась до добавления: падение посередине оставляло
+        // человека и без прежнего черновика, и без нового.
+        server.enqueue(json(ORDER_BODY))
+        val cart = FakeCartRepository()
+        cart.seed(Cart("place-2", "Boshqa joy", lines = listOf(cartLine("lagman"))))
+        val repository = orderRepository(cart)
+        val order = (repository.order("o-1") as ApiResult.Success).data
+        cart.replaceFails = true
+
+        assertNull(repository.repeat(order))
+        assertEquals(listOf("lagman"), cart.current("place-2").lines.map(CartLine::itemId))
     }
 
     @Test

@@ -124,6 +124,34 @@ class MenuOptionRulesTest {
     }
 
     @Test
+    fun `a required group entirely in the stop list makes the item unavailable`() {
+        // Раньше шторка открывалась с кнопкой, которая не включалась никогда:
+        // предвыбрать нечего, а validate вечно возвращал RequiredGroup.
+        val stoppedSize = optionGroup(
+            id = "size",
+            minChoices = 1,
+            options = listOf(
+                menuOption("small", isAvailable = false),
+                menuOption("large", isAvailable = false),
+            ),
+        )
+        val unorderable = menuItem("osh", optionGroups = listOf(stoppedSize))
+
+        assertFalse(unorderable.isOrderable)
+        assertEquals(
+            listOf(SelectionError.Unavailable),
+            MenuOptionRules.validate(unorderable, MenuOptionRules.defaultSelection(unorderable))
+                .filterIsInstance<SelectionError.Unavailable>(),
+        )
+    }
+
+    @Test
+    fun `an item whose required group still has options stays orderable`() {
+        assertTrue(item.isOrderable)
+        assertTrue(MenuOptionRules.isComplete(item, MenuOptionRules.defaultSelection(item)))
+    }
+
+    @Test
     fun `price is the base plus the deltas of the chosen options`() {
         val price = MenuOptionRules.price(item, setOf("large", "cheese"))
 

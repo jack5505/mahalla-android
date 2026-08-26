@@ -306,6 +306,7 @@
     <string name="order_cancel_confirm_title">Отменить заказ?</string>
     <string name="order_cancel_confirm_description">Отменённый заказ вернуть не получится.</string>
     <string name="order_cancel_failed">Не удалось отменить заказ</string>
+    <string name="order_repeat_failed">Не удалось собрать корзину, попробуйте ещё раз</string>
     <string name="order_status_created">Принят</string>
     <string name="order_status_confirmed_food">Подтверждён</string>
     <string name="order_status_preparing">Готовится</string>

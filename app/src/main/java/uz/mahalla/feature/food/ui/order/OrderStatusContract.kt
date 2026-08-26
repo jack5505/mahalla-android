@@ -20,6 +20,9 @@ data class OrderStatusState(
     val cancelConfirmVisible: Boolean = false,
     /** Отмена не прошла — сообщение живёт до следующего действия. */
     val cancelFailed: Boolean = false,
+    val isRepeating: Boolean = false,
+    /** Корзину собрать не удалось — заказ остался, но идти в корзину незачем. */
+    val repeatFailed: Boolean = false,
 ) : UiState {
 
     val data: Order? get() = (order as? ScreenState.Content)?.data
@@ -31,7 +34,7 @@ data class OrderStatusState(
         get() = data?.let { OrderStatusFlow.canCancel(it.status) } == true && !isCancelling
 
     val canRepeat: Boolean
-        get() = data?.let { OrderStatusFlow.canRepeat(it.status) } == true
+        get() = data?.let { OrderStatusFlow.canRepeat(it.status) } == true && !isRepeating
 }
 
 sealed interface OrderStatusEvent : UiEvent {

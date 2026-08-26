@@ -123,13 +123,20 @@ object DeliverySlots {
      * Ближайшие [count] слотов: от «сейчас + минимальный запас», округлённого
      * **вверх** до получаса. Округление вниз дало бы слот, который валидация
      * тут же и отвергнет.
+     *
+     * Секунды тоже округляются вверх: `withSecond(0)` после прибавления запаса
+     * возвращал в 12:00:30 слот 12:30:00, то есть на полминуты раньше
+     * допустимого, — и первый же предложенный слот отвергался как «слишком
+     * рано».
      */
     fun next(
         now: LocalDateTime,
         count: Int = DEFAULT_COUNT,
         minLeadMinutes: Int = CheckoutValidator.MIN_LEAD_MINUTES,
     ): List<LocalDateTime> {
-        val earliest = now.plusMinutes(minLeadMinutes.toLong()).withSecond(0).withNano(0)
+        val lead = now.plusMinutes(minLeadMinutes.toLong())
+        val startOfMinute = lead.withSecond(0).withNano(0)
+        val earliest = if (startOfMinute == lead) lead else startOfMinute.plusMinutes(1)
         val overflow = earliest.minute % STEP_MINUTES
         val first = if (overflow == 0) earliest else earliest.plusMinutes((STEP_MINUTES - overflow).toLong())
         return (0 until count).map { index -> first.plusMinutes((index * STEP_MINUTES).toLong()) }

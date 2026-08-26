@@ -126,7 +126,7 @@ class GraphAssemblyTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(),
+                NetworkModule.provideRefreshClient(backendUrlInterceptor()),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -205,6 +206,27 @@ class OrderStatusViewModelTest {
 
         assertEquals("o-1", repository.repeatedOrderId)
         assertEquals(OrderStatusEffect.OpenCart("place-1"), viewModel.effects.first())
+    }
+
+    @Test
+    fun `a repeat that could not build the cart stays on the screen`() = runTest(mainDispatcherRule.dispatcher) {
+        // Уйти в пустую корзину — значит показать потерянный заказ.
+        repository.loaded = ApiResult.Success(order(status = OrderStatus.Completed))
+        repository.repeatFails = true
+        val viewModel = viewModel()
+        runCurrent()
+
+        val effects = mutableListOf<OrderStatusEffect>()
+        val collector = launch { viewModel.effects.collect { effects += it } }
+        runCurrent()
+
+        viewModel.onEvent(OrderStatusEvent.RepeatClicked)
+        runCurrent()
+
+        assertTrue(viewModel.state.value.repeatFailed)
+        assertFalse(viewModel.state.value.isRepeating)
+        assertEquals(emptyList<OrderStatusEffect>(), effects)
+        collector.cancel()
     }
 
     @Test

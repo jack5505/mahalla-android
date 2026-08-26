@@ -135,6 +135,25 @@ class CartCalculatorTest {
     }
 
     @Test
+    fun `add never removes a line, whatever the quantity of the existing one`() {
+        // «Добавить», которое из-за нулевого количества удаляет строку, —
+        // ловушка: у add и setQuantity разные смыслы.
+        val broken = cartLine("osh").copy(quantity = 0)
+
+        val lines = CartCalculator.add(listOf(broken), cartLine("osh"))
+
+        assertEquals(1, lines.size)
+        assertEquals(1, lines.single().quantity)
+    }
+
+    @Test
+    fun `add clamps the quantity of a new line to at least one`() {
+        val lines = CartCalculator.add(emptyList(), cartLine("osh", quantity = 0))
+
+        assertEquals(1, lines.single().quantity)
+    }
+
+    @Test
     fun `item count sums the quantities, not the lines`() {
         val cart = cart(
             lines = listOf(

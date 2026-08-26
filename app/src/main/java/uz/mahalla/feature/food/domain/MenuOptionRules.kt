@@ -54,7 +54,9 @@ object MenuOptionRules {
      * человека тыкать кнопку столько раз, сколько групп он пропустил.
      */
     fun validate(item: MenuItem, selected: Set<String>): List<SelectionError> = buildList {
-        if (!item.isAvailable) add(SelectionError.Unavailable)
+        // Невыполнимая обязательная группа — это недоступная позиция, а не
+        // «заполните группу»: заполнять её нечем.
+        if (!item.isOrderable) add(SelectionError.Unavailable)
         item.optionGroups.forEach { group ->
             val chosen = chosenIn(group, selected)
             if (chosen.size < group.minChoices) {

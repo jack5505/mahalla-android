@@ -82,9 +82,13 @@ object CartCalculator {
      * дублируется, а увеличивает количество — с упором в [MAX_QUANTITY].
      */
     fun add(lines: List<CartLine>, line: CartLine): List<CartLine> {
+        val added = line.quantity.coerceIn(1, MAX_QUANTITY)
         val existing = lines.firstOrNull { it.id == line.id }
-            ?: return lines + line.copy(quantity = line.quantity.coerceIn(1, MAX_QUANTITY))
-        return setQuantity(lines, line.id, existing.quantity + line.quantity)
+            ?: return lines + line.copy(quantity = added)
+        // Количество складывается уже приведённым к [1, MAX]: «добавить»,
+        // которое из-за нулевого или отрицательного количества удаляет строку, —
+        // ловушка, даже если сейчас так никто не зовёт.
+        return setQuantity(lines, line.id, existing.quantity.coerceAtLeast(0) + added)
     }
 
     /**

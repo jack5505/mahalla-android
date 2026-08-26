@@ -131,12 +131,23 @@ fun OrderStatusContent(
                     }
                 }
 
+                if (state.repeatFailed) {
+                    item(key = "repeat-error") {
+                        Text(
+                            text = stringResource(R.string.order_repeat_failed),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+
                 item(key = "actions") {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
-                        if (state.canRepeat) {
+                        if (state.canRepeat || state.isRepeating) {
                             MahallaButton(
                                 text = stringResource(R.string.order_repeat),
                                 onClick = { onEvent(OrderStatusEvent.RepeatClicked) },
+                                state = ButtonState(loading = state.isRepeating),
                             )
                         }
                         if (state.canCancel || state.isCancelling) {

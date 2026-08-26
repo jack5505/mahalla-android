@@ -312,6 +312,7 @@
     <string name="order_cancel_confirm_title">Buyurtmani bekor qilasizmi?</string>
     <string name="order_cancel_confirm_description">Bekor qilingan buyurtmani qaytarib bo\'lmaydi.</string>
     <string name="order_cancel_failed">Buyurtmani bekor qilib bo\'lmadi</string>
+    <string name="order_repeat_failed">Savatni yig\'ib bo\'lmadi, qaytadan urinib ko\'ring</string>
     <string name="order_status_created">Qabul qilindi</string>
     <string name="order_status_confirmed_food">Tasdiqlandi</string>
     <string name="order_status_preparing">Tayyorlanmoqda</string>

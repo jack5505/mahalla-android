@@ -2,6 +2,7 @@ package uz.mahalla.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import uz.mahalla.data.db.entity.CartDraftItemEntity
@@ -31,6 +32,20 @@ interface CartDraftDao {
 
     @Upsert
     suspend fun upsert(item: CartDraftItemEntity)
+
+    @Upsert
+    suspend fun upsertAll(items: List<CartDraftItemEntity>)
+
+    /**
+     * Полная замена черновика — очистка и запись в одной транзакции. Двумя
+     * вызовами (сначала `clearAll`, потом цикл `upsert`) падение посередине
+     * оставляло человека и без прежней корзины, и без новой.
+     */
+    @Transaction
+    suspend fun replaceAll(items: List<CartDraftItemEntity>) {
+        clearAll()
+        upsertAll(items)
+    }
 
     @Query("DELETE FROM cart_draft_items WHERE placeId = :placeId AND lineId = :lineId")
     suspend fun remove(placeId: String, lineId: String)

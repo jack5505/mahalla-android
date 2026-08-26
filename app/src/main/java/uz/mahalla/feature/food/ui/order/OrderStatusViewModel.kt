@@ -122,9 +122,13 @@ class OrderStatusViewModel @Inject constructor(
     private fun repeat() {
         val order: Order = currentState.data ?: return
         if (!OrderStatusFlow.canRepeat(order.status)) return
+        updateState { copy(isRepeating = true, repeatFailed = false) }
         viewModelScope.launch {
-            repository.repeat(order)
-            emitEffect(OrderStatusEffect.OpenCart(order.placeId))
+            // Уходим в корзину только если она действительно собрана: пустая
+            // корзина после «повторить» выглядит как потерянный заказ.
+            val lines = repository.repeat(order)
+            updateState { copy(isRepeating = false, repeatFailed = lines == null) }
+            if (lines != null) emitEffect(OrderStatusEffect.OpenCart(order.placeId))
         }
     }
 

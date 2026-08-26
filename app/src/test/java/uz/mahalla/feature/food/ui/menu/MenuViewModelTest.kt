@@ -113,6 +113,26 @@ class MenuViewModelTest {
     }
 
     @Test
+    fun `an item whose required group is entirely in the stop list does not open either`() = runTest {
+        // Шторка открывалась, а кнопка «добавить» не включалась никогда: в
+        // обязательной группе выбрать было нечего.
+        val stopped = optionGroup(
+            id = "size",
+            minChoices = 1,
+            options = listOf(menuOption("small", isAvailable = false)),
+        )
+        menuRepository.menuResult = ApiResult.Success(
+            menu(items = listOf(menuItem("osh", optionGroups = listOf(stopped)))),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MenuEvent.ItemClicked("osh"))
+
+        assertNull(viewModel.state.value.sheet)
+        assertTrue(cartRepository.current(PLACE_ID).isEmpty)
+    }
+
+    @Test
     fun `the sheet price follows the chosen options and the quantity`() = runTest {
         menuRepository.menuResult = ApiResult.Success(menu(items = listOf(itemWithOptions())))
         val viewModel = viewModel()

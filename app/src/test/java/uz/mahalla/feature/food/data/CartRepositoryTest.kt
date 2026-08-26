@@ -153,6 +153,24 @@ class CartRepositoryTest {
         assertEquals(1, repository.snapshot("place-2").lines.size)
     }
 
+    @Test
+    fun `replace swaps the whole draft, including the draft of another place`() = runTest {
+        // Повтор заказа: прежний черновик исчезает вместе с появлением нового,
+        // одной транзакцией — а не «сначала почистить, потом добавить».
+        repository.add("place-2", "Somsa uyi", 0, cartLine("somsa"))
+        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
+
+        repository.replace(PLACE_ID, "Osh markazi", DELIVERY_SUM, listOf(cartLine("osh", quantity = 2)))
+
+        assertEquals(emptyList<CartLine>(), repository.snapshot("place-2").lines)
+        val cart = repository.snapshot(PLACE_ID)
+        assertEquals(listOf("osh"), cart.lines.map(CartLine::itemId))
+        assertEquals(2, cart.lines.single().quantity)
+        assertEquals(DELIVERY_SUM, cart.deliverySum)
+        // Промокод был выдан под прежний состав.
+        assertNull(cart.promo)
+    }
+
     private suspend fun add(line: CartLine) =
         repository.add(PLACE_ID, "Osh markazi", DELIVERY_SUM, line)
 
