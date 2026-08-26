@@ -60,6 +60,42 @@
     <string name="theme_light">Yorug\'</string>
     <string name="theme_dark">Qorong\'i</string>
 
+    <!-- UI-кит: действия -->
+    <string name="action_retry">Qayta urinish</string>
+    <string name="action_clear">Tozalash</string>
+    <string name="action_close">Yopish</string>
+    <string name="action_cancel">Bekor qilish</string>
+    <string name="action_delete">O\'chirish</string>
+    <string name="action_see_all">Hammasi</string>
+
+    <!-- UI-кит: поиск и OTP -->
+    <string name="search_hint">Qidirish</string>
+    <string name="search_clear">Qidiruvni tozalash</string>
+    <string name="otp_input_description">Tasdiqlash kodi, %1$d ta raqam</string>
+    <string name="otp_input_progress">%1$d / %2$d raqam kiritildi</string>
+
+    <!-- UI-кит: состояния для TalkBack -->
+    <string name="chip_state_selected">tanlangan</string>
+    <string name="chip_state_not_selected">tanlanmagan</string>
+    <string name="switch_state_on">yoqilgan</string>
+    <string name="switch_state_off">o\'chirilgan</string>
+
+    <!-- UI-кит: состояния экрана -->
+    <string name="state_loading">Yuklanmoqda</string>
+    <string name="state_empty_title">Hozircha bo\'sh</string>
+    <string name="state_empty_description">Bu yerda hali ma\'lumot yo\'q</string>
+    <string name="state_error_title">Xatolik yuz berdi</string>
+
+    <!-- UI-кит: карточки -->
+    <string name="filter_food">Ovqat</string>
+    <string name="filter_pharmacy">Dorixona</string>
+    <string name="place_open_now">Ochiq</string>
+    <string name="place_closed_now">Yopiq</string>
+    <string name="place_rating_description">Reyting %1$s</string>
+    <string name="ticket_number_description">Navbat raqami %1$s</string>
+    <string name="order_status_pending">Kutilmoqda</string>
+    <string name="order_status_confirmed">Tasdiqlangan</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Internet aloqasi yo\'q</string>
     <string name="error_timeout">Server javob bermadi</string>
