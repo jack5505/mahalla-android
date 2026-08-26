@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Незашифрованный трафик (issue #26).
+
+    Адрес бэкенда вводит пользователь, и в локальной сети он обычно http://.
+    Но открывать cleartext всему приложению в релизе нельзя: любой ответ
+    сервера читался бы и подменялся в сети. Поэтому здесь — только loopback
+    (сам телефон) и 10.0.2.2 (хост-машина для эмулятора), а debug-сборка
+    подменяет этот файл своим, где разрешено всё (app/src/debug/res/xml).
+
+    Следствие: на release-сборке экран адреса примет только https-адрес —
+    `CleartextPolicy` скажет об этом прямо, вместо «сервер не ответил».
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

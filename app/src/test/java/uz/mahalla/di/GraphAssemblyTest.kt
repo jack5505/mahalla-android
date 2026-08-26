@@ -15,6 +15,8 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.network.AuthInterceptor
+import uz.mahalla.data.network.BackendUrlInterceptor
+import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.prefs.DataStoreSessionStore
@@ -48,7 +50,8 @@ class GraphAssemblyTest {
         val converterFactory = NetworkModule.provideConverterFactory(json)
         val baseUrl = NetworkModule.provideBaseUrl()
 
-        val refreshClient = NetworkModule.provideRefreshClient()
+        val backendUrlInterceptor = backendUrlInterceptor(baseUrl)
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor)
         val refreshRetrofit =
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
@@ -61,6 +64,7 @@ class GraphAssemblyTest {
                 authApi = authApi,
                 clock = AppModule.provideClock(),
             ),
+            backendUrlInterceptor = backendUrlInterceptor,
         )
         val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
 
@@ -94,7 +98,7 @@ class GraphAssemblyTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(),
+                NetworkModule.provideRefreshClient(backendUrlInterceptor()),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )
@@ -128,7 +132,7 @@ class GraphAssemblyTest {
     @Test
     fun `auth repository assembles on the bare refresh client`() {
         val converterFactory = NetworkModule.provideConverterFactory(NetworkModule.provideJson())
-        val refreshClient = NetworkModule.provideRefreshClient()
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor())
         val authApi = NetworkModule.provideAuthApi(
             NetworkModule.provideRefreshRetrofit(
                 refreshClient,
@@ -154,6 +158,17 @@ class GraphAssemblyTest {
         assertNotNull(loadClass("uz.mahalla.Hilt_MahallaApplication"))
         assertNotNull(loadClass("uz.mahalla.MahallaApplication_HiltComponents"))
     }
+
+    /**
+     * Адрес бэкенда задаёт пользователь (issue #26), поэтому интерцептор,
+     * переводящий запрос на этот адрес, обязан висеть на обоих клиентах.
+     */
+    private fun backendUrlInterceptor(
+        baseUrl: String = NetworkModule.provideBaseUrl(),
+    ) = BackendUrlInterceptor(
+        BackendUrlStore(SettingsDataStore(sharedDataStore(context)), baseUrl),
+        baseUrl,
+    )
 
     /** `initialize = false`: нужен факт кодогенерации, а не статик-инициализация. */
     private fun loadClass(name: String): Class<*> =

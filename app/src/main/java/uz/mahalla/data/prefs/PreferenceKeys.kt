@@ -17,6 +17,9 @@ internal object PreferenceKeys {
     /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
     val CityId = stringPreferencesKey("settings_city_id")
 
+    /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
+    val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
+
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
     val SessionExpiresAt = longPreferencesKey("session_expires_at")
