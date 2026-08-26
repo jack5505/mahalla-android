@@ -1,6 +1,7 @@
 package uz.mahalla.navigation
 
 import kotlinx.serialization.Serializable
+import uz.mahalla.feature.auth.domain.OtpChallenge
 
 /**
  * Typed routes навигации (эпик 1.2). Маршрут — это `@Serializable`-класс, а не
@@ -27,8 +28,28 @@ data object WelcomeRoute
 @Serializable
 data object PhoneRoute
 
+/**
+ * Экран ввода кода. Параметры испытания приходят с экрана телефона (сервер
+ * сообщает их в ответе на запрос кода), иначе таймер повтора и длина кода на
+ * экране OTP были бы выдуманными.
+ */
 @Serializable
-data class OtpRoute(val phone: String)
+data class OtpRoute(
+    val phone: String,
+    val resendAfterSeconds: Int = OtpChallenge.DEFAULT_RESEND_SECONDS,
+    val codeLength: Int = OtpChallenge.DEFAULT_CODE_LENGTH,
+)
+
+/**
+ * Имена аргументов [OtpRoute] для чтения из `SavedStateHandle`. Совпадение с
+ * полями маршрута проверяет `RoutesSerializationTest` — опечатка здесь иначе
+ * ломала бы экран только в рантайме.
+ */
+object OtpArgs {
+    const val PHONE = "phone"
+    const val RESEND_AFTER_SECONDS = "resendAfterSeconds"
+    const val CODE_LENGTH = "codeLength"
+}
 
 @Serializable
 data object PinRoute

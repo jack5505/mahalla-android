@@ -258,6 +258,126 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
 `ComponentStateTest` наполовину сверяют константы сами с собой — реальные
 цели нажатия закрыл бы Compose-тест под Robolectric (`ui-test-junit4`).
 
+## Этап: онбординг и авторизация (эпик 3, issue #7, ветка claude/issue-7-*)
+
+Первый продуктовый флоу целиком: welcome → phone → otp → pin → biometric → geo.
+
+- **Сквозное**: `feature/auth/data/AuthRepository` (интерфейс + `DefaultAuthRepository`)
+  — запрос кода, верификация (сохраняет сессию), явный refresh, logout (чистит
+  сессию **и** PIN даже если запрос не ушёл). Эндпоинты добавлены в
+  `data/network/auth/AuthApi`: `auth/otp/request`, `auth/otp/verify`,
+  `auth/refresh`, `auth/logout` — все на «голом» `@RefreshClient`, чтобы 401 на
+  них не звал `TokenAuthenticator`. Домен: `OtpChallenge` (клиентские дефолты
+  6 цифр / 60 сек / 180 сек + отбрасывание мусора от сервера), `LoginResult`,
+  `OtpFailure` (`asOtpFailure()` раскладывает HTTP-коды: 401/400/422 →
+  InvalidCode, 410 → Expired, 429/423 → TooManyAttempts, остальное → Network).
+- **3.1 Welcome**: выбор языка (сегментированный контрол, пишется в DataStore,
+  на API < 33 — recreate Activity) + одна кнопка «вход или регистрация».
+- **3.2 Телефон**: маска `+998`, валидация, **чекбокс согласия с офертой**
+  (проверяется до сети — SMS платное), ссылка на оферту открывается по
+  `onboarding_offer_url` (`translatable="false"`, пока `https://mahalla.uz/offer`
+  — уточнить у продукта), состояния loading/error.
+- **3.3 OTP**: ячейки поверх скрытого поля, автофокус (`focusRequester` добавлен
+  в `MahallaOtpField`), автоотправка по последней цифре, таймер повтора
+  (корутина в `viewModelScope`, параметры приходят маршрутом `OtpRoute(phone,
+  resendAfterSeconds, codeLength)` из ответа сервера), разные тексты ошибок;
+  сетевая ошибка не стирает введённые цифры, «попытки исчерпаны» блокирует ввод
+  до нового кода.
+- **3.4 PIN**: этап выбирается по `PinStorage.isConfigured()` — Create → Confirm
+  либо Unlock. 4 цифры, ячейки маскированы (`masked = true`), проверка по
+  последней цифре. Лимит 5 попыток → PIN и сессия стираются, экран уходит на
+  повторный вход; отдельная кнопка «Забыли PIN?» делает то же осознанно.
+  Первый введённый код живёт в поле ViewModel, не в `UiState`.
+- **3.5 Биометрия**: `BiometricAvailability` (интерфейс, `BiometricStatus`
+  Available/NotEnrolled/NoHardware/Unavailable) — ViewModel тестируется на JVM;
+  сам `BiometricPrompt` показывает экран. Флаг `biometricEnabled` пишется
+  **только** после успешного промпта, «Позже» пишет `false`. Из-за требования
+  BiometricPrompt `MainActivity` теперь наследуется от `FragmentActivity`
+  (androidx.biometric 1.1.0, fragment приходит транзитивно).
+- **3.6 Геолокация**: экран-объяснение → `RequestMultiplePermissions`
+  (coarse+fine, достаточно любого) → отказ переключает на выбор города
+  (`City` — 8 городов, id пишется в DataStore ключом `settings_city_id`);
+  «Выбрать город вручную» доступно и без запроса разрешения.
+- **Кит пополнен**: `MahallaCheckboxRow` (роль Checkbox, цель нажатия 48dp,
+  ссылка отдельной кнопкой), `MahallaOtpField(masked, focusRequester)`,
+  `OnboardingStep`/`OnboardingError` (общий каркас шагов с `imePadding`).
+- **DataStore**: `AppSettings` + `biometricEnabled` и `cityId`;
+  `OnboardingRepository` стал интерфейсом (`DataStoreOnboardingRepository`) —
+  от него зависят четыре ViewModel онбординга и стартовый пункт графа.
+- **Тесты (218 всего, 0 падений)**: `AuthRepositoryTest` на MockWebServer (15
+  тестов: тела запросов, дефолты и клампинг challenge, абсолютный срок жизни
+  токена, 401 не сохраняет сессию, refresh без сессии не ходит в сеть, 5xx не
+  разлогинивает, logout чистит локально и без сети), `OtpFailureTest`,
+  `PhoneInputViewModelTest`, `OtpViewModelTest` (таймер по виртуальному
+  времени), `PinViewModelTest`, `BiometricViewModelTest`, `GeoViewModelTest`,
+  `WelcomeViewModelTest`; фейки в `testutil/` (`FakeAuthRepository`,
+  `FakePinStorage`, `FakeOnboardingRepository`, `MainDispatcherRule`).
+
+### Правки после код-ревью PR #22
+
+- **Прерванный онбординг больше не стоит второго платного SMS**: `RootViewModel`
+  один раз за процесс решает не только «онбординг или main», но и где онбординг
+  продолжается — если сессия уже в `SessionStore` (`AuthRepository.isAuthorized`,
+  до этого объявлен и не использован), граф стартует с `PinRoute`, а не с
+  welcome → телефон → новый код. Стартовый пункт онбординга протянут параметром
+  `onboardingStartDestination` (MainActivity → `MahallaApp` → `MahallaNavHost`).
+  Заодно `onAuthRestartRequired` чистит стек целиком (`popUpTo(OnboardingGraph)
+  { inclusive = true }`): «назад» на экран PIN, которого больше нет, вести
+  некуда — тем более когда граф стартовал с него.
+- **Биометрия перечитывает статус на `ON_RESUME`** (`BiometricEvent.ScreenResumed`
+  + `LifecycleEventEffect` в `BiometricScreen`): раньше `status()` читался
+  один раз в конструкторе, и пользователь, ушедший добавлять отпечаток в
+  настройки устройства, возвращался к навсегда выключенной кнопке.
+- **Убран двойной нижний инсет**: `OnboardingStep` больше не навешивает
+  `navigationBarsPadding()` поверх `innerPadding` из `Scaffold` — кнопки на всех
+  шести экранах отъезжали на высоту навбара, а с открытой клавиатурой футер
+  висел над ней с тем же зазором.
+- **Записи прикрыты от падения** (`core/result/runCatchingCancellable` —
+  `runCatching`, который не глотает `CancellationException`): PIN
+  (`save`/`verify`/`clear`/`isConfigured` — Keystore кидает `KeyStoreException`
+  и `KeyPermanentlyInvalidatedException`) и записи в DataStore из
+  Welcome/Geo/Biometric/`RootViewModel.onOnboardingFinished`. Поведение при
+  отказе разное и осмысленное: PIN показывает ошибку
+  (`PinError.STORAGE`, новая строка `onboarding_pin_error_storage`) и **не
+  тратит попытку**; язык применяется, даже если не сохранился; город и флаг
+  биометрии не запирают пользователя на шаге — онбординг заканчивается.
+- Тесты: 230 в 32 классах, 0 падений (`assembleDebug` — BUILD SUCCESSFUL).
+  Новые — перечит статуса биометрии, отказ Keystore на save/verify/clear,
+  отказ DataStore в Welcome/Geo/Biometric, старт с PIN при живой сессии,
+  `RunCatchingCancellableTest` (отмена не проглатывается). Фейки
+  `FakePinStorage`/`FakeOnboardingRepository` умеют отказывать (`failure`,
+  `writeFailure`).
+
+**Не сделано / риски эпика 3:**
+
+- **Design-репозиторий в этом прогоне был недоступен** (`git clone` и `gh api`
+  не в allow-list workflow), поэтому вёрстка сделана по описанию issue,
+  AGENTS.md и киту эпика 2 — **сверить с `TZ-ANDROID.md`, `SCREENS.md` и
+  прототипом** (тексты, порядок блоков, иллюстрации).
+- **Контракт бэкенда по OTP выдуман по здравому смыслу** (`auth/otp/request`,
+  `auth/otp/verify`, поля `resendAfter`/`codeLength`/`isNewUser`, коды
+  400/410/429). Сверить с `MAHALLA-IMPLEMENTATION.md` / реальным API и
+  поправить `AuthApi` + `asOtpFailure()`.
+- Ссылка на оферту — заглушка (`https://mahalla.uz/offer`).
+- Биометрия не проверена на устройстве (эмулятора в CI нет): промпт,
+  `FragmentActivity` и отказ в разрешении геолокации нужно прогнать руками.
+- `isNewUser` доезжает до навигации, но никуда не ведёт — экран заполнения
+  профиля появится в следующих эпиках.
+- Разблокировки по биометрии/PIN на старте приложения ещё нет: флаги
+  сохраняются, но app-lock — отдельная задача (эпик профиля/безопасности).
+- Скриншот-тестов по-прежнему нет; соответствие макету проверяется глазами по
+  `@ThemeLanguagePreviews`. Снятый `navigationBarsPadding()` и перечит статуса
+  биометрии на `ON_RESUME` юнит-тестами не покрыть — проверить на устройстве.
+- Открытые замечания ревью PR #22 (задачами, не блокеры): лимит попыток PIN
+  живёт только в памяти (к app-lock переносить в DataStore); мигание заголовка
+  на экране PIN (стадия читается асинхронно, стартовое значение `Create`);
+  `PinRoute` не выталкивается при переходе на биометрию; `refresh()` при 401
+  чистит сессию, но не PIN; голый `(context as? Activity)?.recreate()` в
+  `WelcomeScreen` при аккуратной развёртке `ContextWrapper` в `BiometricScreen`;
+  `City.Default`/`City.fromId` пока не используются; `pin_input_description` и
+  `otp_input_description` просят `<plurals>`; `RoutesSerializationTest` шумит
+  семью warning'ами `ExperimentalSerializationApi`.
+
 ## Этап: discovery (эпик 4, issue #8, ветка claude/issue-8-*)
 
 Главная, карта, поиск с фильтрами и карточка места. Экраны собраны из кита
@@ -288,7 +408,7 @@ KDoc `ButtonCaption` обещает склейку семантики, кото�
   конца списка), `feature/place/ui/` (галерея, описание, часы, контакты,
   действия, отзывы; `tel:` и `geo:` через intent'ы), `feature/map/ui/`.
   Маршруты `SearchRoute(categoryId?, query?)` и `MapRoute` — вне графа табов.
-- **Тесты (331 всего, было 151)**: `PlaceFilterEngineTest`,
+- **Тесты**: `PlaceFilterEngineTest`,
   `DiscoveryFiltersTest`, `HomeSectionsTest`, `SearchHistoryTest`,
   `PlaceCategoryTest`, `MarkerClustererTest`, `OpeningHoursCalculatorTest`,
   `PlaceActionsTest`, `PlaceMappersTest`, `PlaceFormattersTest`,
@@ -313,6 +433,23 @@ SDK не зависит (загрузка, кластеризация, выбо�
 проекте пока нет — вместо фото скелетоны), геолокация на карте только просит
 разрешение эффектом, скриншот-тестов по-прежнему нет, вертикали
 (очередь/бронь/заказ) из карточки — эффект `OpenVertical` без экрана.
+
+### Слияние с эпиком 3 (онбординг)
+
+Эпики 3 и 4 писались параллельно от одного коммита, поэтому ветка эпика 4
+доносит в себе слияние с `main`:
+
+- `MahallaNavHost` — граф онбординга берётся из эпика 3 (включая
+  `onboardingStartDestination` и новые подписи экранов), main-граф и маршруты
+  `SearchRoute`/`MapRoute` — из эпика 4.
+- `MainDispatcherRule` объявлен в обеих ветках. Оставлена версия эпика 3
+  (публичный `dispatcher`, по умолчанию `StandardTestDispatcher` — иначе
+  таймер OTP не двигался бы виртуальным временем), а тесты discovery, которым
+  нужна немедленная отправка корутин, передают `UnconfinedTestDispatcher()`
+  явно.
+- Строки, ключи DataStore, `MahallaComponentDefaults.touchTargets` и три
+  общих теста (`GraphAssemblyTest`, `RoutesSerializationTest`,
+  `TouchTargetTest`) содержат добавления обеих сторон.
 
 ## Окружение (важно, иначе градиент не стартует)
 
@@ -344,12 +481,12 @@ Dev» вручную (workflow_dispatch) либо написать `@claude ...`
    platform-tools, `platforms;android-35`, `build-tools;35.0.0`, лицензии
    приняты (`yes | sdkmanager --licenses`); дальше `./gradlew assembleDebug`
    и `./gradlew testDebugUnitTest`. В облаке это делает `ci.yml` на PR.
-2. Дождаться зелёного `ci.yml` на PR эпика 2 (UI-кит); если что-то падает —
+2. Дождаться зелёного `ci.yml` на PR эпика 4 (discovery); если что-то падает —
    правки в ту же ветку.
-3. Эпик 3 — онбординг и авторизация: экраны welcome → phone → otp → pin →
-   biometric → geo по макету **из компонентов кита**, OTP-эндпоинты в
-   `AuthApi`, PIN через уже готовый `PinStorage`, биометрия
-   (`androidx.biometric`).
+3. Сверить онбординг с design-репозиторием (`TZ-ANDROID.md`, `SCREENS.md`,
+   прототип) и с реальным контрактом OTP-эндпоинтов бэкенда — см. риски
+   эпика 3. Для этого агенту нужен доступ к клонированию mahalla-репо
+   (`git clone` / `gh api` в allow-list workflow).
 4. Закрыть блокер 4.2 — выбрать картографический SDK (Yandex MapKit или
    Google Maps) и заменить заглушку полотна в `MapScreen`; дальше вертикали
    (food: place/menu/cart/checkout/order-status и т.д.).

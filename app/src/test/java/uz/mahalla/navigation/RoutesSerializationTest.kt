@@ -82,8 +82,23 @@ class RoutesSerializationTest {
     }
 
     @Test
-    fun `otp route carries the phone argument`() {
+    fun `otp route carries the phone and challenge arguments`() {
         val descriptor = serializer<OtpRoute>().descriptor
-        assertEquals(listOf("phone"), (0 until descriptor.elementsCount).map(descriptor::getElementName))
+        assertEquals(
+            listOf("phone", "resendAfterSeconds", "codeLength"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+    }
+
+    @Test
+    fun `otp argument names match the route fields`() {
+        // ViewModel читает аргументы из SavedStateHandle по строковым ключам:
+        // расхождение с полями маршрута сломало бы экран только в рантайме.
+        val descriptor = serializer<OtpRoute>().descriptor
+        val fields = (0 until descriptor.elementsCount).map(descriptor::getElementName)
+        assertEquals(
+            listOf(OtpArgs.PHONE, OtpArgs.RESEND_AFTER_SECONDS, OtpArgs.CODE_LENGTH),
+            fields,
+        )
     }
 }

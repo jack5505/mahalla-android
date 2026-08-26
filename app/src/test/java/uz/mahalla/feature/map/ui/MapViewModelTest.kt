@@ -1,6 +1,8 @@
 package uz.mahalla.feature.map.ui
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -22,10 +24,12 @@ import uz.mahalla.testutil.place
  * SDK карты ещё не выбран — тесты проверяют ровно ту часть, которая от него
  * не зависит и переживёт любое из двух решений.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class MapViewModelTest {
 
+    // Загрузка маркеров без таймеров — выполняется на месте.
     @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val repository = FakeCatalogRepository()
 

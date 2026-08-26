@@ -1,24 +1,25 @@
 package uz.mahalla.testutil
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 
 /**
- * Подменяет Main-диспетчер тестовым: `viewModelScope` завязан на Main, и без
- * этого любая ViewModel с корутиной падает в JVM-тесте.
+ * `viewModelScope` живёт на `Dispatchers.Main`, которого в JVM-тестах нет.
  *
- * По умолчанию [UnconfinedTestDispatcher] — корутина выполняется сразу на
- * месте запуска, поэтому проверка состояния не требует `advanceUntilIdle()`
- * после каждого события. Там, где важна именно задержка (debounce поиска),
- * тест передаёт свой `StandardTestDispatcher` и управляет временем сам.
+ * Диспетчер отдаётся наружу нарочно: тест должен запускаться как
+ * `runTest(mainDispatcherRule.dispatcher)`, иначе у `runTest` и у ViewModel
+ * будут разные планировщики, и `advanceTimeBy` не двинет таймер внутри
+ * ViewModel.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class MainDispatcherRule(
-    private val dispatcher: TestDispatcher = UnconfinedTestDispatcher(),
+    val dispatcher: TestDispatcher = StandardTestDispatcher(),
 ) : TestWatcher() {
 
     override fun starting(description: Description) {

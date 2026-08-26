@@ -4,6 +4,20 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Геолокация (эпик 3.6): «рядом со мной» и время доставки. Отказ не
+         блокирует приложение — город выбирается вручную. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Вход по биометрии (эпик 3.5); датчик не обязателен, фолбэк — PIN. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-feature
+        android:name="android.hardware.fingerprint"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.location"
+        android:required="false" />
+
     <application
         android:name=".MahallaApplication"
         android:allowBackup="true"

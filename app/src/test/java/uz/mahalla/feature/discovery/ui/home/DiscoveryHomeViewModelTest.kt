@@ -1,6 +1,8 @@
 package uz.mahalla.feature.discovery.ui.home
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -16,10 +18,13 @@ import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
 
 /** Главная (эпик 4.1): состояния, блоки и переходы. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class DiscoveryHomeViewModelTest {
 
+    // Здесь таймеров нет — загрузка должна выполниться на месте, без
+    // advanceUntilIdle() после каждого события.
     @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val repository = FakeCatalogRepository()
 

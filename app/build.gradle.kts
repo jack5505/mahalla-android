@@ -72,6 +72,9 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
+    // BiometricPrompt требует FragmentActivity — fragment приходит транзитивно,
+    // поэтому MainActivity наследуется от неё (эпик 3.5).
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

@@ -2,7 +2,9 @@ package uz.mahalla.feature.place.ui
 
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,10 +46,12 @@ import java.time.ZoneOffset
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlaceDetailsViewModelTest {
 
+    // Загрузка карточки без таймеров — выполняется на месте.
     @get:Rule
-    val mainDispatcherRule = MainDispatcherRule()
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val repository = FakeCatalogRepository()
 

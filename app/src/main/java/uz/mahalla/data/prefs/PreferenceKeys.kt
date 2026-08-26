@@ -12,6 +12,10 @@ internal object PreferenceKeys {
     val Language = stringPreferencesKey("settings_language")
     val ThemeMode = stringPreferencesKey("settings_theme_mode")
     val OnboardingCompleted = booleanPreferencesKey("settings_onboarding_completed")
+    val BiometricEnabled = booleanPreferencesKey("settings_biometric_enabled")
+
+    /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
+    val CityId = stringPreferencesKey("settings_city_id")
 
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")

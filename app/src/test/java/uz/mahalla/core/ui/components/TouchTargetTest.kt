@@ -54,6 +54,7 @@ class TouchTargetTest {
             "listItem",
             "iconButton",
             "switchRow",
+            "checkboxRow",
             "segment",
             "navItem",
             "otpCell",

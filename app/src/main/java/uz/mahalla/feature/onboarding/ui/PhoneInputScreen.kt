@@ -1,73 +1,132 @@
 package uz.mahalla.feature.onboarding.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaCheckboxRow
 import uz.mahalla.core.ui.components.MahallaPhoneField
-import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.core.ui.messageRes
+import uz.mahalla.core.ui.preview.PreviewSurface
+import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.feature.auth.domain.OtpChallenge
 
 /**
- * Первый экран, собранный из UI-кита (эпик 2): поле телефона с маской и
- * основная кнопка. Каретку в поле держит `PhoneFieldFormatter` — прежняя
- * версия форматировала строку прямо в `OutlinedTextField`, и курсор прыгал
- * в конец при каждом пробеле.
+ * Ввод номера телефона (3.2): маска `+998`, валидация и согласие с офертой.
+ *
+ * Каретку в поле держит `PhoneFieldFormatter` — форматирование строки прямо
+ * в `OutlinedTextField` уводило курсор в конец на каждом пробеле.
  */
 @Composable
 fun PhoneInputScreen(
-    onCodeRequested: (String) -> Unit,
+    onCodeRequested: (String, OtpChallenge) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PhoneInputViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val offerUrl = stringResource(R.string.onboarding_offer_url)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is PhoneInputEffect.CodeRequested -> onCodeRequested(effect.phoneE164)
+                is PhoneInputEffect.CodeRequested ->
+                    onCodeRequested(effect.phoneE164, effect.challenge)
+
+                PhoneInputEffect.OpenOffer -> {
+                    // Браузера может не быть (кастомная прошивка, kiosk-режим) —
+                    // это не повод падать на экране входа.
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(offerUrl)))
+                    }.onFailure { if (it !is ActivityNotFoundException) throw it }
+                }
             }
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(Spacing.gutter),
-        verticalArrangement = Arrangement.spacedBy(Spacing.gap),
+    PhoneInputContent(
+        state = state,
+        onEvent = viewModel::onEvent,
+        onBack = onBack,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun PhoneInputContent(
+    state: PhoneInputState,
+    onEvent: (PhoneInputEvent) -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OnboardingStep(
+        title = stringResource(R.string.onboarding_phone_title),
+        modifier = modifier,
+        subtitle = stringResource(R.string.onboarding_phone_subtitle),
+        onBack = onBack,
+        footer = {
+            MahallaButton(
+                text = stringResource(R.string.onboarding_phone_action),
+                onClick = { onEvent(PhoneInputEvent.Submit) },
+                state = ButtonState(
+                    enabled = state.canSubmit,
+                    loading = state.submitting,
+                ),
+            )
+        },
     ) {
-        Text(
-            text = stringResource(R.string.onboarding_phone_title),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
         MahallaPhoneField(
             digits = state.nationalDigits,
-            onDigitsChange = { viewModel.onEvent(PhoneInputEvent.PhoneChanged(it)) },
+            onDigitsChange = { onEvent(PhoneInputEvent.PhoneChanged(it)) },
             errorText = if (state.error == PhoneInputError.INVALID_NUMBER) {
                 stringResource(R.string.onboarding_phone_error)
             } else {
                 null
             },
+            enabled = !state.submitting,
             imeAction = ImeAction.Done,
         )
-        MahallaButton(
-            text = stringResource(R.string.onboarding_phone_action),
-            onClick = { viewModel.onEvent(PhoneInputEvent.Submit) },
+        MahallaCheckboxRow(
+            title = stringResource(R.string.onboarding_phone_consent),
+            checked = state.consentAccepted,
+            onCheckedChange = { onEvent(PhoneInputEvent.ConsentChanged(it)) },
+            enabled = !state.submitting,
+            isError = state.error == PhoneInputError.CONSENT_REQUIRED,
+            linkLabel = stringResource(R.string.onboarding_phone_consent_link),
+            onLinkClick = { onEvent(PhoneInputEvent.OfferRequested) },
+        )
+        if (state.error == PhoneInputError.CONSENT_REQUIRED) {
+            OnboardingError(stringResource(R.string.onboarding_phone_consent_required))
+        }
+        state.apiError?.let { OnboardingError(stringResource(it.messageRes())) }
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun PhoneInputScreenPreview() {
+    PreviewSurface {
+        PhoneInputContent(
+            state = PhoneInputState(
+                nationalDigits = "901234",
+                consentAccepted = true,
+                apiError = ApiError.NoConnection,
+            ),
+            onEvent = {},
+            onBack = {},
         )
     }
 }
