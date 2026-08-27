@@ -140,7 +140,7 @@ class NetworkStackTest {
 
         val result = apiCall { catalogApi().place("p-1") }
 
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), result)
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertNull(sessionStore.current())
         // Ровно один повтор: исходный запрос + refresh, без бесконечного цикла.
         assertEquals(2, server.requestCount)
@@ -152,7 +152,7 @@ class NetworkStackTest {
 
         val result = apiCall { catalogApi().place("p-1") }
 
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), result)
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertEquals(1, server.requestCount)
     }
 
@@ -219,6 +219,34 @@ class NetworkStackTest {
         val result = apiCall { catalogApi().place("p-1") }
 
         assertEquals(ApiResult.Failure(ApiError.Serialization), result)
+    }
+
+    @Test
+    fun `the error body of the server travels with the failure`() = runTest {
+        // Сквозная проверка issue #34: тело ошибки не должно оставаться только
+        // в инспекторе трафика.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("content-type", "application/json")
+                .setBody(
+                    """{"success":false,"error":{"code":"GEO_PERMISSION_REQUIRED",""" +
+                        """"message":"Joylashuv ruxsatini yoqing"}}""",
+                ),
+        )
+
+        val result = apiCall { catalogApi().place("p-1") } as ApiResult.Failure
+
+        assertEquals(ApiError.Forbidden, result.error)
+        val payload = result.failure.server
+        assertEquals("Joylashuv ruxsatini yoqing", payload?.message)
+        assertEquals("GEO_PERMISSION_REQUIRED", payload?.code)
+        assertEquals(403, payload?.httpCode)
+        assertTrue(
+            "адрес нужен, чтобы понять, куда именно ушёл запрос",
+            payload?.requestLine?.startsWith("GET http") == true,
+        )
+        assertTrue(payload?.body?.contains("GEO_PERMISSION_REQUIRED") == true)
     }
 
     private fun catalogApi(readTimeoutMillis: Long = DEFAULT_READ_TIMEOUT_MILLIS): CatalogApi {

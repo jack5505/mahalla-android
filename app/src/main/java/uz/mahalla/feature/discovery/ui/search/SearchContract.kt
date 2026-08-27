@@ -1,5 +1,6 @@
 package uz.mahalla.feature.discovery.ui.search
 
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
@@ -21,8 +22,12 @@ data class SearchState(
     val history: List<String> = emptyList(),
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
-    /** Догрузка страницы провалилась — дальше только по кнопке «повторить». */
-    val loadMoreFailed: Boolean = false,
+    /**
+     * Догрузка страницы провалилась — дальше только по кнопке «повторить».
+     * Хранится сам отказ: причину видно на месте, а не одной кнопкой без
+     * объяснения (issue #34).
+     */
+    val loadMoreFailure: ApiFailure? = null,
     val fromCache: Boolean = false,
     val filtersVisible: Boolean = false,
 ) : UiState {

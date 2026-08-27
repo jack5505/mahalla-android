@@ -176,6 +176,15 @@
     <string name="error_server">Serverda xatolik yuz berdi</string>
     <string name="error_unknown">Nimadir xato ketdi</string>
 
+    <!-- Подробности ответа сервера (issue #34) -->
+    <string name="error_details_show">Xatolik tafsilotlari</string>
+    <string name="error_details_hide">Tafsilotlarni yashirish</string>
+    <string name="error_details_status">Holat: HTTP %1$s</string>
+    <string name="error_details_code">Xatolik kodi: %1$s</string>
+    <string name="error_details_request">So\'rov: %1$s</string>
+    <string name="error_details_response">Server javobi</string>
+    <string name="error_details_copy">Nusxa olish</string>
+
     <!-- Discovery: категории (эпик 4.1) -->
     <string name="category_food">Ovqat</string>
     <string name="category_pharmacy">Dorixona</string>

@@ -34,7 +34,7 @@ class PhoneInputViewModel @Inject constructor(
 
             PhoneInputEvent.Submit -> onSubmit()
             PhoneInputEvent.OfferRequested -> emitEffect(PhoneInputEffect.OpenOffer)
-            PhoneInputEvent.ErrorDismissed -> updateState { copy(error = null, apiError = null) }
+            PhoneInputEvent.ErrorDismissed -> updateState { copy(error = null, apiFailure = null) }
         }
     }
 
@@ -46,7 +46,7 @@ class PhoneInputViewModel @Inject constructor(
                 formatted = validator.format(digits),
                 numberValid = validator.isValid(digits),
                 error = null,
-                apiError = null,
+                apiFailure = null,
             )
         }
     }
@@ -64,7 +64,7 @@ class PhoneInputViewModel @Inject constructor(
         }
 
         val phone = validator.toE164(digits)
-        updateState { copy(submitting = true, error = null, apiError = null) }
+        updateState { copy(submitting = true, error = null, apiFailure = null) }
         viewModelScope.launch {
             when (val result = authRepository.requestCode(phone)) {
                 is ApiResult.Success -> {
@@ -73,7 +73,7 @@ class PhoneInputViewModel @Inject constructor(
                 }
 
                 is ApiResult.Failure -> updateState {
-                    copy(submitting = false, apiError = result.error)
+                    copy(submitting = false, apiFailure = result.failure)
                 }
             }
         }

@@ -135,7 +135,7 @@ class AuthRepositoryTest {
 
         val result = repository().verifyCode("+998901234567", "000000")
 
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), result)
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertNull(sessionStore.current())
         assertEquals("1234", pinStorage.storedPin)
     }
@@ -171,7 +171,7 @@ class AuthRepositoryTest {
 
         val result = repository().refresh()
 
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), result)
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertNull("сессию с мёртвым refresh хранить нечего", sessionStore.current())
     }
 

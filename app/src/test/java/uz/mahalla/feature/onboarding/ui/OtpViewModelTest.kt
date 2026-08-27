@@ -14,7 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.ServerError
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpFailure
@@ -128,6 +130,34 @@ class OtpViewModelTest {
         assertEquals("", state.code.code)
         assertTrue(state.code.isError)
         assertFalse("ввод не блокируется — код можно набрать снова", state.inputBlocked)
+        assertNull("«код неверный» уже написано под полем — второй раз незачем", state.apiFailure)
+    }
+
+    @Test
+    fun `an explanation from the backend is shown even when the code is blamed`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // issue #34: под полем стояло бы «код неверный», хотя сервер сказал
+        // совсем другое — этот текст и показываем.
+        authRepository.verifyResult = ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.Unauthorized,
+                server = ServerError(
+                    httpCode = 401,
+                    code = "PHONE_BLOCKED",
+                    message = "Raqam bloklangan, qo'llab-quvvatlashga murojaat qiling",
+                ),
+            ),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(OtpEvent.CodeChanged("000000"))
+        advanceUntilIdle()
+
+        assertEquals(
+            "Raqam bloklangan, qo'llab-quvvatlashga murojaat qiling",
+            viewModel.state.value.apiFailure?.serverMessage,
+        )
     }
 
     @Test
@@ -165,7 +195,7 @@ class OtpViewModelTest {
         val state = viewModel.state.value
         assertEquals(OtpFailure.Network, state.failure)
         assertEquals("перенабирать код из-за пропавшей сети незачем", "123456", state.code.code)
-        assertEquals(ApiError.NoConnection, state.apiError)
+        assertEquals(ApiError.NoConnection, state.apiFailure?.error)
     }
 
     @Test
@@ -216,7 +246,7 @@ class OtpViewModelTest {
         viewModel.onEvent(OtpEvent.Resend)
         advanceUntilIdle()
 
-        assertEquals(ApiError.Timeout, viewModel.state.value.apiError)
+        assertEquals(ApiError.Timeout, viewModel.state.value.apiFailure?.error)
         assertTrue("повторить попытку можно сразу", viewModel.state.value.canResend)
     }
 

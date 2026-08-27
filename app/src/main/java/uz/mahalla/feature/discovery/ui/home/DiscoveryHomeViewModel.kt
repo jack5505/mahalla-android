@@ -67,7 +67,7 @@ class DiscoveryHomeViewModel @Inject constructor(
     }
 
     private fun ApiResult<PlacePage>.toContent(): ScreenState<DiscoveryHomeContent> = when (this) {
-        is ApiResult.Failure -> ScreenState.Error(error)
+        is ApiResult.Failure -> ScreenState.Error(failure)
         is ApiResult.Success -> if (data.items.isEmpty()) {
             ScreenState.Empty
         } else {

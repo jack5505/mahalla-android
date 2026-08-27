@@ -39,10 +39,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.messageRes
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.userMessage
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
@@ -152,18 +154,32 @@ fun ErrorState(
     )
 }
 
-/** Ошибка сетевого слоя: текст берётся из единого маппинга [messageRes]. */
+/**
+ * Ошибка сетевого слоя: текст — сообщение сервера, если он его прислал, иначе
+ * единый маппинг [messageRes]. Под кнопкой повтора — раскрываемые подробности
+ * ответа (issue #34).
+ */
 @Composable
 fun ApiErrorState(
-    error: ApiError,
+    failure: ApiFailure,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ErrorState(
-        onRetry = onRetry,
-        modifier = modifier,
-        description = stringResource(error.messageRes()),
-    )
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        ErrorState(
+            onRetry = onRetry,
+            description = failure.userMessage(),
+        )
+        failure.server?.let {
+            MahallaErrorDetails(
+                server = it,
+                modifier = Modifier.padding(horizontal = Spacing.gutter),
+            )
+        }
+    }
 }
 
 /**
@@ -184,7 +200,7 @@ fun <T> ScreenStateHost(
         when (state) {
             is ScreenState.Loading -> loading()
             is ScreenState.Empty -> empty()
-            is ScreenState.Error -> ApiErrorState(error = state.error, onRetry = onRetry)
+            is ScreenState.Error -> ApiErrorState(failure = state.failure, onRetry = onRetry)
             is ScreenState.Content -> content(state.data)
         }
     }
@@ -251,7 +267,7 @@ private fun ScreenStatesPreview() {
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
             ListSkeleton(itemCount = 1)
             EmptyState()
-            ApiErrorState(error = ApiError.NoConnection, onRetry = {})
+            ApiErrorState(failure = ApiFailure(ApiError.NoConnection), onRetry = {})
         }
     }
 }

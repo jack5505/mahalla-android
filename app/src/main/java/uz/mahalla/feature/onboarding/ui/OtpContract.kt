@@ -1,6 +1,6 @@
 package uz.mahalla.feature.onboarding.ui
 
-import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
@@ -15,8 +15,12 @@ data class OtpState(
     val resendInSeconds: Int = 0,
     val resending: Boolean = false,
     val failure: OtpFailure? = null,
-    /** Сетевая ошибка запроса нового кода — показывается отдельно от [failure]. */
-    val apiError: ApiError? = null,
+    /**
+     * Ошибка запроса отдельным блоком под полем: сеть, отказ бэкенда с
+     * объяснением (issue #34). То, что уже сказано подписью поля («код
+     * неверный»), сюда не попадает — см. [OtpViewModel].
+     */
+    val apiFailure: ApiFailure? = null,
 ) : UiState {
     /**
      * Лимит попыток исчерпан или код истёк: вводить дальше бессмысленно,

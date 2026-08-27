@@ -14,11 +14,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaCheckboxRow
 import uz.mahalla.core.ui.components.MahallaPhoneField
-import uz.mahalla.core.ui.messageRes
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.feature.auth.domain.OtpChallenge
@@ -111,7 +112,7 @@ private fun PhoneInputContent(
         if (state.error == PhoneInputError.CONSENT_REQUIRED) {
             OnboardingError(stringResource(R.string.onboarding_phone_consent_required))
         }
-        state.apiError?.let { OnboardingError(stringResource(it.messageRes())) }
+        state.apiFailure?.let { OnboardingApiError(it) }
     }
 }
 
@@ -123,7 +124,18 @@ private fun PhoneInputScreenPreview() {
             state = PhoneInputState(
                 nationalDigits = "901234",
                 consentAccepted = true,
-                apiError = ApiError.NoConnection,
+                // Тот самый случай из issue #34: бэкенд объяснил причину, а
+                // экран показывал «нет прав на это действие».
+                apiFailure = ApiFailure(
+                    error = ApiError.Forbidden,
+                    server = ServerError(
+                        httpCode = 403,
+                        code = "GEO_PERMISSION_REQUIRED",
+                        message = "Mahalla ilovasidan foydalanish uchun joylashuv " +
+                            "ruxsatini yoqing.",
+                        requestLine = "POST https://api.mahalla.uz/auth/otp/request",
+                    ),
+                ),
             ),
             onEvent = {},
             onBack = {},

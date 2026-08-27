@@ -12,7 +12,17 @@ import java.net.SocketTimeoutException
  */
 sealed interface ApiResult<out T> {
     data class Success<out T>(val data: T) : ApiResult<T>
-    data class Failure(val error: ApiError) : ApiResult<Nothing>
+
+    /**
+     * Отказ. Хранится [ApiFailure] целиком — вместе с ответом сервера, который
+     * потом показывается пользователю (issue #34); [error] остаётся для логики,
+     * которой нужна только классификация.
+     */
+    data class Failure(val failure: ApiFailure) : ApiResult<Nothing> {
+        constructor(error: ApiError) : this(ApiFailure(error))
+
+        val error: ApiError get() = failure.error
+    }
 }
 
 inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (this) {
@@ -23,6 +33,8 @@ inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ApiResult<R> = when (th
 fun <T> ApiResult<T>.dataOrNull(): T? = (this as? ApiResult.Success)?.data
 
 fun <T> ApiResult<T>.errorOrNull(): ApiError? = (this as? ApiResult.Failure)?.error
+
+fun <T> ApiResult<T>.failureOrNull(): ApiFailure? = (this as? ApiResult.Failure)?.failure
 
 /**
  * Обёртка над suspend-вызовом Retrofit: маппит исключения в [ApiError].
@@ -39,7 +51,14 @@ suspend fun <T> apiCall(block: suspend () -> T): ApiResult<T> =
     } catch (timeout: SocketTimeoutException) {
         ApiResult.Failure(ApiError.Timeout)
     } catch (http: HttpException) {
-        ApiResult.Failure(ApiError.fromHttpCode(http.code(), http.message()))
+        // Тело ответа разбирается здесь, потому что дальше его уже никто не
+        // увидит: HttpException до UI не доезжает (issue #34).
+        ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.fromHttpCode(http.code(), http.message()),
+                server = ServerErrorParser.parse(http),
+            ),
+        )
     } catch (serialization: SerializationException) {
         ApiResult.Failure(ApiError.Serialization)
     } catch (io: IOException) {

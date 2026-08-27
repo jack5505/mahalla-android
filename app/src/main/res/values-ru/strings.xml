@@ -170,6 +170,15 @@
     <string name="error_server">Ошибка на сервере</string>
     <string name="error_unknown">Что-то пошло не так</string>
 
+    <!-- Подробности ответа сервера (issue #34) -->
+    <string name="error_details_show">Подробности ошибки</string>
+    <string name="error_details_hide">Скрыть подробности</string>
+    <string name="error_details_status">Статус: HTTP %1$s</string>
+    <string name="error_details_code">Код ошибки: %1$s</string>
+    <string name="error_details_request">Запрос: %1$s</string>
+    <string name="error_details_response">Ответ сервера</string>
+    <string name="error_details_copy">Копировать</string>
+
     <!-- Discovery: категории (эпик 4.1) -->
     <string name="category_food">Еда</string>
     <string name="category_pharmacy">Аптеки</string>
