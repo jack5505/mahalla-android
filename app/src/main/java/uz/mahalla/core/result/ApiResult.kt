@@ -17,6 +17,13 @@ sealed interface ApiResult<out T> {
      * Отказ. Хранится [ApiFailure] целиком — вместе с ответом сервера, который
      * потом показывается пользователю (issue #34); [error] остаётся для логики,
      * которой нужна только классификация.
+     *
+     * **Сравнивать по значению можно только [error], а не `Failure` целиком.**
+     * `equals` учитывает и [ApiFailure.server], а тело ответа парсер заполняет
+     * всегда: `assertEquals(ApiResult.Failure(ApiError.Forbidden), result)`
+     * ложно для любого настоящего HTTP-отказа, потому что справа приедет ещё и
+     * [ServerError]. В логике по той же причине ветвиться нужно по
+     * `result.error` (`when`, `==`), а не по варианту `Failure`.
      */
     data class Failure(val failure: ApiFailure) : ApiResult<Nothing> {
         constructor(error: ApiError) : this(ApiFailure(error))

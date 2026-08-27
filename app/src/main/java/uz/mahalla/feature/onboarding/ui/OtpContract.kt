@@ -29,6 +29,19 @@ data class OtpState(
     val inputBlocked: Boolean
         get() = failure == OtpFailure.TooManyAttempts || failure == OtpFailure.Expired
 
+    /**
+     * Текст бэкенда идёт подписью под ячейками: он точнее собственного «код
+     * неверный» и говорит ровно про то же поле. Иначе человек читает два
+     * разных объяснения одного отказа в двух местах экрана (issue #34).
+     */
+    val fieldError: String? get() = apiFailure?.serverMessage
+
+    /**
+     * Отдельный блок повторяет текст, только если под полем его нет: сеть,
+     * пустой ответ, HTML от прокси. Подробности ответа блок показывает всегда.
+     */
+    val showApiMessage: Boolean get() = fieldError == null
+
     val canResend: Boolean get() = resendInSeconds == 0 && !resending && !submitting
 
     val canSubmit: Boolean get() = code.isComplete && !submitting && !inputBlocked

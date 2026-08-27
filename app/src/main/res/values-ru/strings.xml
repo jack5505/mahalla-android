@@ -153,6 +153,9 @@
     <string name="state_empty_title">Пока пусто</string>
     <string name="state_empty_description">Здесь пока нет данных</string>
     <string name="state_error_title">Произошла ошибка</string>
+    <!-- Для TalkBack: состояние раскрываемого блока -->
+    <string name="state_expanded">развёрнуто</string>
+    <string name="state_collapsed">свёрнуто</string>
 
     <!-- UI-кит: карточки -->
     <string name="place_open_now">Открыто</string>

@@ -45,20 +45,27 @@ object ServerErrorParser {
         val parsed = trimmed?.let {
             runCatchingCancellable { Json.parseToJsonElement(it) }.getOrNull()
         }
-        // Одиночный литерал разбором не считаем: `Service unavailable` парсер
-        // принимает как строку, и тело уехало бы на экран в кавычках вместо
-        // того, чтобы стать текстом ошибки.
         val json = parsed?.takeIf { it is JsonObject || it is JsonArray }
         val containers = (json as? JsonObject)?.containers().orEmpty()
+        // Одиночный строковый литерал — это и есть текст ошибки:
+        // `ResponseEntity<String>` у Spring отдаёт `"Service unavailable"`
+        // вместе с кавычками, и показывать их пользователю незачем. Числа и
+        // `true` сообщением не считаются — до кавычек тут дело не доходит.
+        val literal = (parsed as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.content?.trim()?.takeIf { it.isNotEmpty() }
 
         return ServerError(
             httpCode = httpCode,
             httpMessage = httpMessage,
             code = containers.firstNotNullOfOrNull { it.text(CODE_KEYS, stringsOnly = false) },
             message = containers.firstNotNullOfOrNull { it.text(MESSAGE_KEYS) }
-                ?: trimmed?.takeIf { json == null && it.isPlainSentence() },
+                ?: literal?.takeIf { it.isPlainSentence() }
+                ?: trimmed?.takeIf { parsed == null && it.isPlainSentence() },
             requestLine = requestLine,
-            body = json?.let { prettyOrNull(it) }?.truncate() ?: trimmed?.truncate(),
+            body = json?.let { prettyOrNull(it) }?.truncate()
+                ?: literal?.truncate()
+                ?: trimmed?.truncate(),
         )
     }
 
@@ -66,9 +73,13 @@ object ServerErrorParser {
      * Где искать поля: сначала во вложенном `error`, потом в корне. Порядок
      * важен — в конверте Mahalla корневой `message` может отсутствовать, а в
      * плоских ответах вложенного объекта нет.
+     *
+     * `data` сюда не входит намеренно: в конверте Mahalla там полезная
+     * нагрузка, и `{"success":false,"data":{"title":"…"}}` дал бы сообщением
+     * заголовок ответа, а не текст ошибки.
      */
     private fun JsonObject.containers(): List<JsonObject> =
-        listOfNotNull(this["error"] as? JsonObject, this["data"] as? JsonObject, this)
+        listOfNotNull(this["error"] as? JsonObject, this)
 
     private fun JsonObject.text(keys: List<String>, stringsOnly: Boolean = true): String? =
         keys.firstNotNullOfOrNull { key ->

@@ -99,6 +99,28 @@ class ServerErrorParserTest {
     }
 
     @Test
+    fun `a json string literal loses its quotes`() {
+        // `ResponseEntity<String>` у Spring отдаёт валидный JSON — строку в
+        // кавычках. Показывать кавычки пользователю незачем.
+        val server = ServerErrorParser.parse(httpCode = 503, body = "\"Service unavailable\"")
+
+        assertEquals("Service unavailable", server.message)
+        assertEquals("Service unavailable", server.body)
+    }
+
+    @Test
+    fun `payload of the envelope is not mistaken for the error text`() {
+        // В конверте Mahalla `data` — полезная нагрузка: её заголовок не имеет
+        // отношения к причине отказа.
+        val server = ServerErrorParser.parse(
+            httpCode = 409,
+            body = """{"success":false,"data":{"title":"Bosh sahifa"}}""",
+        )
+
+        assertNull(server.message)
+    }
+
+    @Test
     fun `empty and broken bodies do not break the parser`() {
         val empty = ServerErrorParser.parse(httpCode = 404, body = "   ")
         assertNull(empty.message)

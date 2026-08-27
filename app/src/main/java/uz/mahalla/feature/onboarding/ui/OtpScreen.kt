@@ -94,10 +94,12 @@ private fun OtpContent(
             state = state.code,
             onCodeChange = { onEvent(OtpEvent.CodeChanged(it)) },
             enabled = !state.submitting && !state.inputBlocked,
-            errorText = state.failure?.messageOrNull(),
+            errorText = state.fieldError ?: state.failure?.messageOrNull(),
             focusRequester = focusRequester,
         )
-        state.apiFailure?.let { OnboardingApiError(it) }
+        state.apiFailure?.let {
+            OnboardingApiError(failure = it, showMessage = state.showApiMessage)
+        }
     }
 }
 

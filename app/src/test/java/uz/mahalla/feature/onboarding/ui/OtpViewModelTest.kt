@@ -154,10 +154,35 @@ class OtpViewModelTest {
         viewModel.onEvent(OtpEvent.CodeChanged("000000"))
         advanceUntilIdle()
 
+        val state = viewModel.state.value
         assertEquals(
             "Raqam bloklangan, qo'llab-quvvatlashga murojaat qiling",
-            viewModel.state.value.apiFailure?.serverMessage,
+            state.apiFailure?.serverMessage,
         )
+        // Текст сервера идёт под полем вместо «код неверный», и блок его не
+        // повторяет: два объяснения одного отказа в двух местах — хуже, чем
+        // одно.
+        assertEquals(
+            "Raqam bloklangan, qo'llab-quvvatlashga murojaat qiling",
+            state.fieldError,
+        )
+        assertFalse("тот же текст вторым сообщением не показываем", state.showApiMessage)
+    }
+
+    @Test
+    fun `a network failure keeps the message in its own block`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Сервер не отвечал — под полем писать нечего, текст остаётся в блоке.
+        authRepository.verifyResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(OtpEvent.CodeChanged("000000"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertNull(state.fieldError)
+        assertTrue(state.showApiMessage)
     }
 
     @Test

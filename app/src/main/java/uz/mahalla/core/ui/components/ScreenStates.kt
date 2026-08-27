@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Inbox
@@ -158,6 +160,13 @@ fun ErrorState(
  * Ошибка сетевого слоя: текст — сообщение сервера, если он его прислал, иначе
  * единый маппинг [messageRes]. Под кнопкой повтора — раскрываемые подробности
  * ответа (issue #34).
+ *
+ * Прокрутка обязательна: иконка, заголовок, текст и кнопка повтора занимают
+ * половину экрана, а под ними разворачивается тело ответа до 2000 символов —
+ * без прокрутки кнопка «Копировать» оказывается за нижней границей ровно в том
+ * случае, ради которого блок и делался. При `fontScale 1.5` не помещается и
+ * короткий ответ. Все места вызова ([ScreenStateHost]) дают ограниченную
+ * высоту; внутрь прокручиваемого родителя это состояние не ставить.
  */
 @Composable
 fun ApiErrorState(
@@ -166,7 +175,9 @@ fun ApiErrorState(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ErrorState(

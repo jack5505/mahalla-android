@@ -159,6 +159,9 @@
     <string name="state_empty_title">Hozircha bo\'sh</string>
     <string name="state_empty_description">Bu yerda hali ma\'lumot yo\'q</string>
     <string name="state_error_title">Xatolik yuz berdi</string>
+    <!-- Для TalkBack: состояние раскрываемого блока -->
+    <string name="state_expanded">ochilgan</string>
+    <string name="state_collapsed">yig\'ilgan</string>
 
     <!-- UI-кит: карточки -->
     <string name="place_open_now">Ochiq</string>
