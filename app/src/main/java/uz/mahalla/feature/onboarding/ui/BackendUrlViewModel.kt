@@ -79,7 +79,7 @@ class BackendUrlViewModel @Inject constructor(
             updateState { copy(error = BackendUrlError.CLEARTEXT_BLOCKED, checked = false) }
             return
         }
-        // Сервер уже проверяли и он не ответил — пользователь настаивает.
+        // Сервер уже проверяли и он промолчал — пользователь настаивает.
         if (currentState.checked) {
             persist(normalized)
             return
@@ -88,7 +88,13 @@ class BackendUrlViewModel @Inject constructor(
         updateState { copy(checking = true, error = null, certificate = null) }
         viewModelScope.launch {
             val result = reachability.check(normalized)
-            updateState { copy(checking = false, checked = true) }
+            // `checked` — разрешение сохранить адрес следующим тапом, и оно
+            // выдаётся ровно на один случай: сервер промолчал. Недоверенный
+            // сертификат так обходить нельзя — handshake рвётся до запроса, и
+            // «сохранить всё равно» означало бы приложение без сети.
+            updateState {
+                copy(checking = false, checked = result is BackendCheck.Unreachable)
+            }
             when (result) {
                 BackendCheck.Reachable -> persist(normalized)
 
@@ -117,7 +123,7 @@ class BackendUrlViewModel @Inject constructor(
      * случай, когда сертификат сменился между проверкой и подтверждением.
      */
     private fun trustCertificate() {
-        val fingerprint = currentState.certificate?.sha256 ?: return
+        val certificate = currentState.certificate ?: return
         if (currentState.checking) return
         // Состояние правится до записи: показанный сертификат уже принят, а
         // адрес обязан проверяться заново, даже если запись не пройдёт.
@@ -125,9 +131,22 @@ class BackendUrlViewModel @Inject constructor(
         viewModelScope.launch {
             // Не записался пин — доверие всё равно действует на этот запуск
             // (кэш обновлён до записи), запирать пользователя незачем.
-            runCatchingCancellable { certificatePin.save(fingerprint) }
+            val applied = runCatchingCancellable { certificatePin.save(certificate.sha256) }
+                .getOrDefault(true)
             updateState { copy(checking = false) }
-            submit()
+            if (applied) {
+                submit()
+            } else {
+                // Сборка доверять чужому сертификату не имеет права. Проверять
+                // адрес заново незачем — результат будет тот же; экран
+                // возвращается в прежнее состояние, а не мигает впустую.
+                updateState {
+                    copy(
+                        error = BackendUrlError.CERTIFICATE_UNTRUSTED,
+                        certificate = certificate,
+                    )
+                }
+            }
         }
     }
 

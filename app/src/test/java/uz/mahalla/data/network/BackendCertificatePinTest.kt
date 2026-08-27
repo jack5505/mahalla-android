@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -100,11 +101,12 @@ class BackendCertificatePinTest {
     }
 
     @Test
-    fun `a build without the override does not save the pin`() = runTest {
+    fun `a build without the override does not save the pin and says so`() = runTest {
         val settings = settingsDataStore()
         val pin = pin(settings, overrideEnabled = false)
 
-        pin.save(FINGERPRINT)
+        // Не молча: вызывающий иначе рисует успех там, где ничего не случилось.
+        assertFalse(pin.save(FINGERPRINT))
 
         assertNull(pin.pinnedFingerprint())
         assertNull(settings.current().backendCertificatePin)
@@ -123,7 +125,12 @@ class BackendCertificatePinTest {
     )
 
     private companion object {
-        const val FINGERPRINT = "3A:1F:9C:04:BE:77:12:E5:8D:60:AA:31:4C:D9:02:6B"
-        const val OTHER_FINGERPRINT = "F8:55:17:E0:9A:24:73:CB:10:8E:42:FD:66:B3:07:91"
+        /** 32 байта — как настоящий SHA-256, а не первая половина от него. */
+        const val FINGERPRINT =
+            "3A:1F:9C:04:BE:77:12:E5:8D:60:AA:31:4C:D9:02:6B:" +
+                "7E:05:B8:43:2C:91:DA:6F:18:53:C7:20:EF:9B:44:A6"
+        const val OTHER_FINGERPRINT =
+            "F8:55:17:E0:9A:24:73:CB:10:8E:42:FD:66:B3:07:91:" +
+                "5D:2A:C4:38:07:E9:1B:76:AF:30:65:D2:98:41:BC:0E"
     }
 }

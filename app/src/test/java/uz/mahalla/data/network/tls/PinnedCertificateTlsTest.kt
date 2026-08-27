@@ -12,9 +12,12 @@ import org.junit.Before
 import org.junit.Test
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.testutil.SelfSignedServer
+import java.net.Socket
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
+import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLException
+import javax.net.ssl.X509ExtendedTrustManager
 import javax.net.ssl.X509TrustManager
 
 /**
@@ -125,6 +128,65 @@ class PinnedCertificateTlsTest {
     }
 
     @Test
+    fun `the host aware check is used instead of the two argument one`() {
+        // На Android платформенный делегат — RootTrustManager из
+        // network-security-config, и его двухаргументный checkServerTrusted при
+        // наличии <domain-config> (у нас он есть с issue #26) цепочку не
+        // проверяет, а сразу кидает CertificateException. Обычный
+        // X509TrustManager Conscrypt зовёт именно так — доверять переставал бы
+        // любой сервер, включая прод с валидным CA, а release остался бы без
+        // сети целиком.
+        val delegate = DomainAwareTrustManager()
+        val trustManager = PinnedCertificateTrustManager(pinSource = { null }, delegate = delegate)
+
+        trustManager.checkServerTrusted(
+            arrayOf(stand.certificate.certificate),
+            "RSA",
+            null as Socket?,
+        )
+
+        assertEquals("вызван host-aware вариант", 1, delegate.hostAwareCalls)
+    }
+
+    @Test
+    fun `the pin still works through the host aware check`() {
+        val delegate = object : X509ExtendedTrustManager() {
+            override fun checkClientTrusted(c: Array<X509Certificate>, a: String) = Unit
+            override fun checkClientTrusted(c: Array<X509Certificate>, a: String, s: Socket?) = Unit
+            override fun checkClientTrusted(
+                c: Array<X509Certificate>,
+                a: String,
+                e: SSLEngine?,
+            ) = Unit
+
+            override fun checkServerTrusted(c: Array<X509Certificate>, a: String) =
+                throw CertificateException("двухаргументный вариант звать нельзя")
+
+            override fun checkServerTrusted(c: Array<X509Certificate>, a: String, s: Socket?): Unit =
+                throw CertificateException("Trust anchor for certification path not found")
+
+            override fun checkServerTrusted(
+                c: Array<X509Certificate>,
+                a: String,
+                e: SSLEngine?,
+            ): Unit = throw CertificateException("Trust anchor for certification path not found")
+
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+        }
+        val trustManager = PinnedCertificateTrustManager(
+            pinSource = { stand.fingerprint },
+            delegate = delegate,
+        )
+
+        // Не бросает: платформа отказала, но отпечаток совпал с подтверждённым.
+        trustManager.checkServerTrusted(
+            arrayOf(stand.certificate.certificate),
+            "RSA",
+            null as Socket?,
+        )
+    }
+
+    @Test
     fun `accepted issuers stay the platform ones`() {
         // Список уезжает в chain cleaner OkHttp: подменять его нельзя.
         val trustManager = PinnedCertificateTrustManager(pinSource = { stand.fingerprint })
@@ -145,6 +207,51 @@ class PinnedCertificateTlsTest {
     private object AcceptingTrustManager : X509TrustManager {
         override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
         override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+        override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+    }
+
+    /** Платформенный делегат Android в миниатюре: см. `RootTrustManager`. */
+    private class DomainAwareTrustManager : X509ExtendedTrustManager() {
+
+        var hostAwareCalls = 0
+            private set
+
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
+
+        override fun checkClientTrusted(
+            chain: Array<X509Certificate>,
+            authType: String,
+            socket: Socket?,
+        ) = Unit
+
+        override fun checkClientTrusted(
+            chain: Array<X509Certificate>,
+            authType: String,
+            engine: SSLEngine?,
+        ) = Unit
+
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String): Unit =
+            throw CertificateException(
+                "Domain specific configurations require that the hostname aware " +
+                    "checkServerTrusted(X509Certificate[], String, String) is used",
+            )
+
+        override fun checkServerTrusted(
+            chain: Array<X509Certificate>,
+            authType: String,
+            socket: Socket?,
+        ) {
+            hostAwareCalls++
+        }
+
+        override fun checkServerTrusted(
+            chain: Array<X509Certificate>,
+            authType: String,
+            engine: SSLEngine?,
+        ) {
+            hostAwareCalls++
+        }
+
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 

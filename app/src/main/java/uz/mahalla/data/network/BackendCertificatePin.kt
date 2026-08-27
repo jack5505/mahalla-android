@@ -44,10 +44,15 @@ class BackendCertificatePin @Inject constructor(
      *
      * Пин один: подтверждение нового сертификата заменяет прежний. Отдельный
      * список не нужен — приложение разговаривает с одним бэкендом.
+     *
+     * @return `false` — сборке доверять чужим сертификатам не разрешено, пин не
+     * применён. Молча возвращать `Unit` нельзя: вызывающий иначе показывает
+     * успех там, где ничего не произошло.
      */
-    suspend fun save(fingerprint: String) {
-        if (!overrideEnabled) return
+    suspend fun save(fingerprint: String): Boolean {
+        if (!overrideEnabled) return false
         cached = fingerprint
         settingsDataStore.setBackendCertificatePin(fingerprint)
+        return true
     }
 }

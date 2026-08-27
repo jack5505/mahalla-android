@@ -58,6 +58,8 @@ interface BackendReachability {
 @Singleton
 class OkHttpBackendReachability @Inject constructor(
     private val certificatePin: CertificatePinSource,
+    /** То же право, что и на смену адреса — см. `NetworkModule`. */
+    @BackendUrlOverride private val overrideEnabled: Boolean = true,
 ) : BackendReachability {
 
     private companion object {
@@ -72,10 +74,12 @@ class OkHttpBackendReachability @Inject constructor(
      * лениво — проверка случается раз в установку.
      *
      * Пин пользователя учитывается: сертификат, которому уже доверились,
-     * должен проходить проверку так же, как он проходит её в бою.
+     * должен проходить проверку так же, как он проходит её в бою. И ровно так
+     * же не учитывается там, где права на пин нет: проверка обязана врать не
+     * больше, чем боевой клиент.
      */
     private val client by lazy {
-        NetworkFactory.clientBuilder(certificatePin = certificatePin)
+        NetworkFactory.clientBuilder(certificatePin = certificatePin.takeIf { overrideEnabled })
             .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .callTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)

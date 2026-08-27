@@ -34,6 +34,11 @@ import javax.inject.Singleton
  * Клиентов два. Основной несёт `AuthInterceptor` (Bearer) и
  * `TokenAuthenticator` (refresh по 401). Второй, `@RefreshClient`, — «голый»:
  * им ходит сам refresh, иначе получился бы рекурсивный вызов.
+ *
+ * Доверие к самоподписанному сертификату (issue #32) уходит в клиенты только
+ * там, где на него вообще есть право (`BACKEND_URL_OVERRIDE`). В остальных
+ * сборках передаётся `null`, и TLS остаётся ровно платформенным — своей
+ * `sslSocketFactory` у клиента нет, подменить проверку нечем.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -72,11 +77,12 @@ object NetworkModule {
         backendUrlInterceptor: BackendUrlInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
+        @BackendUrlOverride overrideEnabled: Boolean,
     ): OkHttpClient = NetworkFactory.refreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
-        certificatePin = certificatePin,
+        certificatePin = certificatePin.takeIf { overrideEnabled },
     )
 
     @Provides
@@ -101,13 +107,14 @@ object NetworkModule {
         backendUrlInterceptor: BackendUrlInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
+        @BackendUrlOverride overrideEnabled: Boolean,
     ): OkHttpClient = NetworkFactory.mainClient(
         backendUrlInterceptor = backendUrlInterceptor,
         authInterceptor = authInterceptor,
         authenticator = tokenAuthenticator,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
-        certificatePin = certificatePin,
+        certificatePin = certificatePin.takeIf { overrideEnabled },
     )
 
     @Provides

@@ -1,15 +1,18 @@
 package uz.mahalla.data.network.tls
 
 import okhttp3.OkHttpClient
+import java.net.Socket
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.security.cert.X509Certificate
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLEngine
 import javax.net.ssl.SSLSession
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509ExtendedTrustManager
 import javax.net.ssl.X509TrustManager
 
 /**
@@ -43,19 +46,88 @@ fun interface CertificatePinSource {
  * подтверждает CA, которого здесь нет, а доверие выдано конкретному ключу.
  * Иначе просроченный сертификат стенда запирал бы приложение в цикле
  * «не доверенный → доверять → снова не доверенный».
+ *
+ * Наследник **`X509ExtendedTrustManager`, а не `X509TrustManager`**, и это не
+ * стилистика. На Android платформенный делегат — `RootTrustManager` из
+ * network-security-config, и его двухаргументный `checkServerTrusted(chain,
+ * authType)` цепочку не проверяет вовсе: увидев в конфиге хоть один
+ * `<domain-config>` (у нас он есть — cleartext-исключение для loopback из
+ * issue #26), он сразу кидает `CertificateException("Domain specific
+ * configurations require that the hostname aware checkServerTrusted … is
+ * used")`. Обычный `X509TrustManager` Conscrypt зовёт именно так, поэтому
+ * доверять переставал бы вообще любой сервер, включая прод с валидным
+ * Let's Encrypt, — а в release, где пина нет по построению, приложение просто
+ * осталось бы без сети. На JVM этого не видно: тамошний PKIX отвечает на
+ * двухаргументный вариант нормально.
  */
 class PinnedCertificateTrustManager(
     private val pinSource: CertificatePinSource,
     private val delegate: X509TrustManager = platformTrustManager(),
-) : X509TrustManager {
+) : X509ExtendedTrustManager() {
+
+    /**
+     * Host-aware делегат, если платформа его дала. Только он получает сокет или
+     * `SSLEngine`, из которых берётся имя хоста для per-domain правил.
+     */
+    private val extended: X509ExtendedTrustManager? = delegate as? X509ExtendedTrustManager
 
     override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
         delegate.checkClientTrusted(chain, authType)
     }
 
+    override fun checkClientTrusted(
+        chain: Array<X509Certificate>,
+        authType: String,
+        socket: Socket?,
+    ) {
+        extended?.checkClientTrusted(chain, authType, socket)
+            ?: delegate.checkClientTrusted(chain, authType)
+    }
+
+    override fun checkClientTrusted(
+        chain: Array<X509Certificate>,
+        authType: String,
+        engine: SSLEngine?,
+    ) {
+        extended?.checkClientTrusted(chain, authType, engine)
+            ?: delegate.checkClientTrusted(chain, authType)
+    }
+
     override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+        withPinFallback(chain) { delegate.checkServerTrusted(chain, authType) }
+    }
+
+    override fun checkServerTrusted(
+        chain: Array<X509Certificate>,
+        authType: String,
+        socket: Socket?,
+    ) {
+        withPinFallback(chain) {
+            extended?.checkServerTrusted(chain, authType, socket)
+                ?: delegate.checkServerTrusted(chain, authType)
+        }
+    }
+
+    override fun checkServerTrusted(
+        chain: Array<X509Certificate>,
+        authType: String,
+        engine: SSLEngine?,
+    ) {
+        withPinFallback(chain) {
+            extended?.checkServerTrusted(chain, authType, engine)
+                ?: delegate.checkServerTrusted(chain, authType)
+        }
+    }
+
+    override fun getAcceptedIssuers(): Array<X509Certificate> = delegate.acceptedIssuers
+
+    /**
+     * Платформенная проверка идёт первой и остаётся главной; пин спрашивается
+     * только на её отказе.
+     */
+    private fun withPinFallback(chain: Array<X509Certificate>, check: () -> Unit) {
         try {
-            delegate.checkServerTrusted(chain, authType)
+            check()
         } catch (untrusted: CertificateException) {
             val leaf = chain.firstOrNull() ?: throw untrusted
             val pinned = pinSource.pinnedFingerprint()
@@ -64,8 +136,6 @@ class PinnedCertificateTrustManager(
             }
         }
     }
-
-    override fun getAcceptedIssuers(): Array<X509Certificate> = delegate.acceptedIssuers
 }
 
 /**
@@ -92,10 +162,16 @@ class PinnedCertificateHostnameVerifier(
 /**
  * Разрешает клиенту доверенный сертификат (issue #32).
  *
- * Ставится всегда, а не «когда пин задан»: отпечаток читается в момент
- * handshake, поэтому подтверждение доверия действует сразу, без пересборки
- * клиентов. Пока пина нет, поведение ровно то же, что у клиента по умолчанию —
- * обе проверки делают платформенный trust manager и штатный верификатор имени.
+ * Ставится всегда, когда источник пина передан, а не «когда пин уже выдан»:
+ * отпечаток читается в момент handshake, поэтому подтверждение доверия
+ * действует сразу, без пересборки клиентов. Пока пина нет, поведение ровно то
+ * же, что у клиента по умолчанию — обе проверки делают платформенный trust
+ * manager и штатный верификатор имени.
+ *
+ * `pinSource == null` — сборка, которой доверять чужим сертификатам не
+ * разрешено (release без `BACKEND_URL_OVERRIDE`, см. `NetworkModule`). Там
+ * клиент не трогается вообще: ни своей `sslSocketFactory`, ни своего
+ * верификатора имени, то есть остаётся ровно тем, что даёт платформа.
  */
 fun OkHttpClient.Builder.allowPinnedCertificate(
     pinSource: CertificatePinSource?,

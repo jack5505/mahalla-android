@@ -299,6 +299,53 @@ class BackendUrlViewModelTest {
         }
 
     @Test
+    fun `an untrusted certificate is not saved by the second tap either`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // «Всё равно сохранить» задумано на молчащий сервер: тот может
+            // подняться позже. Недоверенный сертификат так обходить нельзя —
+            // handshake рвётся до запроса, и адрес был бы заведомо нерабочим.
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val settings = settingsDataStore()
+            val viewModel = viewModel(store(settings))
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            assertNull("адрес не сохранён", settings.current().backendBaseUrl)
+            assertEquals(
+                BackendUrlError.CERTIFICATE_UNTRUSTED,
+                viewModel.state.value.error,
+            )
+            assertFalse("обход выдаётся только на молчащий сервер", viewModel.state.value.checked)
+            assertEquals("второй тап проверяет адрес заново", 2, reachability.checked.size)
+        }
+
+    @Test
+    fun `a build without the override does not pretend the certificate is trusted`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Пин там запрещён: молча показать успех значило бы отправить
+            // пользователя жать «Доверять» до бесконечности.
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val settings = settingsDataStore()
+            val pin = BackendCertificatePin(settings, overrideEnabled = false)
+            val viewModel = viewModel(store(settings), certificatePin = pin)
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            viewModel.onEvent(BackendUrlEvent.TrustCertificateRequested)
+
+            assertNull(pin.pinnedFingerprint())
+            assertEquals(CERTIFICATE, viewModel.state.value.certificate)
+            assertEquals(
+                BackendUrlError.CERTIFICATE_UNTRUSTED,
+                viewModel.state.value.error,
+            )
+            assertEquals("проверять адрес заново незачем", 1, reachability.checked.size)
+            assertNull(settings.current().backendBaseUrl)
+        }
+
+    @Test
     fun `there is nothing to trust before a check`() =
         runTest(mainDispatcherRule.dispatcher) {
             val viewModel = viewModel()

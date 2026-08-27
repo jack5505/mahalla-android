@@ -61,14 +61,22 @@ object CertificateProbe {
      */
     fun peerCertificate(host: String, port: Int, timeoutMillis: Int): X509Certificate? {
         val plain = Socket()
-        plain.connect(InetSocketAddress(host, port), timeoutMillis)
-        plain.soTimeout = timeoutMillis
-        // autoClose = true: закрытие TLS-сокета закрывает и обёрнутый.
-        // host передаётся именно здесь — из него берётся SNI, без которого
-        // сервер с несколькими сертификатами покажет не тот.
-        (socketFactory.createSocket(plain, host, port, true) as SSLSocket).use { socket ->
-            socket.startHandshake()
-            return socket.session.peerCertificates.firstOrNull() as? X509Certificate
+        try {
+            plain.connect(InetSocketAddress(host, port), timeoutMillis)
+            plain.soTimeout = timeoutMillis
+            // autoClose = true: закрытие TLS-сокета закрывает и обёрнутый.
+            // host передаётся именно здесь — из него берётся SNI, без которого
+            // сервер с несколькими сертификатами покажет не тот.
+            (socketFactory.createSocket(plain, host, port, true) as SSLSocket).use { socket ->
+                socket.startHandshake()
+                return socket.session.peerCertificates.firstOrNull() as? X509Certificate
+            }
+        } catch (failure: Throwable) {
+            // `use` закрывает только TLS-обёртку, а до неё дело может и не
+            // дойти: упасть способны и connect, и сам createSocket. Оставленный
+            // сокет — утечка дескриптора на каждой неудачной проверке.
+            runCatching { plain.close() }
+            throw failure
         }
     }
 }
