@@ -9,6 +9,8 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Converter
 import retrofit2.Retrofit
+import uz.mahalla.data.network.tls.CertificatePinSource
+import uz.mahalla.data.network.tls.allowPinnedCertificate
 import java.util.concurrent.TimeUnit
 
 /**
@@ -36,10 +38,18 @@ object NetworkFactory {
     fun converterFactory(json: Json): Converter.Factory =
         json.asConverterFactory(CONTENT_TYPE.toMediaType())
 
-    fun clientBuilder(logBodies: Boolean = false): OkHttpClient.Builder = OkHttpClient.Builder()
+    /**
+     * @param certificatePin доверие к сертификату, подтверждённому
+     * пользователем (issue #32). `null` — обычная проверка по системным CA.
+     */
+    fun clientBuilder(
+        logBodies: Boolean = false,
+        certificatePin: CertificatePinSource? = null,
+    ): OkHttpClient.Builder = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .allowPinnedCertificate(certificatePin)
         .apply {
             if (logBodies) {
                 addInterceptor(
@@ -72,7 +82,8 @@ object NetworkFactory {
         authenticator: Authenticator,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
-    ): OkHttpClient = clientBuilder(logBodies)
+        certificatePin: CertificatePinSource? = null,
+    ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
         .addInterceptor(authInterceptor)
         .apply { inspector?.let(::addInterceptor) }
@@ -89,7 +100,8 @@ object NetworkFactory {
         backendUrlInterceptor: Interceptor,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
-    ): OkHttpClient = clientBuilder(logBodies)
+        certificatePin: CertificatePinSource? = null,
+    ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
         .apply { inspector?.let(::addInterceptor) }
         .build()

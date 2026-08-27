@@ -22,6 +22,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
@@ -182,6 +183,7 @@ class RootViewModelTest {
         DataStoreOnboardingRepository(settings),
         authRepository,
         BackendUrlStore(settings, BUILD_URL, overrideEnabled),
+        BackendCertificatePin(settings, overrideEnabled),
     )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =

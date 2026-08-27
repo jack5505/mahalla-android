@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.test.core.app.ApplicationProvider
+import okhttp3.OkHttpClient
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -15,11 +17,13 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.network.AuthInterceptor
+import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
+import uz.mahalla.data.network.tls.PinnedCertificateHostnameVerifier
 import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
@@ -52,7 +56,7 @@ class GraphAssemblyTest {
         val baseUrl = NetworkModule.provideBaseUrl()
 
         val backendUrlInterceptor = backendUrlInterceptor(baseUrl)
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor, inspector())
+        val refreshClient = refreshClient(backendUrlInterceptor)
         val refreshRetrofit =
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
@@ -67,6 +71,8 @@ class GraphAssemblyTest {
             ),
             backendUrlInterceptor = backendUrlInterceptor,
             httpInspector = inspector(),
+            certificatePin = certificatePin(),
+            overrideEnabled = true,
         )
         val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
 
@@ -75,6 +81,25 @@ class GraphAssemblyTest {
         // refresh снова позовёт его и получится рекурсия.
         assertTrue(client.authenticator is TokenAuthenticator)
         assertFalse(refreshClient.authenticator is TokenAuthenticator)
+    }
+
+    /**
+     * Сборка без права менять адрес (release) не должна получать ни своей
+     * `sslSocketFactory`, ни своего верификатора имени (issue #32): доверять
+     * там нечему, а подменённый TLS — лишний способ сломать сеть целиком.
+     */
+    @Test
+    fun `a build without the override keeps platform tls`() {
+        val pinned = refreshClient(overrideEnabled = true)
+        val platform = refreshClient(overrideEnabled = false)
+
+        assertTrue(pinned.hostnameVerifier is PinnedCertificateHostnameVerifier)
+        assertFalse(platform.hostnameVerifier is PinnedCertificateHostnameVerifier)
+        assertEquals(
+            "верификатор имени остался штатным",
+            OkHttpClient().hostnameVerifier,
+            platform.hostnameVerifier,
+        )
     }
 
     @Test
@@ -100,7 +125,7 @@ class GraphAssemblyTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector()),
+                refreshClient(),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )
@@ -134,7 +159,7 @@ class GraphAssemblyTest {
     @Test
     fun `auth repository assembles on the bare refresh client`() {
         val converterFactory = NetworkModule.provideConverterFactory(NetworkModule.provideJson())
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector())
+        val refreshClient = refreshClient()
         val authApi = NetworkModule.provideAuthApi(
             NetworkModule.provideRefreshRetrofit(
                 refreshClient,
@@ -170,6 +195,23 @@ class GraphAssemblyTest {
     ) = BackendUrlInterceptor(
         BackendUrlStore(SettingsDataStore(sharedDataStore(context)), baseUrl),
         baseUrl,
+    )
+
+    /**
+     * Доверие к сертификату сервера (issue #32): пин обязан доезжать до обоих
+     * клиентов — вход и refresh идут по «голому», всё остальное по основному.
+     */
+    private fun certificatePin() =
+        BackendCertificatePin(SettingsDataStore(sharedDataStore(context)))
+
+    private fun refreshClient(
+        backendUrlInterceptor: BackendUrlInterceptor = backendUrlInterceptor(),
+        overrideEnabled: Boolean = true,
+    ) = NetworkModule.provideRefreshClient(
+        backendUrlInterceptor = backendUrlInterceptor,
+        httpInspector = inspector(),
+        certificatePin = certificatePin(),
+        overrideEnabled = overrideEnabled,
     )
 
     /**

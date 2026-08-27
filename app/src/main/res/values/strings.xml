@@ -30,6 +30,12 @@
     <string name="backend_url_cleartext_blocked">Bu yig\'ilishda shifrlanmagan http manzillar taqiqlangan — https manzilini kiriting</string>
     <string name="backend_url_unreachable">Server javob bermadi. Manzilni tekshiring yoki shunday saqlang.</string>
     <string name="backend_url_save_anyway">Baribir saqlash</string>
+    <string name="backend_url_certificate_untrusted">Server sertifikatiga ishonch yo\'q: u tizim sertifikat markazi tomonidan berilmagan yoki boshqa nom uchun berilgan.</string>
+    <string name="backend_url_certificate_hint">Barmoq izini server bilan solishtiring (openssl x509 -noout -fingerprint -sha256) va shundan keyin ishonch bildiring.</string>
+    <string name="backend_url_certificate_subject">Kimga berilgan: %1$s</string>
+    <string name="backend_url_certificate_issuer">Kim bergan: %1$s</string>
+    <string name="backend_url_certificate_fingerprint">SHA-256: %1$s</string>
+    <string name="backend_url_certificate_trust">Shu sertifikatga ishonaman</string>
 
     <!-- Инспектор трафика (issue #30) -->
     <string name="http_inspector_open">Tarmoq so\'rovlari</string>

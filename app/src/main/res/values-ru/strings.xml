@@ -25,6 +25,12 @@
     <string name="backend_url_cleartext_blocked">Эта сборка запрещает незашифрованный http — введите https-адрес</string>
     <string name="backend_url_unreachable">Сервер не ответил. Проверьте адрес или сохраните как есть.</string>
     <string name="backend_url_save_anyway">Всё равно сохранить</string>
+    <string name="backend_url_certificate_untrusted">Сертификату сервера нет доверия: он выдан не системным центром сертификации либо выдан на другое имя.</string>
+    <string name="backend_url_certificate_hint">Сверьте отпечаток с сервером (openssl x509 -noout -fingerprint -sha256) и только после этого подтверждайте доверие.</string>
+    <string name="backend_url_certificate_subject">Кому выдан: %1$s</string>
+    <string name="backend_url_certificate_issuer">Кем выдан: %1$s</string>
+    <string name="backend_url_certificate_fingerprint">SHA-256: %1$s</string>
+    <string name="backend_url_certificate_trust">Доверять этому сертификату</string>
 
     <!-- Инспектор трафика (issue #30) -->
     <string name="http_inspector_open">Сетевые запросы</string>

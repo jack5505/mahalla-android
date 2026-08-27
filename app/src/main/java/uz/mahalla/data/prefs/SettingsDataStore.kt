@@ -33,6 +33,7 @@ class SettingsDataStore @Inject constructor(
                 biometricEnabled = preferences[PreferenceKeys.BiometricEnabled] ?: false,
                 cityId = preferences[PreferenceKeys.CityId],
                 backendBaseUrl = preferences[PreferenceKeys.BackendBaseUrl],
+                backendCertificatePin = preferences[PreferenceKeys.BackendCertificatePin],
             )
         }
         // Файл настроек может быть недоступен (нет места, права, IO-ошибка).
@@ -65,5 +66,10 @@ class SettingsDataStore @Inject constructor(
     /** Адрес уже нормализован (`BackendUrl.normalize`) — здесь только запись. */
     suspend fun setBackendBaseUrl(baseUrl: String) {
         dataStore.edit { it[PreferenceKeys.BackendBaseUrl] = baseUrl }
+    }
+
+    /** Отпечаток уже нормализован (`CertificateFingerprint.of`) — issue #32. */
+    suspend fun setBackendCertificatePin(fingerprint: String) {
+        dataStore.edit { it[PreferenceKeys.BackendCertificatePin] = fingerprint }
     }
 }
