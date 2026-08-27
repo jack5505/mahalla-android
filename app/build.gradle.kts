@@ -154,6 +154,13 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
 
+    // Chucker (issue #30): в debug — настоящая библиотека с экраном трафика,
+    // в release — no-op с той же публичной поверхностью (Chucker.isOp = false).
+    // Благодаря no-op код инспектора живёт в main и не ветвится по sourceSet'ам,
+    // а в магазинную сборку не приезжают ни экран, ни база транзакций.
+    debugImplementation(libs.chucker)
+    releaseImplementation(libs.chucker.no.op)
+
     // Карта (эпик 4.2). Инициализация — ленивая, из MapKitInitializer.
     implementation(libs.yandex.mapkit)
 

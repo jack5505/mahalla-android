@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,11 +34,13 @@ fun BackendUrlScreen(
     viewModel: BackendUrlViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 BackendUrlEffect.Saved -> onSaved()
+                is BackendUrlEffect.OpenHttpInspector -> context.startActivity(effect.intent)
             }
         }
     }
@@ -80,6 +83,13 @@ private fun BackendUrlContent(
                 variant = MahallaButtonVariant.Ghost,
                 state = ButtonState(enabled = !state.checking),
             )
+            if (state.httpInspectorAvailable) {
+                MahallaButton(
+                    text = stringResource(R.string.http_inspector_open),
+                    onClick = { onEvent(BackendUrlEvent.HttpInspectorRequested) },
+                    variant = MahallaButtonVariant.Ghost,
+                )
+            }
         },
     ) {
         MahallaTextField(

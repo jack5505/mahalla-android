@@ -22,6 +22,8 @@ import uz.mahalla.data.network.OkHttpBackendReachability
 import uz.mahalla.data.network.RefreshClient
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
+import uz.mahalla.data.network.inspector.ChuckerHttpInspector
+import uz.mahalla.data.network.inspector.HttpInspector
 import javax.inject.Singleton
 
 /**
@@ -64,11 +66,14 @@ object NetworkModule {
     @Provides
     @Singleton
     @RefreshClient
-    fun provideRefreshClient(backendUrlInterceptor: BackendUrlInterceptor): OkHttpClient =
-        NetworkFactory.clientBuilder(logBodies = BuildConfig.DEBUG)
-            // Refresh обязан ходить на тот же сервер, что и остальные запросы.
-            .addInterceptor(backendUrlInterceptor)
-            .build()
+    fun provideRefreshClient(
+        backendUrlInterceptor: BackendUrlInterceptor,
+        httpInspector: HttpInspector,
+    ): OkHttpClient = NetworkFactory.refreshClient(
+        backendUrlInterceptor = backendUrlInterceptor,
+        inspector = httpInspector.interceptor,
+        logBodies = BuildConfig.DEBUG,
+    )
 
     @Provides
     @Singleton
@@ -90,11 +95,14 @@ object NetworkModule {
         authInterceptor: AuthInterceptor,
         tokenAuthenticator: TokenAuthenticator,
         backendUrlInterceptor: BackendUrlInterceptor,
-    ): OkHttpClient = NetworkFactory.clientBuilder(logBodies = BuildConfig.DEBUG)
-        .addInterceptor(backendUrlInterceptor)
-        .addInterceptor(authInterceptor)
-        .authenticator(tokenAuthenticator)
-        .build()
+        httpInspector: HttpInspector,
+    ): OkHttpClient = NetworkFactory.mainClient(
+        backendUrlInterceptor = backendUrlInterceptor,
+        authInterceptor = authInterceptor,
+        authenticator = tokenAuthenticator,
+        inspector = httpInspector.interceptor,
+        logBodies = BuildConfig.DEBUG,
+    )
 
     @Provides
     @Singleton
@@ -114,4 +122,8 @@ interface NetworkBindingsModule {
 
     @Binds
     fun bindCleartextPolicy(impl: AndroidCleartextPolicy): CleartextPolicy
+
+    /** Инспектор трафика (issue #30). В release реализация отвечает «нет». */
+    @Binds
+    fun bindHttpInspector(impl: ChuckerHttpInspector): HttpInspector
 }

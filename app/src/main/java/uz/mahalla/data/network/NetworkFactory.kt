@@ -2,6 +2,8 @@ package uz.mahalla.data.network
 
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
+import okhttp3.Authenticator
+import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -49,6 +51,48 @@ object NetworkFactory {
                 )
             }
         }
+
+    /**
+     * Основной клиент: адрес бэкенда → Bearer → инспектор, плюс refresh по 401.
+     *
+     * Порядок не косметика. Инспектор добавляется последним, поэтому получает
+     * запрос ровно в том виде, в каком тот уйдёт в сеть: с фактическим хостом
+     * (его подставил [BackendUrlInterceptor], issue #26) и с уже проставленным
+     * `Authorization`. Стоя первым, он показывал бы адрес сборки и запрос без
+     * заголовков — то есть отвечал бы не на тот вопрос, ради которого нужен.
+     *
+     * Чего инспектор не увидит: повтор запроса после refresh'а. Его делает
+     * `Authenticator` ниже уровня application-интерцепторов — в списке будет
+     * одна транзакция с ответом 401 и одна с уже успешным повтором только при
+     * следующем вызове API.
+     */
+    fun mainClient(
+        backendUrlInterceptor: Interceptor,
+        authInterceptor: Interceptor,
+        authenticator: Authenticator,
+        inspector: Interceptor? = null,
+        logBodies: Boolean = false,
+    ): OkHttpClient = clientBuilder(logBodies)
+        .addInterceptor(backendUrlInterceptor)
+        .addInterceptor(authInterceptor)
+        .apply { inspector?.let(::addInterceptor) }
+        .authenticator(authenticator)
+        .build()
+
+    /**
+     * «Голый» клиент для авторизации и refresh'а: без `AuthInterceptor` и без
+     * `TokenAuthenticator` (иначе 401 на refresh звал бы refresh). Адрес
+     * бэкенда и инспектор нужны и здесь — вход и обновление токена уходят на
+     * тот же сервер и точно так же требуют просмотра.
+     */
+    fun refreshClient(
+        backendUrlInterceptor: Interceptor,
+        inspector: Interceptor? = null,
+        logBodies: Boolean = false,
+    ): OkHttpClient = clientBuilder(logBodies)
+        .addInterceptor(backendUrlInterceptor)
+        .apply { inspector?.let(::addInterceptor) }
+        .build()
 
     fun retrofit(
         baseUrl: String,
