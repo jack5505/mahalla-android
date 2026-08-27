@@ -9,6 +9,7 @@ import uz.mahalla.data.network.BackendReachability
 import uz.mahalla.data.network.BackendUrl
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.CleartextPolicy
+import uz.mahalla.data.network.inspector.HttpInspector
 import javax.inject.Inject
 
 /**
@@ -23,11 +24,16 @@ class BackendUrlViewModel @Inject constructor(
     private val backendUrlStore: BackendUrlStore,
     private val reachability: BackendReachability,
     private val cleartextPolicy: CleartextPolicy,
+    private val httpInspector: HttpInspector,
 ) : MviViewModel<BackendUrlState, BackendUrlEvent, BackendUrlEffect>(BackendUrlState()) {
 
     init {
         updateState {
-            copy(url = backendUrlStore.current, defaultUrl = backendUrlStore.buildDefault)
+            copy(
+                url = backendUrlStore.current,
+                defaultUrl = backendUrlStore.buildDefault,
+                httpInspectorAvailable = httpInspector.isAvailable,
+            )
         }
     }
 
@@ -44,6 +50,12 @@ class BackendUrlViewModel @Inject constructor(
             }
 
             BackendUrlEvent.Submit -> submit()
+
+            // Интента нет только в сборке без инспектора — там нет и кнопки.
+            BackendUrlEvent.HttpInspectorRequested ->
+                httpInspector.launchIntent()?.let { intent ->
+                    emitEffect(BackendUrlEffect.OpenHttpInspector(intent))
+                }
         }
     }
 

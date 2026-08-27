@@ -26,6 +26,10 @@
     <string name="backend_url_unreachable">Сервер не ответил. Проверьте адрес или сохраните как есть.</string>
     <string name="backend_url_save_anyway">Всё равно сохранить</string>
 
+    <!-- Инспектор трафика (issue #30) -->
+    <string name="http_inspector_open">Сетевые запросы</string>
+    <string name="http_inspector_subtitle">Посмотреть, какие запросы уходят на сервер</string>
+
     <!-- Онбординг: welcome -->
     <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
     <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>

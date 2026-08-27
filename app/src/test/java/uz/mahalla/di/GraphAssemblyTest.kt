@@ -19,6 +19,7 @@ import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
+import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
@@ -51,7 +52,7 @@ class GraphAssemblyTest {
         val baseUrl = NetworkModule.provideBaseUrl()
 
         val backendUrlInterceptor = backendUrlInterceptor(baseUrl)
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor)
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor, inspector())
         val refreshRetrofit =
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
@@ -65,6 +66,7 @@ class GraphAssemblyTest {
                 clock = AppModule.provideClock(),
             ),
             backendUrlInterceptor = backendUrlInterceptor,
+            httpInspector = inspector(),
         )
         val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
 
@@ -98,7 +100,7 @@ class GraphAssemblyTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(backendUrlInterceptor()),
+                NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector()),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )
@@ -132,7 +134,7 @@ class GraphAssemblyTest {
     @Test
     fun `auth repository assembles on the bare refresh client`() {
         val converterFactory = NetworkModule.provideConverterFactory(NetworkModule.provideJson())
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor())
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector())
         val authApi = NetworkModule.provideAuthApi(
             NetworkModule.provideRefreshRetrofit(
                 refreshClient,
@@ -169,6 +171,12 @@ class GraphAssemblyTest {
         BackendUrlStore(SettingsDataStore(sharedDataStore(context)), baseUrl),
         baseUrl,
     )
+
+    /**
+     * Инспектор трафика (issue #30) — настоящий: граф собирается вместе с
+     * Chucker'ом, значит его интерцептор доезжает до обоих клиентов.
+     */
+    private fun inspector() = ChuckerHttpInspector(context)
 
     /** `initialize = false`: нужен факт кодогенерации, а не статик-инициализация. */
     private fun loadClass(name: String): Class<*> =

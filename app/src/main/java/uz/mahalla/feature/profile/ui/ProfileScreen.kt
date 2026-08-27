@@ -43,6 +43,7 @@ fun ProfileScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 ProfileEffect.RecreateActivity -> (context as? Activity)?.recreate()
+                is ProfileEffect.OpenHttpInspector -> context.startActivity(effect.intent)
             }
         }
     }
@@ -90,6 +91,16 @@ fun ProfileScreen(
                 subtitle = state.settings.backendBaseUrl
                     ?: stringResource(R.string.backend_url_default_value),
                 onClick = onChangeServer,
+            )
+        }
+
+        // Инспектор трафика (issue #30): в release строки нет — библиотека
+        // приезжает вариантом no-op и отвечает `isAvailable = false`.
+        if (state.httpInspectorAvailable) {
+            MahallaListItem(
+                title = stringResource(R.string.http_inspector_open),
+                subtitle = stringResource(R.string.http_inspector_subtitle),
+                onClick = { viewModel.onEvent(ProfileEvent.HttpInspectorRequested) },
             )
         }
     }

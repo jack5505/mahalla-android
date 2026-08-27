@@ -1,6 +1,7 @@
 package uz.mahalla.feature.onboarding.ui
 
 import android.app.Application
+import android.content.Intent
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -19,9 +20,11 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.testutil.FakeBackendReachability
 import uz.mahalla.testutil.FakeCleartextPolicy
+import uz.mahalla.testutil.FakeHttpInspector
 import uz.mahalla.testutil.MainDispatcherRule
 import java.io.File
 
@@ -199,8 +202,37 @@ class BackendUrlViewModelTest {
         assertNull(viewModel.state.value.error)
     }
 
-    private fun viewModel(store: BackendUrlStore = store()) =
-        BackendUrlViewModel(store, reachability, cleartextPolicy)
+    @Test
+    fun `inspector button opens the traffic screen`() = runTest(mainDispatcherRule.dispatcher) {
+        // До входа профиль недоступен, а посмотреть запрос кода из SMS нужно
+        // именно здесь (issue #30).
+        val intent = Intent("uz.mahalla.test.INSPECTOR")
+        val viewModel = viewModel(inspector = FakeHttpInspector(intent = intent))
+
+        assertTrue(viewModel.state.value.httpInspectorAvailable)
+        viewModel.onEvent(BackendUrlEvent.HttpInspectorRequested)
+
+        assertEquals(BackendUrlEffect.OpenHttpInspector(intent), viewModel.effects.first())
+    }
+
+    @Test
+    fun `build without an inspector has no button and no effect`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel(inspector = FakeHttpInspector(isAvailable = false))
+
+            viewModel.onEvent(BackendUrlEvent.HttpInspectorRequested)
+            // Сохранение доедет до effects первым, только если инспектор молчит.
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://api.mahalla.uz"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            assertFalse(viewModel.state.value.httpInspectorAvailable)
+            assertEquals(BackendUrlEffect.Saved, viewModel.effects.first())
+        }
+
+    private fun viewModel(
+        store: BackendUrlStore = store(),
+        inspector: HttpInspector = FakeHttpInspector(isAvailable = false),
+    ) = BackendUrlViewModel(store, reachability, cleartextPolicy, inspector)
 
     private fun store(settings: SettingsDataStore = settingsDataStore()) =
         BackendUrlStore(settings, BUILD_URL)
