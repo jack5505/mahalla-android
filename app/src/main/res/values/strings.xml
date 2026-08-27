@@ -159,6 +159,9 @@
     <string name="state_empty_title">Hozircha bo\'sh</string>
     <string name="state_empty_description">Bu yerda hali ma\'lumot yo\'q</string>
     <string name="state_error_title">Xatolik yuz berdi</string>
+    <!-- Для TalkBack: состояние раскрываемого блока -->
+    <string name="state_expanded">ochilgan</string>
+    <string name="state_collapsed">yig\'ilgan</string>
 
     <!-- UI-кит: карточки -->
     <string name="place_open_now">Ochiq</string>
@@ -181,6 +184,15 @@
     <string name="error_not_found">Ma\'lumot topilmadi</string>
     <string name="error_server">Serverda xatolik yuz berdi</string>
     <string name="error_unknown">Nimadir xato ketdi</string>
+
+    <!-- Подробности ответа сервера (issue #34) -->
+    <string name="error_details_show">Xatolik tafsilotlari</string>
+    <string name="error_details_hide">Tafsilotlarni yashirish</string>
+    <string name="error_details_status">Holat: HTTP %1$s</string>
+    <string name="error_details_code">Xatolik kodi: %1$s</string>
+    <string name="error_details_request">So\'rov: %1$s</string>
+    <string name="error_details_response">Server javobi</string>
+    <string name="error_details_copy">Nusxa olish</string>
 
     <!-- Discovery: категории (эпик 4.1) -->
     <string name="category_food">Ovqat</string>

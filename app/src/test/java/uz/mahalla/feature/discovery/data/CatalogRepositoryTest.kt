@@ -272,7 +272,7 @@ class CatalogRepositoryTest {
 
         val result = repository().placeDetails("p-1")
 
-        assertEquals(ApiResult.Failure(ApiError.NotFound), result)
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
         assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
     }
 
@@ -292,7 +292,7 @@ class CatalogRepositoryTest {
 
         val result = repository().placeDetails("p-1")
 
-        assertEquals(ApiResult.Failure(ApiError.NotFound), result)
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
         assertNull(dao.byId("p-1"))
     }
 

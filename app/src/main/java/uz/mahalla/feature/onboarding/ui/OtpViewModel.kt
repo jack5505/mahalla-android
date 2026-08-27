@@ -53,13 +53,13 @@ class OtpViewModel @Inject constructor(
             is OtpEvent.CodeChanged -> onCodeChanged(event.raw)
             OtpEvent.Submit -> submit()
             OtpEvent.Resend -> resend()
-            OtpEvent.ErrorDismissed -> updateState { copy(failure = null, apiError = null) }
+            OtpEvent.ErrorDismissed -> updateState { copy(failure = null, apiFailure = null) }
         }
     }
 
     private fun onCodeChanged(raw: String) {
         if (currentState.inputBlocked || currentState.submitting) return
-        updateState { copy(code = code.onInput(raw), failure = null, apiError = null) }
+        updateState { copy(code = code.onInput(raw), failure = null, apiFailure = null) }
         if (currentState.code.isComplete) submit()
     }
 
@@ -67,7 +67,7 @@ class OtpViewModel @Inject constructor(
         val state = currentState
         if (!state.canSubmit) return
 
-        updateState { copy(submitting = true, failure = null, apiError = null) }
+        updateState { copy(submitting = true, failure = null, apiFailure = null) }
         viewModelScope.launch {
             when (val result = authRepository.verifyCode(state.phone, state.code.code)) {
                 is ApiResult.Success -> {
@@ -81,9 +81,16 @@ class OtpViewModel @Inject constructor(
                         copy(
                             submitting = false,
                             failure = failure,
+                            // Отдельным блоком показываем сетевую ошибку и
+                            // любой ответ, где бэкенд назвал причину словами
+                            // (issue #34): «включите геолокацию» вместо
+                            // подписи поля «код неверный». Остальное уже
+                            // сказано под полем — дублировать нечего.
+                            apiFailure = result.failure.takeIf {
+                                failure == OtpFailure.Network || it.serverMessage != null
+                            },
                             // Сеть — не про код: введённые цифры не трогаем,
                             // пользователь просто повторяет отправку.
-                            apiError = result.error.takeIf { failure == OtpFailure.Network },
                             code = if (failure == OtpFailure.Network) code else code.cleared().asError(),
                         )
                     }
@@ -95,7 +102,7 @@ class OtpViewModel @Inject constructor(
     private fun resend() {
         if (!currentState.canResend) return
 
-        updateState { copy(resending = true, apiError = null) }
+        updateState { copy(resending = true, apiFailure = null) }
         viewModelScope.launch {
             when (val result = authRepository.requestCode(currentState.phone)) {
                 is ApiResult.Success -> {
@@ -103,7 +110,7 @@ class OtpViewModel @Inject constructor(
                         copy(
                             resending = false,
                             failure = null,
-                            apiError = null,
+                            apiFailure = null,
                             code = OtpFieldState(length = result.data.codeLength),
                             resendInSeconds = result.data.resendAfterSeconds,
                         )
@@ -113,7 +120,7 @@ class OtpViewModel @Inject constructor(
                 }
 
                 is ApiResult.Failure -> updateState {
-                    copy(resending = false, apiError = result.error)
+                    copy(resending = false, apiFailure = result.failure)
                 }
             }
         }

@@ -36,13 +36,36 @@ class ApiResultTest {
 
     @Test
     fun `http codes are mapped to domain errors`() = runTest {
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), apiCall { throw httpException(401) })
-        assertEquals(ApiResult.Failure(ApiError.Forbidden), apiCall { throw httpException(403) })
-        assertEquals(ApiResult.Failure(ApiError.NotFound), apiCall { throw httpException(404) })
+        assertEquals(ApiError.Unauthorized, apiCall { throw httpException(401) }.errorOrNull())
+        assertEquals(ApiError.Forbidden, apiCall { throw httpException(403) }.errorOrNull())
+        assertEquals(ApiError.NotFound, apiCall { throw httpException(404) }.errorOrNull())
 
         val serverFailure = apiCall { throw httpException(500) }
         val error = (serverFailure as ApiResult.Failure).error
         assertTrue(error is ApiError.Http && error.code == 500)
+    }
+
+    @Test
+    fun `the body of an http error reaches the caller`() = runTest {
+        // Ровно случай из issue #34: классификация говорит «нет доступа», а
+        // причину знает только бэкенд.
+        val body = """
+            {"success":false,"error":{"code":"GEO_PERMISSION_REQUIRED",
+            "message":"Joylashuv ruxsatini yoqing"}}
+        """.trimIndent()
+
+        val failure = apiCall { throw httpException(403, body) } as ApiResult.Failure
+
+        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals("GEO_PERMISSION_REQUIRED", failure.failure.server?.code)
+        assertEquals("Joylashuv ruxsatini yoqing", failure.failure.serverMessage)
+    }
+
+    @Test
+    fun `failures without a response carry no server payload`() = runTest {
+        // Показывать «HTTP 0» и пустое тело — врать: ответа не было вовсе.
+        assertNull(apiCall { throw IOException("dns") }.failureOrNull()?.server)
+        assertNull(apiCall { throw SocketTimeoutException() }.failureOrNull()?.server)
     }
 
     @Test
@@ -92,7 +115,7 @@ class ApiResultTest {
         assertEquals(ApiError.NoConnection, failure.errorOrNull())
     }
 
-    private fun httpException(code: Int): HttpException = HttpException(
-        Response.error<Unit>(code, "".toResponseBody("application/json".toMediaType())),
+    private fun httpException(code: Int, body: String = ""): HttpException = HttpException(
+        Response.error<Unit>(code, body.toResponseBody("application/json".toMediaType())),
     )
 }

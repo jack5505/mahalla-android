@@ -131,11 +131,19 @@ class SearchViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             if (delayMillis > 0) delay(delayMillis)
             updateState {
-                copy(results = ScreenState.Loading, isLoadingMore = false, loadMoreFailed = false)
+                copy(
+                    results = ScreenState.Loading,
+                    isLoadingMore = false,
+                    loadMoreFailure = null,
+                )
             }
             when (val result = repository.places(filters, page = 0)) {
                 is ApiResult.Failure -> updateState {
-                    copy(results = ScreenState.Error(result.error), hasMore = false, fromCache = false)
+                    copy(
+                        results = ScreenState.Error(result.failure),
+                        hasMore = false,
+                        fromCache = false,
+                    )
                 }
 
                 is ApiResult.Success -> {
@@ -161,7 +169,8 @@ class SearchViewModel @Inject constructor(
      * потерять сотню карточек из-за одного неудачного запроса хуже, чем не
      * получить следующую двадцатку, — но и молча дёргать сеть в цикле нельзя:
      * список не вырос, автотриггер по концу списка больше не сработает,
-     * поэтому провал переводит хвост в состояние «повторить» ([loadMoreFailed]).
+     * поэтому провал переводит хвост в состояние «повторить»
+     * ([SearchState.loadMoreFailure]) — вместе с причиной отказа.
      *
      * Номер загруженной страницы считается локально, а не берётся из ответа:
      * сервер, не вернувший поле `page`, отдаёт дефолтный `0`, и «следующей»
@@ -175,11 +184,11 @@ class SearchViewModel @Inject constructor(
 
         val nextPage = loadedPage + 1
         val filters = state.filters
-        updateState { copy(isLoadingMore = true, loadMoreFailed = false) }
+        updateState { copy(isLoadingMore = true, loadMoreFailure = null) }
         loadMoreJob = viewModelScope.launch {
             when (val result = repository.places(filters, page = nextPage)) {
                 is ApiResult.Failure -> updateState {
-                    copy(isLoadingMore = false, loadMoreFailed = true)
+                    copy(isLoadingMore = false, loadMoreFailure = result.failure)
                 }
 
                 is ApiResult.Success -> {
@@ -189,7 +198,7 @@ class SearchViewModel @Inject constructor(
                             results = ScreenState.Content(appended(loaded.data, result.data.items)),
                             hasMore = result.data.hasMore,
                             isLoadingMore = false,
-                            loadMoreFailed = false,
+                            loadMoreFailure = null,
                         )
                     }
                 }

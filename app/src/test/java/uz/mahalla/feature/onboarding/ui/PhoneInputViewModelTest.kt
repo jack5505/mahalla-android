@@ -11,7 +11,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.ServerError
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.testutil.FakeAuthRepository
@@ -135,9 +137,54 @@ class PhoneInputViewModelTest {
         viewModel.onEvent(PhoneInputEvent.Submit)
         advanceUntilIdle()
 
-        assertEquals(ApiError.NoConnection, viewModel.state.value.apiError)
+        assertEquals(ApiError.NoConnection, viewModel.state.value.apiFailure?.error)
         assertFalse(viewModel.state.value.submitting)
         assertTrue("повторная отправка возможна", viewModel.state.value.canSubmit)
+    }
+
+    @Test
+    fun `the explanation of the backend reaches the state`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // issue #34: 403 сам по себе значит «нет прав», а бэкенд объяснил, что
+        // именно включить. Именно его текст и должен доехать до экрана.
+        authRepository.requestCodeResult = ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.Forbidden,
+                server = ServerError(
+                    httpCode = 403,
+                    code = "GEO_PERMISSION_REQUIRED",
+                    message = "Joylashuv ruxsatini yoqing",
+                    requestLine = "POST http://localhost/auth/otp/request",
+                ),
+            ),
+        )
+        val viewModel = viewModel()
+        viewModel.onEvent(PhoneInputEvent.PhoneChanged("+998 90 123 45 67"))
+        viewModel.onEvent(PhoneInputEvent.ConsentChanged(true))
+
+        viewModel.onEvent(PhoneInputEvent.Submit)
+        advanceUntilIdle()
+
+        val failure = viewModel.state.value.apiFailure
+        assertEquals("Joylashuv ruxsatini yoqing", failure?.serverMessage)
+        assertEquals("GEO_PERMISSION_REQUIRED", failure?.server?.code)
+    }
+
+    @Test
+    fun `retyping the number hides the previous error`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.requestCodeResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+        viewModel.onEvent(PhoneInputEvent.PhoneChanged("+998 90 123 45 67"))
+        viewModel.onEvent(PhoneInputEvent.ConsentChanged(true))
+        viewModel.onEvent(PhoneInputEvent.Submit)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PhoneInputEvent.PhoneChanged("+998 90 123 45 68"))
+
+        assertNull("ошибка про прошлый номер повиснуть не должна", viewModel.state.value.apiFailure)
     }
 
     @Test

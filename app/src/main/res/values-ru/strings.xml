@@ -153,6 +153,9 @@
     <string name="state_empty_title">Пока пусто</string>
     <string name="state_empty_description">Здесь пока нет данных</string>
     <string name="state_error_title">Произошла ошибка</string>
+    <!-- Для TalkBack: состояние раскрываемого блока -->
+    <string name="state_expanded">развёрнуто</string>
+    <string name="state_collapsed">свёрнуто</string>
 
     <!-- UI-кит: карточки -->
     <string name="place_open_now">Открыто</string>
@@ -175,6 +178,15 @@
     <string name="error_not_found">Данные не найдены</string>
     <string name="error_server">Ошибка на сервере</string>
     <string name="error_unknown">Что-то пошло не так</string>
+
+    <!-- Подробности ответа сервера (issue #34) -->
+    <string name="error_details_show">Подробности ошибки</string>
+    <string name="error_details_hide">Скрыть подробности</string>
+    <string name="error_details_status">Статус: HTTP %1$s</string>
+    <string name="error_details_code">Код ошибки: %1$s</string>
+    <string name="error_details_request">Запрос: %1$s</string>
+    <string name="error_details_response">Ответ сервера</string>
+    <string name="error_details_copy">Копировать</string>
 
     <!-- Discovery: категории (эпик 4.1) -->
     <string name="category_food">Еда</string>

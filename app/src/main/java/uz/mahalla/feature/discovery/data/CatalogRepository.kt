@@ -1,6 +1,7 @@
 package uz.mahalla.feature.discovery.data
 
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.data.db.dao.PlaceDao
@@ -99,7 +100,7 @@ class DefaultCatalogRepository @Inject constructor(
                 )
             }
 
-            is ApiResult.Failure -> cachedPage(filters, page, response.error)
+            is ApiResult.Failure -> cachedPage(filters, page, response.failure)
         }
     }
 
@@ -131,13 +132,15 @@ class DefaultCatalogRepository @Inject constructor(
     private suspend fun cachedPage(
         filters: DiscoveryFilters,
         page: Int,
-        error: ApiError,
+        failure: ApiFailure,
     ): ApiResult<PlacePage> {
-        if (page > 0) return ApiResult.Failure(error)
+        // Ответ сервера доносится до экрана как есть: если кэш не спас, человек
+        // должен увидеть, что именно сказал бэкенд (issue #34).
+        if (page > 0) return ApiResult.Failure(failure)
 
         val cached = placeDao.nearest(CACHE_PAGE_SIZE).map { it.toDomain() }
         val filtered = PlaceFilterEngine.apply(cached, filters)
-        if (filtered.isEmpty()) return ApiResult.Failure(error)
+        if (filtered.isEmpty()) return ApiResult.Failure(failure)
 
         return ApiResult.Success(
             PlacePage(items = filtered, page = 0, hasMore = false, fromCache = true),

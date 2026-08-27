@@ -17,7 +17,10 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaTopBar
+import uz.mahalla.core.ui.userMessage
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
@@ -100,4 +103,31 @@ fun OnboardingError(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.error,
     )
+}
+
+/**
+ * Ошибка запроса на шаге онбординга (issue #34): текст от бэкенда (или общий,
+ * если бэкенд промолчал) плюс раскрываемые подробности ответа.
+ *
+ * Вход и регистрация — место, где непонятная ошибка стоит дороже всего:
+ * человек ещё не в приложении и не может ни пожаловаться, ни посмотреть
+ * инспектор трафика в профиле.
+ *
+ * [showMessage] выключается там, где тот же текст уже показан подписью поля:
+ * на экране кода сообщение сервера подставляется под ячейки, и повторять его
+ * вторым абзацем незачем — подробности при этом остаются доступны.
+ */
+@Composable
+fun OnboardingApiError(
+    failure: ApiFailure,
+    modifier: Modifier = Modifier,
+    showMessage: Boolean = true,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        if (showMessage) OnboardingError(failure.userMessage())
+        failure.server?.let { MahallaErrorDetails(server = it) }
+    }
 }

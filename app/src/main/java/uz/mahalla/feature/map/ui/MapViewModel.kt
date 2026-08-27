@@ -51,7 +51,9 @@ class MapViewModel @Inject constructor(
         updateState { copy(places = ScreenState.Loading, clusters = emptyList()) }
         viewModelScope.launch {
             when (val result = repository.places(DiscoveryFilters())) {
-                is ApiResult.Failure -> updateState { copy(places = ScreenState.Error(result.error)) }
+                is ApiResult.Failure -> updateState {
+                    copy(places = ScreenState.Error(result.failure))
+                }
 
                 is ApiResult.Success -> {
                     // На карту попадают только места с координатами: место без

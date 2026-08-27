@@ -15,7 +15,6 @@ import uz.mahalla.core.ui.components.ButtonCaption
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaOtpField
-import uz.mahalla.core.ui.messageRes
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.text.OtpFieldState
@@ -95,10 +94,12 @@ private fun OtpContent(
             state = state.code,
             onCodeChange = { onEvent(OtpEvent.CodeChanged(it)) },
             enabled = !state.submitting && !state.inputBlocked,
-            errorText = state.failure?.messageOrNull(),
+            errorText = state.fieldError ?: state.failure?.messageOrNull(),
             focusRequester = focusRequester,
         )
-        state.apiError?.let { OnboardingError(stringResource(it.messageRes())) }
+        state.apiFailure?.let {
+            OnboardingApiError(failure = it, showMessage = state.showApiMessage)
+        }
     }
 }
 

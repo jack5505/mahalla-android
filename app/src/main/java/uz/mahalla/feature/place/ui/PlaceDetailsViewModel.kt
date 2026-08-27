@@ -51,7 +51,9 @@ class PlaceDetailsViewModel @Inject constructor(
         updateState { copy(details = ScreenState.Loading) }
         viewModelScope.launch {
             when (val result = repository.placeDetails(placeId)) {
-                is ApiResult.Failure -> updateState { copy(details = ScreenState.Error(result.error)) }
+                is ApiResult.Failure -> updateState {
+                    copy(details = ScreenState.Error(result.failure))
+                }
                 is ApiResult.Success -> updateState { withSchedule(result.data) }
             }
         }

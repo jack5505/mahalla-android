@@ -1,8 +1,11 @@
 package uz.mahalla.core.ui
 
 import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
 import uz.mahalla.R
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 
 /**
  * Единственное место, где ошибка сетевого слоя превращается в текст (эпик
@@ -23,5 +26,16 @@ fun ApiError.messageRes(): Int = when (this) {
     }
     is ApiError.Unexpected -> R.string.error_unknown
 }
+
+/**
+ * Текст ошибки для пользователя (issue #34): сообщение бэкенда, если оно есть,
+ * иначе общий текст по классификации.
+ *
+ * Сервер знает причину точнее клиента: «включите доступ к геолокации» вместо
+ * «нет прав на это действие». Свои строки остаются фоллбэком — на случай
+ * пустого тела, HTML от прокси и отсутствия сети.
+ */
+@Composable
+fun ApiFailure.userMessage(): String = serverMessage ?: stringResource(error.messageRes())
 
 private const val SERVER_ERROR_CODE = 500

@@ -1,6 +1,7 @@
 package uz.mahalla.core.ui.state
 
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 
 /**
@@ -14,13 +15,22 @@ import uz.mahalla.core.result.ApiResult
 sealed interface ScreenState<out T> {
     data object Loading : ScreenState<Nothing>
     data object Empty : ScreenState<Nothing>
-    data class Error(val error: ApiError) : ScreenState<Nothing>
+
+    /** Ошибка вместе с ответом сервера: экран показывает его текст (issue #34). */
+    data class Error(val failure: ApiFailure) : ScreenState<Nothing> {
+        constructor(error: ApiError) : this(ApiFailure(error))
+
+        val error: ApiError get() = failure.error
+    }
+
     data class Content<out T>(val data: T) : ScreenState<T>
 }
 
 fun <T> ScreenState<T>.dataOrNull(): T? = (this as? ScreenState.Content)?.data
 
 fun <T> ScreenState<T>.errorOrNull(): ApiError? = (this as? ScreenState.Error)?.error
+
+fun <T> ScreenState<T>.failureOrNull(): ApiFailure? = (this as? ScreenState.Error)?.failure
 
 val ScreenState<*>.isLoading: Boolean get() = this is ScreenState.Loading
 
@@ -38,7 +48,7 @@ inline fun <T, R> ScreenState<T>.map(transform: (T) -> R): ScreenState<R> = when
 inline fun <T> ApiResult<T>.toScreenState(isEmpty: (T) -> Boolean = { false }): ScreenState<T> =
     when (this) {
         is ApiResult.Success -> if (isEmpty(data)) ScreenState.Empty else ScreenState.Content(data)
-        is ApiResult.Failure -> ScreenState.Error(error)
+        is ApiResult.Failure -> ScreenState.Error(failure)
     }
 
 /** Список: пустой ответ — это [ScreenState.Empty], а не пустой контент. */

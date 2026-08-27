@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -332,7 +333,11 @@ class SearchViewModelTest {
         val results = viewModel.state.value.results as ScreenState.Content
         assertEquals(listOf("a"), results.data.map(Place::id))
         assertFalse(viewModel.state.value.isLoadingMore)
-        assertTrue("хвост списка должен предложить повтор", viewModel.state.value.loadMoreFailed)
+        assertEquals(
+            "хвост списка должен предложить повтор и назвать причину",
+            ApiError.NoConnection,
+            viewModel.state.value.loadMoreFailure?.error,
+        )
     }
 
     @Test
@@ -352,7 +357,7 @@ class SearchViewModelTest {
 
         val results = viewModel.state.value.results as ScreenState.Content
         assertEquals(listOf("a", "b"), results.data.map(Place::id))
-        assertFalse(viewModel.state.value.loadMoreFailed)
+        assertNull(viewModel.state.value.loadMoreFailure)
     }
 
     @Test

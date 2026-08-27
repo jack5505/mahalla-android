@@ -1,6 +1,6 @@
 package uz.mahalla.feature.onboarding.ui
 
-import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
@@ -23,8 +23,11 @@ data class PhoneInputState(
     val consentAccepted: Boolean = false,
     val submitting: Boolean = false,
     val error: PhoneInputError? = null,
-    /** Ошибка запроса кода: сеть, лимит, 5xx. Текст — из `messageRes()`. */
-    val apiError: ApiError? = null,
+    /**
+     * Ошибка запроса кода: сеть, лимит, 5xx, отказ бэкенда. Показывается
+     * текстом сервера, если он его прислал, иначе общим (issue #34).
+     */
+    val apiFailure: ApiFailure? = null,
 ) : UiState {
     /**
      * Кнопка активна только когда запрос действительно можно отправить:
