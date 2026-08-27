@@ -3,6 +3,7 @@ package uz.mahalla.data.network
 import okhttp3.Authenticator
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -15,6 +16,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import uz.mahalla.data.network.tls.CertificatePinSource
+import uz.mahalla.testutil.SelfSignedServer
+import javax.net.ssl.SSLException
 
 /**
  * Сборка клиентов (issue #30): где в цепочке стоит инспектор трафика.
@@ -126,6 +130,67 @@ class NetworkClientsTest {
         )
         assertTrue("логирование в тестовой конфигурации выключено", client.interceptors.size == 3)
     }
+
+    @Test
+    fun `both clients accept the certificate the user trusted`() {
+        // issue #32: вход и запрос кода из SMS идут по «голому» refresh-клиенту,
+        // остальное — по основному. Самоподписанный сертификат стенда обязан
+        // проходить на обоих, иначе доверие лечит половину приложения.
+        val stand = SelfSignedServer().apply { start() }
+        stand.server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        stand.server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        val pin = CertificatePinSource { stand.fingerprint }
+
+        val main = NetworkFactory.mainClient(
+            backendUrlInterceptor = addressInterceptor,
+            authInterceptor = tokenInterceptor,
+            authenticator = Authenticator.NONE,
+            certificatePin = pin,
+        )
+        val refresh = NetworkFactory.refreshClient(
+            backendUrlInterceptor = addressInterceptor,
+            certificatePin = pin,
+        )
+
+        try {
+            assertEquals(200, main.code(stand.url("/places").toString()))
+            assertEquals(200, refresh.code(stand.url("/auth/otp/request").toString()))
+        } finally {
+            stand.shutdown()
+        }
+    }
+
+    @Test
+    fun `both clients reject the same certificate without the pin`() {
+        val stand = SelfSignedServer().apply { start() }
+        val pin = CertificatePinSource { null }
+
+        val main = NetworkFactory.mainClient(
+            backendUrlInterceptor = addressInterceptor,
+            authInterceptor = tokenInterceptor,
+            authenticator = Authenticator.NONE,
+            certificatePin = pin,
+        )
+        val refresh = NetworkFactory.refreshClient(
+            backendUrlInterceptor = addressInterceptor,
+            certificatePin = pin,
+        )
+
+        try {
+            val url = stand.url("/places").toString()
+            assertTrue(
+                runCatching { main.code(url) }.exceptionOrNull() is SSLException,
+            )
+            assertTrue(
+                runCatching { refresh.code(url) }.exceptionOrNull() is SSLException,
+            )
+        } finally {
+            stand.shutdown()
+        }
+    }
+
+    private fun OkHttpClient.code(url: String): Int =
+        newCall(Request.Builder().url(url).build()).execute().use { it.code }
 
     private class RecordingInspector : Interceptor {
         var request: Request? = null

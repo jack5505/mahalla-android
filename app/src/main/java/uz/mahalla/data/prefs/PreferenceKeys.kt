@@ -20,6 +20,9 @@ internal object PreferenceKeys {
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 
+    /** Отпечаток сертификата сервера, подтверждённый пользователем (issue #32). */
+    val BackendCertificatePin = stringPreferencesKey("settings_backend_certificate_pin")
+
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
     val SessionExpiresAt = longPreferencesKey("session_expires_at")

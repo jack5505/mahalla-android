@@ -6,7 +6,20 @@
     норма, а без этого файла Android с API 28 режет такие запросы молча, и
     экран ввода адреса был бы бесполезен. Файл перекрывает одноимённый из
     main/ только в debug: релиз остаётся с жёстким конфигом.
+
+    Плюс сертификаты, установленные пользователем (issue #32). С API 24
+    приложение по умолчанию их не видит, поэтому корневой сертификат стенда,
+    добавленный в настройках телефона, не помогал: handshake всё равно падал с
+    `Trust anchor for certification path not found`. Это второй, независимый
+    путь к тому же результату — кто предпочитает поставить CA на устройство,
+    а не подтверждать отпечаток на экране адреса. В релизе его нет: там чужой
+    CA в системе не должен давать доступ к трафику приложения.
 -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

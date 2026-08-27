@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.runCatchingCancellable
+import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
@@ -50,6 +51,7 @@ class RootViewModel @Inject constructor(
     private val onboardingRepository: OnboardingRepository,
     private val authRepository: AuthRepository,
     private val backendUrlStore: BackendUrlStore,
+    private val backendCertificatePin: BackendCertificatePin,
 ) : ViewModel() {
 
     /**
@@ -101,6 +103,9 @@ class RootViewModel @Inject constructor(
         // читает его синхронно, на потоке OkHttp. Здесь это безопасно —
         // splash висит, пока корень не готов.
         backendUrlStore.hydrate()
+        // Тем же порядком и по той же причине: отпечаток доверенного
+        // сертификата читается на потоке OkHttp во время handshake (issue #32).
+        backendCertificatePin.hydrate()
         val withOnboarding = !settings.onboardingCompleted
         return Start(
             withOnboarding = withOnboarding,
