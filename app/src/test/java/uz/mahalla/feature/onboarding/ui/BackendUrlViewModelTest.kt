@@ -19,8 +19,11 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.data.network.BackendCertificatePin
+import uz.mahalla.data.network.BackendCheck
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.inspector.HttpInspector
+import uz.mahalla.data.network.tls.ServerCertificate
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.testutil.FakeBackendReachability
 import uz.mahalla.testutil.FakeCleartextPolicy
@@ -229,22 +232,126 @@ class BackendUrlViewModelTest {
             assertEquals(BackendUrlEffect.Saved, viewModel.effects.first())
         }
 
+    @Test
+    fun `an untrusted certificate is not saved and is reported as such`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // issue #32: сервер на месте, но handshake рвётся. Сохранять адрес
+            // нельзя — по нему не уйдёт ни один запрос.
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val settings = settingsDataStore()
+            val viewModel = viewModel(store(settings))
+
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            assertEquals(
+                BackendUrlError.CERTIFICATE_UNTRUSTED,
+                viewModel.state.value.error,
+            )
+            assertEquals(CERTIFICATE, viewModel.state.value.certificate)
+            assertTrue(viewModel.state.value.canTrustCertificate)
+            assertNull(settings.current().backendBaseUrl)
+        }
+
+    @Test
+    fun `trusting the certificate pins it and saves the address`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val settings = settingsDataStore()
+            val pin = BackendCertificatePin(settings)
+            val viewModel = viewModel(store(settings), certificatePin = pin)
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            // С записанным пином handshake проходит — так же, как в бою:
+            // проверка идёт тем же клиентом, что и запросы приложения.
+            reachability.result = BackendCheck.Reachable
+            viewModel.onEvent(BackendUrlEvent.TrustCertificateRequested)
+            viewModel.effects.first()
+
+            assertEquals(CERTIFICATE.sha256, pin.pinnedFingerprint())
+            assertEquals(CERTIFICATE.sha256, settings.current().backendCertificatePin)
+            assertEquals("https://189.74.96.232/", settings.current().backendBaseUrl)
+            assertNull("сертификат принят — показывать нечего", viewModel.state.value.certificate)
+        }
+
+    @Test
+    fun `the address is checked again after trusting the certificate`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Доверие — не «сохранить на слово»: сертификат мог смениться
+            // между проверкой и подтверждением.
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val settings = settingsDataStore()
+            val viewModel = viewModel(store(settings))
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            viewModel.onEvent(BackendUrlEvent.TrustCertificateRequested)
+            // Запись пина уводит корутину с потока теста: ждём ответа проверки.
+            viewModel.state.first { it.certificate != null }
+
+            assertEquals("адрес проверен второй раз", 2, reachability.checked.size)
+            assertEquals(
+                BackendUrlError.CERTIFICATE_UNTRUSTED,
+                viewModel.state.value.error,
+            )
+            assertNull(settings.current().backendBaseUrl)
+        }
+
+    @Test
+    fun `there is nothing to trust before a check`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel()
+
+            viewModel.onEvent(BackendUrlEvent.TrustCertificateRequested)
+
+            assertFalse(viewModel.state.value.canTrustCertificate)
+            assertTrue("сеть трогать незачем", reachability.checked.isEmpty())
+        }
+
+    @Test
+    fun `editing the address forgets the certificate`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            reachability.result = BackendCheck.UntrustedCertificate(CERTIFICATE)
+            val viewModel = viewModel()
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.232"))
+            viewModel.onEvent(BackendUrlEvent.Submit)
+
+            viewModel.onEvent(BackendUrlEvent.UrlChanged("https://189.74.96.233"))
+
+            assertNull("сертификат относился к прежнему адресу", viewModel.state.value.certificate)
+            assertNull(viewModel.state.value.error)
+        }
+
     private fun viewModel(
         store: BackendUrlStore = store(),
         inspector: HttpInspector = FakeHttpInspector(isAvailable = false),
-    ) = BackendUrlViewModel(store, reachability, cleartextPolicy, inspector)
+        // Отдельный файл: тестам, где пин не проверяется, хранилище адреса
+        // отдавать нельзя — на один файл допустим один экземпляр DataStore.
+        certificatePin: BackendCertificatePin =
+            BackendCertificatePin(settingsDataStore("certificate-pin-vm")),
+    ) = BackendUrlViewModel(store, reachability, cleartextPolicy, inspector, certificatePin)
 
     private fun store(settings: SettingsDataStore = settingsDataStore()) =
         BackendUrlStore(settings, BUILD_URL)
 
-    private fun settingsDataStore() = SettingsDataStore(newDataStore())
+    private fun settingsDataStore(name: String = "backend-url-vm") =
+        SettingsDataStore(newDataStore(name))
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
-    private fun newDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.create(
-        produceFile = { File(temporaryFolder.root, "backend-url-vm.preferences_pb") },
-    )
+    private fun newDataStore(name: String): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create(
+            produceFile = { File(temporaryFolder.root, "$name.preferences_pb") },
+        )
 
     private companion object {
         const val BUILD_URL = "http://10.0.2.2:8080/api/v1/"
+
+        /** Самоподписанный сертификат стенда, как в issue #32. */
+        val CERTIFICATE = ServerCertificate(
+            sha256 = "3A:1F:9C:04:BE:77:12:E5:8D:60:AA:31:4C:D9:02:6B",
+            subject = "CN=189.74.96.232",
+            issuer = "CN=189.74.96.232",
+        )
     }
 }

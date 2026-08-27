@@ -15,6 +15,7 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.network.AuthInterceptor
+import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.TokenAuthenticator
@@ -52,7 +53,7 @@ class GraphAssemblyTest {
         val baseUrl = NetworkModule.provideBaseUrl()
 
         val backendUrlInterceptor = backendUrlInterceptor(baseUrl)
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor, inspector())
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor, inspector(), certificatePin())
         val refreshRetrofit =
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
@@ -67,6 +68,7 @@ class GraphAssemblyTest {
             ),
             backendUrlInterceptor = backendUrlInterceptor,
             httpInspector = inspector(),
+            certificatePin = certificatePin(),
         )
         val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
 
@@ -100,7 +102,7 @@ class GraphAssemblyTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector()),
+                NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector(), certificatePin()),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )
@@ -134,7 +136,7 @@ class GraphAssemblyTest {
     @Test
     fun `auth repository assembles on the bare refresh client`() {
         val converterFactory = NetworkModule.provideConverterFactory(NetworkModule.provideJson())
-        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector())
+        val refreshClient = NetworkModule.provideRefreshClient(backendUrlInterceptor(), inspector(), certificatePin())
         val authApi = NetworkModule.provideAuthApi(
             NetworkModule.provideRefreshRetrofit(
                 refreshClient,
@@ -171,6 +173,13 @@ class GraphAssemblyTest {
         BackendUrlStore(SettingsDataStore(sharedDataStore(context)), baseUrl),
         baseUrl,
     )
+
+    /**
+     * Доверие к сертификату сервера (issue #32): пин обязан доезжать до обоих
+     * клиентов — вход и refresh идут по «голому», всё остальное по основному.
+     */
+    private fun certificatePin() =
+        BackendCertificatePin(SettingsDataStore(sharedDataStore(context)))
 
     /**
      * Инспектор трафика (issue #30) — настоящий: граф собирается вместе с

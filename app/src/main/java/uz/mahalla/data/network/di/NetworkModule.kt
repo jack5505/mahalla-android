@@ -12,6 +12,7 @@ import retrofit2.Retrofit
 import uz.mahalla.BuildConfig
 import uz.mahalla.data.network.AndroidCleartextPolicy
 import uz.mahalla.data.network.AuthInterceptor
+import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendReachability
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlOverride
@@ -24,6 +25,7 @@ import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.network.inspector.HttpInspector
+import uz.mahalla.data.network.tls.CertificatePinSource
 import javax.inject.Singleton
 
 /**
@@ -69,10 +71,12 @@ object NetworkModule {
     fun provideRefreshClient(
         backendUrlInterceptor: BackendUrlInterceptor,
         httpInspector: HttpInspector,
+        certificatePin: BackendCertificatePin,
     ): OkHttpClient = NetworkFactory.refreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
+        certificatePin = certificatePin,
     )
 
     @Provides
@@ -96,12 +100,14 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         backendUrlInterceptor: BackendUrlInterceptor,
         httpInspector: HttpInspector,
+        certificatePin: BackendCertificatePin,
     ): OkHttpClient = NetworkFactory.mainClient(
         backendUrlInterceptor = backendUrlInterceptor,
         authInterceptor = authInterceptor,
         authenticator = tokenAuthenticator,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
+        certificatePin = certificatePin,
     )
 
     @Provides
@@ -122,6 +128,13 @@ interface NetworkBindingsModule {
 
     @Binds
     fun bindCleartextPolicy(impl: AndroidCleartextPolicy): CleartextPolicy
+
+    /**
+     * Доверие к сертификату, подтверждённому пользователем (issue #32). Пин
+     * читают клиенты во время handshake и проверка адреса перед сохранением.
+     */
+    @Binds
+    fun bindCertificatePinSource(impl: BackendCertificatePin): CertificatePinSource
 
     /** Инспектор трафика (issue #30). В release реализация отвечает «нет». */
     @Binds

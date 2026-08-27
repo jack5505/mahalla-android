@@ -5,6 +5,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
+import uz.mahalla.data.network.BackendCertificatePin
+import uz.mahalla.data.network.BackendCheck
 import uz.mahalla.data.network.BackendReachability
 import uz.mahalla.data.network.BackendUrl
 import uz.mahalla.data.network.BackendUrlStore
@@ -25,6 +27,7 @@ class BackendUrlViewModel @Inject constructor(
     private val reachability: BackendReachability,
     private val cleartextPolicy: CleartextPolicy,
     private val httpInspector: HttpInspector,
+    private val certificatePin: BackendCertificatePin,
 ) : MviViewModel<BackendUrlState, BackendUrlEvent, BackendUrlEffect>(BackendUrlState()) {
 
     init {
@@ -41,15 +44,18 @@ class BackendUrlViewModel @Inject constructor(
         when (event) {
             is BackendUrlEvent.UrlChanged -> updateState {
                 // Правка адреса обнуляет и ошибку, и разрешение сохранить
-                // непроверенный: проверять придётся уже новый адрес.
-                copy(url = event.raw, error = null, checked = false)
+                // непроверенный: проверять придётся уже новый адрес. Показанный
+                // сертификат тоже относился к прежнему адресу.
+                copy(url = event.raw, error = null, checked = false, certificate = null)
             }
 
             BackendUrlEvent.DefaultRequested -> updateState {
-                copy(url = defaultUrl, error = null, checked = false)
+                copy(url = defaultUrl, error = null, checked = false, certificate = null)
             }
 
             BackendUrlEvent.Submit -> submit()
+
+            BackendUrlEvent.TrustCertificateRequested -> trustCertificate()
 
             // Интента нет только в сборке без инспектора — там нет и кнопки.
             BackendUrlEvent.HttpInspectorRequested ->
@@ -79,15 +85,49 @@ class BackendUrlViewModel @Inject constructor(
             return
         }
 
-        updateState { copy(checking = true, error = null) }
+        updateState { copy(checking = true, error = null, certificate = null) }
         viewModelScope.launch {
-            val reachable = reachability.check(normalized)
+            val result = reachability.check(normalized)
             updateState { copy(checking = false, checked = true) }
-            if (reachable) {
-                persist(normalized)
-            } else {
-                updateState { copy(error = BackendUrlError.UNREACHABLE) }
+            when (result) {
+                BackendCheck.Reachable -> persist(normalized)
+
+                BackendCheck.Unreachable -> updateState {
+                    copy(error = BackendUrlError.UNREACHABLE)
+                }
+
+                // Сервер на месте, но сертификату нет доверия (issue #32).
+                // Сохранять адрес нельзя: по нему не уйдёт ни один запрос —
+                // handshake рвётся раньше. Дальше решает пользователь.
+                is BackendCheck.UntrustedCertificate -> updateState {
+                    copy(
+                        error = BackendUrlError.CERTIFICATE_UNTRUSTED,
+                        certificate = result.certificate,
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * Доверие сертификату, отпечаток которого пользователь сверил (issue #32).
+     *
+     * После записи пина адрес проверяется заново, а не сохраняется на слово:
+     * так видно, что handshake действительно проходит, и мимо не проедет
+     * случай, когда сертификат сменился между проверкой и подтверждением.
+     */
+    private fun trustCertificate() {
+        val fingerprint = currentState.certificate?.sha256 ?: return
+        if (currentState.checking) return
+        // Состояние правится до записи: показанный сертификат уже принят, а
+        // адрес обязан проверяться заново, даже если запись не пройдёт.
+        updateState { copy(checking = true, error = null, certificate = null, checked = false) }
+        viewModelScope.launch {
+            // Не записался пин — доверие всё равно действует на этот запуск
+            // (кэш обновлён до записи), запирать пользователя незачем.
+            runCatchingCancellable { certificatePin.save(fingerprint) }
+            updateState { copy(checking = false) }
+            submit()
         }
     }
 
