@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -179,7 +180,14 @@ fun MahallaOtpField(
     } else {
         stringResource(R.string.otp_input_description, state.length)
     }
-    val progress = stringResource(R.string.otp_input_progress, state.filledCount, state.length)
+    // Форма согласуется с длиной кода («введено 1 из 6 цифр»), поэтому
+    // quantity — state.length, а оба числа уходят аргументами формата.
+    val progress = pluralStringResource(
+        R.plurals.otp_input_progress,
+        state.length,
+        state.filledCount,
+        state.length,
+    )
     val colors = MaterialTheme.colorScheme
     val mahalla = LocalMahallaColors.current
 

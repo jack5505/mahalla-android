@@ -2,4 +2,8 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <!-- Themed icon (Android 13+): систему интересует только форма, цвет она
+         подставляет из обоев сама. Без этого тега лаунчер на монохромной теме
+         показал бы иконку по умолчанию вместо нашей. -->
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

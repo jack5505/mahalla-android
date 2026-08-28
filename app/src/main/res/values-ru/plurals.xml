@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Количественные строки, русский. Формы по правилам CLDR: one (1, 21, 31…),
+    few (2–4, 22–24…), many (0, 5–20…), other (дробные).
+-->
+<resources>
+
+    <plurals name="onboarding_otp_resend_timer">
+        <item quantity="one">Повторная отправка через %1$d секунду</item>
+        <item quantity="few">Повторная отправка через %1$d секунды</item>
+        <item quantity="many">Повторная отправка через %1$d секунд</item>
+        <item quantity="other">Повторная отправка через %1$d секунды</item>
+    </plurals>
+
+    <!-- Согласование по второму числу: «из 1 цифры», «из 6 цифр». -->
+    <plurals name="otp_input_progress">
+        <item quantity="one">Введено %1$d из %2$d цифры</item>
+        <item quantity="few">Введено %1$d из %2$d цифр</item>
+        <item quantity="many">Введено %1$d из %2$d цифр</item>
+        <item quantity="other">Введено %1$d из %2$d цифр</item>
+    </plurals>
+
+</resources>

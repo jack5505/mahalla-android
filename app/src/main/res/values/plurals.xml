@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Количественные строки (uz — язык по умолчанию). Всё, где число стоит рядом
+    с существительным, живёт здесь: в русском «1 секунду / 2 секунды /
+    5 секунд» — три разные формы, и обычная строка их не покрывает.
+
+    В узбекском существительное после числительного не изменяется, поэтому
+    формы one и other совпадают; объявлены обе — Android выбирает по правилам
+    CLDR, а не по языку файла.
+-->
+<resources>
+
+    <!-- Онбординг: таймер повторной отправки кода (эпик 3.3). -->
+    <plurals name="onboarding_otp_resend_timer">
+        <item quantity="one">Qayta yuborish %1$d sekunddan keyin</item>
+        <item quantity="other">Qayta yuborish %1$d sekunddan keyin</item>
+    </plurals>
+
+    <!--
+        UI-кит: сколько цифр кода уже введено (TalkBack). Форма выбирается по
+        длине кода — именно с ней согласуется существительное («из 6 цифр»),
+        а не с числом уже введённых.
+    -->
+    <plurals name="otp_input_progress">
+        <item quantity="one">%1$d / %2$d raqam kiritildi</item>
+        <item quantity="other">%1$d / %2$d raqam kiritildi</item>
+    </plurals>
+
+</resources>

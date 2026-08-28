@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Монохромный слой иконки (Android 13+): та же временная заглушка-круг, но
+     сплошным цветом — система перекрашивает его под обои сама, поэтому здесь
+     важна только форма. Заменится вместе с брендовой иконкой. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,30 a24,24 0 1,1 -0.01,0 z" />
+</vector>

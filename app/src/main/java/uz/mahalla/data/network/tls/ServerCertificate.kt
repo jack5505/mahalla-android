@@ -1,5 +1,6 @@
 package uz.mahalla.data.network.tls
 
+import android.annotation.SuppressLint
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.cert.X509Certificate
@@ -44,6 +45,11 @@ data class ServerCertificate(
  */
 object CertificateProbe {
 
+    // CustomX509TrustManager: проверки здесь нет по построению — иначе прочитать
+    // сертификат, из-за которого handshake и падает, было бы нечем. Этот
+    // trust manager живёт только внутри `peerCertificate`, HTTP-запрос по такому
+    // сокету не уходит, а сетевые клиенты приложения его не видят.
+    @SuppressLint("CustomX509TrustManager")
     private val acceptAllTrustManager = object : X509TrustManager {
         override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = Unit
         override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) = Unit

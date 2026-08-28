@@ -15,8 +15,14 @@
     а не подтверждать отпечаток на экране адреса. В релизе его нет: там чужой
     CA в системе не должен давать доступ к трафику приложения.
 -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Оба послабления lint ругает справедливо — и оба сделаны намеренно и
+         только здесь: файл лежит в src/debug/ и в release-сборку не попадает
+         (там действует жёсткий конфиг из main/, где cleartext разрешён лишь на
+         loopback и 10.0.2.2, а пользовательских CA нет вовсе). -->
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="AcceptsUserCertificates,InsecureBaseConfiguration">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
