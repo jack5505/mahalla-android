@@ -34,14 +34,21 @@ jobs:
     # Запуск только когда реально упомянут @claude. Проверка привязана к типу
     # события: без этого issue с «@claude» в теле дёргал бы workflow на каждый
     # последующий комментарий (github.event.issue.body есть и в issue_comment).
+    # ═══ ЗАЩИТА ДЛЯ ПУБЛИЧНОГО РЕПО ═══
+    # Реагируем ТОЛЬКО на упоминания от владельца (github.actor == 'jack5505').
+    # Оркестратор комментирует от этого же аккаунта, поэтому фильтр проходит.
+    # Без этой строки любой прохожий в публичном репо мог бы командовать
+    # агентом и жечь подписку.
     if: >-
-      (github.event_name == 'issues' &&
-        contains(github.event.issue.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' &&
-        contains(github.event.review.body, '@claude')) ||
-      ((github.event_name == 'issue_comment' ||
-        github.event_name == 'pull_request_review_comment') &&
-        contains(github.event.comment.body, '@claude'))
+      github.actor == 'jack5505' && (
+        (github.event_name == 'issues' &&
+          contains(github.event.issue.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' &&
+          contains(github.event.review.body, '@claude')) ||
+        ((github.event_name == 'issue_comment' ||
+          github.event_name == 'pull_request_review_comment') &&
+          contains(github.event.comment.body, '@claude'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
