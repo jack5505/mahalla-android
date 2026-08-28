@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,8 +83,9 @@ private fun OtpContent(
             )
             if (state.resendInSeconds > 0) {
                 ButtonCaption(
-                    text = stringResource(
-                        R.string.onboarding_otp_resend_timer,
+                    text = pluralStringResource(
+                        R.plurals.onboarding_otp_resend_timer,
+                        state.resendInSeconds,
                         state.resendInSeconds,
                     ),
                 )

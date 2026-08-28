@@ -29,7 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.automirrored.outlined.Send
 import uz.mahalla.R
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
@@ -189,7 +189,7 @@ private fun MahallaButtonPreview() {
             MahallaButton(
                 text = stringResource(R.string.onboarding_phone_action),
                 onClick = {},
-                icon = Icons.Outlined.Send,
+                icon = Icons.AutoMirrored.Outlined.Send,
             )
             MahallaButton(
                 text = stringResource(R.string.action_retry),

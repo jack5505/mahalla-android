@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Подавления, которые нельзя поставить рядом с кодом: у lint нет способа
+    написать tools:ignore на саму папку ресурсов. Всё остальное подавляется
+    точечно в месте находки, а списком отключённых проверок управляет
+    блок `lint` в app/build.gradle.kts.
+-->
+<lint>
+
+    <!--
+        ObsoleteSdkInt: квалификатор -v26 при minSdk 26 действительно
+        избыточен, но убрать его нельзя — ресурсный мержер AGP 8.7.3 папку
+        `mipmap-anydpi` без версии молча выбрасывает, и сборка падает на
+        `AAPT: error: resource mipmap/ic_launcher not found` (проверено).
+        Вернуться к совету lint можно при обновлении AGP.
+    -->
+    <issue id="ObsoleteSdkInt">
+        <ignore path="src/main/res/mipmap-anydpi-v26" />
+    </issue>
+
+</lint>
