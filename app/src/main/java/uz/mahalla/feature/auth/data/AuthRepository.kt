@@ -5,11 +5,15 @@ import kotlinx.coroutines.flow.map
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.data.device.DeviceInfoProvider
+import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
-import uz.mahalla.data.network.auth.LoginResponse
-import uz.mahalla.data.network.auth.OtpRequest
-import uz.mahalla.data.network.auth.OtpVerifyRequest
 import uz.mahalla.data.network.auth.RefreshTokenRequest
+import uz.mahalla.data.network.auth.SendOtpRequest
+import uz.mahalla.data.network.auth.TokenPairDto
+import uz.mahalla.data.network.auth.VerifyOtpRequest
+import uz.mahalla.data.network.auth.toDto
+import uz.mahalla.data.network.payload
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.security.PinStorage
@@ -32,8 +36,14 @@ interface AuthRepository {
 
     suspend fun requestCode(phoneE164: String): ApiResult<OtpChallenge>
 
-    /** Успех сохраняет сессию — вызывающему остаётся только навигация. */
-    suspend fun verifyCode(phoneE164: String, code: String): ApiResult<LoginResult>
+    /**
+     * Успех сохраняет сессию — вызывающему остаётся только навигация.
+     *
+     * Код проверяется по [otpToken] из [requestCode], а не по номеру телефона:
+     * так решил бэкенд (issue #42), и это заодно означает, что просроченный
+     * или чужой токен отсекается сервером, а не сравнением строк на клиенте.
+     */
+    suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult>
 
     /**
      * Явное обновление токенов. Обычный путь — `TokenAuthenticator` по 401;
@@ -51,32 +61,75 @@ class DefaultAuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
     private val pinStorage: PinStorage,
+    private val deviceInfoProvider: DeviceInfoProvider,
+    private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
 ) : AuthRepository {
 
     override val isAuthorized: Flow<Boolean> = sessionStore.session.map { it != null }
 
     override suspend fun requestCode(phoneE164: String): ApiResult<OtpChallenge> {
-        val result = apiCall { authApi.requestOtp(OtpRequest(phoneE164)) }
-        return when (result) {
-            is ApiResult.Success -> ApiResult.Success(
-                OtpChallenge.of(
-                    codeLength = result.data.codeLength,
-                    resendAfterSeconds = result.data.resendAfterSeconds,
-                    expiresInSeconds = result.data.expiresInSeconds,
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.sendOtp(
+                SendOtpRequest(
+                    phone = phoneE164,
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
                 ),
-            )
+            ).payload()
+        }
+
+        return when (result) {
+            is ApiResult.Success -> {
+                val otpToken = result.data.otpToken
+                // Без токена проверить код нечем: уходить на экран ввода
+                // означало бы гарантированную ошибку после шестой цифры.
+                if (otpToken.isNullOrBlank()) {
+                    ApiResult.Failure(ApiError.Serialization)
+                } else {
+                    ApiResult.Success(
+                        OtpChallenge.of(
+                            otpToken = otpToken,
+                            codeLength = null,
+                            resendAfterSeconds = result.data.cooldownSeconds,
+                            expiresInSeconds = result.data.expiresInSeconds,
+                        ),
+                    )
+                }
+            }
 
             is ApiResult.Failure -> result
         }
     }
 
-    override suspend fun verifyCode(phoneE164: String, code: String): ApiResult<LoginResult> {
-        val result = apiCall { authApi.verifyOtp(OtpVerifyRequest(phoneE164, code)) }
+    override suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult> {
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.verifyOtp(
+                VerifyOtpRequest(
+                    otpToken = otpToken,
+                    otpCode = code,
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            ).payload()
+        }
+
         return when (result) {
             is ApiResult.Success -> {
-                sessionStore.save(result.data.toSession())
-                ApiResult.Success(LoginResult(isNewUser = result.data.isNewUser))
+                val session = result.data.tokens.toSession(sessionId = result.data.sessionId)
+                    ?: return ApiResult.Failure(ApiError.Serialization)
+                sessionStore.save(session)
+                ApiResult.Success(
+                    LoginResult(isNewUser = result.data.user?.fullName.isNullOrBlank()),
+                )
             }
 
             is ApiResult.Failure -> result
@@ -85,16 +138,26 @@ class DefaultAuthRepository @Inject constructor(
 
     override suspend fun refresh(): ApiResult<Unit> {
         val session = sessionStore.current() ?: return ApiResult.Failure(ApiError.Unauthorized)
-        val result = apiCall { authApi.refresh(RefreshTokenRequest(session.refreshToken)) }
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.refresh(
+                RefreshTokenRequest(
+                    refreshToken = session.refreshToken,
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            ).payload()
+        }
+
         return when (result) {
             is ApiResult.Success -> {
-                sessionStore.save(
-                    session(
-                        accessToken = result.data.accessToken,
-                        refreshToken = result.data.refreshToken,
-                        expiresInSeconds = result.data.expiresInSeconds,
-                    ),
-                )
+                val refreshed = result.data.tokens
+                    .toSession(sessionId = result.data.sessionId ?: session.sessionId)
+                    ?: return ApiResult.Failure(ApiError.Serialization)
+                sessionStore.save(refreshed)
                 ApiResult.Success(Unit)
             }
 
@@ -108,36 +171,36 @@ class DefaultAuthRepository @Inject constructor(
     }
 
     override suspend fun logout() {
-        val refreshToken = sessionStore.current()?.refreshToken
+        val session = sessionStore.current()
         // Ответ сервера не важен: локальный выход должен случиться и без сети,
         // иначе пользователь останется «залогиненным» на устройстве.
-        if (refreshToken != null) apiCall { authApi.logout(RefreshTokenRequest(refreshToken)) }
+        if (session != null) {
+            apiCall { authApi.logout(sessionId = session.sessionId, allDevices = false) }
+        }
         sessionStore.clear()
         // PIN защищает именно эту сессию — оставлять его от прошлого
         // пользователя нельзя.
         pinStorage.clear()
     }
 
-    private fun LoginResponse.toSession(): Session = session(
-        accessToken = accessToken,
-        refreshToken = refreshToken,
-        expiresInSeconds = expiresInSeconds,
-    )
-
     /**
      * Сервер сообщает «через сколько истечёт», хранить полезно «когда
      * истечёт»: после перезапуска приложения относительное значение
      * бессмысленно. Не сообщил — срок неизвестен, а не «истёк в 1970».
+     *
+     * `null` означает ответ без пары токенов: такой успех для клиента
+     * бесполезен, вызывающий превращает его в ошибку.
      */
-    private fun session(
-        accessToken: String,
-        refreshToken: String,
-        expiresInSeconds: Long?,
-    ): Session = Session(
-        accessToken = accessToken,
-        refreshToken = refreshToken,
-        expiresAtEpochSeconds = expiresInSeconds
-            ?.let { clock.instant().epochSecond + it }
-            ?: Session.UNKNOWN_EXPIRY,
-    )
+    private fun TokenPairDto?.toSession(sessionId: String?): Session? {
+        val access = this?.accessToken?.takeIf { it.isNotBlank() } ?: return null
+        val refresh = this.refreshToken?.takeIf { it.isNotBlank() } ?: return null
+        return Session(
+            accessToken = access,
+            refreshToken = refresh,
+            expiresAtEpochSeconds = accessExpiresIn
+                ?.let { clock.instant().epochSecond + it }
+                ?: Session.UNKNOWN_EXPIRY,
+            sessionId = sessionId,
+        )
+    }
 }

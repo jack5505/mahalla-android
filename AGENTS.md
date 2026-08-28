@@ -1079,6 +1079,96 @@ certification path not found`. На голый IP публичный серти�
   (замечание ревью PR #21), но lint их не ловит и в объём issue #39 они не
   входили — остаются задачей.
 
+## Этап: регистрация по контракту бэкенда (issue #42, ветка claude/issue-42-*)
+
+Первый же запрос приложения падал: на экране телефона `auth/otp/request`
+возвращал 400 с текстом «Joylashuv ruxsatini yoqing». Контракт авторизации на
+бэкенде (jack5505/mahalla#80) разошёлся с клиентским по всем пунктам сразу.
+
+**Как снят контракт.** Репозиторий `jack5505/mahalla` агенту в CI недоступен
+(`DESIGN_REPO_PAT` не задан, `gh` отдаёт 404), зато стенд отвечает:
+`https://189.74.96.232/v3/api-docs` — полная OpenAPI-схема, плюс
+`/swagger-ui/index.html`. Дальше контракт проверялся прямыми curl-запросами.
+**Это самый быстрый способ узнать реальный API, когда дизайн-репо не
+подключено.**
+
+Что изменилось (эндпоинты `bank-auth`, префикс `api/v1/` уже входит в
+`API_BASE_URL`):
+
+| | было в приложении | стало |
+|---|---|---|
+| пути | `auth/otp/request`, `auth/otp/verify` | `auth/send-otp`, `auth/verify-otp` |
+| запрос | `{phone}` / `{phone, code}` | `{phone, device, lat, lng}` / `{otpToken, otpCode, device, lat, lng}` |
+| ответ | «голый» JSON | конверт `{success, message, data, error{code,message}, timestamp}` |
+| связь шагов | телефон + код | `otpToken` из ответа `send-otp` |
+| токены | `accessToken/refreshToken/expiresIn` | `data.tokens{accessToken, refreshToken, accessExpiresIn, refreshExpiresIn}` |
+| refresh | `{refreshToken}` | `{refreshToken, device, lat, lng}` |
+| logout | `{refreshToken}` в теле | без тела: заголовок `X-Session-Id`, query `allDevices` |
+
+Реализация:
+
+- **Конверт**: `data/network/ApiResponse.kt` (`ApiResponse<T>` + `ApiErrorBody`
+  + `payload()`). Отказ с HTTP 4xx/5xx по-прежнему разбирает `ServerErrorParser`
+  (issue #34 — он уже умеет вложенный `error.code/message`), а ответ **2xx с
+  `success:false`** бросает `ApiEnvelopeException` → новый вариант
+  `ApiError.Business(code)`. `data == null` при `success:true` — тоже отказ:
+  «успех» без данных это пустой экран без объяснения.
+- **Устройство**: `data/device/` — `DeviceDescriptor` (deviceId, platform
+  `ANDROID`, модель, версия ОС, версия приложения; `fcmToken` пока `null` —
+  FCM в проекте нет) и `DeviceIdStore`: UUID установки в DataStore
+  (`device_id`), под `Mutex` (два параллельных запроса иначе завели бы два
+  устройства), отказ хранилища не запирает вход — id живёт в памяти процесса.
+  Не `ANDROID_ID`: тот привязан к аккаунту Google и на части прошивок общий
+  для приложений.
+- **Координаты**: `data/location/` — `LocationSource` (последняя известная
+  позиция через `LocationManager`, только если разрешение уже выдано; свежую
+  не запрашиваем — это ожидание фикса на экране ввода номера) и
+  `RequestLocationProvider`: позиция → центр выбранного города → центр
+  Ташкента. **Так и должно быть**: `lat`/`lng` обязательны, а разрешение
+  онбординг просит на последнем шаге (3.6), то есть на экране телефона
+  настоящих координат ещё нет. `City` получил `latitude`/`longitude`.
+- **Сессия**: `Session.sessionId` (ключ `session_id`) — уходит в `X-Session-Id`
+  при выходе; refresh без него прежний id не стирает.
+- **OTP**: `OtpChallenge.otpToken`, `OtpRoute.otpToken` (+ `OtpArgs.OTP_TOKEN`),
+  `OtpState.otpToken`; `verifyCode(otpToken, code)` вместо `(phone, code)`;
+  повторная отправка заменяет токен. Ответ без `otpToken` — `ApiError.Serialization`:
+  уходить на экран ввода бессмысленно, проверять код будет нечем.
+- **Классификация ошибок кода**: `asOtpFailure()` переехал с `ApiError` на
+  `ApiFailure` и смотрит сперва на `error.code` бэкенда. Иначе 400 на
+  `OTP_EXPIRED` и 400 на `VALIDATION_ERROR` (нет координат) одинаково
+  становились бы «код неверный» — со стиранием ввода и заблокированным
+  повтором. Точные коды → ключевые слова (`EXPIRED`, `ATTEMPT`, `COOLDOWN`,
+  `OTP`…) → прежняя раскладка по HTTP-коду.
+- `TokenAuthenticator` шлёт устройство и координаты тоже: для бэкенда refresh
+  — это продление сессии конкретного устройства.
+
+**Проверено**: `./gradlew testDebugUnitTest` — **593 теста в 70 классах, 0
+падений**; `lintDebug`, `assembleDebug`, `assembleRelease` — BUILD SUCCESSFUL.
+Новые тесты: `ApiResponseTest`, `DeviceIdStoreTest`, `RequestLocationProviderTest`,
+переписанный `AuthRepositoryTest` (тела запросов, конверт, `otpToken`,
+`X-Session-Id`, 200 с `success:false`) и `OtpFailureTest`. Сверх тестов — тот
+же запрос отправлен на стенд руками: полное тело возвращает 200 и `otpToken`
+(`expiresInSeconds: 180`, `cooldownSeconds: 60`, `channel: SMS`).
+
+**Не сделано / риски:**
+
+- **Координаты на экране телефона приблизительные** (центр города). Если
+  бэкенду нужна именно измеренная позиция, шаг геолокации придётся перенести в
+  начало онбординга — это решение продукта.
+- **`nextStep` (`SETUP_PIN`/`ENTER_PIN`/`NONE`) и серверные PIN-эндпоинты**
+  (`auth/setup-pin`, `auth/pin-login`, `auth/pin-resume`) не используются: PIN
+  в приложении локальный (эпик 3.4). Расхождение осознанное, но при появлении
+  app-lock его придётся закрывать.
+- **`isNewUser` теперь выводится из пустого `user.fullName`** — отдельного поля
+  бэкенд не отдаёт.
+- **Остальной API под тот же конверт не переведён**: `CatalogApi` (эпик 4)
+  ждёт «голый» JSON и на живом бэкенде развалится — это отдельная задача того
+  же рода, вне объёма issue #42.
+- **Telegram-канал доставки кода** (`channel: TELEGRAM`, `auth/telegram/*`) в
+  UI никак не отражён: текст на экране всегда про SMS.
+- На устройстве не проверено (эмулятора в CI нет): реальный SMS-путь,
+  разрешение геолокации, повторная отправка.
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`

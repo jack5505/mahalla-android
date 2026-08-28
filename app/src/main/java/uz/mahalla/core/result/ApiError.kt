@@ -23,6 +23,13 @@ sealed interface ApiError {
     /** Прочие HTTP-ошибки, включая 5xx. */
     data class Http(val code: Int, val message: String?) : ApiError
 
+    /**
+     * HTTP-код успешный, но конверт бэкенда говорит `success: false`.
+     * [code] — машинный код из тела (`OTP_EXPIRED`, `VALIDATION_ERROR`);
+     * текст для человека лежит в [ServerError.message], как и у HTTP-отказов.
+     */
+    data class Business(val code: String?) : ApiError
+
     /** Тело ответа не разобралось: битый JSON или несовпадение схемы. */
     data object Serialization : ApiError
 

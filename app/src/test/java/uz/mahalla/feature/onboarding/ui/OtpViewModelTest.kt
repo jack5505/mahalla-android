@@ -41,12 +41,14 @@ class OtpViewModelTest {
 
     private fun viewModel(
         phone: String = PHONE,
+        otpToken: String = OTP_TOKEN,
         resendAfterSeconds: Int = 60,
         codeLength: Int = 6,
     ) = OtpViewModel(
         SavedStateHandle(
             mapOf(
                 OtpArgs.PHONE to phone,
+                OtpArgs.OTP_TOKEN to otpToken,
                 OtpArgs.RESEND_AFTER_SECONDS to resendAfterSeconds,
                 OtpArgs.CODE_LENGTH to codeLength,
             ),
@@ -101,7 +103,9 @@ class OtpViewModelTest {
         val effect = viewModel.effects.first()
 
         assertEquals(OtpEffect.Verified(isNewUser = true), effect)
-        assertEquals(listOf(PHONE to "123456"), authRepository.verifiedCodes)
+        // Код проверяется по токену испытания, а не по номеру телефона:
+        // так его принимает бэкенд (issue #42).
+        assertEquals(listOf(OTP_TOKEN to "123456"), authRepository.verifiedCodes)
     }
 
     @Test
@@ -240,7 +244,7 @@ class OtpViewModelTest {
         mainDispatcherRule.dispatcher,
     ) {
         authRepository.requestCodeResult = ApiResult.Success(
-            OtpChallenge(codeLength = 4, resendAfterSeconds = 20),
+            OtpChallenge(otpToken = "otp-2", codeLength = 4, resendAfterSeconds = 20),
         )
         val viewModel = viewModel(resendAfterSeconds = 1)
         advanceTimeBy(1_100)
@@ -288,7 +292,24 @@ class OtpViewModelTest {
         assertEquals(1, authRepository.verifiedCodes.size)
     }
 
+    @Test
+    fun `resend replaces the otp token`() = runTest(mainDispatcherRule.dispatcher) {
+        // Старый токен бэкенд гасит вместе с отправкой нового кода — проверять
+        // по нему было бы гарантированной ошибкой.
+        authRepository.requestCodeResult = ApiResult.Success(OtpChallenge(otpToken = "otp-2"))
+        val viewModel = viewModel(resendAfterSeconds = 0)
+
+        viewModel.onEvent(OtpEvent.Resend)
+        runCurrent()
+        viewModel.onEvent(OtpEvent.CodeChanged("123456"))
+        advanceUntilIdle()
+
+        assertEquals("otp-2", viewModel.state.value.otpToken)
+        assertEquals(listOf("otp-2" to "123456"), authRepository.verifiedCodes)
+    }
+
     private companion object {
         const val PHONE = "+998901234567"
+        const val OTP_TOKEN = "otp-1"
     }
 }

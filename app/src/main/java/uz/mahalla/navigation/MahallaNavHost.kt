@@ -95,6 +95,7 @@ fun MahallaNavHost(
                         navController.navigate(
                             OtpRoute(
                                 phone = phone,
+                                otpToken = challenge.otpToken,
                                 resendAfterSeconds = challenge.resendAfterSeconds,
                                 codeLength = challenge.codeLength,
                             ),

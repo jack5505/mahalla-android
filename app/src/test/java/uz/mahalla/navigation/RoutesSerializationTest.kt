@@ -28,7 +28,7 @@ class RoutesSerializationTest {
         val place = PlaceRoute(placeId = "p-42")
         assertEquals(place, json.decodeFromString<PlaceRoute>(json.encodeToString(place)))
 
-        val otp = OtpRoute(phone = "+998901234567")
+        val otp = OtpRoute(phone = "+998901234567", otpToken = "otp-1")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
 
         val search = SearchRoute(categoryId = "pharmacy", query = "osh")
@@ -92,7 +92,7 @@ class RoutesSerializationTest {
     fun `otp route carries the phone and challenge arguments`() {
         val descriptor = serializer<OtpRoute>().descriptor
         assertEquals(
-            listOf("phone", "resendAfterSeconds", "codeLength"),
+            listOf("phone", "otpToken", "resendAfterSeconds", "codeLength"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
     }
@@ -104,7 +104,12 @@ class RoutesSerializationTest {
         val descriptor = serializer<OtpRoute>().descriptor
         val fields = (0 until descriptor.elementsCount).map(descriptor::getElementName)
         assertEquals(
-            listOf(OtpArgs.PHONE, OtpArgs.RESEND_AFTER_SECONDS, OtpArgs.CODE_LENGTH),
+            listOf(
+                OtpArgs.PHONE,
+                OtpArgs.OTP_TOKEN,
+                OtpArgs.RESEND_AFTER_SECONDS,
+                OtpArgs.CODE_LENGTH,
+            ),
             fields,
         )
     }

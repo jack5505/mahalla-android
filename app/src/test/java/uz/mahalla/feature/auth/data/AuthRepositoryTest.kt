@@ -1,8 +1,13 @@
 package uz.mahalla.feature.auth.data
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -11,20 +16,25 @@ import org.junit.Before
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakePinStorage
+import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * `AuthRepository` на MockWebServer (эпик 3, сквозная задача): запрос кода,
- * верификация, обновление и выход.
+ * `AuthRepository` на MockWebServer: запрос кода, верификация, обновление и
+ * выход по контракту бэкенда Mahalla (issue #42) — пути `auth/send-otp` и
+ * `auth/verify-otp`, конверт `{success, data, error}`, обязательные
+ * устройство и координаты.
  *
  * Клиент собирается тем же [NetworkFactory], что и в проде — тест проверяет
  * production-конфигурацию, а не свою копию. Часы фиксированные: срок жизни
@@ -35,6 +45,11 @@ class AuthRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var sessionStore: FakeSessionStore
     private lateinit var pinStorage: FakePinStorage
+
+    private val deviceInfoProvider = FakeDeviceInfoProvider()
+    private val locationProvider = FakeRequestLocationProvider(
+        DeviceLocation(latitude = 41.31, longitude = 69.24),
+    )
 
     private val clock: Clock =
         Clock.fixed(Instant.ofEpochSecond(FIXED_NOW_EPOCH_SECONDS), ZoneOffset.UTC)
@@ -53,40 +68,112 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `request code sends the phone and returns server parameters`() = runTest {
-        server.enqueue(jsonResponse("""{"resendAfter":30,"expiresIn":120,"codeLength":4}"""))
+    fun `request code sends the phone, the device and the coordinates`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"otpToken":"otp-1","expiresInSeconds":120,"cooldownSeconds":30,
+                   "maskedPhone":"+998 ** *** 45 67","channel":"SMS"}""",
+            ),
+        )
 
         val result = repository().requestCode("+998901234567")
 
         assertEquals(
             ApiResult.Success(
-                OtpChallenge(codeLength = 4, resendAfterSeconds = 30, expiresInSeconds = 120),
+                OtpChallenge(
+                    otpToken = "otp-1",
+                    codeLength = OtpChallenge.DEFAULT_CODE_LENGTH,
+                    resendAfterSeconds = 30,
+                    expiresInSeconds = 120,
+                ),
             ),
             result,
         )
+
         val request = server.takeRequest()
-        assertEquals("/auth/otp/request", request.path)
-        assertEquals("""{"phone":"+998901234567"}""", request.body.readUtf8())
+        assertEquals("/auth/send-otp", request.path)
+        val body = request.bodyJson()
+        assertEquals("+998901234567", body["phone"]?.jsonPrimitive?.content)
+        // Без координат и устройства бэкенд отвечает 400 VALIDATION_ERROR
+        // («Joylashuv ruxsatini yoqing») — ровно тем, с чего началась задача.
+        assertEquals("41.31", body["lat"]?.jsonPrimitive?.content)
+        assertEquals("69.24", body["lng"]?.jsonPrimitive?.content)
+        val device = body["device"]!!.jsonObject
+        assertEquals("device-1", device["deviceId"]?.jsonPrimitive?.content)
+        assertEquals("ANDROID", device["platform"]?.jsonPrimitive?.content)
+        assertEquals("Pixel 8", device["deviceName"]?.jsonPrimitive?.content)
     }
 
     @Test
     fun `missing challenge fields fall back to client defaults`() = runTest {
-        server.enqueue(jsonResponse("{}"))
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
 
         val result = repository().requestCode("+998901234567")
 
-        assertEquals(ApiResult.Success(OtpChallenge()), result)
+        assertEquals(ApiResult.Success(OtpChallenge(otpToken = "otp-1")), result)
     }
 
     @Test
     fun `nonsense challenge values are replaced by defaults`() = runTest {
-        // Ноль секунд до повтора и код нулевой длины — это не «мгновенно» и не
-        // «пустое поле», а мусор, на котором экран OTP собрать нельзя.
-        server.enqueue(jsonResponse("""{"resendAfter":-5,"codeLength":0,"expiresIn":0}"""))
+        // Ноль секунд жизни кода — это не «мгновенно», а мусор, на котором
+        // экран OTP собрать нельзя.
+        server.enqueue(
+            envelope("""{"otpToken":"otp-1","cooldownSeconds":-5,"expiresInSeconds":0}"""),
+        )
 
         val challenge = (repository().requestCode("+998901234567") as ApiResult.Success).data
 
-        assertEquals(OtpChallenge(), challenge)
+        assertEquals(OtpChallenge(otpToken = "otp-1"), challenge)
+    }
+
+    @Test
+    fun `response without an otp token is unusable`() = runTest {
+        // Проверять код было бы нечем: verify-otp принимает токен, а не номер.
+        server.enqueue(envelope("""{"expiresInSeconds":120}"""))
+
+        val result = repository().requestCode("+998901234567")
+
+        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `validation error carries the backend message`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"VALIDATION_ERROR",
+                       "message":"Joylashuv ruxsatini yoqing"}}""",
+                ),
+        )
+
+        val result = repository().requestCode("+998901234567")
+
+        val failure = (result as ApiResult.Failure).failure
+        assertEquals(400, (failure.error as ApiError.Http).code)
+        assertEquals("VALIDATION_ERROR", failure.server?.code)
+        assertEquals("Joylashuv ruxsatini yoqing", failure.serverMessage)
+    }
+
+    @Test
+    fun `envelope failure with a successful http code is still a failure`() = runTest {
+        // Тот же конверт, но код 200: без разбора `success` это выглядело бы
+        // успехом с пустыми данными.
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"SMS_LIMIT","message":"Keyinroq urinib ko'ring"}}""",
+                ),
+        )
+
+        val result = repository().requestCode("+998901234567")
+
+        val failure = (result as ApiResult.Failure).failure
+        assertEquals(ApiError.Business("SMS_LIMIT"), failure.error)
+        assertEquals("Keyinroq urinib ko'ring", failure.serverMessage)
     }
 
     @Test
@@ -100,42 +187,78 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `verify saves the session with an absolute expiry`() = runTest {
+    fun `verify sends the otp token and saves the session with an absolute expiry`() = runTest {
         server.enqueue(
-            jsonResponse(
-                """{"accessToken":"a-1","refreshToken":"r-1","expiresIn":3600,"isNewUser":true}""",
+            envelope(
+                """{"sessionId":"s-1","nextStep":"SETUP_PIN",
+                   "tokens":{"accessToken":"a-1","refreshToken":"r-1","accessExpiresIn":3600},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
             ),
         )
 
-        val result = repository().verifyCode("+998901234567", "123456")
+        val result = repository().verifyCode("otp-1", "123456")
 
+        // Профиль не заполнен — дальше предлагается его завести.
         assertEquals(ApiResult.Success(LoginResult(isNewUser = true)), result)
         assertEquals(
-            Session("a-1", "r-1", FIXED_NOW_EPOCH_SECONDS + 3600),
+            Session("a-1", "r-1", FIXED_NOW_EPOCH_SECONDS + 3600, sessionId = "s-1"),
             sessionStore.current(),
         )
+
         val request = server.takeRequest()
-        assertEquals("/auth/otp/verify", request.path)
-        assertEquals("""{"phone":"+998901234567","code":"123456"}""", request.body.readUtf8())
+        assertEquals("/auth/verify-otp", request.path)
+        val body = request.bodyJson()
+        assertEquals("otp-1", body["otpToken"]?.jsonPrimitive?.content)
+        assertEquals("123456", body["otpCode"]?.jsonPrimitive?.content)
+        assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
     }
 
     @Test
-    fun `verify without expiresIn leaves the expiry unknown`() = runTest {
-        server.enqueue(jsonResponse("""{"accessToken":"a-1","refreshToken":"r-1"}"""))
+    fun `filled profile means the user is not new`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"fullName":"Alisher"}}""",
+            ),
+        )
 
-        repository().verifyCode("+998901234567", "123456")
+        val result = repository().verifyCode("otp-1", "123456")
+
+        assertEquals(ApiResult.Success(LoginResult(isNewUser = false)), result)
+    }
+
+    @Test
+    fun `verify without expiry leaves it unknown`() = runTest {
+        server.enqueue(envelope("""{"tokens":{"accessToken":"a-1","refreshToken":"r-1"}}"""))
+
+        repository().verifyCode("otp-1", "123456")
 
         // Ноль означал бы «истёк в 1970», т.е. вечно просроченный токен.
         assertEquals(Session.UNKNOWN_EXPIRY, sessionStore.current()?.expiresAtEpochSeconds)
     }
 
     @Test
+    fun `verify without tokens is not a login`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+
+        val result = repository().verifyCode("otp-1", "123456")
+
+        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+        assertNull(sessionStore.current())
+    }
+
+    @Test
     fun `wrong code neither saves a session nor touches the pin`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"OTP_INVALID"}}"""),
+        )
 
-        val result = repository().verifyCode("+998901234567", "000000")
+        val result = repository().verifyCode("otp-1", "000000")
 
-        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+        assertEquals("OTP_INVALID", (result as ApiResult.Failure).failure.server?.code)
         assertNull(sessionStore.current())
         assertEquals("1234", pinStorage.storedPin)
     }
@@ -144,30 +267,44 @@ class AuthRepositoryTest {
     fun `refresh without a session does not hit the network`() = runTest {
         val result = repository().refresh()
 
-        assertEquals(ApiResult.Failure(ApiError.Unauthorized), result)
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertEquals(0, server.requestCount)
     }
 
     @Test
-    fun `refresh rotates the token pair`() = runTest {
-        sessionStore.save(Session("stale", "r-1"))
+    fun `refresh rotates the token pair and carries the device`() = runTest {
+        sessionStore.save(Session("stale", "r-1", sessionId = "s-1"))
         server.enqueue(
-            jsonResponse("""{"accessToken":"fresh","refreshToken":"r-2","expiresIn":60}"""),
+            envelope(
+                """{"sessionId":"s-1",
+                   "tokens":{"accessToken":"fresh","refreshToken":"r-2","accessExpiresIn":60}}""",
+            ),
         )
 
         val result = repository().refresh()
 
         assertEquals(ApiResult.Success(Unit), result)
         assertEquals(
-            Session("fresh", "r-2", FIXED_NOW_EPOCH_SECONDS + 60),
+            Session("fresh", "r-2", FIXED_NOW_EPOCH_SECONDS + 60, sessionId = "s-1"),
             sessionStore.current(),
         )
+
+        val request = server.takeRequest()
+        assertEquals("/auth/refresh", request.path)
+        val body = request.bodyJson()
+        assertEquals("r-1", body["refreshToken"]?.jsonPrimitive?.content)
+        assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
     }
 
     @Test
     fun `dead refresh token clears the session`() = runTest {
         sessionStore.save(Session("stale", "r-1"))
-        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"TOKEN_INVALID"}}"""),
+        )
 
         val result = repository().refresh()
 
@@ -187,15 +324,15 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `logout revokes the refresh token and wipes local data`() = runTest {
-        sessionStore.save(Session("a-1", "r-1"))
-        server.enqueue(MockResponse().setResponseCode(204))
+    fun `logout names the session in the header and wipes local data`() = runTest {
+        sessionStore.save(Session("a-1", "r-1", sessionId = "s-1"))
+        server.enqueue(envelope("{}"))
 
         repository().logout()
 
         val request = server.takeRequest()
-        assertEquals("/auth/logout", request.path)
-        assertEquals("""{"refreshToken":"r-1"}""", request.body.readUtf8())
+        assertEquals("/auth/logout?allDevices=false", request.path)
+        assertEquals("s-1", request.getHeader("X-Session-Id"))
         assertNull(sessionStore.current())
         assertNull("PIN защищал прошлую сессию", pinStorage.storedPin)
     }
@@ -222,9 +359,9 @@ class AuthRepositoryTest {
     @Test
     fun `authorized flag follows the stored session`() = runTest {
         val repository = repository()
-        server.enqueue(jsonResponse("""{"accessToken":"a-1","refreshToken":"r-1"}"""))
+        server.enqueue(envelope("""{"tokens":{"accessToken":"a-1","refreshToken":"r-1"}}"""))
 
-        repository.verifyCode("+998901234567", "123456")
+        repository.verifyCode("otp-1", "123456")
 
         assertTrue(sessionStore.current() != null)
     }
@@ -233,6 +370,8 @@ class AuthRepositoryTest {
         authApi = authApi(),
         sessionStore = sessionStore,
         pinStorage = pinStorage,
+        deviceInfoProvider = deviceInfoProvider,
+        locationProvider = locationProvider,
         clock = clock,
     )
 
@@ -243,10 +382,14 @@ class AuthRepositoryTest {
         converterFactory = NetworkFactory.converterFactory(NetworkFactory.json()),
     ).create(AuthApi::class.java)
 
-    private fun jsonResponse(body: String): MockResponse = MockResponse()
+    /** Успешный ответ в конверте бэкенда: полезная нагрузка лежит в `data`. */
+    private fun envelope(data: String): MockResponse = MockResponse()
         .setResponseCode(200)
         .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
-        .setBody(body)
+        .setBody("""{"success":true,"data":$data}""")
+
+    private fun RecordedRequest.bodyJson(): JsonObject =
+        Json.parseToJsonElement(body.readUtf8()).jsonObject
 
     private companion object {
         const val FIXED_NOW_EPOCH_SECONDS = 1_774_000_000L
