@@ -1016,6 +1016,69 @@ certification path not found`. На голый IP публичный серти�
 нет): прокрутка состояния ошибки, гейт `showRawResponse` и семантика
 раскрывашки — только глазами по превью и руками на устройстве.
 
+## Этап: lint зелёный и снова в CI (issue #39, ветка claude/issue-39-*)
+
+`lintDebug` был выключен из `ci.yml` («в main есть давняя lint-ошибка») и
+показывал **1 ошибку и 58 предупреждений**. Теперь отчёт — `No issues found`,
+причём при `warningsAsErrors = true`: новое предупреждение роняет сборку.
+
+- **Ошибка** `ProduceStateDoesNotAssignValue` (`MapCanvas`): `produceState` со
+  ссылочным типом за `by` — lint не видит присваивания `value`. Заменено на
+  `remember(initializer, retryKey) { mutableStateOf<MapEngineState?>(null) }` +
+  `LaunchedEffect` с теми же ключами: смысл и перезапуск по «Повторить»
+  прежние, обходного `@Suppress` не потребовалось.
+- **Исправлено по существу**: `<plurals>` вместо строк с числом
+  (`onboarding_otp_resend_timer` — в ru появились «секунду/секунды/секунд»,
+  `otp_input_progress` — форма согласуется с длиной кода, поэтому quantity это
+  `state.length`, а оба числа идут аргументами формата); удалён неиспользуемый
+  `discovery_subtitle` (обе локали); монохромный слой лаунчер-иконки
+  (`drawable/ic_launcher_monochrome.xml` + `<monochrome>` в обоих
+  adaptive-icon) — без него на Android 13+ темизированная иконка была бы
+  чужой; `bundle { language { enableSplit = false } }` — язык переключается
+  внутри приложения (эпик 1.5), и split по локалям оставил бы выбранный язык
+  нескачанным (`AppBundleLocaleChanges`); `Icons.AutoMirrored.*` вместо
+  устаревших `Send`/`ReceiptLong` (два предупреждения компилятора).
+- **Подавлено с объяснением рядом с кодом**: `DiscouragedApi` на
+  `screenOrientation="portrait"` (ТЗ: только портрет), `CustomX509TrustManager`
+  в `PinnedCertificateTrustManager` и `CertificateProbe` (issue #32 — это и
+  есть суть решения), `AcceptsUserCertificates` + `InsecureBaseConfiguration`
+  в `src/debug/res/xml/network_security_config.xml` (файл в release не
+  попадает вовсе).
+- **Отключено в `lint {}`** с причиной: `AndroidGradlePluginVersion` и
+  `GradleDependency` (версии стека зафиксированы правилами проекта, а сама
+  проверка ходит в сеть за списком версий — результат зависит не от кода),
+  `OldTargetApi` (targetSdk 35 задан ТЗ и связан с compileSdk 35).
+- **Грабля**: совет lint «переименуйте `mipmap-anydpi-v26` в `mipmap-anydpi`»
+  выполнять нельзя — ресурсный мержер AGP 8.7.3 папку без версии молча
+  выбрасывает, и сборка падает на `AAPT: error: resource mipmap/ic_launcher
+  not found` (проверено). Поэтому единственное подавление, которое нельзя
+  поставить рядом с кодом, живёт в новом `app/lint.xml` (`ObsoleteSdkInt` на
+  эту папку).
+- **Тесты**: `StringResourceParityTest` расширен на `plurals.xml` — паритет
+  имён uz/ru, обязательный набор форм по CLDR (uz: one/other, ru:
+  one/few/many/other), непустые формы и совпадение placeholder'ов во всех
+  формах обеих локалей. Прогон: `./gradlew testDebugUnitTest` — **569 тестов в
+  67 классах, 0 падений, 0 ошибок**; `lintDebug`, `assembleDebug`,
+  `assembleRelease` — BUILD SUCCESSFUL.
+
+**Не сделано / риски:**
+
+- **Шаг в `ci.yml` возвращает пользователь**: GitHub App агента не имеет прав
+  на `.github/workflows`, push с изменением workflow отклоняется. Нужная
+  правка — вернуть `lintDebug` в команду job'а `checks`:
+  `./gradlew --no-daemon lintDebug assembleDebug testDebugUnitTest`
+  (и убрать комментарий про «давнюю lint-ошибку»).
+- `warningsAsErrors = true` означает, что любое новое предупреждение lint —
+  красный CI. Это и было целью, но при обновлении AGP список подавлений почти
+  наверняка придётся пересматривать.
+- Русские формы plurals («через 21 секунду») проверены только правилами CLDR,
+  на устройстве не смотрели: эмулятора в CI нет.
+- Монохромная иконка — та же временная заглушка-круг, что и обычная; вместе с
+  брендовым логотипом меняются обе.
+- `otp_input_description` и `pin_input_description` тоже просятся в plurals
+  (замечание ревью PR #21), но lint их не ловит и в объём issue #39 они не
+  входили — остаются задачей.
+
 ## Окружение (важно, иначе градиент не стартует)
 
 - **JDK 17**: `export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Home`

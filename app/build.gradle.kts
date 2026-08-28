@@ -120,6 +120,36 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    bundle {
+        language {
+            // Per-app languages (эпик 1.5): язык переключается внутри
+            // приложения, поэтому выносить локали в отдельный split нельзя —
+            // выбранный язык оказался бы не скачан, и интерфейс молча остался
+            // бы на языке системы. Play Core ради этого не тянем.
+            enableSplit = false
+        }
+    }
+
+    lint {
+        // Шаг lintDebug вернулся в CI (issue #39): каждое замечание либо
+        // исправлено, либо подавлено рядом с кодом с объяснением, поэтому
+        // новое предупреждение — это регресс, и сборка на нём падает.
+        abortOnError = true
+        warningsAsErrors = true
+        disable += setOf(
+            // Версии стека зафиксированы (AGENTS.md, rules/tech-stack.md):
+            // AGP 8.7.3 + Gradle 8.11.1 + Kotlin 2.0.21 — проверенная связка
+            // под JDK 17, обновление идёт отдельной задачей с полным прогоном.
+            // Вдобавок обе проверки ходят в сеть за списком версий, то есть
+            // в CI их результат зависит не от кода.
+            "AndroidGradlePluginVersion",
+            "GradleDependency",
+            // targetSdk 35 задан ТЗ (design/android/TZ-ANDROID.md) и связан с
+            // compileSdk 35; поднимать его — отдельная задача с регрессом.
+            "OldTargetApi",
+        )
+    }
 }
 
 dependencies {

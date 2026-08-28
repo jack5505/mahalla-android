@@ -10,7 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -155,8 +155,15 @@ fun MapCanvas(
     onCameraChanged: (MapCameraPosition) -> Unit = {},
 ) {
     var retryKey by remember { mutableIntStateOf(0) }
-    val engineState by produceState(initialValue = null as MapEngineState?, initializer, retryKey) {
-        value = initializer.ensureInitialized()
+    // remember + LaunchedEffect, а не produceState: тот же смысл, но со
+    // ссылочным типом за `by` lint (ProduceStateDoesNotAssignValue) присваивание
+    // не видит и ронял сборку. Ключи те же — смена initializer или тап
+    // «Повторить» перезапускают инициализацию.
+    var engineState by remember(initializer, retryKey) {
+        mutableStateOf<MapEngineState?>(null)
+    }
+    LaunchedEffect(initializer, retryKey) {
+        engineState = initializer.ensureInitialized()
     }
 
     Box(modifier = modifier) {

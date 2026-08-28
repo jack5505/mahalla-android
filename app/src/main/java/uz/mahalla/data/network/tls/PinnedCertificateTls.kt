@@ -1,5 +1,6 @@
 package uz.mahalla.data.network.tls
 
+import android.annotation.SuppressLint
 import okhttp3.OkHttpClient
 import java.net.Socket
 import java.security.KeyStore
@@ -60,6 +61,10 @@ fun interface CertificatePinSource {
  * осталось бы без сети. На JVM этого не видно: тамошний PKIX отвечает на
  * двухаргументный вариант нормально.
  */
+// CustomX509TrustManager: свой trust manager здесь и есть суть решения. Он
+// проверку не выключает — платформенный делегат спрашивается первым и решает
+// всё, кроме одного заранее подтверждённого человеком отпечатка.
+@SuppressLint("CustomX509TrustManager")
 class PinnedCertificateTrustManager(
     private val pinSource: CertificatePinSource,
     private val delegate: X509TrustManager = platformTrustManager(),
