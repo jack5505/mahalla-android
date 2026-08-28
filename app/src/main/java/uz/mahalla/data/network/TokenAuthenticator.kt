@@ -7,8 +7,11 @@ import okhttp3.Response
 import okhttp3.Route
 import uz.mahalla.data.network.AuthInterceptor.Companion.BEARER_PREFIX
 import uz.mahalla.data.network.AuthInterceptor.Companion.HEADER_AUTHORIZATION
+import uz.mahalla.data.device.DeviceInfoProvider
+import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.RefreshTokenRequest
+import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
 import java.time.Clock
@@ -31,6 +34,8 @@ import javax.inject.Singleton
 class TokenAuthenticator @Inject constructor(
     private val sessionStore: SessionStore,
     private val authApi: AuthApi,
+    private val deviceInfoProvider: DeviceInfoProvider,
+    private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
 ) : Authenticator {
 
@@ -49,11 +54,26 @@ class TokenAuthenticator @Inject constructor(
             }
 
             val refreshed = runBlocking {
-                runCatching { authApi.refresh(RefreshTokenRequest(session.refreshToken)) }
-                    .getOrNull()
+                // Устройство и координаты бэкенд требует и здесь: refresh для
+                // него — это продление сессии конкретного устройства.
+                val device = deviceInfoProvider.current().toDto()
+                val location = locationProvider.current()
+                runCatching {
+                    authApi.refresh(
+                        RefreshTokenRequest(
+                            refreshToken = session.refreshToken,
+                            device = device,
+                            lat = location.latitude,
+                            lng = location.longitude,
+                        ),
+                    ).payload()
+                }.getOrNull()
             }
 
-            if (refreshed == null) {
+            val tokens = refreshed?.tokens
+            val accessToken = tokens?.accessToken?.takeIf { it.isNotBlank() }
+            val refreshToken = tokens?.refreshToken?.takeIf { it.isNotBlank() }
+            if (accessToken == null || refreshToken == null) {
                 runBlocking { sessionStore.clear() }
                 return@synchronized null
             }
@@ -61,19 +81,20 @@ class TokenAuthenticator @Inject constructor(
             runBlocking {
                 sessionStore.save(
                     Session(
-                        accessToken = refreshed.accessToken,
-                        refreshToken = refreshed.refreshToken,
+                        accessToken = accessToken,
+                        refreshToken = refreshToken,
                         // Сервер отдаёт «через сколько истечёт», хранить
                         // полезно «когда истечёт» — иначе после перезапуска
                         // приложения значение бессмысленно. Не сообщил —
                         // срок неизвестен, а не «истёк сейчас».
-                        expiresAtEpochSeconds = refreshed.expiresInSeconds
+                        expiresAtEpochSeconds = tokens.accessExpiresIn
                             ?.let { clock.instant().epochSecond + it }
                             ?: Session.UNKNOWN_EXPIRY,
+                        sessionId = refreshed.sessionId ?: session.sessionId,
                     ),
                 )
             }
-            response.request.withBearer(refreshed.accessToken)
+            response.request.withBearer(accessToken)
         }
     }
 

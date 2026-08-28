@@ -16,11 +16,13 @@ class FakeAuthRepository(
     initialAuthorized: Boolean = false,
 ) : AuthRepository {
 
-    var requestCodeResult: ApiResult<OtpChallenge> = ApiResult.Success(OtpChallenge())
+    var requestCodeResult: ApiResult<OtpChallenge> =
+        ApiResult.Success(OtpChallenge(otpToken = DEFAULT_OTP_TOKEN))
     var verifyResult: ApiResult<LoginResult> = ApiResult.Success(LoginResult(isNewUser = false))
     var refreshResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
     val requestedPhones = mutableListOf<String>()
+    /** Пары «токен кода — введённый код»: токен приезжает из `requestCode`. */
     val verifiedCodes = mutableListOf<Pair<String, String>>()
     var logoutCount: Int = 0
         private set
@@ -34,8 +36,8 @@ class FakeAuthRepository(
         return requestCodeResult
     }
 
-    override suspend fun verifyCode(phoneE164: String, code: String): ApiResult<LoginResult> {
-        verifiedCodes += phoneE164 to code
+    override suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult> {
+        verifiedCodes += otpToken to code
         if (verifyResult is ApiResult.Success) authorized.value = true
         return verifyResult
     }
@@ -45,5 +47,9 @@ class FakeAuthRepository(
     override suspend fun logout() {
         logoutCount++
         authorized.value = false
+    }
+
+    companion object {
+        const val DEFAULT_OTP_TOKEN = "otp-token"
     }
 }

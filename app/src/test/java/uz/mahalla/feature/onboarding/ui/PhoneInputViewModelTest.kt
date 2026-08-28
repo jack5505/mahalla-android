@@ -111,7 +111,7 @@ class PhoneInputViewModelTest {
     fun `successful request emits the challenge and stops the spinner`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
-        val challenge = OtpChallenge(codeLength = 4, resendAfterSeconds = 30)
+        val challenge = OtpChallenge(otpToken = "otp-1", codeLength = 4, resendAfterSeconds = 30)
         authRepository.requestCodeResult = ApiResult.Success(challenge)
         val viewModel = viewModel()
         viewModel.onEvent(PhoneInputEvent.PhoneChanged("+998 90 123 45 67"))

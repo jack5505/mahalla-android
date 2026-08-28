@@ -25,6 +25,9 @@ fun ApiError.messageRes(): Int = when (this) {
         R.string.error_unknown
     }
     is ApiError.Unexpected -> R.string.error_unknown
+    // Отказ по конверту: причину назвал сам бэкенд, и она уже показана
+    // (см. userMessage). Своего текста для машинного кода у нас нет.
+    is ApiError.Business -> R.string.error_unknown
 }
 
 /**

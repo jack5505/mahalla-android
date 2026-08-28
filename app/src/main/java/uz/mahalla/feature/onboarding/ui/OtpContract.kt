@@ -9,6 +9,11 @@ import uz.mahalla.feature.auth.domain.OtpFailure
 
 data class OtpState(
     val phone: String = "",
+    /**
+     * Токен отправленного кода (issue #42): по нему бэкенд проверяет ввод, и
+     * повторная отправка его заменяет.
+     */
+    val otpToken: String = "",
     val code: OtpFieldState = OtpFieldState(),
     val submitting: Boolean = false,
     /** Сколько секунд осталось до разблокировки «Отправить снова». */

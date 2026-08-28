@@ -57,6 +57,20 @@ suspend fun <T> apiCall(block: suspend () -> T): ApiResult<T> =
         throw cancellation
     } catch (timeout: SocketTimeoutException) {
         ApiResult.Failure(ApiError.Timeout)
+    } catch (envelope: ApiEnvelopeException) {
+        // Ответ 2xx с `success: false`: HTTP-кода отказа нет, причина — только
+        // в теле. Код ответа сохраняем настоящий (200), чтобы подробности не
+        // врали про то, чего сервер не говорил.
+        ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.Business(envelope.code),
+                server = ServerError(
+                    httpCode = HTTP_OK,
+                    code = envelope.code,
+                    message = envelope.serverMessage,
+                ),
+            ),
+        )
     } catch (http: HttpException) {
         // Тело ответа разбирается здесь, потому что дальше его уже никто не
         // увидит: HttpException до UI не доезжает (issue #34).
@@ -73,3 +87,5 @@ suspend fun <T> apiCall(block: suspend () -> T): ApiResult<T> =
     } catch (other: Throwable) {
         ApiResult.Failure(ApiError.Unexpected(other))
     }
+
+private const val HTTP_OK = 200

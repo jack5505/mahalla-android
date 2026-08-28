@@ -23,9 +23,15 @@ internal object PreferenceKeys {
     /** Отпечаток сертификата сервера, подтверждённый пользователем (issue #32). */
     val BackendCertificatePin = stringPreferencesKey("settings_backend_certificate_pin")
 
+    /** Идентификатор установки для сессий устройства на бэкенде (issue #42). */
+    val DeviceId = stringPreferencesKey("device_id")
+
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
     val SessionExpiresAt = longPreferencesKey("session_expires_at")
+
+    /** Идентификатор серверной сессии: уходит в `X-Session-Id` при выходе. */
+    val SessionId = stringPreferencesKey("session_id")
 
     val PinHash = stringPreferencesKey("pin_hash_encrypted")
     val PinSalt = stringPreferencesKey("pin_salt")

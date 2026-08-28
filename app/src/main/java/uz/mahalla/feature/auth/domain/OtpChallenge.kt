@@ -9,6 +9,12 @@ package uz.mahalla.feature.auth.domain
  * разумным — иначе таймер «повторить через -5 сек» или поле на 300 ячеек.
  */
 data class OtpChallenge(
+    /**
+     * Токен отправленного кода: `verify-otp` принимает его, а не номер
+     * телефона (issue #42). Пустым не бывает — репозиторий считает ответ без
+     * токена нечитаемым, потому что проверить код по нему всё равно нельзя.
+     */
+    val otpToken: String,
     val codeLength: Int = DEFAULT_CODE_LENGTH,
     val resendAfterSeconds: Int = DEFAULT_RESEND_SECONDS,
     val expiresInSeconds: Int = DEFAULT_EXPIRES_SECONDS,
@@ -24,7 +30,13 @@ data class OtpChallenge(
         private const val MAX_EXPIRES_SECONDS = 3_600
 
         /** Сборка из ответа сервера: `null` и мусор заменяются дефолтами. */
-        fun of(codeLength: Int?, resendAfterSeconds: Int?, expiresInSeconds: Int?) = OtpChallenge(
+        fun of(
+            otpToken: String,
+            codeLength: Int?,
+            resendAfterSeconds: Int?,
+            expiresInSeconds: Int?,
+        ) = OtpChallenge(
+            otpToken = otpToken,
             codeLength = codeLength
                 ?.takeIf { it in MIN_CODE_LENGTH..MAX_CODE_LENGTH }
                 ?: DEFAULT_CODE_LENGTH,
@@ -38,5 +50,12 @@ data class OtpChallenge(
     }
 }
 
-/** Итог верификации кода. Новому пользователю дальше предлагается заполнить профиль. */
+/**
+ * Итог верификации кода. Новому пользователю дальше предлагается заполнить
+ * профиль.
+ *
+ * Отдельного признака «новый» бэкенд не отдаёт (issue #42), поэтому им служит
+ * пустое имя в профиле: заполнять нечего ровно у того, кто только что
+ * зарегистрировался.
+ */
 data class LoginResult(val isNewUser: Boolean)

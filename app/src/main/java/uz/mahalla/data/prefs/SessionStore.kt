@@ -21,6 +21,12 @@ data class Session(
     val accessToken: String,
     val refreshToken: String,
     val expiresAtEpochSeconds: Long = UNKNOWN_EXPIRY,
+    /**
+     * Идентификатор сессии на бэкенде (issue #42). Уходит в `X-Session-Id`
+     * при выходе, чтобы сервер погасил именно эту сессию, а не все.
+     * `null` — сервер его не прислал.
+     */
+    val sessionId: String? = null,
 ) {
     companion object {
         const val UNKNOWN_EXPIRY = 0L
@@ -56,6 +62,7 @@ class DataStoreSessionStore @Inject constructor(
                     refreshToken = refresh,
                     expiresAtEpochSeconds = preferences[PreferenceKeys.SessionExpiresAt]
                         ?: Session.UNKNOWN_EXPIRY,
+                    sessionId = preferences[PreferenceKeys.SessionId],
                 )
             }
         }
@@ -72,6 +79,10 @@ class DataStoreSessionStore @Inject constructor(
             preferences[PreferenceKeys.SessionAccessToken] = session.accessToken
             preferences[PreferenceKeys.SessionRefreshToken] = session.refreshToken
             preferences[PreferenceKeys.SessionExpiresAt] = session.expiresAtEpochSeconds
+            // Идентификатор сессии перезаписывается, только если он приехал:
+            // обновление токенов может вернуться без него, а сессия при этом
+            // та же самая — стирать её id значило бы разучиться выходить.
+            session.sessionId?.let { preferences[PreferenceKeys.SessionId] = it }
         }
     }
 
@@ -80,6 +91,7 @@ class DataStoreSessionStore @Inject constructor(
             preferences.remove(PreferenceKeys.SessionAccessToken)
             preferences.remove(PreferenceKeys.SessionRefreshToken)
             preferences.remove(PreferenceKeys.SessionExpiresAt)
+            preferences.remove(PreferenceKeys.SessionId)
         }
     }
 }

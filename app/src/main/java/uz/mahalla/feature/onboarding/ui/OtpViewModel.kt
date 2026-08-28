@@ -34,6 +34,7 @@ class OtpViewModel @Inject constructor(
 ) : MviViewModel<OtpState, OtpEvent, OtpEffect>(
     OtpState(
         phone = savedStateHandle[OtpArgs.PHONE] ?: "",
+        otpToken = savedStateHandle[OtpArgs.OTP_TOKEN] ?: "",
         code = OtpFieldState(
             length = savedStateHandle[OtpArgs.CODE_LENGTH] ?: OtpChallenge.DEFAULT_CODE_LENGTH,
         ),
@@ -69,14 +70,14 @@ class OtpViewModel @Inject constructor(
 
         updateState { copy(submitting = true, failure = null, apiFailure = null) }
         viewModelScope.launch {
-            when (val result = authRepository.verifyCode(state.phone, state.code.code)) {
+            when (val result = authRepository.verifyCode(state.otpToken, state.code.code)) {
                 is ApiResult.Success -> {
                     updateState { copy(submitting = false) }
                     emitEffect(OtpEffect.Verified(result.data.isNewUser))
                 }
 
                 is ApiResult.Failure -> {
-                    val failure = result.error.asOtpFailure()
+                    val failure = result.failure.asOtpFailure()
                     updateState {
                         copy(
                             submitting = false,
@@ -111,6 +112,9 @@ class OtpViewModel @Inject constructor(
                             resending = false,
                             failure = null,
                             apiFailure = null,
+                            // Новый код — новый токен: старый бэкенд уже
+                            // погасил, и проверять по нему нечего.
+                            otpToken = result.data.otpToken,
                             code = OtpFieldState(length = result.data.codeLength),
                             resendInSeconds = result.data.resendAfterSeconds,
                         )

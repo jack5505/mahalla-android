@@ -16,6 +16,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
+import uz.mahalla.data.device.AndroidDeviceInfoProvider
+import uz.mahalla.data.device.DeviceIdStore
+import uz.mahalla.data.location.AndroidLocationSource
+import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
@@ -67,6 +71,8 @@ class GraphAssemblyTest {
             tokenAuthenticator = TokenAuthenticator(
                 sessionStore = sessionStore,
                 authApi = authApi,
+                deviceInfoProvider = deviceInfoProvider(context),
+                locationProvider = locationProvider(context),
                 clock = AppModule.provideClock(),
             ),
             backendUrlInterceptor = backendUrlInterceptor,
@@ -173,6 +179,8 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
+            deviceInfoProvider = deviceInfoProvider(context),
+            locationProvider = locationProvider(context),
             clock = AppModule.provideClock(),
         )
 
@@ -219,6 +227,19 @@ class GraphAssemblyTest {
      * Chucker'ом, значит его интерцептор доезжает до обоих клиентов.
      */
     private fun inspector() = ChuckerHttpInspector(context)
+
+    /**
+     * Устройство и координаты — обязательные поля запросов авторизации
+     * (issue #42): и репозиторий, и `TokenAuthenticator` собираются вместе с
+     * ними, реализациями из графа.
+     */
+    private fun deviceInfoProvider(context: Context) =
+        AndroidDeviceInfoProvider(DeviceIdStore(sharedDataStore(context)))
+
+    private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
+        locationSource = AndroidLocationSource(context),
+        settings = SettingsDataStore(sharedDataStore(context)),
+    )
 
     /** `initialize = false`: нужен факт кодогенерации, а не статик-инициализация. */
     private fun loadClass(name: String): Class<*> =

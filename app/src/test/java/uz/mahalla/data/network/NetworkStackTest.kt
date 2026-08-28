@@ -20,6 +20,8 @@ import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.discovery.data.CatalogApi
 import uz.mahalla.feature.discovery.data.PlaceDto
+import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.time.Clock
 import java.time.Instant
@@ -126,7 +128,7 @@ class NetworkStackTest {
         assertEquals("Bearer fresh", replay.getHeader(AuthInterceptor.HEADER_AUTHORIZATION))
 
         assertEquals(
-            Session("fresh", "refresh-2", FIXED_NOW_EPOCH_SECONDS + 3600),
+            Session("fresh", "refresh-2", FIXED_NOW_EPOCH_SECONDS + 3600, sessionId = "s-1"),
             sessionStore.current(),
         )
         assertEquals("сессия перезаписана один раз", 2, sessionStore.saveCount)
@@ -169,7 +171,12 @@ class NetworkStackTest {
     fun `refresh without expiresIn leaves the expiry unknown`() = runTest {
         sessionStore.save(Session("stale", "refresh-1"))
         server.enqueue(MockResponse().setResponseCode(401))
-        server.enqueue(jsonResponse("""{"accessToken":"fresh","refreshToken":"refresh-2"}"""))
+        server.enqueue(
+            jsonResponse(
+                """{"success":true,
+                    "data":{"tokens":{"accessToken":"fresh","refreshToken":"refresh-2"}}}""",
+            ),
+        )
         server.enqueue(jsonResponse(PLACE_BODY))
 
         apiCall { catalogApi().place("p-1") }
@@ -271,7 +278,13 @@ class NetworkStackTest {
         val authApi = NetworkFactory
             .retrofit(server.url("/").toString(), refreshClient, converterFactory())
             .create(AuthApi::class.java)
-        return TokenAuthenticator(sessionStore, authApi, fixedClock)
+        return TokenAuthenticator(
+            sessionStore = sessionStore,
+            authApi = authApi,
+            deviceInfoProvider = FakeDeviceInfoProvider(),
+            locationProvider = FakeRequestLocationProvider(),
+            clock = fixedClock,
+        )
     }
 
     private fun converterFactory(): Converter.Factory =
@@ -313,8 +326,10 @@ class NetworkStackTest {
              "rating":4.6,"distanceMeters":320,"isOpenNow":true}
         """
 
+        /** Конверт бэкенда: пара токенов лежит в `data.tokens` (issue #42). */
         const val REFRESHED_TOKENS_BODY = """
-            {"accessToken":"fresh","refreshToken":"refresh-2","expiresIn":3600}
+            {"success":true,"data":{"sessionId":"s-1",
+             "tokens":{"accessToken":"fresh","refreshToken":"refresh-2","accessExpiresIn":3600}}}
         """
     }
 }

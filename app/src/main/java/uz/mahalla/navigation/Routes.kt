@@ -45,6 +45,8 @@ data object PhoneRoute
 @Serializable
 data class OtpRoute(
     val phone: String,
+    /** Токен отправленного кода: по нему бэкенд его и проверяет (issue #42). */
+    val otpToken: String,
     val resendAfterSeconds: Int = OtpChallenge.DEFAULT_RESEND_SECONDS,
     val codeLength: Int = OtpChallenge.DEFAULT_CODE_LENGTH,
 )
@@ -56,6 +58,7 @@ data class OtpRoute(
  */
 object OtpArgs {
     const val PHONE = "phone"
+    const val OTP_TOKEN = "otpToken"
     const val RESEND_AFTER_SECONDS = "resendAfterSeconds"
     const val CODE_LENGTH = "codeLength"
 }
