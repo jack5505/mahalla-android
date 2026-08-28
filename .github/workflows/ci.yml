@@ -1,46 +1,79 @@
-# Юнит-тесты + debug-сборка.
+# ═══════════════════════════════════════════════════════════════════
+#  CI для ai-dev loop. Положите в репозиторий как:
+#     .github/workflows/ci.yml
 #
-# Запуск только вручную (решение пользователя): Actions → "CI" → Run workflow,
-# выбрать ветку. Автозапуска на PR нет — минуты Actions не жгутся на каждый
-# push. Правило проекта «тесты обязательны» при этом в силе: прогонять этот
-# workflow перед мержем — ручной шаг, автоматика больше не подстрахует.
+#  Два уровня проверок:
+#   • checks   — сборка + unit-тесты + lint. Быстро (~5–10 мин),
+#                гоняется на КАЖДЫЙ push в PR. Именно этот job
+#                оркестратор ждёт через `gh pr checks --watch`.
+#   • emulator — инструментальные тесты на Android-эмуляторе.
+#                Работает на БЕСПЛАТНОМ ubuntu-runner (KVM доступен),
+#                но job долгий (~15–25 мин) и ест лимит минут, поэтому
+#                включается только меткой `emulator` на PR.
+# ═══════════════════════════════════════════════════════════════════
 name: CI
 
 on:
-  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
 
 jobs:
-  build:
+  checks:
+    name: Сборка и unit-тесты
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
+      - name: Gradle (с кэшем)
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: Android-лицензии (страховка)
+      - name: Сборка + тесты + lint
+        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+
+      # ── VPN-часть ────────────────────────────────────────────────
+      # TODO: подставьте проверку своего VPN-модуля, например:
+      #   ./gradlew --no-daemon :vpn:test
+      # или собственный smoke-скрипт:
+      #   ./scripts/vpn-smoke-test.sh
+
+  emulator:
+    name: Тесты на эмуляторе (по метке "emulator")
+    runs-on: ubuntu-latest
+    needs: checks
+    timeout-minutes: 45
+    # Запускается ТОЛЬКО если на PR висит метка "emulator" —
+    # чтобы не сжигать бесплатные минуты на каждой итерации.
+    if: contains(github.event.pull_request.labels.*.name, 'emulator')
+    steps:
+      - name: Включить KVM (аппаратное ускорение на бесплатном runner)
         run: |
-          for SDKROOT in "$ANDROID_HOME" "$ANDROID_SDK_ROOT"; do
-            if [ -x "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-              yes | "$SDKROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
-            fi
-          done
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
-      # v5, не v6: в v6 кэширование вынесено в проприетарный
-      # gradle-actions-caching (отдельные Terms of Use Gradle).
-      - name: Gradle (кэш)
-        uses: gradle/actions/setup-gradle@v5
+      - uses: actions/checkout@v4
 
-      - name: Тесты и сборка
-        run: ./gradlew testDebugUnitTest assembleDebug
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle (с кэшем)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Инструментальные тесты
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
