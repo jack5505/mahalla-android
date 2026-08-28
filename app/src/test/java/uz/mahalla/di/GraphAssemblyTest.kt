@@ -125,8 +125,12 @@ class GraphAssemblyTest {
     fun `food graph assembles over the api, the database and the cart`() {
         val database = DatabaseModule.provideDatabase(context)
         try {
+            // Клиент здесь любой: проверяется сборка репозиториев еды, а не
+            // сетевой стек (для него есть свои тесты выше). Голый OkHttp вместо
+            // NetworkModule.provideRefreshClient() ещё и не ломает этот тест
+            // каждый раз, когда у провайдера клиента появляется новый параметр.
             val retrofit = NetworkModule.provideRetrofit(
-                NetworkModule.provideRefreshClient(backendUrlInterceptor()),
+                okhttp3.OkHttpClient(),
                 NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
                 NetworkModule.provideBaseUrl(),
             )
