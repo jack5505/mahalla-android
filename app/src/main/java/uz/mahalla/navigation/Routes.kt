@@ -63,6 +63,15 @@ object OtpArgs {
     const val CODE_LENGTH = "codeLength"
 }
 
+/**
+ * Вход через Telegram-бот (issue #46). Аргументов нет намеренно: одноразовый
+ * токен выдаёт бэкенд уже на самом экране и живёт он только в памяти
+ * ViewModel — в аргументах маршрута он оказался бы в `SavedStateHandle`, то
+ * есть пережил бы смерть процесса и попал в системный дамп состояния.
+ */
+@Serializable
+data object TelegramRoute
+
 @Serializable
 data object PinRoute
 

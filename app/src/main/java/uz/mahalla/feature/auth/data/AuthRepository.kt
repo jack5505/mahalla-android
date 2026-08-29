@@ -10,6 +10,9 @@ import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
+import uz.mahalla.data.network.auth.TelegramCheckRequest
+import uz.mahalla.data.network.auth.TelegramCheckResponse
+import uz.mahalla.data.network.auth.TelegramInitRequest
 import uz.mahalla.data.network.auth.TokenPairDto
 import uz.mahalla.data.network.auth.VerifyOtpRequest
 import uz.mahalla.data.network.auth.toDto
@@ -19,6 +22,9 @@ import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.TelegramChallenge
+import uz.mahalla.feature.auth.domain.TelegramLoginState
+import uz.mahalla.feature.auth.domain.isTelegramPending
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -44,6 +50,18 @@ interface AuthRepository {
      * или чужой токен отсекается сервером, а не сравнением строк на клиенте.
      */
     suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult>
+
+    /**
+     * Начать вход через Telegram (issue #46): получить одноразовую ссылку на
+     * бота. Номер телефона не нужен — его сообщит боту сам Telegram.
+     */
+    suspend fun startTelegramLogin(): ApiResult<TelegramChallenge>
+
+    /**
+     * Нажали ли Start в боте. [TelegramLoginState.Pending] — «ещё нет», это не
+     * ошибка; успех сохраняет сессию, как и [verifyCode].
+     */
+    suspend fun checkTelegramLogin(deepLinkToken: String): ApiResult<TelegramLoginState>
 
     /**
      * Явное обновление токенов. Обычный путь — `TokenAuthenticator` по 401;
@@ -134,6 +152,96 @@ class DefaultAuthRepository @Inject constructor(
 
             is ApiResult.Failure -> result
         }
+    }
+
+    override suspend fun startTelegramLogin(): ApiResult<TelegramChallenge> {
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.telegramInit(
+                TelegramInitRequest(
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            ).payload()
+        }
+
+        return when (result) {
+            is ApiResult.Success -> TelegramChallenge.of(
+                deepLinkToken = result.data.deepLinkToken,
+                botUrl = result.data.telegramBotUrl,
+                expiresInSeconds = result.data.expiresInSeconds,
+            )
+                // Либо токена нет (проверять будет нечего), либо ссылка ведёт
+                // не в Telegram — открывать её мы всё равно откажемся, так что
+                // честнее сразу уйти на SMS, чем показать экран-тупик.
+                ?.let { ApiResult.Success(it) }
+                ?: ApiResult.Failure(ApiError.Serialization)
+
+            is ApiResult.Failure -> result
+        }
+    }
+
+    override suspend fun checkTelegramLogin(
+        deepLinkToken: String,
+    ): ApiResult<TelegramLoginState> {
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.telegramCheck(
+                TelegramCheckRequest(
+                    deepLinkToken = deepLinkToken,
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            ).payload()
+        }
+
+        return when (result) {
+            is ApiResult.Success -> onTelegramConfirmed(result.data)
+
+            is ApiResult.Failure ->
+                // «Ещё не нажали Start» приезжает отказом (400 `TG_PENDING`),
+                // но отказом не является: опрос продолжается, а пользователю
+                // ничего не показываем.
+                if (result.failure.isTelegramPending()) {
+                    ApiResult.Success(TelegramLoginState.Pending)
+                } else {
+                    result
+                }
+        }
+    }
+
+    /**
+     * Подтверждённый вход. Сессия сохраняется только когда телефон аккаунта
+     * подтверждён: иначе бэкенд сам просит добить вход SMS-кодом, и держать до
+     * этого момента живые токены незачем — отличить такую сессию от полноценной
+     * в остальном приложении было бы нечем.
+     */
+    private suspend fun onTelegramConfirmed(
+        response: TelegramCheckResponse,
+    ): ApiResult<TelegramLoginState> {
+        val login = LoginResult(isNewUser = response.user?.fullName.isNullOrBlank())
+        if (response.requiresPhoneVerify) {
+            return ApiResult.Success(
+                TelegramLoginState.Confirmed(login = login, requiresPhoneVerify = true),
+            )
+        }
+
+        // Токены у этого эндпоинта лежат в корне ответа, а не в `tokens`.
+        val session = TokenPairDto(
+            accessToken = response.accessToken,
+            refreshToken = response.refreshToken,
+            accessExpiresIn = response.accessExpiresIn,
+            refreshExpiresIn = response.refreshExpiresIn,
+        ).toSession(sessionId = null) ?: return ApiResult.Failure(ApiError.Serialization)
+
+        sessionStore.save(session)
+        return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
     }
 
     override suspend fun refresh(): ApiResult<Unit> {

@@ -16,6 +16,7 @@ import uz.mahalla.feature.onboarding.ui.GeoScreen
 import uz.mahalla.feature.onboarding.ui.OtpScreen
 import uz.mahalla.feature.onboarding.ui.PhoneInputScreen
 import uz.mahalla.feature.onboarding.ui.PinScreen
+import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
@@ -101,6 +102,24 @@ fun MahallaNavHost(
                             ),
                         )
                     },
+                    onTelegramRequested = { navController.navigate(TelegramRoute) },
+                    onBack = { navController.navigateUp() },
+                )
+            }
+            composable<TelegramRoute> {
+                TelegramLoginScreen(
+                    // Вход состоялся без единого SMS — дальше обычный путь.
+                    // Экран уходит из стека вместе с вводом номера: токен уже
+                    // отработан, возвращаться к ожиданию Start некуда.
+                    onConfirmed = {
+                        navController.navigate(PinRoute) {
+                            popUpTo(PhoneRoute) { inclusive = true }
+                        }
+                    },
+                    // Telegram не подошёл (или не подтвердил номер) — остаётся
+                    // SMS. Экран телефона в стеке цел, поэтому просто назад:
+                    // повторная навигация на него завела бы второй экземпляр.
+                    onSmsRequested = { navController.popBackStack(PhoneRoute, inclusive = false) },
                     onBack = { navController.navigateUp() },
                 )
             }

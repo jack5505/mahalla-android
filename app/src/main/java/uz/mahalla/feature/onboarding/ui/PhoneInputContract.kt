@@ -22,6 +22,12 @@ data class PhoneInputState(
     val numberValid: Boolean = false,
     val consentAccepted: Boolean = false,
     val submitting: Boolean = false,
+    /**
+     * На устройстве есть Telegram — значит доступен бесплатный вход (issue
+     * #46). Нет — кнопки нет вовсе: ссылка на бота открылась бы в браузере,
+     * где нажать Start невозможно.
+     */
+    val telegramAvailable: Boolean = false,
     val error: PhoneInputError? = null,
     /**
      * Ошибка запроса кода: сеть, лимит, 5xx, отказ бэкенда. Показывается
@@ -41,6 +47,9 @@ sealed interface PhoneInputEvent : UiEvent {
     data class ConsentChanged(val accepted: Boolean) : PhoneInputEvent
     data object Submit : PhoneInputEvent
     data object OfferRequested : PhoneInputEvent
+
+    /** Войти через Telegram-бот вместо SMS (issue #46). */
+    data object TelegramRequested : PhoneInputEvent
     data object ErrorDismissed : PhoneInputEvent
 }
 
@@ -53,4 +62,7 @@ sealed interface PhoneInputEffect : UiEffect {
 
     /** Открыть текст оферты во внешнем браузере. */
     data object OpenOffer : PhoneInputEffect
+
+    /** Перейти на бесплатный вход через Telegram-бот (issue #46). */
+    data object OpenTelegram : PhoneInputEffect
 }

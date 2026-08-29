@@ -22,6 +22,7 @@ import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.TelegramLoginState
 import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRequestLocationProvider
@@ -364,6 +365,151 @@ class AuthRepositoryTest {
         repository.verifyCode("otp-1", "123456")
 
         assertTrue(sessionStore.current() != null)
+    }
+
+    // --- Вход через Telegram-бот (issue #46) ---
+
+    @Test
+    fun `telegram init asks for a link and sends no phone number`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"deepLinkToken":"dl-1",
+                   "telegramBotUrl":"https://t.me/MahallaVerifyBot?start=dl-1",
+                   "expiresInSeconds":300}""",
+            ),
+        )
+
+        val result = repository().startTelegramLogin()
+
+        val challenge = (result as ApiResult.Success).data
+        assertEquals("dl-1", challenge.deepLinkToken)
+        assertEquals("https://t.me/MahallaVerifyBot?start=dl-1", challenge.botUrl)
+        assertEquals(300, challenge.expiresInSeconds)
+
+        val request = server.takeRequest()
+        assertEquals("/auth/telegram/init", request.path)
+        val body = request.bodyJson()
+        assertNull("номер телефона на этом шаге неизвестен", body["phone"])
+        assertEquals(
+            FakeDeviceInfoProvider.DEFAULT.deviceId,
+            body["device"]!!.jsonObject["deviceId"]!!.jsonPrimitive.content,
+        )
+        assertEquals(41.31, body["lat"]!!.jsonPrimitive.content.toDouble(), 0.001)
+    }
+
+    /**
+     * Ссылка, ведущая не в Telegram, — отказ, а не экран-тупик: открыть её мы
+     * всё равно откажемся (`TelegramBotLink`).
+     */
+    @Test
+    fun `telegram init rejects a foreign bot link`() = runTest {
+        server.enqueue(
+            envelope("""{"deepLinkToken":"dl-1","telegramBotUrl":"https://evil.example/x"}"""),
+        )
+
+        val result = repository().startTelegramLogin()
+
+        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `TG_PENDING is reported as waiting, not as an error`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"TG_PENDING",
+                       "message":"Telegram bot orqali tasdiqlash kutilmoqda."}}""",
+                ),
+        )
+
+        val result = repository().checkTelegramLogin("dl-1")
+
+        assertEquals(
+            TelegramLoginState.Pending,
+            (result as ApiResult.Success).data,
+        )
+        assertNull("сессии пока нет", sessionStore.current())
+
+        val body = server.takeRequest().bodyJson()
+        assertEquals("dl-1", body["deepLinkToken"]!!.jsonPrimitive.content)
+    }
+
+    /**
+     * Токены у этого эндпоинта лежат в корне ответа, а не в `tokens`, и
+     * `sessionId` бэкенд не отдаёт вовсе.
+     */
+    @Test
+    fun `confirmed telegram login saves the session`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"accessToken":"a-tg","refreshToken":"r-tg","accessExpiresIn":3600,
+                   "refreshExpiresIn":86400,"requiresPhoneVerify":false,
+                   "user":{"id":"u-1","phone":"+998901234567","fullName":"Ali"}}""",
+            ),
+        )
+
+        val result = repository().checkTelegramLogin("dl-1")
+
+        val state = (result as ApiResult.Success).data
+        assertEquals(
+            TelegramLoginState.Confirmed(login = LoginResult(isNewUser = false)),
+            state,
+        )
+        assertEquals(
+            Session(
+                accessToken = "a-tg",
+                refreshToken = "r-tg",
+                expiresAtEpochSeconds = FIXED_NOW_EPOCH_SECONDS + 3600,
+                sessionId = null,
+            ),
+            sessionStore.current(),
+        )
+    }
+
+    /**
+     * Telegram подтвердил личность, но номер не проверен. Сессию не сохраняем:
+     * отличить такую «половину входа» от полноценной в остальном приложении
+     * было бы нечем.
+     */
+    @Test
+    fun `unverified phone does not create a session`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"accessToken":"a-tg","refreshToken":"r-tg","accessExpiresIn":3600,
+                   "requiresPhoneVerify":true,"user":{"id":"u-1"}}""",
+            ),
+        )
+
+        val result = repository().checkTelegramLogin("dl-1")
+
+        assertEquals(
+            TelegramLoginState.Confirmed(
+                login = LoginResult(isNewUser = true),
+                requiresPhoneVerify = true,
+            ),
+            (result as ApiResult.Success).data,
+        )
+        assertNull("полуавторизованной сессии быть не должно", sessionStore.current())
+    }
+
+    @Test
+    fun `a real telegram failure stays a failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"VALIDATION_ERROR"}}"""),
+        )
+
+        val result = repository().checkTelegramLogin("dl-1")
+
+        assertTrue(result is ApiResult.Failure)
+        assertEquals(
+            "VALIDATION_ERROR",
+            (result as ApiResult.Failure).failure.server?.code,
+        )
     }
 
     private fun repository(): AuthRepository = DefaultAuthRepository(
