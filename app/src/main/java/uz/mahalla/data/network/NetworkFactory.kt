@@ -63,11 +63,13 @@ object NetworkFactory {
         }
 
     /**
-     * Основной клиент: адрес бэкенда → Bearer → инспектор, плюс refresh по 401.
+     * Основной клиент: адрес бэкенда → координаты → Bearer → инспектор, плюс
+     * refresh по 401.
      *
      * Порядок не косметика. Инспектор добавляется последним, поэтому получает
      * запрос ровно в том виде, в каком тот уйдёт в сеть: с фактическим хостом
-     * (его подставил [BackendUrlInterceptor], issue #26) и с уже проставленным
+     * (его подставил [BackendUrlInterceptor], issue #26), с координатами
+     * ([GeoHeaderInterceptor], issue #53) и с уже проставленным
      * `Authorization`. Стоя первым, он показывал бы адрес сборки и запрос без
      * заголовков — то есть отвечал бы не на тот вопрос, ради которого нужен.
      *
@@ -80,11 +82,13 @@ object NetworkFactory {
         backendUrlInterceptor: Interceptor,
         authInterceptor: Interceptor,
         authenticator: Authenticator,
+        geoHeaderInterceptor: Interceptor? = null,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
     ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
+        .apply { geoHeaderInterceptor?.let(::addInterceptor) }
         .addInterceptor(authInterceptor)
         .apply { inspector?.let(::addInterceptor) }
         .authenticator(authenticator)
@@ -93,16 +97,19 @@ object NetworkFactory {
     /**
      * «Голый» клиент для авторизации и refresh'а: без `AuthInterceptor` и без
      * `TokenAuthenticator` (иначе 401 на refresh звал бы refresh). Адрес
-     * бэкенда и инспектор нужны и здесь — вход и обновление токена уходят на
-     * тот же сервер и точно так же требуют просмотра.
+     * бэкенда, координаты и инспектор нужны и здесь — вход и обновление токена
+     * уходят на тот же сервер, точно так же требуют просмотра и проходят через
+     * тот же гео-фильтр бэкенда.
      */
     fun refreshClient(
         backendUrlInterceptor: Interceptor,
+        geoHeaderInterceptor: Interceptor? = null,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
     ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
+        .apply { geoHeaderInterceptor?.let(::addInterceptor) }
         .apply { inspector?.let(::addInterceptor) }
         .build()
 

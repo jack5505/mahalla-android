@@ -81,7 +81,7 @@ class DiscoveryFiltersTest {
         // локально в PlaceFilterEngine.
         val filters = DiscoveryFilters(categories = setOf(PlaceCategory.Cinema, PlaceCategory.Food))
 
-        assertEquals("food", filters.apiCategory())
+        assertEquals("FOOD", filters.apiCategory())
     }
 
     @Test

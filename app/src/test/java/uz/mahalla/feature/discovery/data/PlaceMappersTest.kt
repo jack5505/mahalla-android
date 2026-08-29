@@ -4,14 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.PlaceCategory
-import java.time.DayOfWeek
 import java.time.Instant
-import java.time.LocalTime
 
 /**
- * Разбор ответа каталога (эпик 4).
+ * Разбор ответа каталога (эпик 4, контракт бэкенда — issue #53).
  *
  * Главное правило проверок: одно битое поле не должно уносить весь список —
  * каталог это витрина, и место без координат лучше показать без метки, чем
@@ -20,19 +19,19 @@ import java.time.LocalTime
 class PlaceMappersTest {
 
     @Test
-    fun `place dto maps to the domain model`() {
-        val dto = PlaceDto(
+    fun `summary maps to the domain model`() {
+        val dto = PlaceSummaryDto(
             id = "p-1",
             name = "Osh markazi",
-            category = "food",
-            rating = 4.6,
-            distanceMeters = 320,
-            isOpenNow = true,
-            reviewCount = 42,
+            category = "FOOD",
             address = "Amir Temur 1",
             latitude = 41.31,
             longitude = 69.28,
-            isRecommended = true,
+            isAvailable = true,
+            ratingAvg = 4.6,
+            ratingCount = 42,
+            distanceMeters = 320.7,
+            logoUrl = "logo.jpg",
         )
 
         val place = dto.toDomain()
@@ -40,27 +39,48 @@ class PlaceMappersTest {
         assertEquals("p-1", place.id)
         assertEquals(PlaceCategory.Food, place.category)
         assertEquals(GeoPoint(41.31, 69.28), place.point)
+        assertEquals(4.6, place.rating, 0.0)
         assertEquals(42, place.reviewCount)
-        assertTrue(place.isRecommended)
+        assertEquals("расстояние сервера округляется вниз", 320, place.distanceMeters)
+        assertTrue(place.isOpenNow)
+        assertEquals("logo.jpg", place.photoUrl)
+    }
+
+    @Test
+    fun `a search hit gets its distance measured locally`() {
+        // В ответе поиска расстояния нет вовсе — без пересчёта у всей выдачи
+        // стояло бы «0 м».
+        val dto = PlaceDocumentDto(id = "p", name = "P", latitude = 41.3157, longitude = 69.2797)
+
+        val place = dto.toDomain(DeviceLocation(latitude = 41.3111, longitude = 69.2797))
+
+        assertTrue("${place.distanceMeters} м", place.distanceMeters in 400..600)
+    }
+
+    @Test
+    fun `without coordinates the distance stays zero instead of a made up number`() {
+        val dto = PlaceDocumentDto(id = "p", name = "P")
+
+        assertEquals(0, dto.toDomain(DeviceLocation(41.3111, 69.2797)).distanceMeters)
     }
 
     @Test
     fun `half a coordinate is no coordinate`() {
-        val dto = PlaceDto(id = "p", name = "P", latitude = 41.31, longitude = null)
+        val dto = PlaceSummaryDto(id = "p", name = "P", latitude = 41.31, longitude = null)
 
         assertNull(dto.toDomain().point)
     }
 
     @Test
     fun `coordinates out of range are dropped`() {
-        val dto = PlaceDto(id = "p", name = "P", latitude = 500.0, longitude = 69.28)
+        val dto = PlaceSummaryDto(id = "p", name = "P", latitude = 500.0, longitude = 69.28)
 
         assertNull(dto.toDomain().point)
     }
 
     @Test
     fun `blank strings become nulls`() {
-        val dto = PlaceDto(id = "p", name = "P", address = "  ", photoUrl = "")
+        val dto = PlaceSummaryDto(id = "p", name = "P", address = "  ", logoUrl = "")
 
         val place = dto.toDomain()
 
@@ -69,86 +89,65 @@ class PlaceMappersTest {
     }
 
     @Test
-    fun `main photo comes first and is not duplicated`() {
-        val dto = PlaceDto(
+    fun `the cover comes before the logo and duplicates are dropped`() {
+        // Логотип это иконка, а не фотография заведения: в галерее он не может
+        // стоять первым, а вторым экземпляром — тем более.
+        val dto = PlaceDetailDto(
             id = "p",
             name = "P",
-            photoUrl = "main.jpg",
-            photos = listOf("main.jpg", "second.jpg", ""),
+            coverUrl = "cover.jpg",
+            logoUrl = "cover.jpg",
         )
 
-        assertEquals(listOf("main.jpg", "second.jpg"), dto.toDetails().photos)
+        assertEquals(listOf("cover.jpg"), dto.toDetails().photos)
     }
 
     @Test
-    fun `opening hours parse into the domain schedule`() {
-        val dto = OpeningHoursDto(dayOfWeek = 1, opensAt = "09:00", closesAt = "18:00")
+    fun `the card falls back to the city when there is no address`() {
+        val dto = PlaceDetailDto(id = "p", name = "P", address = "  ", city = "Toshkent")
 
-        val hours = dto.toDomainOrNull()!!
-
-        assertEquals(DayOfWeek.MONDAY, hours.dayOfWeek)
-        assertEquals(LocalTime.of(9, 0), hours.opensAt)
-        assertEquals(LocalTime.of(18, 0), hours.closesAt)
+        assertEquals("Toshkent", dto.toDetails().contacts.address)
     }
 
     @Test
-    fun `an impossible day of week is skipped instead of crashing`() {
-        assertNull(OpeningHoursDto(dayOfWeek = 9, opensAt = "09:00", closesAt = "18:00").toDomainOrNull())
-    }
-
-    @Test
-    fun `half an interval is treated as a day off`() {
-        // «Открыто с 9:00 и никогда не закрыто» показать нечем.
-        val hours = OpeningHoursDto(dayOfWeek = 3, opensAt = "09:00", closesAt = null).toDomainOrNull()!!
-
-        assertTrue(hours.isDayOff)
-    }
-
-    @Test
-    fun `broken time is treated as a day off`() {
-        val hours = OpeningHoursDto(dayOfWeek = 3, opensAt = "утром", closesAt = "18:00").toDomainOrNull()!!
-
-        assertTrue(hours.isDayOff)
-    }
-
-    @Test
-    fun `review timestamp is parsed and a broken one is dropped`() {
-        val parsed = ReviewDto(id = "r", createdAt = "2026-08-25T10:15:30Z").toDomain()
+    fun `review timestamp is parsed in both formats and a broken one is dropped`() {
+        val instant = ReviewDto(id = "r", createdAt = "2026-08-25T10:15:30Z").toDomain()
+        // Jackson сериализует LocalDateTime без зоны — такой отзыв тоже обязан
+        // получить дату, иначе она пуста у всех.
+        val local = ReviewDto(id = "r", createdAt = "2026-08-25T10:15:30.123").toDomain()
         val broken = ReviewDto(id = "r", createdAt = "вчера").toDomain()
 
-        assertEquals(Instant.parse("2026-08-25T10:15:30Z"), parsed.createdAt)
+        assertEquals(Instant.parse("2026-08-25T10:15:30Z"), instant.createdAt)
+        assertEquals(Instant.parse("2026-08-25T10:15:30.123Z"), local.createdAt)
         assertNull(broken.createdAt)
     }
 
     @Test
-    fun `dto survives a round trip through the cache`() {
-        val dto = PlaceDto(
+    fun `a place survives a round trip through the cache`() {
+        val place = PlaceSummaryDto(
             id = "p-1",
             name = "Osh markazi",
-            category = "food",
-            rating = 4.6,
-            distanceMeters = 320,
-            isOpenNow = true,
-            reviewCount = 42,
+            category = "FOOD",
             address = "Amir Temur 1",
-            photoUrl = "main.jpg",
             latitude = 41.31,
             longitude = 69.28,
-            isRecommended = true,
-            description = "Osh va somsa",
-            phone = "+998901234567",
-        )
+            isAvailable = true,
+            ratingAvg = 4.6,
+            ratingCount = 42,
+            distanceMeters = 320.0,
+            logoUrl = "logo.jpg",
+        ).toDomain()
 
-        val restored = dto.toEntity(updatedAtEpochSeconds = 1_774_000_000L).toDomain()
+        val restored = place.toEntity(updatedAtEpochSeconds = 1_774_000_000L).toDomain()
 
-        assertEquals(dto.toDomain(), restored)
+        assertEquals(place, restored)
     }
 
     @Test
     fun `unknown category is normalized on the way into the cache`() {
         // В базе хранится apiValue; неизвестное значение превращается в Other,
         // и после чтения обратно оно не «оживает» как настоящая категория.
-        val entity = PlaceDto(id = "p", name = "P", category = "barbershop").toEntity(0)
+        val entity = PlaceSummaryDto(id = "p", name = "P", category = "MOSQUE").toDomain().toEntity(0)
 
         assertEquals("", entity.category)
         assertEquals(PlaceCategory.Other, entity.toDomain().category)
@@ -156,13 +155,15 @@ class PlaceMappersTest {
 
     @Test
     fun `cached details are marked as cached and carry no schedule`() {
-        val details = PlaceDto(id = "p", name = "P", phone = "+998901234567", description = "Text")
-            .toEntity(0)
+        val details = PlaceSummaryDto(id = "p", name = "P")
+            .toDomain()
+            .toEntity(0, description = "Text", phone = "+998901234567")
             .toCachedDetails()
 
         assertTrue(details.fromCache)
         assertTrue(details.hours.isEmpty())
         assertTrue(details.reviews.isEmpty())
         assertEquals("+998901234567", details.contacts.phone)
+        assertEquals("Text", details.description)
     }
 }

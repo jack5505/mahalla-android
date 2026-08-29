@@ -77,13 +77,13 @@ class BackendUrlInterceptorTest {
     fun `query parameters survive the rewrite`() = runTest {
         val store = store()
         store.save(server.url("/").toString())
-        server.enqueue(jsonResponse("""{"items":[],"page":0,"hasMore":false}"""))
+        server.enqueue(jsonResponse("""{"success":true,"data":[]}"""))
 
-        apiCall { catalogApi(store).places(query = "osh", page = 2) }
+        apiCall { catalogApi(store).search(query = "osh", category = "FOOD") }
 
         val path = server.takeRequest().path.orEmpty()
-        assertEquals("/places", path.substringBefore("?"))
-        listOf("q=osh", "page=2", "size=20").forEach {
+        assertEquals("/search", path.substringBefore("?"))
+        listOf("query=osh", "category=FOOD").forEach {
             assertTrue("в '$path' нет '$it'", path.contains(it))
         }
     }
@@ -113,6 +113,6 @@ class BackendUrlInterceptorTest {
 
     private companion object {
         const val BUILD_URL = "http://10.0.2.2:8080/api/v1/"
-        const val PLACE_BODY = """{"id":"p-1","name":"Osh markazi"}"""
+        const val PLACE_BODY = """{"success":true,"data":{"id":"p-1","name":"Osh markazi"}}"""
     }
 }

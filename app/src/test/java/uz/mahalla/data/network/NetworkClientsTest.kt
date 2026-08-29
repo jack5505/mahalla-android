@@ -16,8 +16,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.tls.CertificatePinSource
 import uz.mahalla.testutil.SelfSignedServer
+import java.time.Clock
 import javax.net.ssl.SSLException
 
 /**
@@ -42,6 +45,12 @@ class NetworkClientsTest {
                 .build(),
         )
     }
+    private val geoInterceptor = GeoHeaderInterceptor(
+        locationProvider = object : RequestLocationProvider {
+            override suspend fun current() = DeviceLocation(latitude = 41.3111, longitude = 69.2797)
+        },
+        clock = Clock.systemUTC(),
+    )
 
     @Before
     fun setUp() {
@@ -129,6 +138,46 @@ class NetworkClientsTest {
             client.interceptors,
         )
         assertTrue("логирование в тестовой конфигурации выключено", client.interceptors.size == 3)
+    }
+
+    @Test
+    fun `coordinates are added before the token and seen by the inspector`() {
+        // issue #53: гео-фильтр бэкенда отклоняет запрос без заголовков ещё до
+        // маршрутизации, поэтому они обязаны стоять до инспектора — иначе в
+        // инспекторе видно не то, что ушло в сеть.
+        val inspector = RecordingInspector()
+        val client = NetworkFactory.mainClient(
+            backendUrlInterceptor = addressInterceptor,
+            authInterceptor = tokenInterceptor,
+            authenticator = Authenticator.NONE,
+            geoHeaderInterceptor = geoInterceptor,
+            inspector = inspector,
+        )
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+
+        client.newCall(Request.Builder().url(server.url("/places/nearby")).build())
+            .execute()
+            .close()
+
+        assertEquals(
+            listOf(addressInterceptor, geoInterceptor, tokenInterceptor, inspector),
+            client.interceptors,
+        )
+        val seen = requireNotNull(inspector.request)
+        assertEquals("41.311100", seen.header(GeoHeaderInterceptor.HEADER_LATITUDE))
+        assertEquals("69.279700", seen.header(GeoHeaderInterceptor.HEADER_LONGITUDE))
+    }
+
+    @Test
+    fun `the bare client carries the coordinates too`() {
+        // Вход и refresh идут по «голому» клиенту и проходят через тот же
+        // фильтр бэкенда.
+        val client = NetworkFactory.refreshClient(
+            backendUrlInterceptor = addressInterceptor,
+            geoHeaderInterceptor = geoInterceptor,
+        )
+
+        assertEquals(listOf(addressInterceptor, geoInterceptor), client.interceptors)
     }
 
     @Test

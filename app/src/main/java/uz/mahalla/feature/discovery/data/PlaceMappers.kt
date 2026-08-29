@@ -1,76 +1,105 @@
 package uz.mahalla.feature.discovery.data
 
 import uz.mahalla.data.db.entity.PlaceEntity
+import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.feature.discovery.domain.GeoDistance
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
-import uz.mahalla.feature.place.domain.OpeningHours
-import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
-import java.time.DateTimeException
-import java.time.DayOfWeek
 import java.time.Instant
-import java.time.LocalTime
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
 
 /**
- * DTO ↔ домен ↔ Room (эпик 4).
+ * DTO ↔ домен ↔ Room (эпик 4, контракт бэкенда — issue #53).
  *
  * Разбор «мягкий»: битое поле в ответе не роняет весь список. Каталог —
  * витрина, и одно место без координат лучше показать без метки на карте, чем
  * потерять экран целиком.
  */
 
-fun PlaceDto.toDomain(): Place = Place(
-    id = id,
-    name = name,
-    category = PlaceCategory.fromApi(category),
-    rating = rating,
-    reviewCount = reviewCount,
-    distanceMeters = distanceMeters,
-    isOpenNow = isOpenNow,
-    address = address?.takeIf(String::isNotBlank),
-    photoUrl = photoUrl?.takeIf(String::isNotBlank),
-    point = geoPoint(latitude, longitude),
-    isRecommended = isRecommended,
-)
+/**
+ * @param from координаты пользователя. Нужны только как запасной способ
+ * посчитать расстояние: сервер присылает его сам, но в ответе поиска этого
+ * поля нет.
+ */
+fun PlaceSummaryDto.toDomain(from: DeviceLocation? = null): Place {
+    val point = geoPoint(latitude, longitude)
+    return Place(
+        id = id,
+        name = name,
+        category = PlaceCategory.fromApi(category),
+        rating = ratingAvg,
+        reviewCount = ratingCount,
+        distanceMeters = distanceMeters?.toInt() ?: distanceTo(from, point),
+        // «Работает сейчас» у бэкенда одно поле на всё: расписания в контракте
+        // нет, есть переключатель «принимаем заказы».
+        isOpenNow = isAvailable,
+        address = address?.takeIf(String::isNotBlank),
+        photoUrl = logoUrl?.takeIf(String::isNotBlank),
+        point = point,
+    )
+}
 
-fun PlaceDto.toDetails(reviews: List<Review> = emptyList()): PlaceDetails = PlaceDetails(
-    place = toDomain(),
+/**
+ * Место из поискового индекса. Ни адреса, ни числа отзывов там нет, поэтому
+ * карточка в выдаче показывает меньше — но показывает.
+ */
+fun PlaceDocumentDto.toDomain(from: DeviceLocation? = null): Place {
+    val point = geoPoint(latitude, longitude)
+    return Place(
+        id = id,
+        name = name,
+        category = PlaceCategory.fromApi(category),
+        rating = ratingAvg,
+        reviewCount = 0,
+        distanceMeters = distanceTo(from, point),
+        isOpenNow = isActive,
+        address = city?.takeIf(String::isNotBlank),
+        point = point,
+    )
+}
+
+fun PlaceDetailDto.toDomain(from: DeviceLocation? = null): Place {
+    val point = geoPoint(latitude, longitude)
+    return Place(
+        id = id,
+        name = name,
+        category = PlaceCategory.fromApi(category),
+        rating = ratingAvg,
+        reviewCount = ratingCount,
+        distanceMeters = distanceTo(from, point),
+        isOpenNow = isAvailable,
+        address = address?.takeIf(String::isNotBlank),
+        photoUrl = logoUrl?.takeIf(String::isNotBlank),
+        point = point,
+    )
+}
+
+/**
+ * Карточка. Расписания бэкенд не отдаёт (`hours` пуст), а вертикали —
+ * очередь, бронь, заказ — определяются категорией: у каждой из них свой
+ * контроллер (`food/…/menu`, `barber-services/…`, `gaming/…/zones`).
+ */
+fun PlaceDetailDto.toDetails(
+    reviews: List<Review> = emptyList(),
+    from: DeviceLocation? = null,
+): PlaceDetails = PlaceDetails(
+    place = toDomain(from),
     description = description?.takeIf(String::isNotBlank),
-    // Главное фото первым и без дублей: сервер иногда присылает его и в
-    // photoUrl, и в photos.
-    photos = (listOfNotNull(photoUrl?.takeIf(String::isNotBlank)) + photos)
-        .filter(String::isNotBlank)
-        .distinct(),
-    hours = openingHours.mapNotNull(OpeningHoursDto::toDomainOrNull),
+    // Обложка первой: логотип это иконка, а не фотография заведения.
+    photos = listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct(),
     contacts = PlaceContacts(
         phone = phone?.takeIf(String::isNotBlank),
         website = website?.takeIf(String::isNotBlank),
-        address = address?.takeIf(String::isNotBlank),
+        address = address?.takeIf(String::isNotBlank) ?: city?.takeIf(String::isNotBlank),
     ),
-    capabilities = PlaceCapabilities(queue = hasQueue, booking = hasBooking, ordering = hasOrdering),
     reviews = reviews,
 )
-
-fun OpeningHoursDto.toDomainOrNull(): OpeningHours? {
-    val day = try {
-        DayOfWeek.of(dayOfWeek)
-    } catch (invalidDay: DateTimeException) {
-        return null
-    }
-    val opens = parseTime(opensAt)
-    val closes = parseTime(closesAt)
-    // Половина интервала бессмысленна: «открыто с 9:00 и никогда не закрыто»
-    // показать нечем, поэтому такой день считаем выходным.
-    return if (opens == null || closes == null) {
-        OpeningHours(day, opensAt = null, closesAt = null)
-    } else {
-        OpeningHours(day, opens, closes)
-    }
-}
 
 fun ReviewDto.toDomain(): Review = Review(
     id = id,
@@ -80,10 +109,15 @@ fun ReviewDto.toDomain(): Review = Review(
     createdAt = parseInstant(createdAt),
 )
 
-fun PlaceDto.toEntity(updatedAtEpochSeconds: Long): PlaceEntity = PlaceEntity(
+fun Place.toEntity(
+    updatedAtEpochSeconds: Long,
+    description: String? = null,
+    phone: String? = null,
+    website: String? = null,
+): PlaceEntity = PlaceEntity(
     id = id,
     name = name,
-    category = PlaceCategory.fromApi(category).apiValue,
+    category = category.apiValue,
     rating = rating,
     distanceMeters = distanceMeters,
     isOpenNow = isOpenNow,
@@ -91,8 +125,8 @@ fun PlaceDto.toEntity(updatedAtEpochSeconds: Long): PlaceEntity = PlaceEntity(
     reviewCount = reviewCount,
     address = address,
     photoUrl = photoUrl,
-    latitude = latitude,
-    longitude = longitude,
+    latitude = point?.latitude,
+    longitude = point?.longitude,
     isRecommended = isRecommended,
     description = description,
     phone = phone,
@@ -126,6 +160,14 @@ fun PlaceEntity.toCachedDetails(): PlaceDetails = PlaceDetails(
     fromCache = true,
 )
 
+/** Ноль вместо честного расстояния — ложь; без координат остаётся только он. */
+private fun distanceTo(from: DeviceLocation?, point: GeoPoint?): Int =
+    if (from != null && point != null) {
+        GeoDistance.meters(GeoPoint(from.latitude, from.longitude), point)
+    } else {
+        0
+    }
+
 private fun geoPoint(latitude: Double?, longitude: Double?): GeoPoint? =
     if (latitude != null && longitude != null &&
         latitude in LATITUDE_RANGE && longitude in LONGITUDE_RANGE
@@ -135,23 +177,22 @@ private fun geoPoint(latitude: Double?, longitude: Double?): GeoPoint? =
         null
     }
 
-private fun parseTime(value: String?): LocalTime? {
-    val raw = value?.trim().orEmpty()
-    if (raw.isEmpty()) return null
-    return try {
-        LocalTime.parse(raw)
-    } catch (invalid: DateTimeParseException) {
-        null
-    }
-}
-
+/**
+ * Момент времени из ответа. Jackson на бэкенде сериализует `LocalDateTime` без
+ * зоны (`2026-08-29T16:09:06.688`), а `Instant` — с `Z`; принимаем оба, второй
+ * считая временем UTC. Иначе дата у каждого отзыва была бы пустой.
+ */
 private fun parseInstant(value: String?): Instant? {
     val raw = value?.trim().orEmpty()
     if (raw.isEmpty()) return null
     return try {
         Instant.parse(raw)
     } catch (invalid: DateTimeParseException) {
-        null
+        try {
+            LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC)
+        } catch (invalidLocal: DateTimeParseException) {
+            null
+        }
     }
 }
 
