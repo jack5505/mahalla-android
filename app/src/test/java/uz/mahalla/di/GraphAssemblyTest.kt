@@ -23,6 +23,7 @@ import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
+import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
@@ -76,6 +77,7 @@ class GraphAssemblyTest {
                 clock = AppModule.provideClock(),
             ),
             backendUrlInterceptor = backendUrlInterceptor,
+            geoHeaderInterceptor = geoHeaderInterceptor(),
             httpInspector = inspector(),
             certificatePin = certificatePin(),
             overrideEnabled = true,
@@ -139,6 +141,7 @@ class GraphAssemblyTest {
                 DefaultCatalogRepository(
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
+                    locationProvider = locationProvider(context),
                     clock = AppModule.provideClock(),
                 ),
             )
@@ -217,6 +220,7 @@ class GraphAssemblyTest {
         overrideEnabled: Boolean = true,
     ) = NetworkModule.provideRefreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
+        geoHeaderInterceptor = geoHeaderInterceptor(),
         httpInspector = inspector(),
         certificatePin = certificatePin(),
         overrideEnabled = overrideEnabled,
@@ -235,6 +239,15 @@ class GraphAssemblyTest {
      */
     private fun deviceInfoProvider(context: Context) =
         AndroidDeviceInfoProvider(DeviceIdStore(sharedDataStore(context)))
+
+    /**
+     * Координаты в заголовках каждого запроса (issue #53): без них бэкенд
+     * отвечает 403 `GEO_PERMISSION_REQUIRED` ещё до маршрутизации.
+     */
+    private fun geoHeaderInterceptor() = GeoHeaderInterceptor(
+        locationProvider = locationProvider(context),
+        clock = AppModule.provideClock(),
+    )
 
     private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
         locationSource = AndroidLocationSource(context),

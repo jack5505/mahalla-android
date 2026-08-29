@@ -1,114 +1,152 @@
 package uz.mahalla.feature.discovery.data
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
+import uz.mahalla.data.network.ApiResponse
 
 /**
- * Место в ответе каталога.
+ * Место в краткой выдаче (`PlaceSummary` в схеме бэкенда).
  *
- * Один DTO на список и на карточку: краткая выдача просто не присылает
- * детальные поля, и все они nullable. Две почти одинаковые структуры разошлись
- * бы по именам полей при первом же изменении контракта.
+ * Имена полей сняты с `https://189-74-96-232.nip.io/v3/api-docs` (issue #53):
+ * рейтинг это `ratingAvg`/`ratingCount`, картинка — `logoUrl`, координаты —
+ * `lat`/`lng`, а «работает сейчас» — `isAvailable`.
  */
 @Serializable
-data class PlaceDto(
+data class PlaceSummaryDto(
     @SerialName("id") val id: String,
-    @SerialName("name") val name: String,
+    @SerialName("name") val name: String = "",
     @SerialName("category") val category: String = "",
-    @SerialName("rating") val rating: Double = 0.0,
-    @SerialName("distanceMeters") val distanceMeters: Int = 0,
-    @SerialName("isOpenNow") val isOpenNow: Boolean = false,
-    @SerialName("reviewCount") val reviewCount: Int = 0,
     @SerialName("address") val address: String? = null,
-    @SerialName("photoUrl") val photoUrl: String? = null,
-    @SerialName("latitude") val latitude: Double? = null,
-    @SerialName("longitude") val longitude: Double? = null,
-    @SerialName("isRecommended") val isRecommended: Boolean = false,
-    // --- только в карточке ---
+    @SerialName("lat") val latitude: Double? = null,
+    @SerialName("lng") val longitude: Double? = null,
+    @SerialName("isAvailable") val isAvailable: Boolean = false,
+    @SerialName("ratingAvg") val ratingAvg: Double = 0.0,
+    @SerialName("ratingCount") val ratingCount: Int = 0,
+    /** Считает сервер — у него координаты из запроса. `null` в ответе поиска. */
+    @SerialName("distanceMeters") val distanceMeters: Double? = null,
+    @SerialName("logoUrl") val logoUrl: String? = null,
+)
+
+/** Карточка места (`PlaceDetail`). Расписания бэкенд пока не отдаёт. */
+@Serializable
+data class PlaceDetailDto(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String = "",
+    @SerialName("category") val category: String = "",
     @SerialName("description") val description: String? = null,
-    @SerialName("photos") val photos: List<String> = emptyList(),
+    @SerialName("address") val address: String? = null,
+    @SerialName("lat") val latitude: Double? = null,
+    @SerialName("lng") val longitude: Double? = null,
+    @SerialName("city") val city: String? = null,
     @SerialName("phone") val phone: String? = null,
     @SerialName("website") val website: String? = null,
-    @SerialName("openingHours") val openingHours: List<OpeningHoursDto> = emptyList(),
-    @SerialName("hasQueue") val hasQueue: Boolean = false,
-    @SerialName("hasBooking") val hasBooking: Boolean = false,
-    @SerialName("hasOrdering") val hasOrdering: Boolean = false,
+    @SerialName("isAvailable") val isAvailable: Boolean = false,
+    @SerialName("ratingAvg") val ratingAvg: Double = 0.0,
+    @SerialName("ratingCount") val ratingCount: Int = 0,
+    @SerialName("logoUrl") val logoUrl: String? = null,
+    @SerialName("coverUrl") val coverUrl: String? = null,
 )
 
 /**
- * `dayOfWeek` — 1..7 по ISO (понедельник = 1), время в `HH:mm`.
- * `null` в любом из полей означает выходной.
+ * Документ поискового индекса (`PlaceDocument`) — ответ `GET /search`.
+ *
+ * Полей меньше, чем в выдаче «рядом»: ни адреса, ни числа отзывов, ни
+ * расстояния. Расстояние считаем сами по координатам (`GeoDistance`) — иначе
+ * найденное поиском место показывало бы «0 м».
  */
 @Serializable
-data class OpeningHoursDto(
-    @SerialName("dayOfWeek") val dayOfWeek: Int,
-    @SerialName("opensAt") val opensAt: String? = null,
-    @SerialName("closesAt") val closesAt: String? = null,
+data class PlaceDocumentDto(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String = "",
+    @SerialName("category") val category: String = "",
+    @SerialName("description") val description: String? = null,
+    @SerialName("city") val city: String? = null,
+    @SerialName("lat") val latitude: Double? = null,
+    @SerialName("lng") val longitude: Double? = null,
+    @SerialName("ratingAvg") val ratingAvg: Double = 0.0,
+    @SerialName("isActive") val isActive: Boolean = true,
 )
 
+/**
+ * Отзыв. Имена полей в схеме стенда перекрыты коллизией `Response` (springdoc
+ * склеил несколько классов с одинаковым простым именем), поэтому у автора и
+ * текста приняты оба вероятных варианта: разбор не должен зависеть от того,
+ * какое из них окажется настоящим.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ReviewDto(
     @SerialName("id") val id: String,
-    @SerialName("author") val author: String = "",
+    @JsonNames("author", "authorName") @SerialName("userName") val author: String = "",
     @SerialName("rating") val rating: Int = 0,
-    @SerialName("text") val text: String = "",
+    @JsonNames("comment") @SerialName("text") val text: String = "",
     @SerialName("createdAt") val createdAt: String? = null,
 )
 
+/** Страница бэкенда: `content` + метаданные (`PageResponse`). */
+@Serializable
+data class PageDto<T>(
+    @SerialName("content") val content: List<T> = emptyList(),
+    @SerialName("page") val page: Int = 0,
+    @SerialName("totalPages") val totalPages: Int = 1,
+    @SerialName("totalElements") val totalElements: Long = 0,
+    @SerialName("last") val last: Boolean = true,
+)
+
 /**
- * Страница выдачи. `hasMore` считаем сами по [totalPages] — сервер отдаёт
- * привычный для Spring формат, и полагаться на «пришло меньше, чем просили»
- * нельзя: последняя страница бывает ровно полной.
+ * Каталог мест (эпик 4), контракт снят со схемы стенда (issue #53).
+ *
+ * Прежний `GET places?q=…&page=…` в бэкенде не существует вовсе: у
+ * `/api/v1/places` объявлен только `POST` (создание заведения), а выдача живёт
+ * в трёх разных эндпоинтах. Отсюда и 403 на каждый запрос главной — до
+ * маршрутизации его отклонял гео-фильтр, см. `GeoHeaderInterceptor`.
+ *
+ * Ответы приходят в конверте `{success, data, error}` — разворачивает
+ * `ApiResponse.payload()`.
  */
-@Serializable
-data class PlacePageDto(
-    @SerialName("items") val items: List<PlaceDto> = emptyList(),
-    @SerialName("page") val page: Int = 0,
-    @SerialName("totalPages") val totalPages: Int = 1,
-    @SerialName("totalElements") val totalElements: Int = 0,
-)
-
-@Serializable
-data class ReviewPageDto(
-    @SerialName("items") val items: List<ReviewDto> = emptyList(),
-    @SerialName("page") val page: Int = 0,
-    @SerialName("totalPages") val totalPages: Int = 1,
-)
-
-/** Каталог мест: выдача с фильтрами (4.1/4.3), карточка и отзывы (4.4). */
 interface CatalogApi {
 
     /**
-     * `null` в параметре — Retrofit просто не добавит его в URL, то есть
-     * «без фильтра».
+     * Выдача «рядом». Пагинации у бэкенда нет: он отдаёт всё, что попало в
+     * радиус, одним списком.
      */
-    @GET("places")
-    suspend fun places(
+    @GET("places/nearby")
+    suspend fun nearby(
+        @Query("lat") latitude: Double,
+        @Query("lng") longitude: Double,
+        @Query("radiusMeters") radiusMeters: Int = DEFAULT_RADIUS_METERS,
         @Query("category") category: String? = null,
-        @Query("q") query: String? = null,
-        @Query("openNow") openNow: Boolean? = null,
-        @Query("maxDistance") maxDistanceMeters: Int? = null,
-        @Query("minRating") minRating: Double? = null,
-        @Query("sort") sort: String? = null,
-        @Query("page") page: Int = 0,
-        @Query("size") size: Int = DEFAULT_PAGE_SIZE,
-    ): PlacePageDto
+    ): ApiResponse<List<PlaceSummaryDto>>
+
+    /** Поиск по индексу: описание, город и название, а не только имя. */
+    @GET("search")
+    suspend fun search(
+        @Query("query") query: String?,
+        @Query("category") category: String? = null,
+    ): ApiResponse<List<PlaceDocumentDto>>
 
     @GET("places/{id}")
-    suspend fun place(@Path("id") id: String): PlaceDto
+    suspend fun place(@Path("id") id: String): ApiResponse<PlaceDetailDto>
 
-    @GET("places/{id}/reviews")
+    @GET("reviews/places/{placeId}")
     suspend fun reviews(
-        @Path("id") id: String,
+        @Path("placeId") placeId: String,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = DEFAULT_REVIEWS_SIZE,
-    ): ReviewPageDto
+    ): ApiResponse<PageDto<ReviewDto>>
 
     companion object {
-        const val DEFAULT_PAGE_SIZE = 20
-        const val DEFAULT_REVIEWS_SIZE = 10
+        /**
+         * У бэкенда по умолчанию 3 км. Для главной этого мало: в райцентре
+         * список оказался бы пустым при живом каталоге через дорогу.
+         */
+        const val DEFAULT_RADIUS_METERS = 10_000
+
+        const val DEFAULT_REVIEWS_SIZE = 20
     }
 }

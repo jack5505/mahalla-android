@@ -12,18 +12,20 @@ import org.junit.Before
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
-import uz.mahalla.feature.discovery.domain.PlaceSort
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * Репозиторий каталога (эпик 4): сеть с фоллбэком на Room.
+ * Репозиторий каталога (эпик 4, контракт бэкенда — issue #53): сеть с
+ * фоллбэком на Room.
  *
  * Сеть — настоящая, на [MockWebServer] и том же [NetworkFactory], что в
  * проде: подмена Retrofit фейком не поймала бы ни ошибку в пути запроса, ни
@@ -36,6 +38,10 @@ class CatalogRepositoryTest {
     private lateinit var dao: FakePlaceDao
 
     private val clock: Clock = Clock.fixed(Instant.ofEpochSecond(NOW), ZoneOffset.UTC)
+
+    private val location = object : RequestLocationProvider {
+        override suspend fun current() = DeviceLocation(latitude = 41.3111, longitude = 69.2797)
+    }
 
     @Before
     fun setUp() {
@@ -50,75 +56,97 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `an empty query goes to nearby with the coordinates`() = runTest {
+        // Ровно то, чего не хватало в issue #53: без lat/lng бэкенд отвечает
+        // 403 GEO_PERMISSION_REQUIRED, а `GET places` у него и вовсе нет.
+        server.enqueue(json(NEARBY_BODY))
+
+        repository().places(DiscoveryFilters())
+
+        val path = server.takeRequest().path.orEmpty()
+        assertTrue(path, path.startsWith("/places/nearby?"))
+        assertTrue(path, path.contains("lat=41.3111"))
+        assertTrue(path, path.contains("lng=69.2797"))
+        assertTrue(path, path.contains("radiusMeters=${CatalogApi.DEFAULT_RADIUS_METERS}"))
+    }
+
+    @Test
     fun `successful page is mapped and cached`() = runTest {
-        server.enqueue(json(PAGE_BODY))
+        server.enqueue(json(NEARBY_BODY))
 
         val result = repository().places(DiscoveryFilters())
 
         val page = (result as ApiResult.Success).data
         assertEquals(listOf("near", "far"), page.items.map(Place::id))
         assertFalse(page.fromCache)
-        assertTrue(page.hasMore)
+        assertFalse("сервер отдаёт всё одним списком", page.hasMore)
         assertEquals(2, dao.current().size)
     }
 
     @Test
-    fun `filters are passed to the server`() = runTest {
-        server.enqueue(json(PAGE_BODY))
+    fun `the distance filter becomes the search radius`() = runTest {
+        server.enqueue(json(NEARBY_BODY))
 
-        repository().places(
-            DiscoveryFilters(
-                query = "  osh  ",
-                categories = setOf(PlaceCategory.Pharmacy),
-                maxDistanceMeters = 1_000,
-                minRating = 4.0,
-                openNowOnly = true,
-                sort = PlaceSort.Rating,
-            ),
-        )
+        repository().places(DiscoveryFilters(maxDistanceMeters = 1_000))
 
-        val path = server.takeRequest().path.orEmpty()
-        assertTrue(path, path.contains("category=pharmacy"))
-        assertTrue(path, path.contains("q=osh"))
-        assertTrue(path, path.contains("openNow=true"))
-        assertTrue(path, path.contains("maxDistance=1000"))
-        assertTrue(path, path.contains("sort=rating"))
+        assertTrue(server.takeRequest().path.orEmpty().contains("radiusMeters=1000"))
     }
 
     @Test
-    fun `open now is omitted when the filter is off`() = runTest {
-        // Параметра быть не должно вовсе: `openNow=false` сервер понял бы как
-        // «покажи только закрытые».
-        server.enqueue(json(PAGE_BODY))
+    fun `a category is sent in the value of the backend enum`() = runTest {
+        server.enqueue(json(NEARBY_BODY))
 
-        repository().places(DiscoveryFilters())
+        repository().places(DiscoveryFilters(categories = setOf(PlaceCategory.Playground)))
 
-        assertFalse(server.takeRequest().path.orEmpty().contains("openNow"))
+        // «playground» бэкенд не знает: у него эта категория называется GAMING.
+        assertTrue(server.takeRequest().path.orEmpty().contains("category=GAMING"))
+    }
+
+    @Test
+    fun `a non-empty query goes to the search index`() = runTest {
+        // Поиск бэкенда смотрит описание и город, а не только название —
+        // подменять его выдачей «рядом» значит терять находки.
+        server.enqueue(json(SEARCH_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "  osh  "))
+
+        val path = server.takeRequest().path.orEmpty()
+        assertTrue(path, path.startsWith("/search?"))
+        assertTrue(path, path.contains("query=osh"))
+        assertEquals(listOf("s-1"), (result as ApiResult.Success).data.items.map(Place::id))
+    }
+
+    @Test
+    fun `a search hit gets its distance measured locally`() = runTest {
+        server.enqueue(json(SEARCH_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "osh"))
+
+        val place = (result as ApiResult.Success).data.items.single()
+        assertTrue("${place.distanceMeters} м", place.distanceMeters in 400..600)
     }
 
     @Test
     fun `server results are not re-filtered by the query`() = runTest {
-        // Сервер ищет по описанию, меню и тегам, matchesQuery — только по
-        // названию и адресу. Прогнать ответ через полный фильтр значит
-        // показать «ничего не найдено» при непустом ответе, да ещё и с
-        // hasMore = true, до которого потом не добраться.
-        server.enqueue(json(PAGE_BODY))
+        // Сервер ищет по описанию и городу, matchesQuery — только по названию
+        // и адресу. Прогнать ответ через полный фильтр значит показать
+        // «ничего не найдено» при непустом ответе.
+        server.enqueue(json(SEARCH_BODY))
 
-        val result = repository().places(DiscoveryFilters(query = "osh"))
+        val result = repository().places(DiscoveryFilters(query = "shashlik"))
 
-        val page = (result as ApiResult.Success).data
-        assertEquals(listOf("near", "far"), page.items.map(Place::id))
+        assertEquals(1, (result as ApiResult.Success).data.items.size)
     }
 
     @Test
     fun `server results are not re-filtered by the rating threshold`() = runTest {
-        // reviewCount в кратком ответе нет, hasRating = false — локальный порог
-        // вырезал бы всю выдачу.
-        server.enqueue(json(PAGE_BODY))
+        // Числа отзывов в кратком ответе нет, hasRating = false — локальный
+        // порог вырезал бы всю выдачу.
+        server.enqueue(json(SEARCH_BODY))
 
-        val result = repository().places(DiscoveryFilters(minRating = 4.0))
+        val result = repository().places(DiscoveryFilters(query = "osh", minRating = 4.0))
 
-        assertEquals(2, (result as ApiResult.Success).data.items.size)
+        assertEquals(1, (result as ApiResult.Success).data.items.size)
     }
 
     @Test
@@ -126,7 +154,7 @@ class CatalogRepositoryTest {
         // В запрос уходит одна категория; если сервер прислал чужую — она
         // лишняя. Категория, которой ещё нет в приложении (Other), остаётся:
         // иначе новые разделы каталога были бы невидимы до следующего релиза.
-        server.enqueue(json(MIXED_PAGE_BODY))
+        server.enqueue(json(MIXED_BODY))
 
         val result = repository().places(
             DiscoveryFilters(categories = setOf(PlaceCategory.Pharmacy)),
@@ -134,6 +162,18 @@ class CatalogRepositoryTest {
 
         val ids = (result as ApiResult.Success).data.items.map(Place::id)
         assertEquals(listOf("pharmacy", "unknown"), ids)
+    }
+
+    @Test
+    fun `an envelope with success false is a failure, not an empty screen`() = runTest {
+        // 200 с success:false — это отказ бэкенда, а пустой список означал бы
+        // «рядом ничего нет».
+        server.enqueue(json(ENVELOPE_FAILURE_BODY))
+
+        val result = repository().places(DiscoveryFilters())
+
+        val failure = (result as ApiResult.Failure).failure
+        assertEquals("GEO_PERMISSION_REQUIRED", failure.server?.code)
     }
 
     @Test
@@ -153,8 +193,8 @@ class CatalogRepositoryTest {
     fun `cache fallback respects the active filters`() = runTest {
         dao.seed(
             listOf(
-                entity("food", category = "food"),
-                entity("pharmacy", category = "pharmacy"),
+                entity("food", category = "FOOD"),
+                entity("pharmacy", category = "PHARMACY"),
             ),
         )
         server.enqueue(MockResponse().setResponseCode(500))
@@ -180,7 +220,7 @@ class CatalogRepositoryTest {
 
     @Test
     fun `cache that does not match the filters is an error too`() = runTest {
-        dao.seed(listOf(entity("food", category = "food")))
+        dao.seed(listOf(entity("food", category = "FOOD")))
         server.enqueue(MockResponse().setResponseCode(500))
 
         val result = repository().places(
@@ -191,15 +231,15 @@ class CatalogRepositoryTest {
     }
 
     @Test
-    fun `later pages are not served from the cache`() = runTest {
-        // Дорисовать «хвост» списка из кэша значит смешать свежие и старые
-        // данные в одном списке — пользователь их не различит.
-        dao.seed(listOf(entity("cached")))
-        server.enqueue(MockResponse().setResponseCode(500))
-
+    fun `later pages are not requested at all`() = runTest {
+        // Пагинации у бэкенда нет: сходить за той же первой страницей значило
+        // бы дописать её в список второй раз.
         val result = repository().places(DiscoveryFilters(), page = 1)
 
-        assertTrue(result is ApiResult.Failure)
+        val page = (result as ApiResult.Success).data
+        assertTrue(page.items.isEmpty())
+        assertFalse(page.hasMore)
+        assertEquals(0, server.requestCount)
     }
 
     @Test
@@ -207,7 +247,7 @@ class CatalogRepositoryTest {
         // Иначе офлайн-главная показывала бы то, что человек искал вчера,
         // вместо всего, что рядом.
         dao.seed(listOf(entity("old")))
-        server.enqueue(json(PAGE_BODY))
+        server.enqueue(json(SEARCH_BODY))
 
         repository().places(DiscoveryFilters(query = "osh"))
 
@@ -216,7 +256,7 @@ class CatalogRepositoryTest {
 
     @Test
     fun `caching drops entries older than the ttl`() = runTest {
-        server.enqueue(json(PAGE_BODY))
+        server.enqueue(json(NEARBY_BODY))
 
         repository().places(DiscoveryFilters())
 
@@ -233,9 +273,25 @@ class CatalogRepositoryTest {
         val details = (result as ApiResult.Success).data
         assertEquals("Osh markazi", details.place.name)
         assertEquals("Eng mazali osh", details.description)
-        assertEquals(1, details.hours.size)
+        assertEquals("+998901234567", details.contacts.phone)
         assertEquals(listOf("r-1"), details.reviews.map { it.id })
+        assertEquals("Ali", details.reviews.single().author)
         assertFalse(details.fromCache)
+        assertEquals("/places/p-1", server.takeRequest().path)
+        assertTrue(server.takeRequest().path.orEmpty().startsWith("/reviews/places/p-1"))
+    }
+
+    @Test
+    fun `the card is cached whole`() = runTest {
+        // Открытая офлайн, она иначе показывала бы одно название.
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+
+        repository().placeDetails("p-1")
+
+        val cached = dao.byId("p-1")!!
+        assertEquals("Eng mazali osh", cached.description)
+        assertEquals("+998901234567", cached.phone)
     }
 
     @Test
@@ -304,25 +360,24 @@ class CatalogRepositoryTest {
                 NetworkFactory.converterFactory(NetworkFactory.json()),
             )
             .create(CatalogApi::class.java)
-        return DefaultCatalogRepository(api, dao, clock)
+        return DefaultCatalogRepository(api, dao, location, clock)
     }
 
     private fun entity(
         id: String,
         name: String = "Place $id",
-        category: String = "food",
+        category: String = "FOOD",
         distanceMeters: Int = 500,
         phone: String? = null,
-    ) = PlaceDto(
+    ) = PlaceSummaryDto(
         id = id,
         name = name,
         category = category,
-        rating = 4.5,
-        distanceMeters = distanceMeters,
-        isOpenNow = true,
-        reviewCount = 10,
-        phone = phone,
-    ).toEntity(NOW)
+        ratingAvg = 4.5,
+        ratingCount = 10,
+        distanceMeters = distanceMeters.toDouble(),
+        isAvailable = true,
+    ).toDomain().toEntity(NOW, phone = phone)
 
     private fun json(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
@@ -333,32 +388,44 @@ class CatalogRepositoryTest {
         const val NOW = 1_774_000_000L
         const val CACHE_TTL_SECONDS = 7L * 24 * 60 * 60
 
-        const val MIXED_PAGE_BODY = """
-            {"items":[
-              {"id":"food","name":"Food","category":"food","rating":4.1,"distanceMeters":300,"isOpenNow":true},
-              {"id":"pharmacy","name":"Pharmacy","category":"pharmacy","rating":4.2,"distanceMeters":100,"isOpenNow":true},
-              {"id":"unknown","name":"Barber","category":"barbershop","rating":4.3,"distanceMeters":200,"isOpenNow":true}
-            ],"page":0,"totalPages":1,"totalElements":3}
+        const val NEARBY_BODY = """
+            {"success":true,"data":[
+              {"id":"far","name":"Far","category":"FOOD","ratingAvg":4.1,"distanceMeters":900.0,"isAvailable":true},
+              {"id":"near","name":"Near","category":"FOOD","ratingAvg":4.9,"distanceMeters":100.0,"isAvailable":true}
+            ]}
         """
 
-        const val PAGE_BODY = """
-            {"items":[
-              {"id":"far","name":"Far","category":"food","rating":4.1,"distanceMeters":900,"isOpenNow":true},
-              {"id":"near","name":"Near","category":"food","rating":4.9,"distanceMeters":100,"isOpenNow":true}
-            ],"page":0,"totalPages":3,"totalElements":42}
+        const val MIXED_BODY = """
+            {"success":true,"data":[
+              {"id":"food","name":"Food","category":"FOOD","distanceMeters":300.0},
+              {"id":"pharmacy","name":"Pharmacy","category":"PHARMACY","distanceMeters":100.0},
+              {"id":"unknown","name":"Bakery","category":"BAKERY","distanceMeters":200.0}
+            ]}
+        """
+
+        const val SEARCH_BODY = """
+            {"success":true,"data":[
+              {"id":"s-1","name":"Osh markazi","category":"FOOD","description":"Shashlik ham bor",
+               "city":"Toshkent","lat":41.3157,"lng":69.2797,"ratingAvg":4.6,"isActive":true}
+            ]}
+        """
+
+        const val ENVELOPE_FAILURE_BODY = """
+            {"success":false,"error":{"code":"GEO_PERMISSION_REQUIRED",
+             "message":"Joylashuv ruxsatini yoqing"}}
         """
 
         const val DETAILS_BODY = """
-            {"id":"p-1","name":"Osh markazi","category":"food","rating":4.6,
-             "distanceMeters":320,"isOpenNow":true,"reviewCount":42,
-             "description":"Eng mazali osh","phone":"+998901234567",
-             "photos":["a.jpg"],"hasQueue":true,
-             "openingHours":[{"dayOfWeek":1,"opensAt":"09:00","closesAt":"18:00"}]}
+            {"success":true,"data":{"id":"p-1","name":"Osh markazi","category":"FOOD",
+             "description":"Eng mazali osh","address":"Amir Temur 1","lat":41.31,"lng":69.28,
+             "phone":"+998901234567","isAvailable":true,"ratingAvg":4.6,"ratingCount":42,
+             "coverUrl":"cover.jpg"}}
         """
 
         const val REVIEWS_BODY = """
-            {"items":[{"id":"r-1","author":"Ali","rating":5,"text":"Zo'r",
-             "createdAt":"2026-08-25T10:15:30Z"}],"page":0,"totalPages":1}
+            {"success":true,"data":{"content":[{"id":"r-1","userName":"Ali","rating":5,
+             "text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
+             "page":0,"totalPages":1,"totalElements":1,"last":true}}
         """
     }
 }

@@ -19,7 +19,7 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.discovery.data.CatalogApi
-import uz.mahalla.feature.discovery.data.PlaceDto
+import uz.mahalla.feature.discovery.data.PlaceDetailDto
 import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
@@ -60,17 +60,17 @@ class NetworkStackTest {
     fun `parses a successful response`() = runTest {
         server.enqueue(jsonResponse(PLACE_BODY))
 
-        val result = apiCall { catalogApi().place("p-1") }
+        val result = apiCall { catalogApi().place("p-1").payload() }
 
         assertEquals(
             ApiResult.Success(
-                PlaceDto(
+                PlaceDetailDto(
                     id = "p-1",
                     name = "Osh markazi",
-                    category = "food",
-                    rating = 4.6,
-                    distanceMeters = 320,
-                    isOpenNow = true,
+                    category = "FOOD",
+                    ratingAvg = 4.6,
+                    ratingCount = 42,
+                    isAvailable = true,
                 ),
             ),
             result,
@@ -79,9 +79,13 @@ class NetworkStackTest {
 
     @Test
     fun `unknown fields do not break parsing`() = runTest {
-        server.enqueue(jsonResponse("""{"id":"p-1","name":"Osh markazi","loyaltyTier":"gold"}"""))
+        server.enqueue(
+            jsonResponse(
+                """{"success":true,"data":{"id":"p-1","name":"Osh markazi","loyaltyTier":"gold"}}""",
+            ),
+        )
 
-        val result = apiCall { catalogApi().place("p-1") }
+        val result = apiCall { catalogApi().place("p-1").payload() }
 
         assertEquals("p-1", (result as ApiResult.Success).data.id)
     }
@@ -321,9 +325,10 @@ class NetworkStackTest {
         const val DEFAULT_READ_TIMEOUT_MILLIS = 5_000L
         const val FIXED_NOW_EPOCH_SECONDS = 1_774_000_000L
 
+        /** Ответ каталога тоже в конверте бэкенда (issue #53). */
         const val PLACE_BODY = """
-            {"id":"p-1","name":"Osh markazi","category":"food",
-             "rating":4.6,"distanceMeters":320,"isOpenNow":true}
+            {"success":true,"data":{"id":"p-1","name":"Osh markazi","category":"FOOD",
+             "ratingAvg":4.6,"ratingCount":42,"isAvailable":true}}
         """
 
         /** Конверт бэкенда: пара токенов лежит в `data.tokens` (issue #42). */

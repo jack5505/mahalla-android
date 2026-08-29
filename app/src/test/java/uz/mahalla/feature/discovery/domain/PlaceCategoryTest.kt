@@ -12,8 +12,10 @@ class PlaceCategoryTest {
     @Test
     fun `all six categories from the specification are present`() {
         assertEquals(6, PlaceCategory.selectable.size)
+        // Значения перечисления бэкенда (issue #53): именно они уходят в
+        // параметр `category` запроса.
         assertEquals(
-            listOf("food", "pharmacy", "hospital", "cinema", "playground", "master"),
+            listOf("FOOD", "PHARMACY", "HOSPITAL", "CINEMA", "GAMING", "BARBER"),
             PlaceCategory.selectable.map(PlaceCategory::apiValue),
         )
     }
@@ -22,9 +24,25 @@ class PlaceCategoryTest {
     fun `unknown value maps to Other instead of failing`() {
         // Сервер может отдать новую категорию раньше релиза приложения —
         // падать на этом нельзя.
-        assertEquals(PlaceCategory.Other, PlaceCategory.fromApi("barbershop"))
+        assertEquals(PlaceCategory.Other, PlaceCategory.fromApi("MOSQUE"))
         assertEquals(PlaceCategory.Other, PlaceCategory.fromApi(null))
         assertEquals(PlaceCategory.Other, PlaceCategory.fromApi(""))
+    }
+
+    @Test
+    fun `values from older versions of the app are still understood`() {
+        // В кэше Room и в прежних ответах лежат «food», «playground»,
+        // «master» — после обновления они не должны превратиться в Other.
+        assertEquals(PlaceCategory.Food, PlaceCategory.fromApi("food"))
+        assertEquals(PlaceCategory.Playground, PlaceCategory.fromApi("playground"))
+        assertEquals(PlaceCategory.Master, PlaceCategory.fromApi("master"))
+    }
+
+    @Test
+    fun `backend categories map onto the six of the specification`() {
+        assertEquals(PlaceCategory.Playground, PlaceCategory.fromApi("GAMING"))
+        assertEquals(PlaceCategory.Master, PlaceCategory.fromApi("BARBER"))
+        assertEquals(PlaceCategory.Master, PlaceCategory.fromApi("FREELANCER"))
     }
 
     @Test
