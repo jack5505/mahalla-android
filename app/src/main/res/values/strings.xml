@@ -76,6 +76,9 @@
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Tasdiqlash kodi</string>
     <string name="onboarding_otp_sent_to">Kod %1$s raqamiga yuborildi</string>
+    <string name="onboarding_otp_sent_to_telegram">Kod SMS emas, %1$s raqamiga bog\'langan Telegram hisobiga yuborildi</string>
+    <string name="onboarding_otp_telegram_hint">Telegramni oching va Mahalla botining xabaridan kodni oling — SMS kelmaydi. Keyin kodni shu yerga kiriting.</string>
+    <string name="onboarding_otp_telegram_hint_no_app">Kod Mahalla botidan %1$s raqamiga bog\'langan Telegram hisobiga keldi. SMS kelmaydi: kodni Telegram o\'rnatilgan qurilmadan oling yoki SMS bilan qayta urinib ko\'ring.</string>
     <string name="onboarding_otp_action">Tasdiqlash</string>
     <string name="onboarding_otp_resend">Kodni qayta yuborish</string>
     <string name="onboarding_otp_error_invalid">Kod noto\'g\'ri, qaytadan kiriting</string>

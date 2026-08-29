@@ -3,6 +3,8 @@ package uz.mahalla.feature.onboarding.ui
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -19,10 +21,12 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
 import uz.mahalla.feature.auth.domain.OtpFailure
 import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.navigation.OtpArgs
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeTelegramAvailability
 import uz.mahalla.testutil.MainDispatcherRule
 
 /**
@@ -39,22 +43,26 @@ class OtpViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authRepository = FakeAuthRepository()
+    private val telegramAvailability = FakeTelegramAvailability()
 
     private fun viewModel(
         phone: String = PHONE,
         otpToken: String = OTP_TOKEN,
         resendAfterSeconds: Int = 60,
         codeLength: Int = 6,
+        channel: String? = null,
     ) = OtpViewModel(
         SavedStateHandle(
-            mapOf(
-                OtpArgs.PHONE to phone,
-                OtpArgs.OTP_TOKEN to otpToken,
-                OtpArgs.RESEND_AFTER_SECONDS to resendAfterSeconds,
-                OtpArgs.CODE_LENGTH to codeLength,
-            ),
+            buildMap {
+                put(OtpArgs.PHONE, phone)
+                put(OtpArgs.OTP_TOKEN, otpToken)
+                put(OtpArgs.RESEND_AFTER_SECONDS, resendAfterSeconds)
+                put(OtpArgs.CODE_LENGTH, codeLength)
+                channel?.let { put(OtpArgs.CHANNEL, it) }
+            },
         ),
         authRepository,
+        telegramAvailability,
     )
 
     @Test
@@ -71,7 +79,7 @@ class OtpViewModelTest {
     fun `missing arguments fall back to defaults instead of crashing`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
-        val viewModel = OtpViewModel(SavedStateHandle(), authRepository)
+        val viewModel = OtpViewModel(SavedStateHandle(), authRepository, telegramAvailability)
 
         assertEquals("", viewModel.state.value.phone)
         assertEquals(OtpChallenge.DEFAULT_CODE_LENGTH, viewModel.state.value.code.length)
@@ -279,6 +287,77 @@ class OtpViewModelTest {
 
         assertEquals(ApiError.Timeout, viewModel.state.value.apiFailure?.error)
         assertTrue("повторить попытку можно сразу", viewModel.state.value.canResend)
+    }
+
+    @Test
+    fun `the telegram channel from the route reaches the screen`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // issue #54: без этого экран писал «код отправлен на +998…», а код в
+        // это время лежал в Telegram — человек ждал SMS, которого не будет.
+        val state = viewModel(channel = OtpDeliveryChannel.Telegram.name).state.value
+
+        assertTrue(state.isTelegramChannel)
+        assertTrue("Telegram установлен — кнопку показываем", state.canOpenTelegram)
+    }
+
+    @Test
+    fun `an unknown channel is treated as sms`() = runTest(mainDispatcherRule.dispatcher) {
+        // Обещать Telegram там, где его может не быть, хуже, чем промолчать.
+        assertFalse(viewModel(channel = "CARRIER_PIGEON").state.value.isTelegramChannel)
+        assertFalse(viewModel().state.value.isTelegramChannel)
+    }
+
+    @Test
+    fun `without telegram installed the screen offers no button`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        telegramAvailability.packageName = null
+        val viewModel = viewModel(channel = OtpDeliveryChannel.Telegram.name)
+
+        val state = viewModel.state.value
+        assertTrue("объяснение всё равно нужно — SMS не придёт", state.isTelegramChannel)
+        assertFalse("открывать нечего", state.canOpenTelegram)
+
+        // Кнопки нет, но событие могло прийти из старой композиции.
+        val effects = mutableListOf<OtpEffect>()
+        val collector = launch { viewModel.effects.toList(effects) }
+        viewModel.onEvent(OtpEvent.OpenTelegramRequested)
+        advanceUntilIdle()
+        assertTrue("открывать нечего — эффекта нет", effects.isEmpty())
+        collector.cancel()
+    }
+
+    @Test
+    fun `opening telegram addresses the installed client`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel(channel = OtpDeliveryChannel.Telegram.name)
+
+        viewModel.onEvent(OtpEvent.OpenTelegramRequested)
+
+        assertEquals(
+            OtpEffect.OpenTelegram(FakeTelegramAvailability.DEFAULT_PACKAGE),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `resend updates the channel because the server picks it anew`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Первый код ушёл в SMS, повторный сервер отправил боту — подпись
+        // экрана обязана переехать вместе с ним.
+        authRepository.requestCodeResult = ApiResult.Success(
+            OtpChallenge(otpToken = "otp-2", channel = OtpDeliveryChannel.Telegram),
+        )
+        val viewModel = viewModel(resendAfterSeconds = 0)
+        assertFalse(viewModel.state.value.isTelegramChannel)
+
+        viewModel.onEvent(OtpEvent.Resend)
+        runCurrent()
+
+        assertTrue(viewModel.state.value.isTelegramChannel)
     }
 
     @Test

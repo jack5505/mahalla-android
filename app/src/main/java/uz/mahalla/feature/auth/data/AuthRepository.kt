@@ -138,6 +138,10 @@ class DefaultAuthRepository @Inject constructor(
                             codeLength = null,
                             resendAfterSeconds = result.data.cooldownSeconds,
                             expiresInSeconds = result.data.expiresInSeconds,
+                            // Куда именно ушёл код, знает только сервер
+                            // (issue #54): для связанного с ботом номера это
+                            // Telegram, и человеку это надо сказать.
+                            channel = result.data.channel,
                         ),
                     )
                 }

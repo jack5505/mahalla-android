@@ -1,5 +1,6 @@
 package uz.mahalla.feature.onboarding.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,13 +14,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
+import uz.mahalla.core.ui.components.colors
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -103,6 +107,42 @@ fun OnboardingError(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.error,
     )
+}
+
+/**
+ * Пояснение на шаге онбординга: не ошибка, но и не проходная подпись — то, без
+ * чего человек застрянет. Первый случай — «код ушёл не в SMS, а в Telegram»
+ * (issue #54).
+ *
+ * Выделено фоном тона [MahallaTone.Info], потому что обычным абзацем под
+ * заголовком это уже не читается: экран кода человек открывает, чтобы найти
+ * поле ввода, и текст рядом с ним пропускает.
+ *
+ * `mergeDescendants` — TalkBack читает блок одной репликой, а не по абзацу.
+ */
+@Composable
+fun OnboardingNotice(
+    text: String,
+    modifier: Modifier = Modifier,
+    action: (@Composable ColumnScope.() -> Unit)? = null,
+) {
+    val tone = MahallaTone.Info.colors()
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(tone.container)
+            .padding(Spacing.card)
+            .semantics(mergeDescendants = true) {},
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tone.content,
+        )
+        action?.invoke(this)
+    }
 }
 
 /**

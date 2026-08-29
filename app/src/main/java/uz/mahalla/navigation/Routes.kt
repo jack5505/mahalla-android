@@ -2,6 +2,7 @@ package uz.mahalla.navigation
 
 import kotlinx.serialization.Serializable
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
 
 /**
  * Typed routes навигации (эпик 1.2). Маршрут — это `@Serializable`-класс, а не
@@ -49,6 +50,13 @@ data class OtpRoute(
     val otpToken: String,
     val resendAfterSeconds: Int = OtpChallenge.DEFAULT_RESEND_SECONDS,
     val codeLength: Int = OtpChallenge.DEFAULT_CODE_LENGTH,
+    /**
+     * Канал доставки ([OtpDeliveryChannel]) именем константы, а не самим
+     * перечислением: типизированные маршруты Navigation кладут аргументы в
+     * `Bundle`, и для enum'а понадобился бы собственный `NavType`. Читает его
+     * `OtpDeliveryChannel.byName`, незнакомое значение — SMS.
+     */
+    val channel: String = OtpDeliveryChannel.Sms.name,
 )
 
 /**
@@ -61,6 +69,7 @@ object OtpArgs {
     const val OTP_TOKEN = "otpToken"
     const val RESEND_AFTER_SECONDS = "resendAfterSeconds"
     const val CODE_LENGTH = "codeLength"
+    const val CHANNEL = "channel"
 }
 
 /**

@@ -10,7 +10,9 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.feature.auth.data.AuthRepository
+import uz.mahalla.feature.auth.data.TelegramAvailability
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
 import uz.mahalla.feature.auth.domain.OtpFailure
 import uz.mahalla.feature.auth.domain.asOtpFailure
 import uz.mahalla.navigation.OtpArgs
@@ -31,10 +33,13 @@ import javax.inject.Inject
 class OtpViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val authRepository: AuthRepository,
+    telegramAvailability: TelegramAvailability,
 ) : MviViewModel<OtpState, OtpEvent, OtpEffect>(
     OtpState(
         phone = savedStateHandle[OtpArgs.PHONE] ?: "",
         otpToken = savedStateHandle[OtpArgs.OTP_TOKEN] ?: "",
+        channel = OtpDeliveryChannel.byName(savedStateHandle[OtpArgs.CHANNEL]),
+        telegramPackage = telegramAvailability.installedPackage(),
         code = OtpFieldState(
             length = savedStateHandle[OtpArgs.CODE_LENGTH] ?: OtpChallenge.DEFAULT_CODE_LENGTH,
         ),
@@ -55,7 +60,13 @@ class OtpViewModel @Inject constructor(
             OtpEvent.Submit -> submit()
             OtpEvent.Resend -> resend()
             OtpEvent.ErrorDismissed -> updateState { copy(failure = null, apiFailure = null) }
+            OtpEvent.OpenTelegramRequested -> openTelegram()
         }
+    }
+
+    private fun openTelegram() {
+        val packageName = currentState.telegramPackage ?: return
+        emitEffect(OtpEffect.OpenTelegram(packageName))
     }
 
     private fun onCodeChanged(raw: String) {
@@ -119,6 +130,10 @@ class OtpViewModel @Inject constructor(
                             otpToken = result.data.otpToken,
                             code = OtpFieldState(length = result.data.codeLength),
                             resendInSeconds = result.data.resendAfterSeconds,
+                            // Канал сервер выбирает на каждый запрос заново, и
+                            // повтор может уйти уже не туда, куда первый код
+                            // (issue #54).
+                            channel = result.data.channel,
                         )
                     }
                     startCountdown()

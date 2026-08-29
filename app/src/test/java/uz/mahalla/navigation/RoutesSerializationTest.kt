@@ -92,7 +92,7 @@ class RoutesSerializationTest {
     fun `otp route carries the phone and challenge arguments`() {
         val descriptor = serializer<OtpRoute>().descriptor
         assertEquals(
-            listOf("phone", "otpToken", "resendAfterSeconds", "codeLength"),
+            listOf("phone", "otpToken", "resendAfterSeconds", "codeLength", "channel"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
     }
@@ -109,6 +109,7 @@ class RoutesSerializationTest {
                 OtpArgs.OTP_TOKEN,
                 OtpArgs.RESEND_AFTER_SECONDS,
                 OtpArgs.CODE_LENGTH,
+                OtpArgs.CHANNEL,
             ),
             fields,
         )
