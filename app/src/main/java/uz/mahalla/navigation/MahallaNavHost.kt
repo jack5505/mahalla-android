@@ -103,6 +103,7 @@ fun MahallaNavHost(
                                 otpToken = challenge.otpToken,
                                 resendAfterSeconds = challenge.resendAfterSeconds,
                                 codeLength = challenge.codeLength,
+                                channel = challenge.channel.name,
                             ),
                         )
                     },

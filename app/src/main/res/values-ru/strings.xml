@@ -70,6 +70,9 @@
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Код подтверждения</string>
     <string name="onboarding_otp_sent_to">Код отправлен на %1$s</string>
+    <string name="onboarding_otp_sent_to_telegram">Код отправлен не по SMS, а в Telegram-аккаунт с номером %1$s</string>
+    <string name="onboarding_otp_telegram_hint">Откройте Telegram и возьмите код из сообщения бота Mahalla — SMS не придёт. Затем введите код здесь.</string>
+    <string name="onboarding_otp_telegram_hint_no_app">Код прислал бот Mahalla в Telegram-аккаунт с номером %1$s. SMS не придёт: возьмите код на устройстве с Telegram или повторите вход по SMS.</string>
     <string name="onboarding_otp_action">Подтвердить</string>
     <string name="onboarding_otp_resend">Отправить код снова</string>
     <string name="onboarding_otp_error_invalid">Неверный код, введите заново</string>

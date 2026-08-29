@@ -22,6 +22,7 @@ import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
 import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramLoginState
@@ -115,6 +116,27 @@ class AuthRepositoryTest {
         val result = repository().requestCode("+998901234567")
 
         assertEquals(ApiResult.Success(OtpChallenge(otpToken = "otp-1")), result)
+    }
+
+    @Test
+    fun `the delivery channel reaches the domain`() = runTest {
+        // На стенде тот же запрос отвечает SMS для незнакомого номера и
+        // TELEGRAM для связанного с ботом (issue #54) — экран кода обязан
+        // сказать человеку, куда смотреть.
+        server.enqueue(envelope("""{"otpToken":"otp-1","channel":"TELEGRAM"}"""))
+
+        val challenge = (repository().requestCode("+998901234567") as ApiResult.Success).data
+
+        assertEquals(OtpDeliveryChannel.Telegram, challenge.channel)
+    }
+
+    @Test
+    fun `an unknown delivery channel stays sms`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1","channel":"VOICE"}"""))
+
+        val challenge = (repository().requestCode("+998901234567") as ApiResult.Success).data
+
+        assertEquals(OtpDeliveryChannel.Sms, challenge.channel)
     }
 
     @Test

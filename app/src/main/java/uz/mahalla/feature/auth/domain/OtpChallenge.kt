@@ -1,6 +1,40 @@
 package uz.mahalla.feature.auth.domain
 
 /**
+ * Куда бэкенд отправил код (`channel` в ответе `auth/send-otp`).
+ *
+ * Канал выбирает сервер, а не приложение: у кого номер уже связан с
+ * Telegram-ботом, тот получает код бесплатным сообщением от бота, остальные —
+ * платным SMS. Проверено на стенде: один и тот же запрос отвечает `SMS` для
+ * незнакомого номера и `TELEGRAM` для связанного.
+ *
+ * Пользователю разница видна не подписью на экране, а тем, что SMS не приходит:
+ * он ждёт его, не зная, что код уже лежит в Telegram (issue #54). Поэтому канал
+ * доезжает до экрана ввода кода.
+ */
+enum class OtpDeliveryChannel {
+    Sms,
+    Telegram,
+    ;
+
+    companion object {
+        /**
+         * Разбор значения сервера. Незнакомый канал (и молчание) считаем SMS:
+         * это поведение до issue #54, и обещать Telegram там, где его может не
+         * быть, хуже, чем не обещать ничего.
+         */
+        fun of(raw: String?): OtpDeliveryChannel = when (raw?.trim()?.uppercase()) {
+            "TELEGRAM" -> Telegram
+            else -> Sms
+        }
+
+        /** Обратный разбор для аргумента маршрута (`OtpRoute.channel`). */
+        fun byName(name: String?): OtpDeliveryChannel =
+            entries.firstOrNull { it.name == name } ?: Sms
+    }
+}
+
+/**
  * Параметры отправленного SMS-кода (эпик 3.3).
  *
  * Значения по умолчанию — клиентские: бэкенд может не прислать ни одного
@@ -18,6 +52,8 @@ data class OtpChallenge(
     val codeLength: Int = DEFAULT_CODE_LENGTH,
     val resendAfterSeconds: Int = DEFAULT_RESEND_SECONDS,
     val expiresInSeconds: Int = DEFAULT_EXPIRES_SECONDS,
+    /** Куда ушёл код — от этого зависит текст экрана (issue #54). */
+    val channel: OtpDeliveryChannel = OtpDeliveryChannel.Sms,
 ) {
     companion object {
         const val DEFAULT_CODE_LENGTH = 6
@@ -35,6 +71,7 @@ data class OtpChallenge(
             codeLength: Int?,
             resendAfterSeconds: Int?,
             expiresInSeconds: Int?,
+            channel: String? = null,
         ) = OtpChallenge(
             otpToken = otpToken,
             codeLength = codeLength
@@ -46,6 +83,7 @@ data class OtpChallenge(
             expiresInSeconds = expiresInSeconds
                 ?.takeIf { it in 1..MAX_EXPIRES_SECONDS }
                 ?: DEFAULT_EXPIRES_SECONDS,
+            channel = OtpDeliveryChannel.of(channel),
         )
     }
 }
