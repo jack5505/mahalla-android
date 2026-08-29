@@ -9,6 +9,10 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
+import uz.mahalla.feature.food.ui.cart.CartScreen
+import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
+import uz.mahalla.feature.food.ui.menu.MenuScreen
+import uz.mahalla.feature.food.ui.order.OrderStatusScreen
 import uz.mahalla.feature.map.ui.MapScreen
 import uz.mahalla.feature.onboarding.ui.BackendUrlScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
@@ -221,7 +225,58 @@ fun MahallaNavHost(
             // placeId читает сама ViewModel из SavedStateHandle — экран о
             // маршруте ничего не знает и открывается одинаково из списка и из
             // deep link'а.
-            PlaceDetailsScreen(onBack = { navController.navigateUp() })
+            PlaceDetailsScreen(
+                onOrderClick = { placeId -> navController.navigate(MenuRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус заказа.
+        composable<MenuRoute> {
+            MenuScreen(
+                onCartClick = { placeId -> navController.navigate(CartRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<CartRoute> {
+            CartScreen(
+                onCheckout = { placeId -> navController.navigate(CheckoutRoute(placeId)) },
+                // «Добавить ещё» — это возврат в меню, а не второй его
+                // экземпляр поверх первого.
+                onAddMore = { placeId ->
+                    navController.navigate(MenuRoute(placeId)) {
+                        popUpTo(MenuRoute(placeId)) { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<CheckoutRoute> {
+            CheckoutScreen(
+                // Заказ создан — возвращаться в корзину, которой больше нет,
+                // некуда: весь путь оформления уходит из стека, и «назад» с
+                // экрана статуса ведёт на карточку заведения.
+                onOrderCreated = { orderId ->
+                    navController.navigate(OrderStatusRoute(orderId)) {
+                        popUpTo<MenuRoute> { inclusive = true }
+                    }
+                },
+                onOpenWallet = { navController.navigate(WalletRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<OrderStatusRoute> {
+            OrderStatusScreen(
+                onOpenCart = { placeId ->
+                    navController.navigate(CartRoute(placeId)) {
+                        popUpTo<OrderStatusRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
         }
     }
 }

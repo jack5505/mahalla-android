@@ -33,6 +33,48 @@ class RoutesSerializationTest {
 
         val search = SearchRoute(categoryId = "pharmacy", query = "osh")
         assertEquals(search, json.decodeFromString<SearchRoute>(json.encodeToString(search)))
+
+        val menu = MenuRoute(placeId = "p-42")
+        assertEquals(menu, json.decodeFromString<MenuRoute>(json.encodeToString(menu)))
+
+        val order = OrderStatusRoute(orderId = "o-42")
+        assertEquals(order, json.decodeFromString<OrderStatusRoute>(json.encodeToString(order)))
+    }
+
+    /**
+     * Вертикаль «Еда» (эпик 5): три экрана ходят по placeId, четвёртый — по
+     * orderId. Совпадение имён аргументов важно, потому что ViewModel'и
+     * читают их из `SavedStateHandle`.
+     */
+    @Test
+    fun `food routes carry the ids their view models read`() {
+        listOf(
+            serializer<MenuRoute>().descriptor,
+            serializer<CartRoute>().descriptor,
+            serializer<CheckoutRoute>().descriptor,
+        ).forEach { descriptor ->
+            assertEquals(1, descriptor.elementsCount)
+            assertEquals("placeId", descriptor.getElementName(0))
+        }
+
+        val order = serializer<OrderStatusRoute>().descriptor
+        assertEquals(1, order.elementsCount)
+        assertEquals("orderId", order.getElementName(0))
+    }
+
+    @Test
+    fun `food routes are distinguishable from each other`() {
+        // Одинаковый serialName склеил бы меню, корзину и checkout в один
+        // destination — при том, что аргумент у них один и тот же.
+        val serialNames = listOf(
+            serializer<MenuRoute>().descriptor.serialName,
+            serializer<CartRoute>().descriptor.serialName,
+            serializer<CheckoutRoute>().descriptor.serialName,
+            serializer<OrderStatusRoute>().descriptor.serialName,
+            serializer<PlaceRoute>().descriptor.serialName,
+        )
+
+        assertEquals(serialNames.size, serialNames.toSet().size)
     }
 
     @Test

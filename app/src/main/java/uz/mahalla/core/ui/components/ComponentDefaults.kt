@@ -43,6 +43,20 @@ object MahallaComponentDefaults {
     /** Метка на карте: тапают по ней пальцем, а не курсором. */
     val mapMarkerMinSize: Dp = minTouchTarget
 
+    // --- Вертикаль «Еда» (эпик 5) ---
+
+    /** Степпер количества в корзине и в меню. */
+    val stepperMinHeight: Dp = minTouchTarget
+
+    /** Поле числа между «−» и «+»: ширина под двузначное количество. */
+    val stepperValueMinWidth: Dp = 32.dp
+
+    /** Строка позиции меню: две строки текста плюс цена. */
+    val menuItemMinHeight: Dp = 64.dp
+
+    /** Больше 99 порций одного блюда — опечатка (`CartCalculator.MAX_QUANTITY`). */
+    const val maxStepperQuantity: Int = 99
+
     val progressIndicatorSize: Dp = 18.dp
     val progressStrokeWidth: Dp = 2.dp
     val cardIconSize: Dp = 20.dp
@@ -68,5 +82,7 @@ object MahallaComponentDefaults {
         "categoryTile" to categoryTileMinHeight,
         "searchEntry" to searchEntryMinHeight,
         "mapMarker" to mapMarkerMinSize,
+        "stepper" to stepperMinHeight,
+        "menuItem" to menuItemMinHeight,
     )
 }

@@ -59,8 +59,8 @@ object BackendUrl {
      * встаёт путь [targetBase]; query и fragment запроса сохраняются.
      */
     fun rewrite(requestUrl: HttpUrl, templateBase: HttpUrl, targetBase: HttpUrl): HttpUrl {
-        val templateSegments = templateBase.pathSegments.filter(String::isNotEmpty)
-        val requestSegments = requestUrl.pathSegments
+        val templateSegments = templateBase.encodedPathSegments.filter(String::isNotEmpty)
+        val requestSegments = requestUrl.encodedPathSegments
         val relative = if (requestSegments.take(templateSegments.size) == templateSegments) {
             requestSegments.drop(templateSegments.size)
         } else {
@@ -74,10 +74,8 @@ object BackendUrl {
             .host(targetBase.host)
             .port(targetBase.port)
             .encodedPath("/")
-        val segments = targetBase.pathSegments.filter(String::isNotEmpty) + relative
-        // addPathSegment кодирует сегмент, а pathSegments отдаёт его декодированным —
-        // пересборка не теряет экранирование.
-        segments.forEach(builder::addPathSegment)
+        val segments = targetBase.encodedPathSegments.filter(String::isNotEmpty) + relative
+        segments.forEach(builder::addEncodedPathSegment)
         return builder.build()
     }
 }
