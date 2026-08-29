@@ -79,10 +79,15 @@ sealed interface TelegramLoginState {
      * отправляется на обычный SMS-путь. Полуавторизованное состояние («токены
      * есть, телефон не проверен») в приложении не заводим: отличить его потом
      * от нормального входа было бы нечем.
+     * @param phone номер, который бот сообщил бэкенду. Нужен ровно при
+     * [requiresPhoneVerify]: экран показывает человеку, какой именно номер
+     * предстоит подтвердить кодом, — иначе возврат к форме выглядит как
+     * «ничего не произошло» (issue #49).
      */
     data class Confirmed(
         val login: LoginResult,
         val requiresPhoneVerify: Boolean = false,
+        val phone: String? = null,
     ) : TelegramLoginState
 }
 

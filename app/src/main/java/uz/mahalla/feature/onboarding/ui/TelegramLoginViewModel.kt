@@ -74,7 +74,12 @@ class TelegramLoginViewModel @Inject constructor(
         pollJob?.cancel()
         deepLinkToken = null
         updateState {
-            copy(status = TelegramStatus.PREPARING, botUrl = null, apiFailure = null)
+            copy(
+                status = TelegramStatus.PREPARING,
+                botUrl = null,
+                phone = null,
+                apiFailure = null,
+            )
         }
 
         viewModelScope.launch {
@@ -135,7 +140,7 @@ class TelegramLoginViewModel @Inject constructor(
         pollJob = viewModelScope.launch {
             // Ограничение по времени снаружи цикла: срок жизни токена задаёт
             // сервер, и переживать его опрос не должен ни на секунду.
-            val outcome = withTimeoutOrNull(remainingMillis) {
+            withTimeoutOrNull(remainingMillis) {
                 var attempt = 0
                 while (isActive) {
                     if (attempt > 0 || !immediate) {
@@ -146,7 +151,18 @@ class TelegramLoginViewModel @Inject constructor(
                     when (val result = authRepository.checkTelegramLogin(token)) {
                         is ApiResult.Success -> {
                             val state = result.data
-                            if (state is TelegramLoginState.Confirmed) return@withTimeoutOrNull state
+                            if (state is TelegramLoginState.Confirmed) {
+                                // Результат применяется здесь же, а не после
+                                // выхода из `withTimeoutOrNull`: возвращение на
+                                // экран (самый частый момент подтверждения)
+                                // отменяет этот job, а отмена вклинивается
+                                // только на точке приостановки. Между ответом
+                                // сервера и `confirm` их быть не должно, иначе
+                                // подтверждённый вход теряется вместе с уже
+                                // потраченным токеном.
+                                confirm(state)
+                                return@withTimeoutOrNull
+                            }
                         }
 
                         is ApiResult.Failure ->
@@ -157,27 +173,43 @@ class TelegramLoginViewModel @Inject constructor(
                                         apiFailure = result.failure,
                                     )
                                 }
-                                return@withTimeoutOrNull null
+                                return@withTimeoutOrNull
                             }
                     }
                 }
-                null
             }
 
-            when {
-                outcome != null -> confirm(outcome)
-                // Ошибку уже показали внутри цикла — второй раз статус не трогаем.
-                currentState.status == TelegramStatus.WAITING -> expire()
-            }
+            // Статус изменился — значит цикл уже всё рассказал пользователю
+            // (подтверждение, отказ или просьба подтвердить номер).
+            if (currentState.status == TelegramStatus.WAITING) expire()
         }
     }
 
+    /**
+     * Токен отработал — держать его в памяти дальше незачем, и опрашивать
+     * больше нечего.
+     *
+     * Статус меняется в обоих случаях: пока он оставался [TelegramStatus.WAITING],
+     * экран крутил «ждём подтверждения» и после успеха, а `ScreenResumed`
+     * уходил в `return` по обнулённому токену — выйти из этого состояния было
+     * нельзя (issue #49).
+     */
     private fun confirm(state: TelegramLoginState.Confirmed) {
-        // Токен отработал — держать его в памяти дальше незачем.
         deepLinkToken = null
         if (state.requiresPhoneVerify) {
-            emitEffect(TelegramEffect.PhoneVerificationRequired)
+            // Автоматически на форму номера не уводим: подтверждение через
+            // Telegram уже случилось, и человек должен увидеть, почему этого
+            // оказалось мало.
+            updateState {
+                copy(
+                    status = TelegramStatus.PHONE_VERIFY,
+                    botUrl = null,
+                    phone = state.phone,
+                    apiFailure = null,
+                )
+            }
         } else {
+            updateState { copy(status = TelegramStatus.CONFIRMED, botUrl = null) }
             emitEffect(TelegramEffect.Confirmed(isNewUser = state.login.isNewUser))
         }
     }

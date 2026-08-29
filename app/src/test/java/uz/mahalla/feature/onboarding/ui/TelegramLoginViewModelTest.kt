@@ -102,6 +102,8 @@ class TelegramLoginViewModelTest {
             effects.contains(TelegramEffect.Confirmed(isNewUser = true)),
         )
         assertTrue("сессия сохранена", authRepository.isAuthorized.first())
+        assertEquals(TelegramStatus.CONFIRMED, viewModel.state.value.status)
+        assertFalse("ждать больше нечего", viewModel.state.value.isWaiting)
     }
 
     /**
@@ -220,9 +222,73 @@ class TelegramLoginViewModelTest {
     /**
      * Telegram узнал человека, но номер аккаунта не подтверждён: сессии нет,
      * дальше обычный SMS-путь.
+     *
+     * Раньше это был молчаливый одноразовый эффект при статусе `WAITING` —
+     * экран продолжал крутить «ждём подтверждения», а `deepLinkToken` был уже
+     * обнулён, то есть выйти из состояния было нельзя (issue #49).
      */
     @Test
-    fun `unverified phone falls back to sms`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `unverified phone stops the spinner and explains itself`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.telegramCheckResults = listOf(
+            ApiResult.Success(
+                TelegramLoginState.Confirmed(
+                    login = LoginResult(isNewUser = true),
+                    requiresPhoneVerify = true,
+                    phone = "+998937555505",
+                ),
+            ),
+        )
+
+        val viewModel = viewModel()
+        val effects = mutableListOf<TelegramEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+        advanceTimeBy(10_000)
+
+        val state = viewModel.state.value
+        assertEquals(TelegramStatus.PHONE_VERIFY, state.status)
+        assertTrue("кнопка перехода на SMS — главная", state.needsPhoneVerify)
+        assertFalse("крутилке здесь делать нечего", state.isWaiting)
+        assertEquals("номер называем явно", "+998937555505", state.phone)
+        assertFalse("полуавторизованной сессии быть не должно", authRepository.isAuthorized.first())
+        assertFalse(
+            "на форму номера уводит тап, а не само приложение",
+            effects.contains(TelegramEffect.SwitchToSms),
+        )
+    }
+
+    /**
+     * После подтверждения опрашивать больше нечего: токен потрачен. Возврат на
+     * экран не должен ни перезапускать опрос, ни возвращать крутилку.
+     */
+    @Test
+    fun `returning after the phone verify request changes nothing`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.telegramCheckResults = listOf(
+            ApiResult.Success(
+                TelegramLoginState.Confirmed(
+                    login = LoginResult(isNewUser = true),
+                    requiresPhoneVerify = true,
+                ),
+            ),
+        )
+
+        val viewModel = viewModel()
+        advanceTimeBy(10_000)
+        val checks = authRepository.telegramChecks.size
+
+        viewModel.onEvent(TelegramEvent.ScreenResumed)
+        advanceTimeBy(30_000)
+
+        assertEquals("опрос остановлен", checks, authRepository.telegramChecks.size)
+        assertEquals(TelegramStatus.PHONE_VERIFY, viewModel.state.value.status)
+    }
+
+    /** С экрана «подтвердите номер» есть ровно один шаг — и он работает. */
+    @Test
+    fun `phone verify screen leads to sms`() = runTest(mainDispatcherRule.dispatcher) {
         authRepository.telegramCheckResults = listOf(
             ApiResult.Success(
                 TelegramLoginState.Confirmed(
@@ -237,8 +303,42 @@ class TelegramLoginViewModelTest {
         backgroundScope.launch { viewModel.effects.toList(effects) }
         advanceTimeBy(10_000)
 
-        assertTrue(effects.contains(TelegramEffect.PhoneVerificationRequired))
-        assertFalse("полуавторизованной сессии быть не должно", authRepository.isAuthorized.first())
+        viewModel.onEvent(TelegramEvent.SmsRequested)
+        runCurrent()
+
+        assertTrue(effects.contains(TelegramEffect.SwitchToSms))
+    }
+
+    /**
+     * Возврат из Telegram — самый частый момент подтверждения, и он же отменяет
+     * текущий опрос. Отменённым не должен оказаться тот опрос, который
+     * подтверждение уже получил: токен одноразовый, второй раз его никто не
+     * подтвердит.
+     */
+    @Test
+    fun `a resume does not swallow a confirmation already received`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.telegramCheckResults = listOf(
+            ApiResult.Success(TelegramLoginState.Pending),
+            ApiResult.Success(
+                TelegramLoginState.Confirmed(login = LoginResult(isNewUser = false)),
+            ),
+        )
+
+        val viewModel = viewModel()
+        val effects = mutableListOf<TelegramEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        // Первый опрос отвечает `Pending`, второй — подтверждением; событие
+        // возврата приходит ровно в тот же момент.
+        advanceTimeBy(2_000)
+        viewModel.onEvent(TelegramEvent.ScreenResumed)
+        advanceTimeBy(10_000)
+
+        assertEquals(TelegramStatus.CONFIRMED, viewModel.state.value.status)
+        assertTrue(effects.contains(TelegramEffect.Confirmed(isNewUser = false)))
+        assertTrue("сессия сохранена", authRepository.isAuthorized.first())
     }
 
     @Test

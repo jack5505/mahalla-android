@@ -68,6 +68,10 @@
     <string name="onboarding_telegram_failed">Telegram orqali kirib bo\'lmadi.</string>
     <string name="onboarding_telegram_retry">Qaytadan urinish</string>
     <string name="onboarding_telegram_use_sms">SMS orqali davom etish</string>
+    <string name="onboarding_telegram_confirmed">Kirish tasdiqlandi.</string>
+    <string name="onboarding_telegram_phone_verify">Telegram sizni tanidi, lekin raqamni SMS kodi bilan bir marta tasdiqlash kerak.</string>
+    <string name="onboarding_telegram_phone_verify_number">Tasdiqlanadigan raqam: %1$s</string>
+    <string name="onboarding_telegram_verify_phone">Raqamni SMS orqali tasdiqlash</string>
 
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Tasdiqlash kodi</string>

@@ -62,6 +62,10 @@
     <string name="onboarding_telegram_failed">Не удалось войти через Telegram.</string>
     <string name="onboarding_telegram_retry">Попробовать снова</string>
     <string name="onboarding_telegram_use_sms">Продолжить по SMS</string>
+    <string name="onboarding_telegram_confirmed">Вход подтверждён.</string>
+    <string name="onboarding_telegram_phone_verify">Telegram вас узнал, но номер нужно один раз подтвердить кодом из SMS.</string>
+    <string name="onboarding_telegram_phone_verify_number">Номер для подтверждения: %1$s</string>
+    <string name="onboarding_telegram_verify_phone">Подтвердить номер по SMS</string>
 
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Код подтверждения</string>
