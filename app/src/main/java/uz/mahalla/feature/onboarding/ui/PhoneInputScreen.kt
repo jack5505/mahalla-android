@@ -18,6 +18,7 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCheckboxRow
 import uz.mahalla.core.ui.components.MahallaPhoneField
 import uz.mahalla.core.ui.preview.PreviewSurface
@@ -33,6 +34,7 @@ import uz.mahalla.feature.auth.domain.OtpChallenge
 @Composable
 fun PhoneInputScreen(
     onCodeRequested: (String, OtpChallenge) -> Unit,
+    onTelegramRequested: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PhoneInputViewModel = hiltViewModel(),
@@ -46,6 +48,8 @@ fun PhoneInputScreen(
             when (effect) {
                 is PhoneInputEffect.CodeRequested ->
                     onCodeRequested(effect.phoneE164, effect.challenge)
+
+                PhoneInputEffect.OpenTelegram -> onTelegramRequested()
 
                 PhoneInputEffect.OpenOffer -> {
                     // Браузера может не быть (кастомная прошивка, kiosk-режим) —
@@ -79,9 +83,23 @@ private fun PhoneInputContent(
         subtitle = stringResource(R.string.onboarding_phone_subtitle),
         onBack = onBack,
         footer = {
+            // Telegram первым и основной кнопкой: этот путь бесплатный для
+            // компании и короче для человека — ни ожидания SMS, ни ввода кода.
+            if (state.telegramAvailable) {
+                MahallaButton(
+                    text = stringResource(R.string.onboarding_phone_telegram),
+                    onClick = { onEvent(PhoneInputEvent.TelegramRequested) },
+                    state = ButtonState(enabled = !state.submitting),
+                )
+            }
             MahallaButton(
                 text = stringResource(R.string.onboarding_phone_action),
                 onClick = { onEvent(PhoneInputEvent.Submit) },
+                variant = if (state.telegramAvailable) {
+                    MahallaButtonVariant.Secondary
+                } else {
+                    MahallaButtonVariant.Primary
+                },
                 state = ButtonState(
                     enabled = state.canSubmit,
                     loading = state.submitting,
@@ -124,6 +142,7 @@ private fun PhoneInputScreenPreview() {
             state = PhoneInputState(
                 nationalDigits = "901234",
                 consentAccepted = true,
+                telegramAvailable = true,
                 // Тот самый случай из issue #34: бэкенд объяснил причину, а
                 // экран показывал «нет прав на это действие».
                 apiFailure = ApiFailure(

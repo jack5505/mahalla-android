@@ -95,6 +95,57 @@ data class VerifyOtpResponse(
     @SerialName("user") val user: UserDto? = null,
 )
 
+/**
+ * Начало входа через Telegram (issue #46). Номера телефона здесь нет: кто
+ * именно входит, бэкенд узнаёт от бота, когда пользователь нажмёт Start.
+ */
+@Serializable
+data class TelegramInitRequest(
+    @SerialName("device") val device: DeviceInfoDto,
+    @SerialName("lat") val lat: Double,
+    @SerialName("lng") val lng: Double,
+)
+
+/**
+ * @param telegramBotUrl `https://t.me/<bot>?start=<deepLinkToken>` — ссылку
+ * проверяет `TelegramBotLink` до открытия.
+ * @param expiresInSeconds сколько живёт токен (на стенде — 300).
+ */
+@Serializable
+data class TelegramInitResponse(
+    @SerialName("deepLinkToken") val deepLinkToken: String? = null,
+    @SerialName("telegramBotUrl") val telegramBotUrl: String? = null,
+    @SerialName("expiresInSeconds") val expiresInSeconds: Int? = null,
+)
+
+@Serializable
+data class TelegramCheckRequest(
+    @SerialName("deepLinkToken") val deepLinkToken: String,
+    @SerialName("device") val device: DeviceInfoDto,
+    @SerialName("lat") val lat: Double,
+    @SerialName("lng") val lng: Double,
+)
+
+/**
+ * Ответ на подтверждённый вход через Telegram.
+ *
+ * Токены лежат в корне, а не в `tokens`, как у `verify-otp`, и `sessionId`
+ * бэкенд не отдаёт вовсе — значит `X-Session-Id` при выходе будет пустым
+ * (`logout` это допускает).
+ *
+ * @param requiresPhoneVerify телефон аккаунта не подтверждён: вход придётся
+ * добить обычным SMS-кодом.
+ */
+@Serializable
+data class TelegramCheckResponse(
+    @SerialName("accessToken") val accessToken: String? = null,
+    @SerialName("refreshToken") val refreshToken: String? = null,
+    @SerialName("accessExpiresIn") val accessExpiresIn: Long? = null,
+    @SerialName("refreshExpiresIn") val refreshExpiresIn: Long? = null,
+    @SerialName("requiresPhoneVerify") val requiresPhoneVerify: Boolean = false,
+    @SerialName("user") val user: UserDto? = null,
+)
+
 @Serializable
 data class RefreshTokenRequest(
     @SerialName("refreshToken") val refreshToken: String,
@@ -132,6 +183,20 @@ interface AuthApi {
 
     @POST("auth/verify-otp")
     suspend fun verifyOtp(@Body body: VerifyOtpRequest): ApiResponse<VerifyOtpResponse>
+
+    /**
+     * Выдать одноразовую ссылку на бота (issue #46). Анонимный запрос —
+     * подтверждать личность будет сам Telegram.
+     */
+    @POST("auth/telegram/init")
+    suspend fun telegramInit(@Body body: TelegramInitRequest): ApiResponse<TelegramInitResponse>
+
+    /**
+     * Нажали ли Start. Пока не нажали — 400 с кодом `TG_PENDING`; это штатное
+     * ожидание, а не отказ (разбирает `DefaultAuthRepository`).
+     */
+    @POST("auth/telegram/check")
+    suspend fun telegramCheck(@Body body: TelegramCheckRequest): ApiResponse<TelegramCheckResponse>
 
     @POST("auth/refresh")
     suspend fun refresh(@Body body: RefreshTokenRequest): ApiResponse<AuthResponseDto>

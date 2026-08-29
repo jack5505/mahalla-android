@@ -18,6 +18,23 @@
         android:name="android.hardware.location"
         android:required="false" />
 
+    <!-- Вход через Telegram-бот (issue #46). Начиная с API 30 чужие пакеты
+         невидимы без этого блока: без него PackageManager отвечает «Telegram
+         не установлен» на устройстве, где он есть, и приложение уводило бы
+         человека на платное SMS. Схема tg: — общее определение
+         Telegram-клиента (ловит и форки), список пакетов — запасной путь для
+         прошивок с урезанным резолвером. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tg" />
+        </intent>
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <package android:name="org.thunderdog.challegram" />
+        <package android:name="org.telegram.plus" />
+    </queries>
+
     <application
         android:name=".MahallaApplication"
         android:allowBackup="true"

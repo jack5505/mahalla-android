@@ -51,6 +51,17 @@
     <string name="onboarding_phone_consent">Согласен с условиями публичной оферты</string>
     <string name="onboarding_phone_consent_link">Читать оферту</string>
     <string name="onboarding_phone_consent_required">Чтобы продолжить, примите оферту</string>
+    <string name="onboarding_phone_telegram">Войти через Telegram</string>
+
+    <!-- Онбординг: вход через Telegram-бот (issue #46) -->
+    <string name="onboarding_telegram_title">Вход через Telegram</string>
+    <string name="onboarding_telegram_subtitle">Откройте бота и нажмите «Старт» — SMS ждать не нужно.</string>
+    <string name="onboarding_telegram_waiting">Ждём подтверждения в Telegram…</string>
+    <string name="onboarding_telegram_open">Открыть Telegram</string>
+    <string name="onboarding_telegram_expired">Время подтверждения истекло. Попробуйте ещё раз.</string>
+    <string name="onboarding_telegram_failed">Не удалось войти через Telegram.</string>
+    <string name="onboarding_telegram_retry">Попробовать снова</string>
+    <string name="onboarding_telegram_use_sms">Продолжить по SMS</string>
 
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Код подтверждения</string>

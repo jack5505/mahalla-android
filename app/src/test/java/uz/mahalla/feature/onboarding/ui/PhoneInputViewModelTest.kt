@@ -17,6 +17,7 @@ import uz.mahalla.core.result.ServerError
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeTelegramAvailability
 import uz.mahalla.testutil.MainDispatcherRule
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -26,8 +27,10 @@ class PhoneInputViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authRepository = FakeAuthRepository()
+    private val telegramAvailability = FakeTelegramAvailability()
 
-    private fun viewModel() = PhoneInputViewModel(PhoneNumberValidator(), authRepository)
+    private fun viewModel() =
+        PhoneInputViewModel(PhoneNumberValidator(), authRepository, telegramAvailability)
 
     @Test
     fun `initial state is empty and cannot be submitted`() {

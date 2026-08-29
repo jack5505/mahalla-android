@@ -56,7 +56,18 @@
     <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
     <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
     <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
+    <string name="onboarding_phone_telegram">Telegram orqali kirish</string>
     <string name="onboarding_offer_url" translatable="false">https://mahalla.uz/offer</string>
+
+    <!-- Онбординг: вход через Telegram-бот (issue #46) -->
+    <string name="onboarding_telegram_title">Telegram orqali kirish</string>
+    <string name="onboarding_telegram_subtitle">Botni oching va «Start» tugmasini bosing — SMS kutish shart emas.</string>
+    <string name="onboarding_telegram_waiting">Telegramdagi tasdiqni kutyapmiz…</string>
+    <string name="onboarding_telegram_open">Telegramni ochish</string>
+    <string name="onboarding_telegram_expired">Tasdiqlash muddati tugadi. Qaytadan urinib ko\'ring.</string>
+    <string name="onboarding_telegram_failed">Telegram orqali kirib bo\'lmadi.</string>
+    <string name="onboarding_telegram_retry">Qaytadan urinish</string>
+    <string name="onboarding_telegram_use_sms">SMS orqali davom etish</string>
 
     <!-- Онбординг: код из SMS -->
     <string name="onboarding_otp_title">Tasdiqlash kodi</string>

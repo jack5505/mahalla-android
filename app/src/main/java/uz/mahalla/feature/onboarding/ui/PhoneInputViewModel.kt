@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.auth.data.AuthRepository
+import uz.mahalla.feature.auth.data.TelegramAvailability
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import javax.inject.Inject
 
@@ -20,7 +21,12 @@ import javax.inject.Inject
 class PhoneInputViewModel @Inject constructor(
     private val validator: PhoneNumberValidator,
     private val authRepository: AuthRepository,
-) : MviViewModel<PhoneInputState, PhoneInputEvent, PhoneInputEffect>(PhoneInputState()) {
+    telegramAvailability: TelegramAvailability,
+) : MviViewModel<PhoneInputState, PhoneInputEvent, PhoneInputEffect>(
+    PhoneInputState(
+        telegramAvailable = telegramAvailability.installedPackage() != null,
+    ),
+) {
 
     override fun onEvent(event: PhoneInputEvent) {
         when (event) {
@@ -33,6 +39,7 @@ class PhoneInputViewModel @Inject constructor(
             }
 
             PhoneInputEvent.Submit -> onSubmit()
+            PhoneInputEvent.TelegramRequested -> onTelegramRequested()
             PhoneInputEvent.OfferRequested -> emitEffect(PhoneInputEffect.OpenOffer)
             PhoneInputEvent.ErrorDismissed -> updateState { copy(error = null, apiFailure = null) }
         }
@@ -49,6 +56,21 @@ class PhoneInputViewModel @Inject constructor(
                 apiFailure = null,
             )
         }
+    }
+
+    /**
+     * Telegram-путь номера не требует — его сообщит боту сам Telegram. А вот
+     * оферту принять всё равно нужно: регистрация от канала доставки не
+     * зависит, и обойти согласие через бесплатную кнопку нельзя.
+     */
+    private fun onTelegramRequested() {
+        if (currentState.submitting) return
+        if (!currentState.consentAccepted) {
+            updateState { copy(error = PhoneInputError.CONSENT_REQUIRED) }
+            return
+        }
+        updateState { copy(error = null, apiFailure = null) }
+        emitEffect(PhoneInputEffect.OpenTelegram)
     }
 
     private fun onSubmit() {
