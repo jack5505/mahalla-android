@@ -8,6 +8,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.ServerError
+import uz.mahalla.feature.auth.domain.ServerPin
+import uz.mahalla.feature.auth.domain.ServerPinChallenge
+import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.MainDispatcherRule
@@ -55,7 +62,7 @@ class PinViewModelTest {
         val viewModel = viewModel(storage)
         advanceUntilIdle()
 
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         advanceUntilIdle()
 
         assertEquals(PinStage.Confirm, viewModel.state.value.stage)
@@ -69,13 +76,13 @@ class PinViewModelTest {
         val viewModel = viewModel(storage)
         advanceUntilIdle()
 
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         advanceUntilIdle()
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         val effect = viewModel.effects.first()
 
         assertEquals(PinEffect.PinReady, effect)
-        assertEquals("1234", storage.storedPin)
+        assertEquals("123456", storage.storedPin)
         assertEquals(1, storage.saveCount)
     }
 
@@ -87,9 +94,9 @@ class PinViewModelTest {
         val viewModel = viewModel(storage)
         advanceUntilIdle()
 
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         advanceUntilIdle()
-        viewModel.onEvent(PinEvent.PinChanged("4321"))
+        viewModel.onEvent(PinEvent.PinChanged("654321"))
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -99,7 +106,7 @@ class PinViewModelTest {
         assertNull("ничего не сохранено", storage.storedPin)
 
         // Первый ввод забыт: повтор старого кода снова уводит на подтверждение.
-        viewModel.onEvent(PinEvent.PinChanged("1111"))
+        viewModel.onEvent(PinEvent.PinChanged("111111"))
         advanceUntilIdle()
         assertEquals(PinStage.Confirm, viewModel.state.value.stage)
     }
@@ -194,10 +201,10 @@ class PinViewModelTest {
         val viewModel = viewModel(storage)
         advanceUntilIdle()
 
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         advanceUntilIdle()
         storage.failure = GeneralSecurityException("ключ инвалидирован")
-        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
         advanceUntilIdle()
 
         val state = viewModel.state.value
@@ -241,6 +248,129 @@ class PinViewModelTest {
 
         assertEquals(PinEffect.AuthRestartRequired, effect)
         assertEquals(false, viewModel.state.value.busy)
+    }
+
+    @Test
+    fun `an unfinished login without a session restarts the authorization`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Процесс умер между вводом кода и этим экраном: испытание было только
+        // в памяти, сессии нет. Придуманный сейчас PIN открыл бы приложение,
+        // где каждый запрос отвечает 401.
+        val viewModel = PinViewModel(FakePinStorage(), FakeAuthRepository())
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.AuthRestartRequired, effect)
+    }
+
+    @Test
+    fun `a legacy four digit pin keeps a four cell field`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // PIN, сохранённый до issue #51: шесть ячеек ввести его не дали бы.
+        val viewModel = viewModel(FakePinStorage(initialPin = "1234"))
+        advanceUntilIdle()
+
+        assertEquals(4, viewModel.state.value.pin.length)
+    }
+
+    @Test
+    fun `a pending setup sends the pin to the backend before storing it`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Setup, "s-1")
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        assertEquals(PinStage.Create, viewModel.state.value.stage)
+        assertEquals(ServerPin.LENGTH, viewModel.state.value.pin.length)
+
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
+        advanceUntilIdle()
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.PinReady, effect)
+        // Тот же код уходит и на сервер (он выдаёт токены), и в Keystore.
+        assertEquals(listOf("123456"), authRepository.completedServerPins)
+        assertEquals("123456", storage.storedPin)
+    }
+
+    @Test
+    fun `a pending enter verifies the pin on the server even without a stored one`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Enter)
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        // Локального хэша нет (новое устройство), а вводить всё равно надо:
+        // код проверит бэкенд.
+        assertEquals(PinStage.Unlock, viewModel.state.value.stage)
+
+        viewModel.onEvent(PinEvent.PinChanged("654321"))
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.PinReady, effect)
+        assertEquals(listOf("654321"), authRepository.completedServerPins)
+        // Принятый сервером код становится локальным: следующий запуск
+        // разблокируется без сети.
+        assertEquals("654321", storage.storedPin)
+    }
+
+    @Test
+    fun `a rejected pin shows the backend message and stores nothing`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Enter)
+        authRepository.completeServerPinResult = ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.Unauthorized,
+                server = ServerError(
+                    httpCode = 401,
+                    code = "PIN_INVALID",
+                    message = "Noto'g'ri PIN. 2 ta urinish qoldi.",
+                ),
+            ),
+        )
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("000000"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals("Noto'g'ri PIN. 2 ta urinish qoldi.", state.apiFailure?.serverMessage)
+        assertEquals(false, state.busy)
+        assertEquals("", state.pin.code)
+        assertEquals(PinStage.Unlock, state.stage)
+        assertNull("непринятый сервером код локальным не становится", storage.storedPin)
+        // Счётчик попыток ведёт сервер: свой стёр бы сессию раньше времени.
+        assertEquals(PinState.MAX_ATTEMPTS, state.attemptsLeft)
+    }
+
+    @Test
+    fun `a rejected setup starts over instead of asking to repeat`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Setup, "s-1")
+        authRepository.completeServerPinResult = ApiResult.Failure(ApiError.NoConnection)
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
+        advanceUntilIdle()
+        viewModel.onEvent(PinEvent.PinChanged("123456"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals(PinStage.Create, state.stage)
+        assertEquals(ApiError.NoConnection, state.apiFailure?.error)
+        assertNull(storage.storedPin)
     }
 
     @Test

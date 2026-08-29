@@ -1,6 +1,7 @@
 package uz.mahalla.data.prefs
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 
@@ -35,6 +36,13 @@ internal object PreferenceKeys {
 
     val PinHash = stringPreferencesKey("pin_hash_encrypted")
     val PinSalt = stringPreferencesKey("pin_salt")
+
+    /**
+     * Длина сохранённого PIN (issue #51): с переходом на шестизначный код
+     * экран блокировки обязан нарисовать столько ячеек, сколько цифр человек
+     * задал. Ключа нет — PIN достался от версии с четырьмя цифрами.
+     */
+    val PinLength = intPreferencesKey("pin_length")
 
     /** История поиска (эпик 4.3) — одна строка, порядок значим. */
     val SearchHistory = stringPreferencesKey("discovery_search_history")

@@ -73,7 +73,9 @@ class OtpViewModel @Inject constructor(
             when (val result = authRepository.verifyCode(state.otpToken, state.code.code)) {
                 is ApiResult.Success -> {
                     updateState { copy(submitting = false) }
-                    emitEffect(OtpEffect.Verified(result.data.isNewUser))
+                    // Дальше в любом случае экран PIN: либо сессия уже есть,
+                    // либо PIN — то, чем бэкенд её выдаст (issue #51).
+                    emitEffect(OtpEffect.Verified(result.data.login.isNewUser))
                 }
 
                 is ApiResult.Failure -> {
