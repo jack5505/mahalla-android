@@ -1,9 +1,12 @@
 package uz.mahalla.feature.onboarding.ui
 
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.text.OtpFieldState
+import uz.mahalla.feature.auth.domain.ServerPin
+import uz.mahalla.feature.auth.domain.ServerPinStep
 
 /** Этап работы с PIN (3.4). */
 enum class PinStage {
@@ -38,9 +41,33 @@ data class PinState(
     val attemptsLeft: Int = MAX_ATTEMPTS,
     val busy: Boolean = false,
     val error: PinError? = null,
+    /**
+     * Шаг, которого ждёт бэкенд (issue #51). `null` — PIN нужен только
+     * устройству, сессия уже есть: сеть на этом экране не участвует.
+     */
+    val serverStep: ServerPinStep? = null,
+    /**
+     * Отказ бэкенда на `setup-pin`/`pin-login` с его же объяснением
+     * (issue #34): «PIN noto'g'ri, 2 urinish qoldi» точнее любого своего
+     * текста, а после блокировки только сервер знает, насколько.
+     */
+    val apiFailure: ApiFailure? = null,
 ) : UiState {
+
+    /**
+     * Счётчик попыток ведёт сервер: свой лимит стёр бы PIN и сессию раньше
+     * времени, а сообщения об оставшихся попытках расходились бы.
+     */
+    val countsAttemptsLocally: Boolean get() = serverStep == null
+
     companion object {
-        const val PIN_LENGTH = 4
+        /**
+         * Шесть цифр: столько требует бэкенд (issue #51), и тот же код
+         * становится локальным PIN. Прежний четырёхзначный, если он где-то
+         * сохранён, продолжает открывать экран блокировки — длину поля даёт
+         * `PinStorage.configuredLength()`.
+         */
+        const val PIN_LENGTH = ServerPin.LENGTH
 
         /** Пять попыток, затем PIN сбрасывается и требуется вход по SMS. */
         const val MAX_ATTEMPTS = 5

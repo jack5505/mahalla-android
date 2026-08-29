@@ -6,8 +6,10 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.TelegramChallenge
 import uz.mahalla.feature.auth.domain.TelegramLoginState
+import uz.mahalla.feature.auth.domain.VerificationResult
 
 /**
  * Авторизация в памяти: ViewModel'и онбординга не должны знать ни про сеть,
@@ -20,8 +22,16 @@ class FakeAuthRepository(
 
     var requestCodeResult: ApiResult<OtpChallenge> =
         ApiResult.Success(OtpChallenge(otpToken = DEFAULT_OTP_TOKEN))
-    var verifyResult: ApiResult<LoginResult> = ApiResult.Success(LoginResult(isNewUser = false))
+    var verifyResult: ApiResult<VerificationResult> =
+        ApiResult.Success(VerificationResult.Authorized(LoginResult(isNewUser = false)))
     var refreshResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Ответ `setup-pin`/`pin-login` (issue #51). */
+    var completeServerPinResult: ApiResult<LoginResult> =
+        ApiResult.Success(LoginResult(isNewUser = false))
+
+    /** PIN'ы, ушедшие на бэкенд: тест проверяет, что запрос вообще случился. */
+    val completedServerPins = mutableListOf<String>()
 
     var telegramStartResult: ApiResult<TelegramChallenge> = ApiResult.Success(
         TelegramChallenge(deepLinkToken = DEFAULT_DEEP_LINK_TOKEN, botUrl = DEFAULT_BOT_URL),
@@ -53,10 +63,33 @@ class FakeAuthRepository(
         return requestCodeResult
     }
 
-    override suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult> {
+    override var pendingServerPin: ServerPinChallenge? = null
+
+    override suspend fun verifyCode(
+        otpToken: String,
+        code: String,
+    ): ApiResult<VerificationResult> {
         verifiedCodes += otpToken to code
-        if (verifyResult is ApiResult.Success) authorized.value = true
-        return verifyResult
+        val result = verifyResult
+        if (result is ApiResult.Success) {
+            when (val verification = result.data) {
+                is VerificationResult.Authorized -> authorized.value = true
+                // Токенов ещё нет: сессию выдаст только PIN-шаг.
+                is VerificationResult.PinRequired ->
+                    pendingServerPin = verification.challenge
+            }
+        }
+        return result
+    }
+
+    override suspend fun completeServerPin(pin: String): ApiResult<LoginResult> {
+        completedServerPins += pin
+        val result = completeServerPinResult
+        if (result is ApiResult.Success) {
+            authorized.value = true
+            pendingServerPin = null
+        }
+        return result
     }
 
     override suspend fun startTelegramLogin(): ApiResult<TelegramChallenge> {
@@ -84,6 +117,7 @@ class FakeAuthRepository(
     override suspend fun logout() {
         logoutCount++
         authorized.value = false
+        pendingServerPin = null
     }
 
     companion object {

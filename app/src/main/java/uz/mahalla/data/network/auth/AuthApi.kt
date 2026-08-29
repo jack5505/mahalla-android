@@ -83,9 +83,12 @@ data class UserDto(
 )
 
 /**
- * @param nextStep что бэкенд предлагает делать дальше: `SETUP_PIN`,
- * `ENTER_PIN` или `NONE`. Приложение держит PIN локально (эпик 3.4), поэтому
- * поле пока только доезжает до домена.
+ * @param nextStep что бэкенд требует сделать дальше: `SETUP_PIN`, `ENTER_PIN`
+ * или `NONE`. Это не подсказка, а условие выдачи токенов: при `SETUP_PIN` и
+ * `ENTER_PIN` [tokens] в ответе **нет**, их отдаст `auth/setup-pin` либо
+ * `auth/pin-login` (issue #51).
+ * @param sessionId идентификатор сессии, созданной проверкой кода. Он же —
+ * обязательный параметр `auth/setup-pin`.
  */
 @Serializable
 data class VerifyOtpResponse(
@@ -93,6 +96,45 @@ data class VerifyOtpResponse(
     @SerialName("nextStep") val nextStep: String? = null,
     @SerialName("tokens") val tokens: TokenPairDto? = null,
     @SerialName("user") val user: UserDto? = null,
+)
+
+/**
+ * Установка PIN на сервере (issue #51). PIN — ровно шесть цифр
+ * (`^[0-9]{6}$`), сессию бэкенд берёт из [sessionId], а не из токена: до этого
+ * запроса токенов ещё не существует.
+ */
+@Serializable
+data class SetupPinRequest(
+    @SerialName("sessionId") val sessionId: String,
+    @SerialName("pin") val pin: String,
+    @SerialName("pinConfirm") val pinConfirm: String,
+)
+
+/**
+ * Вход по уже установленному PIN. Кто входит, бэкенд определяет по устройству
+ * (`DEVICE_UNKNOWN`, если оно ему незнакомо) — номера телефона здесь нет.
+ */
+@Serializable
+data class PinLoginRequest(
+    @SerialName("pin") val pin: String,
+    @SerialName("device") val device: DeviceInfoDto,
+    @SerialName("lat") val lat: Double,
+    @SerialName("lng") val lng: Double,
+)
+
+/**
+ * @param pinRequired PIN всё ещё нужен: ответ без токенов — отказ, а не успех.
+ * @param remainingAttempts сколько попыток осталось до блокировки.
+ */
+@Serializable
+data class PinLoginResponse(
+    @SerialName("tokens") val tokens: TokenPairDto? = null,
+    @SerialName("user") val user: UserDto? = null,
+    @SerialName("sessionId") val sessionId: String? = null,
+    @SerialName("pinRequired") val pinRequired: Boolean = false,
+    @SerialName("remainingAttempts") val remainingAttempts: Int? = null,
+    @SerialName("lockedSecondsRemaining") val lockedSecondsRemaining: Long? = null,
+    @SerialName("message") val message: String? = null,
 )
 
 /**
@@ -183,6 +225,20 @@ interface AuthApi {
 
     @POST("auth/verify-otp")
     suspend fun verifyOtp(@Body body: VerifyOtpRequest): ApiResponse<VerifyOtpResponse>
+
+    /**
+     * Завершить вход установкой PIN (issue #51). Запрос анонимный: сессия
+     * опознаётся по `sessionId` из [verifyOtp], токенов на этом шаге ещё нет.
+     */
+    @POST("auth/setup-pin")
+    suspend fun setupPin(@Body body: SetupPinRequest): ApiResponse<AuthResponseDto>
+
+    /**
+     * Завершить вход вводом уже установленного PIN. Тоже анонимный — сессию
+     * бэкенд ищет по устройству.
+     */
+    @POST("auth/pin-login")
+    suspend fun pinLogin(@Body body: PinLoginRequest): ApiResponse<PinLoginResponse>
 
     /**
      * Выдать одноразовую ссылку на бота (issue #46). Анонимный запрос —

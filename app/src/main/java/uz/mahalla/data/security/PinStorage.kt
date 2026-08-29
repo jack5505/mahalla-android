@@ -14,6 +14,17 @@ import javax.inject.Singleton
 /** Локальный PIN: только установка и проверка, прочитать его нельзя. */
 interface PinStorage {
     suspend fun isConfigured(): Boolean
+
+    /**
+     * Из скольких цифр состоит сохранённый PIN, `null` — не настроен.
+     *
+     * Длину пришлось запомнить, когда PIN стал шестизначным (issue #51):
+     * иначе экран блокировки нарисовал бы шесть ячеек человеку с прежним
+     * четырёхзначным кодом, и ввести его стало бы нечем. Сам код по этому
+     * значению не восстанавливается.
+     */
+    suspend fun configuredLength(): Int?
+
     suspend fun save(pin: String)
     suspend fun verify(pin: String): Boolean
     suspend fun clear()
@@ -40,6 +51,20 @@ class KeystorePinStorage @Inject constructor(
             preferences[PreferenceKeys.PinSalt] != null
     }
 
+    /**
+     * PIN настроен, а длины нет — значит он записан прошлой версией
+     * приложения, до issue #51: тогда PIN был четырёхзначным.
+     */
+    override suspend fun configuredLength(): Int? {
+        val preferences = dataStore.data.first()
+        if (preferences[PreferenceKeys.PinHash] == null ||
+            preferences[PreferenceKeys.PinSalt] == null
+        ) {
+            return null
+        }
+        return preferences[PreferenceKeys.PinLength] ?: LEGACY_PIN_LENGTH
+    }
+
     override suspend fun save(pin: String) {
         val salt = PinHasher.newSalt()
         val encryptedHash = withContext(Dispatchers.Default) {
@@ -48,6 +73,7 @@ class KeystorePinStorage @Inject constructor(
         dataStore.edit { preferences ->
             preferences[PreferenceKeys.PinSalt] = salt.toBase64()
             preferences[PreferenceKeys.PinHash] = encryptedHash.toBase64()
+            preferences[PreferenceKeys.PinLength] = pin.length
         }
     }
 
@@ -68,6 +94,7 @@ class KeystorePinStorage @Inject constructor(
         dataStore.edit { preferences ->
             preferences.remove(PreferenceKeys.PinHash)
             preferences.remove(PreferenceKeys.PinSalt)
+            preferences.remove(PreferenceKeys.PinLength)
         }
     }
 
@@ -75,4 +102,8 @@ class KeystorePinStorage @Inject constructor(
 
     private fun String.fromBase64(): ByteArray? =
         runCatching { Base64.getDecoder().decode(this) }.getOrNull()
+
+    private companion object {
+        const val LEGACY_PIN_LENGTH = 4
+    }
 }

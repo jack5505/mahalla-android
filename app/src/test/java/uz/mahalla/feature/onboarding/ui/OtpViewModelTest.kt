@@ -20,6 +20,7 @@ import uz.mahalla.core.result.ServerError
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpFailure
+import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.navigation.OtpArgs
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -96,7 +97,8 @@ class OtpViewModelTest {
     fun `completing the code verifies it without an extra tap`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
-        authRepository.verifyResult = ApiResult.Success(LoginResult(isNewUser = true))
+        authRepository.verifyResult =
+            ApiResult.Success(VerificationResult.Authorized(LoginResult(isNewUser = true)))
         val viewModel = viewModel()
 
         viewModel.onEvent(OtpEvent.CodeChanged("123456"))

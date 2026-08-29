@@ -76,6 +76,9 @@ private fun PinContent(
             masked = true,
             focusRequester = focusRequester,
         )
+        // Отказ бэкенда на PIN-шаге входа (issue #51): текст сервера точнее
+        // собственного, а подробности ответа нужны для поддержки.
+        state.apiFailure?.let { OnboardingApiError(failure = it) }
     }
 }
 

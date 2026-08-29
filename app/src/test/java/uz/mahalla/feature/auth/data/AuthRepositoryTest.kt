@@ -22,7 +22,10 @@ import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.ServerPinChallenge
+import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramLoginState
+import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRequestLocationProvider
@@ -200,7 +203,10 @@ class AuthRepositoryTest {
         val result = repository().verifyCode("otp-1", "123456")
 
         // Профиль не заполнен — дальше предлагается его завести.
-        assertEquals(ApiResult.Success(LoginResult(isNewUser = true)), result)
+        assertEquals(
+            ApiResult.Success(VerificationResult.Authorized(LoginResult(isNewUser = true))),
+            result,
+        )
         assertEquals(
             Session("a-1", "r-1", FIXED_NOW_EPOCH_SECONDS + 3600, sessionId = "s-1"),
             sessionStore.current(),
@@ -225,7 +231,10 @@ class AuthRepositoryTest {
 
         val result = repository().verifyCode("otp-1", "123456")
 
-        assertEquals(ApiResult.Success(LoginResult(isNewUser = false)), result)
+        assertEquals(
+            ApiResult.Success(VerificationResult.Authorized(LoginResult(isNewUser = false))),
+            result,
+        )
     }
 
     @Test
@@ -239,13 +248,137 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `verify without tokens is not a login`() = runTest {
+    fun `verify without tokens means the backend is waiting for a pin`() = runTest {
         server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
 
-        val result = repository().verifyCode("otp-1", "123456")
+        val repository = repository()
+        val result = repository.verifyCode("otp-1", "123456")
 
-        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+        // Ответ без токенов — не сломанный JSON, а середина входа (issue #51):
+        // раньше здесь возвращалась `Serialization`, и верный код заканчивался
+        // «Nimadir xato ketdi».
+        assertEquals(
+            ApiResult.Success(
+                VerificationResult.PinRequired(
+                    challenge = ServerPinChallenge(ServerPinStep.Enter, sessionId = "s-1"),
+                    login = LoginResult(isNewUser = true),
+                ),
+            ),
+            result,
+        )
+        assertEquals(
+            ServerPinChallenge(ServerPinStep.Enter, sessionId = "s-1"),
+            repository.pendingServerPin,
+        )
+        // Токенов нет — сессии тоже: сохранять нечего.
         assertNull(sessionStore.current())
+    }
+
+    @Test
+    fun `setup pin finishes the login and stores the tokens`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"SETUP_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"sessionId":"s-1",
+                   "tokens":{"accessToken":"a-1","refreshToken":"r-1","accessExpiresIn":3600},
+                   "user":{"fullName":"Alisher"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("123456")
+
+        assertEquals(ApiResult.Success(LoginResult(isNewUser = false)), result)
+        assertEquals(
+            Session("a-1", "r-1", FIXED_NOW_EPOCH_SECONDS + 3600, sessionId = "s-1"),
+            sessionStore.current(),
+        )
+        // Испытание отработано: второй раз тот же `sessionId` не нужен.
+        assertNull(repository.pendingServerPin)
+
+        server.takeRequest()
+        val request = server.takeRequest()
+        assertEquals("/auth/setup-pin", request.path)
+        val body = request.bodyJson()
+        assertEquals("s-1", body["sessionId"]?.jsonPrimitive?.content)
+        assertEquals("123456", body["pin"]?.jsonPrimitive?.content)
+        // Подтверждение сервер требует отдельным полем — экран уже сверил.
+        assertEquals("123456", body["pinConfirm"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `pin login sends the device and finishes the login`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-2","refreshToken":"r-2"},
+                   "user":{"fullName":"Alisher"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("654321")
+
+        assertEquals(ApiResult.Success(LoginResult(isNewUser = false)), result)
+        assertEquals("a-2", sessionStore.current()?.accessToken)
+
+        server.takeRequest()
+        val request = server.takeRequest()
+        assertEquals("/auth/pin-login", request.path)
+        val body = request.bodyJson()
+        assertEquals("654321", body["pin"]?.jsonPrimitive?.content)
+        assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `a rejected pin keeps the challenge so the next attempt can be sent`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"PIN_INVALID",
+                       "message":"Noto'g'ri PIN. 2 ta urinish qoldi."}}""",
+                ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("000000")
+
+        val failure = (result as ApiResult.Failure).failure
+        assertEquals("PIN_INVALID", failure.server?.code)
+        assertEquals("Noto'g'ri PIN. 2 ta urinish qoldi.", failure.serverMessage)
+        assertNull(sessionStore.current())
+        // Попытка не последняя — испытание должно пережить отказ.
+        assertEquals(
+            ServerPinChallenge(ServerPinStep.Enter, sessionId = "s-1"),
+            repository.pendingServerPin,
+        )
+    }
+
+    @Test
+    fun `setup without a session id is a broken answer`() = runTest {
+        server.enqueue(envelope("""{"nextStep":"SETUP_PIN"}"""))
+
+        val repository = repository()
+        val result = repository.verifyCode("otp-1", "123456")
+
+        // Отправлять `setup-pin` не с чем: без `sessionId` бэкенд не поймёт,
+        // чью сессию завершать.
+        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+        assertNull(repository.pendingServerPin)
+    }
+
+    @Test
+    fun `a pin is not sent without a pending challenge`() = runTest {
+        val result = repository().completeServerPin("123456")
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+        assertEquals(0, server.requestCount)
     }
 
     @Test

@@ -8,8 +8,10 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
+import uz.mahalla.data.network.auth.PinLoginRequest
 import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
+import uz.mahalla.data.network.auth.SetupPinRequest
 import uz.mahalla.data.network.auth.TelegramCheckRequest
 import uz.mahalla.data.network.auth.TelegramCheckResponse
 import uz.mahalla.data.network.auth.TelegramInitRequest
@@ -22,8 +24,12 @@ import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.ServerPin
+import uz.mahalla.feature.auth.domain.ServerPinChallenge
+import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramChallenge
 import uz.mahalla.feature.auth.domain.TelegramLoginState
+import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.feature.auth.domain.isTelegramPending
 import java.time.Clock
 import javax.inject.Inject
@@ -43,13 +49,30 @@ interface AuthRepository {
     suspend fun requestCode(phoneE164: String): ApiResult<OtpChallenge>
 
     /**
-     * Успех сохраняет сессию — вызывающему остаётся только навигация.
-     *
      * Код проверяется по [otpToken] из [requestCode], а не по номеру телефона:
      * так решил бэкенд (issue #42), и это заодно означает, что просроченный
      * или чужой токен отсекается сервером, а не сравнением строк на клиенте.
+     *
+     * Верный код ещё не значит «вошёл»: токены бэкенд выдаёт только после
+     * PIN-шага (issue #51). [VerificationResult.Authorized] — сессия
+     * сохранена, [VerificationResult.PinRequired] — нужен [completeServerPin].
      */
-    suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult>
+    suspend fun verifyCode(otpToken: String, code: String): ApiResult<VerificationResult>
+
+    /**
+     * Незавершённый вход: что бэкенд ждёт после проверки кода. `null` —
+     * PIN-шаг не нужен (токены уже есть) или входа не было.
+     *
+     * Живёт только в памяти процесса: `sessionId` — одноразовый пропуск к
+     * токенам, и переживать перезапуск приложения он не должен.
+     */
+    val pendingServerPin: ServerPinChallenge?
+
+    /**
+     * Завершить вход PIN'ом: `auth/setup-pin` либо `auth/pin-login` — что
+     * именно, решает [pendingServerPin]. Успех сохраняет сессию.
+     */
+    suspend fun completeServerPin(pin: String): ApiResult<LoginResult>
 
     /**
      * Начать вход через Telegram (issue #46): получить одноразовую ссылку на
@@ -124,7 +147,14 @@ class DefaultAuthRepository @Inject constructor(
         }
     }
 
-    override suspend fun verifyCode(otpToken: String, code: String): ApiResult<LoginResult> {
+    @Volatile
+    override var pendingServerPin: ServerPinChallenge? = null
+        private set
+
+    override suspend fun verifyCode(
+        otpToken: String,
+        code: String,
+    ): ApiResult<VerificationResult> {
         val device = deviceInfoProvider.current().toDto()
         val location = locationProvider.current()
 
@@ -142,16 +172,104 @@ class DefaultAuthRepository @Inject constructor(
 
         return when (result) {
             is ApiResult.Success -> {
+                val login = LoginResult(isNewUser = result.data.user?.fullName.isNullOrBlank())
                 val session = result.data.tokens.toSession(sessionId = result.data.sessionId)
-                    ?: return ApiResult.Failure(ApiError.Serialization)
-                sessionStore.save(session)
-                ApiResult.Success(
-                    LoginResult(isNewUser = result.data.user?.fullName.isNullOrBlank()),
+                if (session != null) {
+                    pendingServerPin = null
+                    sessionStore.save(session)
+                    return ApiResult.Success(VerificationResult.Authorized(login))
+                }
+
+                // Токенов нет — значит бэкенд ждёт PIN (issue #51). Раньше это
+                // считалось неразобранным ответом, и верный код заканчивался
+                // тупиком «Nimadir xato ketdi».
+                val step = ServerPin.stepOf(
+                    nextStep = result.data.nextStep,
+                    pinConfigured = result.data.user?.pinSetup == true,
                 )
+                val sessionId = result.data.sessionId?.takeIf { it.isNotBlank() }
+                // Установка PIN без sessionId невозможна: отправлять нечего.
+                if (step == ServerPinStep.Setup && sessionId == null) {
+                    pendingServerPin = null
+                    return ApiResult.Failure(ApiError.Serialization)
+                }
+
+                val challenge = ServerPinChallenge(step = step, sessionId = sessionId)
+                pendingServerPin = challenge
+                ApiResult.Success(VerificationResult.PinRequired(challenge, login))
             }
 
             is ApiResult.Failure -> result
         }
+    }
+
+    override suspend fun completeServerPin(pin: String): ApiResult<LoginResult> {
+        val challenge = pendingServerPin ?: return ApiResult.Failure(ApiError.Unauthorized)
+        return when (challenge.step) {
+            ServerPinStep.Setup -> setupServerPin(
+                sessionId = challenge.sessionId ?: return ApiResult.Failure(ApiError.Unauthorized),
+                pin = pin,
+            )
+
+            ServerPinStep.Enter -> serverPinLogin(pin)
+        }
+    }
+
+    private suspend fun setupServerPin(sessionId: String, pin: String): ApiResult<LoginResult> {
+        val result = apiCall {
+            authApi.setupPin(
+                SetupPinRequest(sessionId = sessionId, pin = pin, pinConfirm = pin),
+            ).payload()
+        }
+
+        return when (result) {
+            is ApiResult.Success -> saveLogin(
+                tokens = result.data.tokens,
+                sessionId = result.data.sessionId ?: sessionId,
+                fullName = result.data.user?.fullName,
+            )
+
+            is ApiResult.Failure -> result
+        }
+    }
+
+    private suspend fun serverPinLogin(pin: String): ApiResult<LoginResult> {
+        val device = deviceInfoProvider.current().toDto()
+        val location = locationProvider.current()
+
+        val result = apiCall {
+            authApi.pinLogin(
+                PinLoginRequest(
+                    pin = pin,
+                    device = device,
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            ).payload()
+        }
+
+        return when (result) {
+            is ApiResult.Success -> saveLogin(
+                tokens = result.data.tokens,
+                sessionId = result.data.sessionId,
+                fullName = result.data.user?.fullName,
+            )
+
+            is ApiResult.Failure -> result
+        }
+    }
+
+    /** Общий хвост обоих PIN-запросов: без токенов вход не состоялся. */
+    private suspend fun saveLogin(
+        tokens: TokenPairDto?,
+        sessionId: String?,
+        fullName: String?,
+    ): ApiResult<LoginResult> {
+        val session = tokens.toSession(sessionId = sessionId)
+            ?: return ApiResult.Failure(ApiError.Serialization)
+        sessionStore.save(session)
+        pendingServerPin = null
+        return ApiResult.Success(LoginResult(isNewUser = fullName.isNullOrBlank()))
     }
 
     override suspend fun startTelegramLogin(): ApiResult<TelegramChallenge> {
@@ -293,6 +411,9 @@ class DefaultAuthRepository @Inject constructor(
             apiCall { authApi.logout(sessionId = session.sessionId, allDevices = false) }
         }
         sessionStore.clear()
+        // Незавершённый вход тоже сбрасываем: `sessionId` от прошлой попытки
+        // после выхода не значит ничего.
+        pendingServerPin = null
         // PIN защищает именно эту сессию — оставлять его от прошлого
         // пользователя нельзя.
         pinStorage.clear()

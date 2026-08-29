@@ -28,6 +28,11 @@ class FakePinStorage(initialPin: String? = null) : PinStorage {
         return storedPin != null
     }
 
+    override suspend fun configuredLength(): Int? {
+        failure?.let { throw it }
+        return storedPin?.length
+    }
+
     override suspend fun save(pin: String) {
         failure?.let { throw it }
         storedPin = pin

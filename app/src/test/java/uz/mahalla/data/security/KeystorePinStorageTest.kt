@@ -134,6 +134,29 @@ class KeystorePinStorageTest {
     }
 
     @Test
+    fun `the saved length is remembered and cleared with the pin`() = runTest {
+        val storage = KeystorePinStorage(dataStore(), ReversibleCipher())
+
+        assertEquals(null, storage.configuredLength())
+
+        storage.save("123456")
+        assertEquals(6, storage.configuredLength())
+
+        storage.clear()
+        assertEquals(null, storage.configuredLength())
+    }
+
+    @Test
+    fun `a pin saved before the length was stored counts as four digits`() = runTest {
+        val store = dataStore()
+        KeystorePinStorage(store, ReversibleCipher()).save("1234")
+        // Записи прошлой версии приложения ключа длины не имеют (issue #51).
+        store.edit { it.remove(PreferenceKeys.PinLength) }
+
+        assertEquals(4, KeystorePinStorage(store, ReversibleCipher()).configuredLength())
+    }
+
+    @Test
     fun `corrupted base64 does not crash verification`() = runTest {
         val store = dataStore()
         store.edit { preferences ->
