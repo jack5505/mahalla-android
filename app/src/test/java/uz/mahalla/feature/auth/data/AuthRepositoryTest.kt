@@ -454,7 +454,12 @@ class AuthRepositoryTest {
 
         val state = (result as ApiResult.Success).data
         assertEquals(
-            TelegramLoginState.Confirmed(login = LoginResult(isNewUser = false)),
+            TelegramLoginState.Confirmed(
+                login = LoginResult(isNewUser = false),
+                // Номер нужен только когда его просят подтвердить — здесь он
+                // ни на что не влияет и в состояние не едет.
+                phone = null,
+            ),
             state,
         )
         assertEquals(
@@ -478,7 +483,8 @@ class AuthRepositoryTest {
         server.enqueue(
             envelope(
                 """{"accessToken":"a-tg","refreshToken":"r-tg","accessExpiresIn":3600,
-                   "requiresPhoneVerify":true,"user":{"id":"u-1"}}""",
+                   "requiresPhoneVerify":true,
+                   "user":{"id":"u-1","phone":"+998937555505"}}""",
             ),
         )
 
@@ -488,6 +494,9 @@ class AuthRepositoryTest {
             TelegramLoginState.Confirmed(
                 login = LoginResult(isNewUser = true),
                 requiresPhoneVerify = true,
+                // Номер бот уже сообщил бэкенду — экран назовёт его человеку
+                // (issue #49).
+                phone = "+998937555505",
             ),
             (result as ApiResult.Success).data,
         )

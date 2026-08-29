@@ -228,7 +228,14 @@ class DefaultAuthRepository @Inject constructor(
         val login = LoginResult(isNewUser = response.user?.fullName.isNullOrBlank())
         if (response.requiresPhoneVerify) {
             return ApiResult.Success(
-                TelegramLoginState.Confirmed(login = login, requiresPhoneVerify = true),
+                TelegramLoginState.Confirmed(
+                    login = login,
+                    requiresPhoneVerify = true,
+                    // Номер бот уже сообщил бэкенду — показать его человеку
+                    // дешевле, чем заставлять вспоминать, что именно он
+                    // подтверждал.
+                    phone = response.user?.phone?.takeIf { it.isNotBlank() },
+                ),
             )
         }
 

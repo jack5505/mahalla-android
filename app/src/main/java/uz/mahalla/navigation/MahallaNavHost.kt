@@ -116,10 +116,19 @@ fun MahallaNavHost(
                             popUpTo(PhoneRoute) { inclusive = true }
                         }
                     },
-                    // Telegram не подошёл (или не подтвердил номер) — остаётся
-                    // SMS. Экран телефона в стеке цел, поэтому просто назад:
-                    // повторная навигация на него завела бы второй экземпляр.
-                    onSmsRequested = { navController.popBackStack(PhoneRoute, inclusive = false) },
+                    // Telegram не подошёл (или бэкенд просит подтвердить номер)
+                    // — остаётся SMS. Обычно экран телефона в стеке цел, и
+                    // достаточно вернуться назад: повторная навигация на него
+                    // завела бы второй экземпляр. Но если его там нет,
+                    // `popBackStack` молча вернёт `false` — и человек останется
+                    // на экране Telegram без единого пути дальше (issue #49).
+                    onSmsRequested = {
+                        if (!navController.popBackStack(PhoneRoute, inclusive = false)) {
+                            navController.navigate(PhoneRoute) {
+                                popUpTo(TelegramRoute) { inclusive = true }
+                            }
+                        }
+                    },
                     onBack = { navController.navigateUp() },
                 )
             }

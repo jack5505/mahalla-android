@@ -64,9 +64,6 @@ fun TelegramLoginScreen(
             when (effect) {
                 is TelegramEffect.OpenBot -> context.openTelegram(effect)
                 is TelegramEffect.Confirmed -> onConfirmed(effect.isNewUser)
-                // Telegram узнал человека, но номер не подтверждён — дальше
-                // обычный SMS-путь, сессии пока нет.
-                TelegramEffect.PhoneVerificationRequired -> onSmsRequested()
                 TelegramEffect.SwitchToSms -> onSmsRequested()
             }
         }
@@ -115,35 +112,63 @@ private fun TelegramLoginContent(
         subtitle = stringResource(state.subtitleRes),
         onBack = onBack,
         footer = {
-            if (state.canRetry) {
-                MahallaButton(
-                    text = stringResource(R.string.onboarding_telegram_retry),
-                    onClick = { onEvent(TelegramEvent.RetryRequested) },
+            when {
+                // Бэкенд просит подтвердить номер кодом — других шагов на этом
+                // экране не осталось, и SMS-кнопка становится главной.
+                state.needsPhoneVerify -> MahallaButton(
+                    text = stringResource(R.string.onboarding_telegram_verify_phone),
+                    onClick = { onEvent(TelegramEvent.SmsRequested) },
                 )
-            } else {
-                MahallaButton(
-                    text = stringResource(R.string.onboarding_telegram_open),
-                    onClick = { onEvent(TelegramEvent.OpenBotRequested) },
-                    state = ButtonState(
-                        enabled = state.canOpenBot,
-                        loading = state.status == TelegramStatus.PREPARING,
-                    ),
-                )
+
+                state.canRetry -> {
+                    MahallaButton(
+                        text = stringResource(R.string.onboarding_telegram_retry),
+                        onClick = { onEvent(TelegramEvent.RetryRequested) },
+                    )
+                    TelegramSmsFallbackButton(onEvent)
+                }
+
+                else -> {
+                    MahallaButton(
+                        text = stringResource(R.string.onboarding_telegram_open),
+                        onClick = { onEvent(TelegramEvent.OpenBotRequested) },
+                        state = ButtonState(
+                            enabled = state.canOpenBot,
+                            loading = state.status == TelegramStatus.PREPARING,
+                        ),
+                    )
+                    TelegramSmsFallbackButton(onEvent)
+                }
             }
-            // Путь наружу есть всегда: Telegram может быть установлен, но не
-            // тем аккаунтом, и запирать человека в бесплатном канале нельзя.
-            MahallaButton(
-                text = stringResource(R.string.onboarding_telegram_use_sms),
-                onClick = { onEvent(TelegramEvent.SmsRequested) },
-                variant = MahallaButtonVariant.Ghost,
-            )
         },
     ) {
-        if (state.status == TelegramStatus.WAITING) {
+        if (state.isWaiting) {
             TelegramWaitingRow()
+        }
+        // Номер называем явно: человек только что отдал боту контакт и должен
+        // понимать, какой именно номер предстоит подтвердить.
+        state.phone?.let { phone ->
+            Text(
+                text = stringResource(R.string.onboarding_telegram_phone_verify_number, phone),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
         }
         state.apiFailure?.let { OnboardingApiError(it) }
     }
+}
+
+/**
+ * Путь наружу есть всегда: Telegram может быть установлен, но не тем аккаунтом,
+ * и запирать человека в бесплатном канале нельзя.
+ */
+@Composable
+private fun TelegramSmsFallbackButton(onEvent: (TelegramEvent) -> Unit) {
+    MahallaButton(
+        text = stringResource(R.string.onboarding_telegram_use_sms),
+        onClick = { onEvent(TelegramEvent.SmsRequested) },
+        variant = MahallaButtonVariant.Ghost,
+    )
 }
 
 /** Индикатор ожидания Start — с текстом, иначе крутилка ничего не объясняет. */
@@ -172,6 +197,8 @@ private val TelegramState.subtitleRes: Int
     get() = when (status) {
         TelegramStatus.PREPARING -> R.string.onboarding_telegram_subtitle
         TelegramStatus.WAITING -> R.string.onboarding_telegram_subtitle
+        TelegramStatus.CONFIRMED -> R.string.onboarding_telegram_confirmed
+        TelegramStatus.PHONE_VERIFY -> R.string.onboarding_telegram_phone_verify
         TelegramStatus.EXPIRED -> R.string.onboarding_telegram_expired
         TelegramStatus.FAILED -> R.string.onboarding_telegram_failed
     }
@@ -184,6 +211,21 @@ private fun TelegramLoginScreenPreview() {
             state = TelegramState(
                 status = TelegramStatus.WAITING,
                 botUrl = "https://t.me/MahallaVerifyBot?start=abc",
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun TelegramLoginPhoneVerifyPreview() {
+    PreviewSurface {
+        TelegramLoginContent(
+            state = TelegramState(
+                status = TelegramStatus.PHONE_VERIFY,
+                phone = "+998901234567",
             ),
             onEvent = {},
             onBack = {},

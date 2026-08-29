@@ -13,6 +13,25 @@ enum class TelegramStatus {
     /** Бот открыт, опрашиваем `auth/telegram/check`. */
     WAITING,
 
+    /**
+     * Вход состоялся, сессия сохранена — экран уходит эффектом
+     * [TelegramEffect.Confirmed]. Статус нужен, чтобы до навигации на экране не
+     * крутилось «ждём подтверждения»: ждать уже нечего.
+     */
+    CONFIRMED,
+
+    /**
+     * Telegram подтвердил личность, но номер аккаунта бэкенд считает
+     * непроверенным (`requiresPhoneVerify`) — вход придётся добить кодом из
+     * SMS.
+     *
+     * Отдельный статус, а не молчаливый возврат к форме номера: раньше
+     * приложение в этом случае только слало одноразовый эффект, оставаясь в
+     * [WAITING], — человек видел бесконечную крутилку и никакого объяснения
+     * (issue #49).
+     */
+    PHONE_VERIFY,
+
     /** Токен истёк: Start так и не нажали. Нужна новая попытка. */
     EXPIRED,
 
@@ -28,6 +47,12 @@ data class TelegramState(
      * не появиться, или он вернулся, не нажав Start.
      */
     val botUrl: String? = null,
+    /**
+     * Номер, который бот сообщил бэкенду. Заполнен только при
+     * [TelegramStatus.PHONE_VERIFY] и только если сервер его прислал — экран
+     * называет человеку номер, который предстоит подтвердить.
+     */
+    val phone: String? = null,
     val apiFailure: ApiFailure? = null,
 ) : UiState {
 
@@ -36,6 +61,15 @@ data class TelegramState(
 
     /** Есть смысл начать заново — с новым токеном. */
     val canRetry: Boolean get() = status == TelegramStatus.EXPIRED || status == TelegramStatus.FAILED
+
+    /**
+     * Дальше только SMS: Telegram своё отработал, но номер не подтверждён.
+     * Кнопка перехода становится главной — это единственный осмысленный шаг.
+     */
+    val needsPhoneVerify: Boolean get() = status == TelegramStatus.PHONE_VERIFY
+
+    /** Ждать больше нечего — крутилку показывать нельзя. */
+    val isWaiting: Boolean get() = status == TelegramStatus.WAITING
 }
 
 sealed interface TelegramEvent : UiEvent {
@@ -70,11 +104,10 @@ sealed interface TelegramEffect : UiEffect {
     data class Confirmed(val isNewUser: Boolean) : TelegramEffect
 
     /**
-     * Telegram подтвердил личность, но номер аккаунта не проверен — дальше
-     * обычный SMS-путь. Сессия при этом не сохранена (см. `AuthRepository`).
+     * Пользователь выбрал SMS вместо Telegram — сам или потому, что бэкенд
+     * попросил подтвердить номер ([TelegramStatus.PHONE_VERIFY]). Уход на
+     * SMS в обоих случаях делается тапом, а не сам собой: молчаливый возврат к
+     * форме номера человек читает как «ничего не произошло» (issue #49).
      */
-    data object PhoneVerificationRequired : TelegramEffect
-
-    /** Пользователь выбрал SMS вместо Telegram. */
     data object SwitchToSms : TelegramEffect
 }
