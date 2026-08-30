@@ -2,25 +2,61 @@ package uz.mahalla.feature.profile.ui
 
 import android.content.Intent
 import uz.mahalla.core.locale.AppLanguage
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
+import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
+import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.profile.domain.DeviceSession
 
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
  * показываем строку «сетевые запросы». В release её нет.
+ * @param profile кто вошёл. Приезжает с ответом на вход и лежит в DataStore:
+ * `GET /users/me` у бэкенда нет (issue #61).
+ * @param sessions устройства, на которых открыт вход.
+ * @param pendingSessionId строка списка, на которой сейчас идёт запрос:
+ * отзыв и доверие блокируются точечно, а не всем экраном.
+ * @param sessionFailure отказ отзыва или доверия — показывается текстом
+ * сервера рядом со списком (issue #34), а не молча теряется.
+ * @param confirmLogout показан диалог подтверждения выхода.
+ * @param confirmRevoke устройство, которое собираются отозвать.
+ * @param loggingOut выход уже идёт: повторные нажатия не плодят запросов.
  */
 data class ProfileState(
     val settings: AppSettings = AppSettings(),
     val httpInspectorAvailable: Boolean = false,
+    val profile: UserProfile = UserProfile(),
+    val sessions: ScreenState<List<DeviceSession>> = ScreenState.Loading,
+    val pendingSessionId: String? = null,
+    val sessionFailure: ApiFailure? = null,
+    val confirmLogout: Boolean = false,
+    val confirmRevoke: DeviceSession? = null,
+    val loggingOut: Boolean = false,
 ) : UiState
 
 sealed interface ProfileEvent : UiEvent {
     data class LanguageSelected(val language: AppLanguage) : ProfileEvent
     data class ThemeSelected(val mode: ThemeMode) : ProfileEvent
     data object HttpInspectorRequested : ProfileEvent
+
+    /** Экран вернулся на передний план: список устройств мог устареть. */
+    data object ScreenResumed : ProfileEvent
+
+    data object SessionsRetryRequested : ProfileEvent
+
+    data object LogoutRequested : ProfileEvent
+    data object LogoutConfirmed : ProfileEvent
+    data object LogoutDismissed : ProfileEvent
+
+    data class SessionRevokeRequested(val session: DeviceSession) : ProfileEvent
+    data object SessionRevokeConfirmed : ProfileEvent
+    data object SessionRevokeDismissed : ProfileEvent
+
+    data class SessionTrustToggled(val session: DeviceSession, val trusted: Boolean) : ProfileEvent
 }
 
 sealed interface ProfileEffect : UiEffect {
@@ -29,4 +65,10 @@ sealed interface ProfileEffect : UiEffect {
 
     /** Экран инспектора трафика: интент отдаёт сама библиотека (issue #30). */
     data class OpenHttpInspector(val intent: Intent) : ProfileEffect
+
+    /**
+     * Вышли: сессии и PIN больше нет, приложение возвращается в онбординг.
+     * Навигацию делает граф — ViewModel про маршруты не знает.
+     */
+    data object LoggedOut : ProfileEffect
 }

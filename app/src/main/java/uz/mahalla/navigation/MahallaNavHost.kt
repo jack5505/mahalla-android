@@ -193,6 +193,17 @@ fun MahallaNavHost(
             composable<WalletRoute> { WalletScreen() }
             composable<ProfileRoute> {
                 ProfileScreen(
+                    // Вышли (issue #61): сессии и PIN больше нет, поэтому весь
+                    // основной граф уходит из стека — «назад» в приложение,
+                    // где каждый запрос ответит 401, вести некуда. Идём на
+                    // welcome, а не в `OnboardingGraph`: граф онбординга мог
+                    // стартовать с PIN (прерванный вход), а после выхода
+                    // проверять нечего.
+                    onLoggedOut = {
+                        navController.navigate(WelcomeRoute) {
+                            popUpTo(MainGraph) { inclusive = true }
+                        }
+                    },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {

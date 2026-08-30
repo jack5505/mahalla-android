@@ -30,6 +30,7 @@ import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.network.tls.PinnedCertificateHostnameVerifier
 import uz.mahalla.data.prefs.DataStoreSessionStore
+import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
@@ -217,6 +218,7 @@ class GraphAssemblyTest {
         val repository = DefaultAuthRepository(
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
+            userProfileStore = DataStoreUserProfileStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),

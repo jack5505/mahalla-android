@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -201,7 +202,11 @@ private fun OrderHeader(order: Order, modifier: Modifier = Modifier) {
         }
         if (order.etaMinutes != null && !OrderStatusFlow.isFinal(order.status)) {
             Text(
-                text = stringResource(R.string.order_eta, order.etaMinutes),
+                text = pluralStringResource(
+                    R.plurals.order_eta,
+                    order.etaMinutes,
+                    order.etaMinutes,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = LocalMahallaColors.current.fgMuted,
             )

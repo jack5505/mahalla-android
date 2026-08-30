@@ -27,6 +27,16 @@ internal object PreferenceKeys {
     /** Идентификатор установки для сессий устройства на бэкенде (issue #42). */
     val DeviceId = stringPreferencesKey("device_id")
 
+    /**
+     * Профиль вошедшего пользователя (issue #61). Приезжает только с ответом
+     * на вход — `GET /users/me` у бэкенда нет, спросить его заново нечем,
+     * поэтому шапка профиля читается отсюда.
+     */
+    val ProfileUserId = stringPreferencesKey("profile_user_id")
+    val ProfilePhone = stringPreferencesKey("profile_phone")
+    val ProfileFullName = stringPreferencesKey("profile_full_name")
+    val ProfileAvatarUrl = stringPreferencesKey("profile_avatar_url")
+
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
     val SessionExpiresAt = longPreferencesKey("session_expires_at")

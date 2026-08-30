@@ -132,9 +132,27 @@
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_subtitle">Balans, to\'ldirish va to\'lovlar tarixi.</string>
     <string name="profile_title">Profil</string>
-    <string name="profile_subtitle">Til, mavzu va hisob sozlamalari.</string>
     <string name="profile_language">Til</string>
     <string name="profile_theme">Mavzu</string>
+    <string name="profile_name_unknown">Ism ko\'rsatilmagan</string>
+    <string name="profile_phone_unknown">Raqam noma\'lum</string>
+    <string name="profile_logout">Chiqish</string>
+    <string name="profile_logout_title">Hisobdan chiqasizmi?</string>
+    <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_devices_title">Mening qurilmalarim</string>
+    <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
+    <string name="profile_device_unknown">Noma\'lum qurilma</string>
+    <string name="profile_device_current">Bu qurilma</string>
+    <string name="profile_device_last_activity">Oxirgi faollik: %1$s</string>
+    <string name="profile_device_ip">IP: %1$s</string>
+    <string name="profile_device_trusted">Ishonchli qurilma</string>
+    <string name="profile_device_trusted_description">Ishonchli qurilmada kirish soddalashadi.</string>
+    <string name="profile_device_revoke">Chiqarish</string>
+    <string name="profile_device_revoke_title">Qurilmani chiqarasizmi?</string>
+    <string name="profile_device_revoke_message">%1$s qurilmasidagi kirish tugatiladi. Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_device_status_locked">Bloklangan</string>
+    <string name="profile_device_status_pin_required">PIN kerak</string>
+    <string name="profile_device_status_pending_pin">PIN o\'rnatilmagan</string>
 
     <!-- Детали -->
     <string name="place_title">Joy</string>
@@ -335,14 +353,12 @@
     <string name="checkout_submit">Buyurtma berish</string>
     <string name="checkout_error_address">Yetkazib berish uchun manzilni kiriting</string>
     <string name="checkout_error_time_required">Vaqtni tanlang</string>
-    <string name="checkout_error_time_too_soon">Vaqt kamida %1$d daqiqadan keyin bo\'lsin</string>
     <string name="checkout_error_insufficient_funds">Hamyonda %1$s yetishmayapti</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Buyurtma</string>
     <string name="order_items_title">Tarkibi</string>
     <string name="order_line_name">%1$s × %2$d</string>
-    <string name="order_eta">Taxminan %1$d daqiqa</string>
     <string name="order_repeat">Buyurtmani takrorlash</string>
     <string name="order_cancel">Bekor qilish</string>
     <string name="order_cancel_keep">Qoldirish</string>
