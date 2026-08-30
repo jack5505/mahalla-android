@@ -10,13 +10,13 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
 import uz.mahalla.feature.food.data.OrderRepository
-import uz.mahalla.feature.food.data.WalletRepository
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.DeliverySlots
+import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.CheckoutRoute
 import java.time.Clock
 import java.time.LocalDateTime
@@ -130,15 +130,21 @@ class CheckoutViewModel @Inject constructor(
 
     private fun loadBalance() {
         viewModelScope.launch {
-            when (val result = walletRepository.balance()) {
+            when (val result = walletRepository.wallet()) {
                 is ApiResult.Failure -> updateState {
                     // Баланс неизвестен — считаем его достаточным: решающее
                     // слово всё равно за сервером при создании заказа.
                     copy(balanceKnown = false, walletBalanceSum = Long.MAX_VALUE).revalidated()
                 }
 
+                // Сравнивать с суммой заказа нужно именно «доступно»:
+                // заморозка под другую незавершённую операцию потратить себя
+                // не даст (issue #62).
                 is ApiResult.Success -> updateState {
-                    copy(balanceKnown = true, walletBalanceSum = result.data).revalidated()
+                    copy(
+                        balanceKnown = true,
+                        walletBalanceSum = result.data.availableSum,
+                    ).revalidated()
                 }
             }
         }

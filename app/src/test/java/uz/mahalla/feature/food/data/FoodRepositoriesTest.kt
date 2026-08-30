@@ -275,24 +275,6 @@ class FoodRepositoriesTest {
         assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
     }
 
-    // --- Кошелёк ---
-
-    @Test
-    fun `wallet balance is read as a whole number of sums`() = runTest {
-        server.enqueue(json("""{"balance":250000}"""))
-
-        assertEquals(250_000L, (walletRepository().balance() as ApiResult.Success).data)
-    }
-
-    @Test
-    fun `a negative balance from the server is clamped to zero`() = runTest {
-        // Отрицательный баланс — ошибка сервера; показывать «−5 000» человеку
-        // незачем, а на проверку «хватает ли денег» он влияет одинаково.
-        server.enqueue(json("""{"balance":-5000}"""))
-
-        assertEquals(0L, (walletRepository().balance() as ApiResult.Success).data)
-    }
-
     private fun api(): FoodApi = NetworkFactory
         .retrofit(
             server.url("/").toString(),
@@ -307,8 +289,6 @@ class FoodRepositoriesTest {
         cart: FakeCartRepository = FakeCartRepository(),
         dao: FakeOrderDao = FakeOrderDao(),
     ) = DefaultOrderRepository(api(), dao, cart)
-
-    private fun walletRepository() = DefaultWalletRepository(api())
 
     private fun json(body: String): MockResponse = MockResponse()
         .setResponseCode(200)

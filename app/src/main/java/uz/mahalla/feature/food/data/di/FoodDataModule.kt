@@ -10,11 +10,9 @@ import uz.mahalla.feature.food.data.CartRepository
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
-import uz.mahalla.feature.food.data.DefaultWalletRepository
 import uz.mahalla.feature.food.data.FoodApi
 import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.data.OrderRepository
-import uz.mahalla.feature.food.data.WalletRepository
 import javax.inject.Singleton
 
 /** API вертикали «Еда» (эпик 5) — в её собственном модуле, как в discovery. */
@@ -40,7 +38,4 @@ interface FoodBindingsModule {
 
     @Binds
     fun bindOrderRepository(impl: DefaultOrderRepository): OrderRepository
-
-    @Binds
-    fun bindWalletRepository(impl: DefaultWalletRepository): WalletRepository
 }

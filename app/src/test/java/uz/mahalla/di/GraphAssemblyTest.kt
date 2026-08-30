@@ -42,9 +42,10 @@ import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
-import uz.mahalla.feature.food.data.DefaultWalletRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.wallet.data.DefaultWalletRepository
+import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
 /**
  * Сборка графа (эпик 1.1).
@@ -175,7 +176,11 @@ class GraphAssemblyTest {
             val cartRepository = DefaultCartRepository(DatabaseModule.provideCartDraftDao(database))
 
             assertNotNull(DefaultMenuRepository(api))
-            assertNotNull(DefaultWalletRepository(api))
+            // Кошелёк живёт в своём модуле и на своих ручках (issue #62):
+            // `wallet/balance` у бэкенда никогда не было.
+            assertNotNull(
+                DefaultWalletRepository(WalletDataModule.provideWalletApi(retrofit)),
+            )
             assertNotNull(
                 DefaultOrderRepository(
                     api = api,
