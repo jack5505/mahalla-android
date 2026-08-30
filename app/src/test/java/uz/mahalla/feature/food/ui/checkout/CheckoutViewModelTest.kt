@@ -25,6 +25,7 @@ import uz.mahalla.feature.food.domain.PromoCode
 import uz.mahalla.feature.food.domain.PromoKind
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeOrderRepository
+import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.cartLine
@@ -125,7 +126,7 @@ class CheckoutViewModelTest {
     @Test
     fun `wallet payment reports how much is missing`() = runTest {
         seed()
-        walletRepository.balance = ApiResult.Success(50_000)
+        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 50_000))
         val viewModel = viewModel()
         viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
 
@@ -138,7 +139,7 @@ class CheckoutViewModelTest {
     @Test
     fun `switching to cash unblocks an order the wallet cannot pay`() = runTest {
         seed()
-        walletRepository.balance = ApiResult.Success(0)
+        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 0))
         val viewModel = viewModel()
         viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
 
@@ -152,7 +153,7 @@ class CheckoutViewModelTest {
         // Решающее слово всё равно за сервером; отказать из-за неотвеченного
         // запроса — хуже.
         seed()
-        walletRepository.balance = ApiResult.Failure(ApiError.Timeout)
+        walletRepository.wallet = ApiResult.Failure(ApiError.Timeout)
         val viewModel = viewModel()
         viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
 

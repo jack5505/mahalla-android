@@ -38,9 +38,6 @@ interface FoodApi {
 
     @POST("orders/{id}/cancel")
     suspend fun cancelOrder(@Path("id") orderId: String): OrderDto
-
-    @GET("wallet/balance")
-    suspend fun walletBalance(): WalletBalanceDto
 }
 
 @Serializable
@@ -144,9 +141,4 @@ data class OrderDto(
     @SerialName("address") val address: String? = null,
     @SerialName("comment") val comment: String? = null,
     @SerialName("etaMinutes") val etaMinutes: Int? = null,
-)
-
-@Serializable
-data class WalletBalanceDto(
-    @SerialName("balance") val balance: Long = 0,
 )

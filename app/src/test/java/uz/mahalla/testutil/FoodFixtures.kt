@@ -8,7 +8,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.data.CartRepository
 import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.data.OrderRepository
-import uz.mahalla.feature.food.data.WalletRepository
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CartLine
@@ -251,11 +250,4 @@ class FakeOrderRepository : OrderRepository {
         repeatedOrderId = order.id
         return order.lines.takeUnless { repeatFails }
     }
-}
-
-class FakeWalletRepository : WalletRepository {
-
-    var balance: ApiResult<Long> = ApiResult.Success(1_000_000)
-
-    override suspend fun balance(): ApiResult<Long> = balance
 }
