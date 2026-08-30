@@ -272,12 +272,12 @@
 
     <!-- Discovery: карта (эпик 4.2) -->
     <string name="map_title">Карта</string>
-    <string name="map_sdk_pending">SDK карты ещё не выбран: здесь показан список маркеров.</string>
-    <string name="map_markers_count">Маркеров: %1$d, масштаб %2$d</string>
-    <string name="map_cluster_places">Мест: %1$d</string>
     <string name="map_zoom_in">Приблизить</string>
     <string name="map_zoom_out">Отдалить</string>
     <string name="map_my_location">Моё местоположение</string>
+    <string name="map_empty_places">Здесь пока нет мест</string>
+    <string name="map_location_denied">Разрешение на геолокацию не выдано. Чтобы видеть себя на карте, включите его в настройках.</string>
+    <string name="map_location_unavailable">Не удалось определить местоположение. Проверьте, включена ли геолокация.</string>
 
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Часы работы</string>
