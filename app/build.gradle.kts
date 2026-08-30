@@ -164,6 +164,12 @@ android {
     }
 }
 
+ksp {
+    // Схемы Room (issue #64) коммитятся в app/schemas: без них миграции
+    // писались бы по памяти, а сравнить две версии было бы нечем.
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
