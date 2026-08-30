@@ -12,8 +12,14 @@ import uz.mahalla.data.db.entity.PlaceEntity
 /**
  * Локальная БД (эпик 1.4): кэш каталога и заказов + черновик корзины.
  *
- * `exportSchema = false` — схема ещё не стабилизирована; включим экспорт и
- * миграции, когда появится первый релиз.
+ * `exportSchema = true` (issue #64): схема каждой версии лежит в
+ * `app/schemas/` и коммитится вместе с кодом — без неё ни сравнить версии,
+ * ни написать миграцию по факту, а не по памяти.
+ *
+ * Обновление схемы: поднять [VERSION], добавить `Migration` в
+ * [MahallaMigrations.ALL] и случай в `MahallaMigrationsTest`. Миграции нет —
+ * приложение упадёт при открытии БД на устройстве с прежней схемой (прежний
+ * `fallbackToDestructiveMigration` вместо этого молча стирал корзину).
  */
 @Database(
     entities = [
@@ -23,8 +29,8 @@ import uz.mahalla.data.db.entity.PlaceEntity
     ],
     // v2 — эпик 4: в кэш мест добавлены адрес, координаты, фото и контакты.
     // v3 — эпик 5: строка черновика корзины ключуется позицией + модификаторами.
-    version = 3,
-    exportSchema = false,
+    version = MahallaDatabase.VERSION,
+    exportSchema = true,
 )
 abstract class MahallaDatabase : RoomDatabase() {
 
@@ -34,5 +40,8 @@ abstract class MahallaDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "mahalla.db"
+
+        /** Текущая версия схемы. Константа, чтобы тест миграций сверялся с ней. */
+        const val VERSION = 3
     }
 }
