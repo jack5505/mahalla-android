@@ -57,6 +57,20 @@ object MahallaComponentDefaults {
     /** Больше 99 порций одного блюда — опечатка (`CartCalculator.MAX_QUANTITY`). */
     const val maxStepperQuantity: Int = 99
 
+    // --- Картинки (issue #60) ---
+
+    /** Миниатюра в строке списка: карточка места, позиция меню. */
+    val thumbnailSize: Dp = 64.dp
+
+    /** Аватар автора отзыва. */
+    val avatarSize: Dp = 40.dp
+
+    /** Полоса фотографий на карточке места. */
+    val galleryImageHeight: Dp = 160.dp
+
+    /** Ширина фотографии в галерее: следующая видна краем, значит листается. */
+    val galleryImageWidth: Dp = 240.dp
+
     val progressIndicatorSize: Dp = 18.dp
     val progressStrokeWidth: Dp = 2.dp
     val cardIconSize: Dp = 20.dp

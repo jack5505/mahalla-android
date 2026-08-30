@@ -329,14 +329,12 @@
     <string name="checkout_submit">Заказать</string>
     <string name="checkout_error_address">Укажите адрес доставки</string>
     <string name="checkout_error_time_required">Выберите время</string>
-    <string name="checkout_error_time_too_soon">Выберите время не раньше чем через %1$d минут</string>
     <string name="checkout_error_insufficient_funds">На кошельке не хватает %1$s</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Заказ</string>
     <string name="order_items_title">Состав</string>
     <string name="order_line_name">%1$s × %2$d</string>
-    <string name="order_eta">Примерно %1$d минут</string>
     <string name="order_repeat">Повторить заказ</string>
     <string name="order_cancel">Отменить заказ</string>
     <string name="order_cancel_keep">Оставить</string>
@@ -361,4 +359,8 @@
     <string name="day_friday">Пятница</string>
     <string name="day_saturday">Суббота</string>
     <string name="day_sunday">Воскресенье</string>
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">Аватар: %1$s</string>
+    <string name="image_gallery_of">Фотографии: %1$s</string>
 </resources>

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,6 +36,7 @@ import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaDialog
 import uz.mahalla.core.ui.components.MahallaFilterRow
+import uz.mahalla.core.ui.components.MahallaThumbnail
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.ScreenStateHost
@@ -177,6 +179,12 @@ private fun MenuItemRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.Top,
         ) {
+            // Фото блюда — декоративное: название читается строкой рядом.
+            MahallaThumbnail(
+                url = item.photoUrl,
+                contentDescription = null,
+                fallbackIcon = Icons.Outlined.RestaurantMenu,
+            )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,

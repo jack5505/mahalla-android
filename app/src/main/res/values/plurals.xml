@@ -26,4 +26,18 @@
         <item quantity="other">%1$d / %2$d raqam kiritildi</item>
     </plurals>
 
+    <!--
+        Вертикаль «Еда» (эпик 5): минуты рядом с числом. В uz форма одна, но
+        обе объявлены — выбор делает CLDR, а не язык файла.
+    -->
+    <plurals name="checkout_error_time_too_soon">
+        <item quantity="one">Vaqt kamida %1$d daqiqadan keyin bo\'lsin</item>
+        <item quantity="other">Vaqt kamida %1$d daqiqadan keyin bo\'lsin</item>
+    </plurals>
+
+    <plurals name="order_eta">
+        <item quantity="one">Taxminan %1$d daqiqa</item>
+        <item quantity="other">Taxminan %1$d daqiqa</item>
+    </plurals>
+
 </resources>

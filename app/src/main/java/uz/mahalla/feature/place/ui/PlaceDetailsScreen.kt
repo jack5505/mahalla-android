@@ -4,15 +4,16 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
@@ -30,23 +31,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
+import uz.mahalla.core.ui.components.MahallaAsyncImage
+import uz.mahalla.core.ui.components.MahallaAvatar
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
+import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
-import uz.mahalla.core.ui.components.SkeletonBox
 import uz.mahalla.feature.discovery.ui.distanceLabel
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
@@ -148,7 +152,9 @@ private fun DetailsList(
         verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         contentPadding = PaddingValues(bottom = Spacing.gutter),
     ) {
-        item(key = "gallery") { Gallery(photoCount = details.photos.size) }
+        item(key = "gallery") {
+            Gallery(photos = details.photos, placeName = details.place.name)
+        }
 
         item(key = "summary") { Summary(details = details, openNow = state.openNow) }
 
@@ -194,21 +200,31 @@ private fun DetailsList(
 }
 
 /**
- * Галерея — пока скелетоны по числу фото: загрузчика изображений в проекте
- * ещё нет (Coil появится вместе с медиа-эпиком), а рисовать пустоту вместо
- * известного количества снимков хуже, чем показать их места.
+ * Галерея (issue #60): фотографии заведения лентой.
+ *
+ * Одна фотография занимает не всю ширину намеренно — край следующей говорит,
+ * что ленту можно листать. Подпись для TalkBack одна на весь блок: читать
+ * «фото заведения» столько раз, сколько снимков, бессмысленно.
  */
 @Composable
-private fun Gallery(photoCount: Int, modifier: Modifier = Modifier) {
-    if (photoCount == 0) return
-    Row(
-        modifier = modifier.fillMaxWidth(),
+private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
+    if (photos.isEmpty()) return
+    val description = stringResource(R.string.image_gallery_of, placeName)
+    LazyRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        repeat(photoCount.coerceAtMost(MAX_GALLERY_PREVIEW)) {
-            Box(modifier = Modifier.weight(1f)) {
-                SkeletonBox(modifier = Modifier.fillMaxWidth(), height = GALLERY_HEIGHT)
-            }
+        items(items = photos, key = { it }) { photo ->
+            MahallaAsyncImage(
+                url = photo,
+                contentDescription = null,
+                modifier = Modifier.size(
+                    width = MahallaComponentDefaults.galleryImageWidth,
+                    height = MahallaComponentDefaults.galleryImageHeight,
+                ),
+            )
         }
     }
 }
@@ -387,8 +403,11 @@ private fun ReviewCard(review: Review, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val author = review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
+            // Имя автора стоит следующей строкой — аватар только рисуется.
+            MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
             Text(
-                text = review.author.ifBlank { stringResource(R.string.place_review_anonymous) },
+                text = author,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -463,5 +482,3 @@ private fun android.content.Context.startActivitySafely(intent: Intent) {
 }
 
 private val HOUR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
-private val GALLERY_HEIGHT = 120.dp
-private const val MAX_GALLERY_PREVIEW = 3
