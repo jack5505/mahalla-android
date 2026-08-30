@@ -9,20 +9,29 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.data.CatalogRepository
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
-import uz.mahalla.feature.map.domain.MarkerClusterer
+import uz.mahalla.feature.map.canvas.MapCameraFit
+import uz.mahalla.feature.map.canvas.MapCoordinates
+import uz.mahalla.feature.map.canvas.MapMarkerUi
+import uz.mahalla.feature.map.data.MapKitInitializer
+import uz.mahalla.feature.map.data.UserLocationProvider
 import javax.inject.Inject
 
 /**
- * Карта (эпик 4.2): маркеры, кластеризация, выбор по тапу, «моё
- * местоположение».
+ * Карта (issue #65): маркеры, камера, выбор места, «моё местоположение».
  *
- * SDK карты ещё не выбран (блокер эпика), поэтому вся логика здесь оперирует
- * координатами, а не типами Yandex/Google: подключение SDK не должно трогать
- * ViewModel.
+ * ViewModel не знает про Yandex MapKit: она отдаёт [MapMarkerUi] и
+ * [uz.mahalla.feature.map.canvas.MapCameraPosition], а переводит их в примитивы
+ * SDK полотно `MapCanvas`. Единственное исключение — [mapInitializer]: движок
+ * поднимается лениво, а композиция не должна ходить в Hilt сама, поэтому ворота
+ * инициализации приезжают на экран через ViewModel (так же это описано в KDoc
+ * `MapCanvas`).
  */
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val repository: CatalogRepository,
+    private val locationProvider: UserLocationProvider,
+    /** Передаётся экрану как есть — сама ViewModel SDK не трогает. */
+    val mapInitializer: MapKitInitializer,
 ) : MviViewModel<MapState, MapEvent, MapEffect>(MapState()) {
 
     init {
@@ -33,22 +42,32 @@ class MapViewModel @Inject constructor(
         when (event) {
             MapEvent.Retry -> load()
 
-            is MapEvent.ZoomChanged -> onZoomChanged(event.zoom)
+            is MapEvent.MarkerClicked -> onMarkerClicked(event.placeId)
 
-            is MapEvent.ClusterClicked -> onClusterClicked(event.clusterId)
+            MapEvent.SelectionCleared -> select(null)
 
-            MapEvent.SelectionCleared -> updateState { copy(selectedClusterId = null) }
+            is MapEvent.CameraMoved -> updateState { copy(camera = event.camera) }
 
-            // Разрешение и получение координат — дело экрана и системного
-            // диалога; ViewModel только просит.
-            MapEvent.MyLocationClicked -> emitEffect(MapEffect.RequestLocation)
+            MapEvent.ZoomInClicked -> updateState { copy(camera = MapCameraFit.zoomIn(camera)) }
+
+            MapEvent.ZoomOutClicked -> updateState { copy(camera = MapCameraFit.zoomOut(camera)) }
+
+            MapEvent.MyLocationClicked -> onMyLocationClicked()
+
+            is MapEvent.LocationPermissionChecked -> updateState {
+                copy(showUserLocation = event.granted)
+            }
+
+            is MapEvent.LocationPermissionResult -> onPermissionResult(event.granted)
+
+            MapEvent.NoticeDismissed -> updateState { copy(locationNotice = null) }
 
             is MapEvent.PlaceClicked -> emitEffect(MapEffect.OpenPlace(event.placeId))
         }
     }
 
     private fun load() {
-        updateState { copy(places = ScreenState.Loading, clusters = emptyList()) }
+        updateState { copy(places = ScreenState.Loading, markers = emptyList()) }
         viewModelScope.launch {
             when (val result = repository.places(DiscoveryFilters())) {
                 is ApiResult.Failure -> updateState {
@@ -60,6 +79,7 @@ class MapViewModel @Inject constructor(
                     // точки нарисовать негде, а в счётчике маркеров оно
                     // соврало бы.
                     val mappable = result.data.items.filter { it.point != null }
+                    val loaded = markersOf(mappable, selectedId = null)
                     updateState {
                         copy(
                             places = if (mappable.isEmpty()) {
@@ -67,8 +87,16 @@ class MapViewModel @Inject constructor(
                             } else {
                                 ScreenState.Content(mappable)
                             },
-                            clusters = MarkerClusterer.cluster(mappable, zoom),
-                            selectedClusterId = null,
+                            markers = loaded,
+                            // Камера подгоняется под выдачу, а пустая выдача
+                            // оставляет её там, где карта уже стоит: уносить
+                            // экран в дефолтный город на каждом обновлении —
+                            // потеря того, что пользователь только что нашёл.
+                            camera = MapCameraFit.fit(
+                                points = loaded.map(MapMarkerUi::point),
+                                fallback = camera,
+                            ),
+                            selectedPlaceId = null,
                         )
                     }
                 }
@@ -76,40 +104,73 @@ class MapViewModel @Inject constructor(
         }
     }
 
-    private fun onZoomChanged(zoom: Int) {
-        val clamped = zoom.coerceIn(MapState.MIN_ZOOM, MapState.MAX_ZOOM)
-        if (clamped == currentState.zoom) return
-        val places = (currentState.places as? ScreenState.Content)?.data.orEmpty()
+    private fun onMarkerClicked(placeId: String) {
+        // Неизвестный id — маркер из прошлой выдачи: полотно могло отдать тап,
+        // пока приезжал новый список.
+        if (currentState.markers.none { it.id == placeId }) return
+        // Камеру при выборе не двигаем: пользователь ткнул в то, что видит, а
+        // самопроизвольный полёт под пальцем читается как промах.
+        select(placeId)
+    }
+
+    private fun select(placeId: String?) {
+        if (currentState.selectedPlaceId == placeId) return
         updateState {
             copy(
-                zoom = clamped,
-                clusters = MarkerClusterer.cluster(places, clamped),
-                // Кластеры пересобрались — прежний id мог исчезнуть, и
-                // раскрытая карточка осталась бы висеть без своего маркера.
-                selectedClusterId = null,
+                selectedPlaceId = placeId,
+                markers = markers.map { it.copy(selected = it.id == placeId) },
             )
         }
     }
 
-    private fun onClusterClicked(clusterId: String) {
-        val cluster = currentState.clusters.firstOrNull { it.id == clusterId } ?: return
-        val single: Place? = cluster.single
-        if (single != null) {
-            updateState { copy(selectedClusterId = clusterId, camera = cluster.center) }
-            emitEffect(MapEffect.MoveCamera(cluster.center, currentState.zoom))
-            return
+    private fun onMyLocationClicked() {
+        updateState { copy(locationNotice = null) }
+        if (currentState.showUserLocation) {
+            locate()
+        } else {
+            emitEffect(MapEffect.RequestLocationPermission)
         }
-        // Тап по группе — приблизиться к ней, а не открыть случайное место.
-        // Выделение при этом не ставим: после пересборки кластеров этого id
-        // может уже не существовать.
-        val zoom = (currentState.zoom + ZOOM_STEP).coerceAtMost(MapState.MAX_ZOOM)
-        onZoomChanged(zoom)
-        updateState { copy(camera = cluster.center) }
-        emitEffect(MapEffect.MoveCamera(cluster.center, currentState.zoom))
     }
 
-    private companion object {
-        /** На сколько приближает тап по кластеру. */
-        const val ZOOM_STEP = 2
+    private fun onPermissionResult(granted: Boolean) {
+        updateState {
+            copy(
+                showUserLocation = granted,
+                locationNotice = if (granted) null else LocationNotice.PermissionDenied,
+            )
+        }
+        if (granted) locate()
     }
+
+    /**
+     * Координаты спрашиваются у MapKit: свой клиент геолокации в проект не
+     * тянем (см. [UserLocationProvider]). Отсутствие координат — норма, но
+     * молча оставлять карту на месте нельзя: тап без последствий выглядит как
+     * поломка кнопки.
+     */
+    private fun locate() {
+        if (currentState.isLocating) return
+        updateState { copy(isLocating = true) }
+        viewModelScope.launch {
+            val point = locationProvider.currentLocation()
+            updateState {
+                copy(
+                    isLocating = false,
+                    camera = if (point == null) camera else MapCameraFit.focusOn(point, camera),
+                    locationNotice = if (point == null) LocationNotice.Unavailable else null,
+                )
+            }
+        }
+    }
+
+    private fun markersOf(places: List<Place>, selectedId: String?): List<MapMarkerUi> =
+        places.mapNotNull { place ->
+            val point = place.point ?: return@mapNotNull null
+            MapMarkerUi(
+                id = place.id,
+                point = MapCoordinates(point.latitude, point.longitude),
+                title = place.name,
+                selected = place.id == selectedId,
+            )
+        }
 }

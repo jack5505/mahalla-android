@@ -278,12 +278,12 @@
 
     <!-- Discovery: карта (эпик 4.2) -->
     <string name="map_title">Xarita</string>
-    <string name="map_sdk_pending">Xarita SDK hali tanlanmagan: bu yerda belgilar ro\'yxati ko\'rsatilmoqda.</string>
-    <string name="map_markers_count">%1$d ta belgi, masshtab %2$d</string>
-    <string name="map_cluster_places">%1$d ta joy</string>
     <string name="map_zoom_in">Yaqinlashtirish</string>
     <string name="map_zoom_out">Uzoqlashtirish</string>
     <string name="map_my_location">Mening joylashuvim</string>
+    <string name="map_empty_places">Bu hududda joy topilmadi</string>
+    <string name="map_location_denied">Joylashuv ruxsati berilmadi. Xaritada o\'zingizni ko\'rish uchun sozlamalardan ruxsat bering.</string>
+    <string name="map_location_unavailable">Joylashuvni aniqlab bo\'lmadi. Geolokatsiya yoqilganini tekshiring.</string>
 
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Ish vaqti</string>
