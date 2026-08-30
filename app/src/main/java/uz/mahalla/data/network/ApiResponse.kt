@@ -52,3 +52,17 @@ fun <T : Any> ApiResponse<T>.payload(): T {
     }
     return payload
 }
+
+/**
+ * То же для ответов без полезной нагрузки (`ApiResponseVoid` у бэкенда —
+ * отзыв сессии, доверие устройству): `data` там `null` и при успехе, поэтому
+ * [payload] превратил бы штатный ответ в ошибку. Проверяется только `success`.
+ */
+fun ApiResponse<*>.ensureSuccess() {
+    if (!success) {
+        throw ApiEnvelopeException(
+            code = error?.code,
+            serverMessage = error?.message ?: message,
+        )
+    }
+}

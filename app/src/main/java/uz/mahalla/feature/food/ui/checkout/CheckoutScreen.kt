@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -195,8 +196,9 @@ private fun TimeBlock(
             if (timeError != null) {
                 Text(
                     text = when (timeError) {
-                        is CheckoutError.TimeTooSoon -> stringResource(
-                            R.string.checkout_error_time_too_soon,
+                        is CheckoutError.TimeTooSoon -> pluralStringResource(
+                            R.plurals.checkout_error_time_too_soon,
+                            timeError.minLeadMinutes,
                             timeError.minLeadMinutes,
                         )
 

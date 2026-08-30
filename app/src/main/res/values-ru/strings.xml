@@ -126,9 +126,27 @@
     <string name="wallet_title">Кошелёк</string>
     <string name="wallet_subtitle">Баланс, пополнение и история платежей.</string>
     <string name="profile_title">Профиль</string>
-    <string name="profile_subtitle">Язык, тема и настройки аккаунта.</string>
     <string name="profile_language">Язык</string>
     <string name="profile_theme">Тема</string>
+    <string name="profile_name_unknown">Имя не указано</string>
+    <string name="profile_phone_unknown">Номер неизвестен</string>
+    <string name="profile_logout">Выйти</string>
+    <string name="profile_logout_title">Выйти из аккаунта?</string>
+    <string name="profile_logout_message">Чтобы войти снова, понадобится код подтверждения.</string>
+    <string name="profile_devices_title">Мои устройства</string>
+    <string name="profile_devices_empty">Активных устройств нет</string>
+    <string name="profile_device_unknown">Неизвестное устройство</string>
+    <string name="profile_device_current">Это устройство</string>
+    <string name="profile_device_last_activity">Последняя активность: %1$s</string>
+    <string name="profile_device_ip">IP: %1$s</string>
+    <string name="profile_device_trusted">Доверенное устройство</string>
+    <string name="profile_device_trusted_description">На доверенном устройстве вход проходит проще.</string>
+    <string name="profile_device_revoke">Отозвать</string>
+    <string name="profile_device_revoke_title">Отозвать устройство?</string>
+    <string name="profile_device_revoke_message">Вход на «%1$s» будет завершён. Чтобы войти снова, понадобится код подтверждения.</string>
+    <string name="profile_device_status_locked">Заблокировано</string>
+    <string name="profile_device_status_pin_required">Нужен PIN</string>
+    <string name="profile_device_status_pending_pin">PIN не задан</string>
 
     <!-- Детали -->
     <string name="place_title">Место</string>
@@ -329,14 +347,12 @@
     <string name="checkout_submit">Заказать</string>
     <string name="checkout_error_address">Укажите адрес доставки</string>
     <string name="checkout_error_time_required">Выберите время</string>
-    <string name="checkout_error_time_too_soon">Выберите время не раньше чем через %1$d минут</string>
     <string name="checkout_error_insufficient_funds">На кошельке не хватает %1$s</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Заказ</string>
     <string name="order_items_title">Состав</string>
     <string name="order_line_name">%1$s × %2$d</string>
-    <string name="order_eta">Примерно %1$d минут</string>
     <string name="order_repeat">Повторить заказ</string>
     <string name="order_cancel">Отменить заказ</string>
     <string name="order_cancel_keep">Оставить</string>

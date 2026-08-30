@@ -16,11 +16,14 @@ import uz.mahalla.data.network.auth.TelegramCheckRequest
 import uz.mahalla.data.network.auth.TelegramCheckResponse
 import uz.mahalla.data.network.auth.TelegramInitRequest
 import uz.mahalla.data.network.auth.TokenPairDto
+import uz.mahalla.data.network.auth.UserDto
 import uz.mahalla.data.network.auth.VerifyOtpRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.network.payload
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
@@ -101,6 +104,7 @@ interface AuthRepository {
 class DefaultAuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
+    private val userProfileStore: UserProfileStore,
     private val pinStorage: PinStorage,
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
@@ -181,6 +185,7 @@ class DefaultAuthRepository @Inject constructor(
                 if (session != null) {
                     pendingServerPin = null
                     sessionStore.save(session)
+                    saveProfile(result.data.user)
                     return ApiResult.Success(VerificationResult.Authorized(login))
                 }
 
@@ -230,7 +235,7 @@ class DefaultAuthRepository @Inject constructor(
             is ApiResult.Success -> saveLogin(
                 tokens = result.data.tokens,
                 sessionId = result.data.sessionId ?: sessionId,
-                fullName = result.data.user?.fullName,
+                user = result.data.user,
             )
 
             is ApiResult.Failure -> result
@@ -256,7 +261,7 @@ class DefaultAuthRepository @Inject constructor(
             is ApiResult.Success -> saveLogin(
                 tokens = result.data.tokens,
                 sessionId = result.data.sessionId,
-                fullName = result.data.user?.fullName,
+                user = result.data.user,
             )
 
             is ApiResult.Failure -> result
@@ -267,13 +272,32 @@ class DefaultAuthRepository @Inject constructor(
     private suspend fun saveLogin(
         tokens: TokenPairDto?,
         sessionId: String?,
-        fullName: String?,
+        user: UserDto?,
     ): ApiResult<LoginResult> {
         val session = tokens.toSession(sessionId = sessionId)
             ?: return ApiResult.Failure(ApiError.Serialization)
         sessionStore.save(session)
+        saveProfile(user)
         pendingServerPin = null
-        return ApiResult.Success(LoginResult(isNewUser = fullName.isNullOrBlank()))
+        return ApiResult.Success(LoginResult(isNewUser = user?.fullName.isNullOrBlank()))
+    }
+
+    /**
+     * Кто вошёл — единственный источник этих данных (issue #61): отдельного
+     * `GET /users/me` у бэкенда нет, спросить профиль потом будет нечем.
+     * Ответ без блока `user` прежний профиль не стирает: это не «пользователь
+     * стал безымянным», а «эндпоинт про другое».
+     */
+    private suspend fun saveProfile(user: UserDto?) {
+        if (user == null) return
+        userProfileStore.save(
+            UserProfile(
+                id = user.id,
+                phone = user.phone,
+                fullName = user.fullName,
+                avatarUrl = user.avatarUrl,
+            ),
+        )
     }
 
     override suspend fun startTelegramLogin(): ApiResult<TelegramChallenge> {
@@ -370,6 +394,7 @@ class DefaultAuthRepository @Inject constructor(
         ).toSession(sessionId = null) ?: return ApiResult.Failure(ApiError.Serialization)
 
         sessionStore.save(session)
+        saveProfile(response.user)
         return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
     }
 
@@ -415,6 +440,8 @@ class DefaultAuthRepository @Inject constructor(
             apiCall { authApi.logout(sessionId = session.sessionId, allDevices = false) }
         }
         sessionStore.clear()
+        // Имя и номер прошлого пользователя после выхода не показываем.
+        userProfileStore.clear()
         // Незавершённый вход тоже сбрасываем: `sessionId` от прошлой попытки
         // после выхода не значит ничего.
         pendingServerPin = null

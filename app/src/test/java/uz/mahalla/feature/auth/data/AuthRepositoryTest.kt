@@ -20,6 +20,7 @@ import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
+import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
@@ -31,6 +32,7 @@ import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
+import uz.mahalla.testutil.FakeUserProfileStore
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -49,6 +51,7 @@ class AuthRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var sessionStore: FakeSessionStore
+    private lateinit var userProfileStore: FakeUserProfileStore
     private lateinit var pinStorage: FakePinStorage
 
     private val deviceInfoProvider = FakeDeviceInfoProvider()
@@ -64,6 +67,7 @@ class AuthRepositoryTest {
         server = MockWebServer()
         server.start()
         sessionStore = FakeSessionStore()
+        userProfileStore = FakeUserProfileStore()
         pinStorage = FakePinStorage(initialPin = "1234")
     }
 
@@ -480,6 +484,59 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `login stores the profile for the profile screen`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567","fullName":"Alisher Usmonov",
+                           "avatarUrl":"https://cdn.mahalla.uz/a.png"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        // Другого источника у профиля нет: `GET /users/me` бэкенд не отдаёт
+        // (issue #61), поэтому имя и номер сохраняет сам вход.
+        assertEquals(
+            UserProfile(
+                id = "u-1",
+                phone = "+998901234567",
+                fullName = "Alisher Usmonov",
+                avatarUrl = "https://cdn.mahalla.uz/a.png",
+            ),
+            userProfileStore.current(),
+        )
+    }
+
+    @Test
+    fun `pin step stores the profile too`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"SETUP_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        repository.completeServerPin("123456")
+
+        assertEquals("+998901234567", userProfileStore.current().phone)
+    }
+
+    @Test
+    fun `logout forgets who was logged in`() = runTest {
+        userProfileStore.save(UserProfile(phone = "+998901234567", fullName = "Alisher"))
+
+        repository().logout()
+
+        // Имя прошлого пользователя в шапке профиля после выхода — это
+        // сообщение «вы всё ещё здесь», которого не было.
+        assertEquals(UserProfile(), userProfileStore.current())
+    }
+
+    @Test
     fun `logout names the session in the header and wipes local data`() = runTest {
         sessionStore.save(Session("a-1", "r-1", sessionId = "s-1"))
         server.enqueue(envelope("{}"))
@@ -679,6 +736,7 @@ class AuthRepositoryTest {
     private fun repository(): AuthRepository = DefaultAuthRepository(
         authApi = authApi(),
         sessionStore = sessionStore,
+        userProfileStore = userProfileStore,
         pinStorage = pinStorage,
         deviceInfoProvider = deviceInfoProvider,
         locationProvider = locationProvider,

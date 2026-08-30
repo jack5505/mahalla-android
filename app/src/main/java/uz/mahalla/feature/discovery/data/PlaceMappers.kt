@@ -1,5 +1,6 @@
 package uz.mahalla.feature.discovery.data
 
+import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.data.db.entity.PlaceEntity
 import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.feature.discovery.domain.GeoDistance
@@ -9,10 +10,6 @@ import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeParseException
 
 /**
  * DTO ↔ домен ↔ Room (эпик 4, контракт бэкенда — issue #53).
@@ -106,7 +103,7 @@ fun ReviewDto.toDomain(): Review = Review(
     author = author,
     rating = rating,
     text = text,
-    createdAt = parseInstant(createdAt),
+    createdAt = parseServerInstant(createdAt),
 )
 
 fun Place.toEntity(
@@ -176,25 +173,6 @@ private fun geoPoint(latitude: Double?, longitude: Double?): GeoPoint? =
     } else {
         null
     }
-
-/**
- * Момент времени из ответа. Jackson на бэкенде сериализует `LocalDateTime` без
- * зоны (`2026-08-29T16:09:06.688`), а `Instant` — с `Z`; принимаем оба, второй
- * считая временем UTC. Иначе дата у каждого отзыва была бы пустой.
- */
-private fun parseInstant(value: String?): Instant? {
-    val raw = value?.trim().orEmpty()
-    if (raw.isEmpty()) return null
-    return try {
-        Instant.parse(raw)
-    } catch (invalid: DateTimeParseException) {
-        try {
-            LocalDateTime.parse(raw).toInstant(ZoneOffset.UTC)
-        } catch (invalidLocal: DateTimeParseException) {
-            null
-        }
-    }
-}
 
 private val LATITUDE_RANGE = -90.0..90.0
 private val LONGITUDE_RANGE = -180.0..180.0
