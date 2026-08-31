@@ -7,12 +7,14 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.data.db.dao.PlaceDao
 import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceFilterEngine
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
+import uz.mahalla.feature.place.domain.ReviewDraft
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -41,6 +43,12 @@ interface CatalogRepository {
     suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails>
 
     suspend fun reviews(placeId: String, page: Int = 0): ApiResult<List<Review>>
+
+    /** Оставить отзыв о месте (issue #76). */
+    suspend fun addReview(placeId: String, draft: ReviewDraft): ApiResult<Unit>
+
+    /** Удалить свой отзыв. Чей он — проверяет бэкенд по токену. */
+    suspend fun deleteReview(reviewId: String): ApiResult<Unit>
 }
 
 /**
@@ -147,6 +155,29 @@ class DefaultCatalogRepository @Inject constructor(
 
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> =
         apiCall { api.reviews(placeId, page).payload().content.map(ReviewDto::toDomain) }
+
+    /**
+     * Незаполненный черновик в сеть не уходит: 400 от сервера сказал бы то же
+     * самое, но платой за это был бы запрос и молчание экрана на время его
+     * выполнения.
+     */
+    override suspend fun addReview(placeId: String, draft: ReviewDraft): ApiResult<Unit> {
+        if (!draft.canSubmit) {
+            return ApiResult.Failure(ApiError.Business(ReviewDraft.INVALID_CODE))
+        }
+        return apiCall {
+            api.createReview(
+                CreateReviewRequest(
+                    placeId = placeId,
+                    rating = draft.rating,
+                    text = draft.textOrNull(),
+                ),
+            ).ensureSuccess()
+        }
+    }
+
+    override suspend fun deleteReview(reviewId: String): ApiResult<Unit> =
+        apiCall { api.deleteReview(reviewId).ensureSuccess() }
 
     /**
      * Координаты обязательны для `places/nearby` и нужны, чтобы посчитать

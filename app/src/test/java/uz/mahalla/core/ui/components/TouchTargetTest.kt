@@ -65,6 +65,8 @@ class TouchTargetTest {
             // Эпик 5: степпер количества и строка позиции меню.
             "stepper",
             "menuItem",
+            // issue #76: звезда в форме отзыва.
+            "ratingStar",
         )
 
         assertEquals(expected, MahallaComponentDefaults.touchTargets.keys)

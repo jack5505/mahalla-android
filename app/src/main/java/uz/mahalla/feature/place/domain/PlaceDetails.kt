@@ -51,6 +51,11 @@ data class PlaceCapabilities(
     val ordering: Boolean = false,
 )
 
+/**
+ * @param authorId id автора с сервера. Единственный признак, по которому свой
+ * отзыв отличается от чужого (issue #76) — «мой» это факт про аккаунт, а не
+ * про отзыв, поэтому сравнение живёт в состоянии экрана, а не здесь.
+ */
 @Immutable
 data class Review(
     val id: String,
@@ -58,6 +63,7 @@ data class Review(
     val rating: Int,
     val text: String,
     val createdAt: Instant?,
+    val authorId: String? = null,
 )
 
 /**

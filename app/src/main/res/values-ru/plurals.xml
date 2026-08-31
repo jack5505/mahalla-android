@@ -34,4 +34,11 @@
         <item quantity="other">Примерно %1$d минуты</item>
     </plurals>
 
+    <plurals name="rating_star_description">
+        <item quantity="one">%1$d звезда</item>
+        <item quantity="few">%1$d звезды</item>
+        <item quantity="many">%1$d звёзд</item>
+        <item quantity="other">%1$d звезды</item>
+    </plurals>
+
 </resources>

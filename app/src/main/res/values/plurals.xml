@@ -38,4 +38,10 @@
         <item quantity="other">Taxminan %1$d daqiqa</item>
     </plurals>
 
+    <!-- Форма отзыва: подпись звезды для TalkBack (issue #76). -->
+    <plurals name="rating_star_description">
+        <item quantity="one">%1$d yulduz</item>
+        <item quantity="other">%1$d yulduz</item>
+    </plurals>
+
 </resources>

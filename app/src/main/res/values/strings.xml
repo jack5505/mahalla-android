@@ -294,6 +294,21 @@
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
+    <!-- Sharh qoldirish (issue #76) -->
+    <string name="place_reviews_empty">Hozircha sharhlar yo\'q. Birinchi bo\'ling.</string>
+    <string name="place_review_add">Sharh qoldirish</string>
+    <string name="place_review_mine">Sizning sharhingiz</string>
+    <string name="place_review_form_title">Sharh qoldirish</string>
+    <string name="place_review_rating_label">Bahoyingiz</string>
+    <string name="place_review_rating_required">Baho qo\'ying — sharhning asosiy qismi shu.</string>
+    <string name="place_review_text_label">Sharh</string>
+    <string name="place_review_text_placeholder">Nima yoqdi, nima yoqmadi?</string>
+    <string name="place_review_text_counter">%1$d / %2$d</string>
+    <string name="place_review_text_too_long">Sharh juda uzun — qisqartiring.</string>
+    <string name="place_review_submit">Yuborish</string>
+    <string name="place_review_delete">Sharhni o\'chirish</string>
+    <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
+    <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
