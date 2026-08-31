@@ -54,8 +54,19 @@ sealed interface PlaceDetailsEffect : UiEffect {
     data class Dial(val phone: String) : PlaceDetailsEffect
     data class OpenRoute(val point: GeoPoint, val label: String) : PlaceDetailsEffect
 
-    /** Очередь, бронь и заказ — вертикали следующих эпиков. */
-    data class OpenVertical(val action: PlaceAction, val placeId: String) : PlaceDetailsEffect
+    /**
+     * Очередь (форма заказа услуги, issue #71) и заказ (меню, эпик 5); бронь
+     * ждёт своего эпика.
+     *
+     * [placeName] едет вместе с id: имя нужно заголовку следующего экрана, а
+     * читать состояние карточки из обработчика эффекта нельзя — он собран один
+     * раз и видел бы данные на момент подписки.
+     */
+    data class OpenVertical(
+        val action: PlaceAction,
+        val placeId: String,
+        val placeName: String,
+    ) : PlaceDetailsEffect
 
     data object NavigateBack : PlaceDetailsEffect
 }

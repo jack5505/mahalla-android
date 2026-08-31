@@ -39,6 +39,26 @@ class RoutesSerializationTest {
 
         val order = OrderStatusRoute(orderId = "o-42")
         assertEquals(order, json.decodeFromString<OrderStatusRoute>(json.encodeToString(order)))
+
+        val service = ServiceOrderRoute(placeId = "p-42", placeName = "Barbershop Chilonzor")
+        assertEquals(
+            service,
+            json.decodeFromString<ServiceOrderRoute>(json.encodeToString(service)),
+        )
+    }
+
+    /**
+     * Форма заказа услуги (issue #71) читает оба аргумента из
+     * `SavedStateHandle`, поэтому имена полей маршрута — часть контракта
+     * экрана, а не деталь навигации.
+     */
+    @Test
+    fun `service order route carries the place its view model reads`() {
+        val descriptor = serializer<ServiceOrderRoute>().descriptor
+
+        assertEquals(2, descriptor.elementsCount)
+        assertEquals("placeId", descriptor.getElementName(0))
+        assertEquals("placeName", descriptor.getElementName(1))
     }
 
     /**

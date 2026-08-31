@@ -142,3 +142,20 @@ data class CheckoutRoute(val placeId: String)
  */
 @Serializable
 data class OrderStatusRoute(val orderId: String)
+
+// --- Услуги (issue #71): форма заказа услуги и форма выставления услуги ---
+
+/**
+ * Заказ услуги в заведении. [placeName] передаётся аргументом, а не грузится
+ * заново: карточка места, с которой сюда приходят, имя уже показала — второй
+ * запрос ради заголовка означал бы пустую шапку на время загрузки.
+ */
+@Serializable
+data class ServiceOrderRoute(val placeId: String, val placeName: String = "")
+
+/**
+ * Своя анкета исполнителя. Аргументов нет: анкета одна на аккаунт, и читает
+ * её экран сам у сервера.
+ */
+@Serializable
+data object ServiceOfferRoute

@@ -7,6 +7,7 @@ import uz.mahalla.feature.discovery.domain.GeoDistance
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
@@ -85,18 +86,22 @@ fun PlaceDetailDto.toDomain(from: DeviceLocation? = null): Place {
 fun PlaceDetailDto.toDetails(
     reviews: List<Review> = emptyList(),
     from: DeviceLocation? = null,
-): PlaceDetails = PlaceDetails(
-    place = toDomain(from),
-    description = description?.takeIf(String::isNotBlank),
-    // Обложка первой: логотип это иконка, а не фотография заведения.
-    photos = listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct(),
-    contacts = PlaceContacts(
-        phone = phone?.takeIf(String::isNotBlank),
-        website = website?.takeIf(String::isNotBlank),
-        address = address?.takeIf(String::isNotBlank) ?: city?.takeIf(String::isNotBlank),
-    ),
-    reviews = reviews,
-)
+): PlaceDetails {
+    val place = toDomain(from)
+    return PlaceDetails(
+        place = place,
+        description = description?.takeIf(String::isNotBlank),
+        // Обложка первой: логотип это иконка, а не фотография заведения.
+        photos = listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct(),
+        contacts = PlaceContacts(
+            phone = phone?.takeIf(String::isNotBlank),
+            website = website?.takeIf(String::isNotBlank),
+            address = address?.takeIf(String::isNotBlank) ?: city?.takeIf(String::isNotBlank),
+        ),
+        capabilities = PlaceCapabilities.forCategory(place.category),
+        reviews = reviews,
+    )
+}
 
 fun ReviewDto.toDomain(): Review = Review(
     id = id,
@@ -149,13 +154,19 @@ fun PlaceEntity.toDomain(): Place = Place(
  * отзывов здесь нет — [PlaceDetails.fromCache] говорит экрану, что блоки
  * пусты не потому, что их нет у места.
  */
-fun PlaceEntity.toCachedDetails(): PlaceDetails = PlaceDetails(
-    place = toDomain(),
-    description = description,
-    photos = listOfNotNull(photoUrl),
-    contacts = PlaceContacts(phone = phone, website = website, address = address),
-    fromCache = true,
-)
+fun PlaceEntity.toCachedDetails(): PlaceDetails {
+    val place = toDomain()
+    return PlaceDetails(
+        place = place,
+        description = description,
+        photos = listOfNotNull(photoUrl),
+        contacts = PlaceContacts(phone = phone, website = website, address = address),
+        // Вертикаль выводится из категории, а она в кэше есть: офлайн-карточка
+        // не должна терять кнопку, которая была на онлайновой.
+        capabilities = PlaceCapabilities.forCategory(place.category),
+        fromCache = true,
+    )
+}
 
 /** Ноль вместо честного расстояния — ложь; без координат остаётся только он. */
 private fun distanceTo(from: DeviceLocation?, point: GeoPoint?): Int =

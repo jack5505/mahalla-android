@@ -25,6 +25,8 @@ import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.services.ui.offer.ServiceOfferScreen
+import uz.mahalla.feature.services.ui.order.ServiceOrderScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
 /**
@@ -211,6 +213,10 @@ fun MahallaNavHost(
                     } else {
                         null
                     },
+                    // Своя анкета исполнителя (issue #71): выставить услугу
+                    // человек может только за себя, поэтому вход в неё — из
+                    // профиля, а не из каталога.
+                    onOpenServiceOffer = { navController.navigate(ServiceOfferRoute) },
                 )
             }
         }
@@ -239,8 +245,24 @@ fun MahallaNavHost(
             // deep link'а.
             PlaceDetailsScreen(
                 onOrderClick = { placeId -> navController.navigate(MenuRoute(placeId)) },
+                // Очередь (issue #71) — форма заказа услуги: имя заведения
+                // отдаёт сама карточка, второй запрос ради заголовка не нужен.
+                onServiceOrderClick = { placeId, placeName ->
+                    navController.navigate(ServiceOrderRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Услуги (issue #71): заказ услуги у заведения и своя анкета
+        // исполнителя. Вне графа табов: обе формы открываются поверх экрана,
+        // с которого пришли, и возвращают на него же.
+        composable<ServiceOrderRoute> {
+            ServiceOrderScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<ServiceOfferRoute> {
+            ServiceOfferScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус заказа.
