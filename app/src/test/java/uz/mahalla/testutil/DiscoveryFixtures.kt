@@ -51,6 +51,10 @@ class FakeCatalogRepository : CatalogRepository {
     var details: ApiResult<PlaceDetails> = ApiResult.Failure(ApiError.NotFound)
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
 
+    /** Карточки для «Избранного» (issue #75): ответ на каждый id отдельно. */
+    val cards: MutableMap<String, ApiResult<Place>> = mutableMapOf()
+    val requestedCards: MutableList<String> = mutableListOf()
+
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
 
     fun respondWith(items: List<Place>, page: Int = 0, hasMore: Boolean = false, fromCache: Boolean = false) {
@@ -67,6 +71,11 @@ class FakeCatalogRepository : CatalogRepository {
     }
 
     override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> = details
+
+    override suspend fun placeCard(placeId: String): ApiResult<Place> {
+        requestedCards += placeId
+        return cards[placeId] ?: ApiResult.Failure(ApiError.NotFound)
+    }
 
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> = reviews
 }

@@ -34,4 +34,18 @@
         <item quantity="other">Примерно %1$d минуты</item>
     </plurals>
 
+    <plurals name="place_social_like">
+        <item quantity="one">Нравится, %1$d лайк</item>
+        <item quantity="few">Нравится, %1$d лайка</item>
+        <item quantity="many">Нравится, %1$d лайков</item>
+        <item quantity="other">Нравится, %1$d лайка</item>
+    </plurals>
+
+    <plurals name="place_social_unlike">
+        <item quantity="one">Убрать лайк, %1$d лайк</item>
+        <item quantity="few">Убрать лайк, %1$d лайка</item>
+        <item quantity="many">Убрать лайк, %1$d лайков</item>
+        <item quantity="other">Убрать лайк, %1$d лайка</item>
+    </plurals>
+
 </resources>

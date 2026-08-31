@@ -352,6 +352,42 @@ class CatalogRepositoryTest {
         assertNull(dao.byId("p-1"))
     }
 
+    @Test
+    fun `a card for a list is one request, without reviews`() = runTest {
+        // «Избранное» (issue #75) дозапрашивает карточки по одной: второй
+        // запрос за отзывами на каждую сделал бы экран вдвое дороже без единой
+        // строки на нём.
+        server.enqueue(json(DETAILS_BODY))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals("Osh markazi", (result as ApiResult.Success).data.name)
+        assertEquals(1, server.requestCount)
+        assertEquals("/places/p-1", server.takeRequest().path)
+        assertEquals("Osh markazi", dao.byId("p-1")?.name)
+    }
+
+    @Test
+    fun `a card that did not arrive comes from the cache`() = runTest {
+        dao.seed(listOf(entity("p-1", name = "Osh markazi")))
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals("Osh markazi", (result as ApiResult.Success).data.name)
+    }
+
+    @Test
+    fun `a deleted place does not come back as a card either`() = runTest {
+        dao.seed(listOf(entity("p-1")))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
+    }
+
     private fun repository(): DefaultCatalogRepository {
         val api = NetworkFactory
             .retrofit(

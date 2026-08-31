@@ -75,6 +75,7 @@ import java.time.Instant
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
@@ -101,6 +102,7 @@ fun ProfileScreen(
         state = state,
         onEvent = viewModel::onEvent,
         modifier = modifier,
+        onOpenSavedPlaces = onOpenSavedPlaces,
         onChangeServer = onChangeServer,
     )
 }
@@ -112,6 +114,7 @@ fun ProfileContentScreen(
     state: ProfileState,
     onEvent: (ProfileEvent) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -125,6 +128,16 @@ fun ProfileContentScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             ProfileHeader(profile = state.profile)
+
+            // «Избранное» (issue #75): единственный вход в сохранённые места —
+            // на самой карточке кнопка только добавляет и убирает.
+            if (onOpenSavedPlaces != null) {
+                MahallaListItem(
+                    title = stringResource(R.string.profile_saved_places),
+                    subtitle = stringResource(R.string.profile_saved_places_subtitle),
+                    onClick = onOpenSavedPlaces,
+                )
+            }
 
             Text(
                 text = stringResource(R.string.profile_language),

@@ -25,7 +25,12 @@ import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
+import uz.mahalla.feature.social.data.LikeResult
+import uz.mahalla.feature.social.domain.PlaceComment
+import uz.mahalla.feature.social.domain.PlaceCommentPage
+import uz.mahalla.feature.social.domain.PlaceSocialStatus
 import uz.mahalla.testutil.FakeCatalogRepository
+import uz.mahalla.testutil.FakeSocialRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
 import java.time.Clock
@@ -54,6 +59,7 @@ class PlaceDetailsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val repository = FakeCatalogRepository()
+    private val social = FakeSocialRepository()
 
     @Test
     fun `card is loaded for the id from the route`() = runTest {
@@ -215,10 +221,265 @@ class PlaceDetailsViewModelTest {
         assertEquals(PlaceDetailsEffect.NavigateBack, viewModel.effects.first())
     }
 
+    // --- Лайк, «Избранное» и комментарии (issue #75) ---
+
+    @Test
+    fun `like and save states come from the server, not from defaults`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = true, saved = true, likes = 42))
+
+        val state = viewModel().state.value
+
+        assertEquals(PlaceSocialStatus(liked = true, saved = true, likes = 42), state.social)
+        assertFalse(state.socialLoading)
+    }
+
+    @Test
+    fun `an unknown like state is not drawn as not liked`() = runTest {
+        // Иначе человек нажмёт и снимет собственный лайк, думая, что ставит его.
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Failure(ApiError.NoConnection)
+
+        val state = viewModel().state.value
+
+        assertNull(state.social)
+        assertEquals(ApiError.NoConnection, state.socialFailure?.error)
+    }
+
+    @Test
+    fun `a tap on the heart is applied before the server answers`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = false, likes = 10))
+        social.likeResult = ApiResult.Success(LikeResult(liked = true, likes = 11))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.LikeClicked)
+
+        assertEquals(PlaceSocialStatus(liked = true, likes = 11), viewModel.state.value.social)
+        assertEquals(listOf(PLACE_ID), social.likeCalls)
+    }
+
+    @Test
+    fun `a failed like rolls back to the state before the tap`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = false, likes = 10))
+        social.likeResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.LikeClicked)
+
+        assertEquals(PlaceSocialStatus(liked = false, likes = 10), viewModel.state.value.social)
+        // Кнопка, вернувшаяся в прежнее состояние без объяснения, читается как
+        // сломанная (issue #34).
+        assertEquals(ApiError.NoConnection, viewModel.state.value.socialFailure?.error)
+        assertFalse(viewModel.state.value.likePending)
+    }
+
+    @Test
+    fun `the server counter replaces the optimistic one`() = runTest {
+        // Между нажатием и ответом место могли лайкнуть ещё десять человек.
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = false, likes = 10))
+        social.likeResult = ApiResult.Success(LikeResult(liked = true, likes = 21))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.LikeClicked)
+
+        assertEquals(21L, viewModel.state.value.social?.likes)
+    }
+
+    @Test
+    fun `saving works the same way and rolls back too`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(saved = false, likes = 3))
+        social.saveResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.SaveClicked)
+
+        assertFalse(viewModel.state.value.social!!.saved)
+        assertEquals(ApiError.Forbidden, viewModel.state.value.socialFailure?.error)
+    }
+
+    @Test
+    fun `save keeps the like counter untouched`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = true, likes = 7))
+        social.saveResult = ApiResult.Success(true)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.SaveClicked)
+
+        assertEquals(
+            PlaceSocialStatus(liked = true, saved = true, likes = 7),
+            viewModel.state.value.social,
+        )
+    }
+
+    @Test
+    fun `the like state can be retried without leaving the screen`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.status = ApiResult.Failure(ApiError.Timeout)
+        val viewModel = viewModel()
+
+        social.status = ApiResult.Success(PlaceSocialStatus(liked = true, likes = 1))
+        viewModel.onEvent(PlaceDetailsEvent.SocialRetry)
+
+        assertEquals(1L, viewModel.state.value.social?.likes)
+        assertNull(viewModel.state.value.socialFailure)
+    }
+
+    @Test
+    fun `comments are loaded next to the card`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.commentPages[0] = ApiResult.Success(
+            PlaceCommentPage(items = listOf(comment("c-1")), hasMore = true),
+        )
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf("c-1"), (state.comments as ScreenState.Content).data.map { it.id })
+        assertTrue(state.hasMoreComments)
+    }
+
+    @Test
+    fun `a comment failure does not hide the card`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.commentPages[0] = ApiResult.Failure(ApiError.NoConnection)
+
+        val state = viewModel().state.value
+
+        assertTrue(state.details is ScreenState.Content)
+        assertTrue(state.comments is ScreenState.Error)
+    }
+
+    @Test
+    fun `an empty comment cannot be sent`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDraftChanged("   "))
+        assertFalse(viewModel.state.value.canSubmitComment)
+        viewModel.onEvent(PlaceDetailsEvent.CommentSubmitted)
+
+        assertTrue(social.sentComments.isEmpty())
+    }
+
+    @Test
+    fun `a sent comment goes to the top and clears the draft`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.commentPages[0] = ApiResult.Success(PlaceCommentPage(items = listOf(comment("c-1"))))
+        social.addCommentResult = ApiResult.Success(comment("c-2", isMine = true))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDraftChanged("Zo'r joy"))
+        viewModel.onEvent(PlaceDetailsEvent.CommentSubmitted)
+
+        assertEquals(listOf("Zo'r joy"), social.sentComments)
+        assertEquals(
+            listOf("c-2", "c-1"),
+            (viewModel.state.value.comments as ScreenState.Content).data.map { it.id },
+        )
+        assertEquals("", viewModel.state.value.commentDraft)
+    }
+
+    @Test
+    fun `a rejected comment keeps the text in the field`() = runTest {
+        // Стереть написанное, не отправив его, — потерять работу человека.
+        repository.details = ApiResult.Success(details())
+        social.addCommentResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDraftChanged("Zo'r joy"))
+        viewModel.onEvent(PlaceDetailsEvent.CommentSubmitted)
+
+        assertEquals("Zo'r joy", viewModel.state.value.commentDraft)
+        assertEquals(ApiError.NoConnection, viewModel.state.value.commentFailure?.error)
+        assertFalse(viewModel.state.value.sendingComment)
+    }
+
+    @Test
+    fun `deleting a comment asks first and then removes it`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val mine = comment("c-1", isMine = true)
+        social.commentPages[0] = ApiResult.Success(
+            PlaceCommentPage(items = listOf(mine, comment("c-2"))),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteRequested(mine))
+        assertEquals(mine, viewModel.state.value.confirmDeleteComment)
+        assertTrue(social.deletedComments.isEmpty())
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteConfirmed)
+
+        assertEquals(listOf("c-1"), social.deletedComments)
+        assertEquals(
+            listOf("c-2"),
+            (viewModel.state.value.comments as ScreenState.Content).data.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a dismissed dialog deletes nothing`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val mine = comment("c-1", isMine = true)
+        social.commentPages[0] = ApiResult.Success(PlaceCommentPage(items = listOf(mine)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteRequested(mine))
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteDismissed)
+
+        assertNull(viewModel.state.value.confirmDeleteComment)
+        assertTrue(social.deletedComments.isEmpty())
+    }
+
+    @Test
+    fun `the last deleted comment leaves the list empty, not broken`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val mine = comment("c-1", isMine = true)
+        social.commentPages[0] = ApiResult.Success(PlaceCommentPage(items = listOf(mine)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteRequested(mine))
+        viewModel.onEvent(PlaceDetailsEvent.CommentDeleteConfirmed)
+
+        assertTrue(viewModel.state.value.comments is ScreenState.Empty)
+    }
+
+    @Test
+    fun `more comments are appended without duplicates`() = runTest {
+        repository.details = ApiResult.Success(details())
+        social.commentPages[0] = ApiResult.Success(
+            PlaceCommentPage(items = listOf(comment("c-1")), hasMore = true),
+        )
+        social.commentPages[1] = ApiResult.Success(
+            PlaceCommentPage(items = listOf(comment("c-1"), comment("c-2"))),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.MoreCommentsRequested)
+
+        assertEquals(
+            listOf("c-1", "c-2"),
+            (viewModel.state.value.comments as ScreenState.Content).data.map { it.id },
+        )
+        assertFalse(viewModel.state.value.hasMoreComments)
+    }
+
     private fun viewModel(clock: Clock = mondayAt("12:00")) = PlaceDetailsViewModel(
         repository = repository,
+        socialRepository = social,
         clock = clock,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
+    )
+
+    private fun comment(id: String, isMine: Boolean = false) = PlaceComment(
+        id = id,
+        authorId = if (isMine) "u-1" else "u-2",
+        text = "Zo'r",
+        createdAt = Instant.parse("2026-08-30T10:15:30Z"),
+        isMine = isMine,
     )
 
     private fun details(

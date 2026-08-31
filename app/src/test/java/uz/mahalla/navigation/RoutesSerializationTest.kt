@@ -108,6 +108,7 @@ class RoutesSerializationTest {
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
+            serializer<SavedPlacesRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
