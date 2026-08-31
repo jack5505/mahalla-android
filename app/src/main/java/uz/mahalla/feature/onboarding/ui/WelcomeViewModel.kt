@@ -2,12 +2,13 @@ package uz.mahalla.feature.onboarding.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
-import javax.inject.Inject
 
 /**
  * Welcome (3.1): язык выбирается до входа — иначе пользователь читает
@@ -35,6 +36,7 @@ class WelcomeViewModel @Inject constructor(
                 // равно применяем: пользователь просил его сейчас, а не на
                 // следующий запуск. Крэш вместо смены языка — худший исход.
                 runCatchingCancellable { onboardingRepository.setLanguage(event.language) }
+                    .reportSwallowed("settings.setLanguage")
                 if (localeManager.apply(event.language)) {
                     emitEffect(WelcomeEffect.RecreateActivity)
                 }

@@ -3,14 +3,15 @@ package uz.mahalla.data.device
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import uz.mahalla.core.result.runCatchingCancellable
-import uz.mahalla.data.prefs.PreferenceKeys
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import uz.mahalla.core.crash.reportSwallowed
+import uz.mahalla.core.result.runCatchingCancellable
+import uz.mahalla.data.prefs.PreferenceKeys
 
 /**
  * Идентификатор установки, который бэкенд использует как ключ сессии
@@ -45,7 +46,7 @@ class DeviceIdStore @Inject constructor(
             cached?.let { return@withLock it }
             val stored = runCatchingCancellable {
                 dataStore.data.first()[PreferenceKeys.DeviceId]
-            }.getOrNull()
+            }.reportSwallowed("device.readId").getOrNull()
             val id = stored?.takeIf { it.isNotBlank() } ?: generateAndStore()
             cached = id
             id
@@ -56,7 +57,7 @@ class DeviceIdStore @Inject constructor(
         val id = UUID.randomUUID().toString()
         runCatchingCancellable {
             dataStore.edit { it[PreferenceKeys.DeviceId] = id }
-        }
+        }.reportSwallowed("device.storeId")
         return id
     }
 }

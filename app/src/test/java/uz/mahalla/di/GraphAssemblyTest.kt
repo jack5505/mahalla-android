@@ -14,6 +14,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.crash.NoopCrashReporter
+import uz.mahalla.core.crash.di.CrashModule
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.device.AndroidDeviceInfoProvider
@@ -23,8 +25,8 @@ import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
-import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
@@ -265,6 +267,26 @@ class GraphAssemblyTest {
 
         assertNotNull(repository)
         assertFalse(refreshClient.authenticator is TokenAuthenticator)
+    }
+
+    /**
+     * Отчёты о падениях (issue #74). В тестовой сборке секрета `SENTRY_DSN`
+     * нет, и граф обязан отдать заглушку: SDK тогда не поднимается вовсе, а
+     * не поднимается «вхолостую» с пустым адресом.
+     */
+    @Test
+    fun `crash graph falls back to the noop reporter without a dsn`() {
+        val config = CrashModule.provideCrashReportingConfig()
+        val reporter = CrashModule.provideCrashReporter(context, config)
+
+        // Юнит-тесты идут по debug-конфигурации, а там сбор выключен даже с
+        // заданным секретом: включает его только SENTRY_ENABLED_IN_DEBUG.
+        assertEquals("debug", config.environment)
+        assertFalse(config.isEnabled)
+        assertTrue(reporter === NoopCrashReporter)
+        assertFalse(reporter.isEnabled)
+        // Версия сборки в отчёте обязательна: без неё непонятно, где падает.
+        assertTrue(config.release, config.release.startsWith("uz.mahalla@"))
     }
 
     @Test
