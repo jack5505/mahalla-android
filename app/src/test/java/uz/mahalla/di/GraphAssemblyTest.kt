@@ -44,6 +44,8 @@ import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.social.data.DefaultSocialRepository
+import uz.mahalla.feature.social.data.di.SocialDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
@@ -186,6 +188,37 @@ class GraphAssemblyTest {
                     api = api,
                     orderDao = DatabaseModule.provideOrderDao(database),
                     cartRepository = cartRepository,
+                ),
+            )
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * Лайк, «Избранное» и комментарии (issue #75). Репозиторий стоит на
+     * каталоге: «Избранное» бэкенд отдаёт одними идентификаторами, и карточки
+     * дозапрашиваются его же ручкой.
+     */
+    @Test
+    fun `social graph assembles over the api, the catalog and the profile`() {
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val retrofit = NetworkModule.provideRetrofit(
+                OkHttpClient(),
+                NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                NetworkModule.provideBaseUrl(),
+            )
+            assertNotNull(
+                DefaultSocialRepository(
+                    api = SocialDataModule.provideSocialApi(retrofit),
+                    catalogRepository = DefaultCatalogRepository(
+                        api = DiscoveryDataModule.provideCatalogApi(retrofit),
+                        placeDao = DatabaseModule.providePlaceDao(database),
+                        locationProvider = locationProvider(context),
+                        clock = AppModule.provideClock(),
+                    ),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
                 ),
             )
         } finally {

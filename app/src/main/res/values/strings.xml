@@ -149,6 +149,8 @@
     <string name="profile_logout">Chiqish</string>
     <string name="profile_logout_title">Hisobdan chiqasizmi?</string>
     <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_saved_places">Saqlangan joylar</string>
+    <string name="profile_saved_places_subtitle">Saqlangan joylar ro\'yxati</string>
     <string name="profile_devices_title">Mening qurilmalarim</string>
     <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
     <string name="profile_device_unknown">Noma\'lum qurilma</string>
@@ -182,6 +184,7 @@
     <string name="action_cancel">Bekor qilish</string>
     <string name="action_delete">O\'chirish</string>
     <string name="action_see_all">Hammasi</string>
+    <string name="action_show_more">Yana ko\'rsatish</string>
 
     <!-- UI-кит: поиск и OTP -->
     <string name="search_hint">Qidirish</string>
@@ -301,6 +304,26 @@
     <string name="place_action_order">Buyurtma berish</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
     <string name="place_action_route">Yo\'nalish</string>
+
+    <!-- Карточка места: лайк, избранное, комментарии (issue #75) -->
+    <string name="place_social_save">Saqlash</string>
+    <string name="place_social_saved">Saqlangan</string>
+    <string name="place_social_unavailable">Yoqtirish va saqlash holatini olib bo\'lmadi.</string>
+    <string name="place_comments_title">Izohlar</string>
+    <string name="place_comments_empty">Hozircha izoh yo\'q. Birinchi bo\'lib yozing.</string>
+    <string name="place_comments_show_more">Yana izohlar</string>
+    <string name="place_comment_hint">Izoh yozing</string>
+    <string name="place_comment_send">Yuborish</string>
+    <string name="place_comment_author_me">Siz</string>
+    <string name="place_comment_author_other">Foydalanuvchi</string>
+    <string name="place_comment_delete">O\'chirish</string>
+    <string name="place_comment_delete_title">Izohni o\'chirasizmi?</string>
+    <string name="place_comment_delete_message">Izoh butunlay o\'chadi, uni qaytarib bo\'lmaydi.</string>
+
+    <!-- Избранное (issue #75) -->
+    <string name="saved_places_title">Saqlangan joylar</string>
+    <string name="saved_places_empty_title">Saqlangan joylar yo\'q</string>
+    <string name="saved_places_empty_description">Joy kartochkasidagi «Saqlash» tugmasi orqali qo\'shing.</string>
     <string name="action_collapse">Yig\'ish</string>
 
     <!-- UI-кит: степпер количества (эпик 5.2) -->

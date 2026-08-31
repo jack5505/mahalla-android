@@ -38,4 +38,19 @@
         <item quantity="other">Taxminan %1$d daqiqa</item>
     </plurals>
 
+    <!--
+        Карточка места (issue #75): подпись кнопки лайка для TalkBack. Само
+        число нарисовано рядом цифрами, а озвучить надо и действие, и счётчик —
+        иначе кнопка читается как «кнопка» без единого смысла.
+    -->
+    <plurals name="place_social_like">
+        <item quantity="one">Yoqtirish, %1$d ta yoqtirish</item>
+        <item quantity="other">Yoqtirish, %1$d ta yoqtirish</item>
+    </plurals>
+
+    <plurals name="place_social_unlike">
+        <item quantity="one">Yoqtirishni bekor qilish, %1$d ta yoqtirish</item>
+        <item quantity="other">Yoqtirishni bekor qilish, %1$d ta yoqtirish</item>
+    </plurals>
+
 </resources>

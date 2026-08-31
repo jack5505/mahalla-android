@@ -25,6 +25,7 @@ import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.social.ui.saved.SavedPlacesScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
 /**
@@ -204,6 +205,9 @@ fun MahallaNavHost(
                             popUpTo(MainGraph) { inclusive = true }
                         }
                     },
+                    // «Избранное» (issue #75): на карточке места кнопка только
+                    // добавляет и убирает, посмотреть список можно отсюда.
+                    onOpenSavedPlaces = { navController.navigate(SavedPlacesRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -219,6 +223,14 @@ fun MahallaNavHost(
         // а возврат ведёт обратно на главную.
         composable<SearchRoute> {
             SearchScreen(
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // «Избранное» (issue #75): открывается из профиля, возврат — туда же.
+        composable<SavedPlacesRoute> {
+            SavedPlacesScreen(
                 onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
                 onBack = { navController.navigateUp() },
             )

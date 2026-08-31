@@ -120,6 +120,13 @@ data class SearchRoute(
 @Serializable
 data object MapRoute
 
+/**
+ * «Избранное» (issue #75). Вне графа табов: экран открывается из профиля, и
+ * нижняя навигация на нём не нужна — возврат ведёт обратно в профиль.
+ */
+@Serializable
+data object SavedPlacesRoute
+
 // --- Детали ---
 
 @Serializable
