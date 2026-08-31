@@ -33,6 +33,43 @@ fun mapkitApiKey(): String {
 }
 
 /**
+ * DSN Sentry (issue #74) — адрес проекта, куда уезжают отчёты о падениях.
+ *
+ * Читается ровно как ключ MapKit: переменная окружения `SENTRY_DSN` (секрет
+ * Actions) или `local.properties`, строка `sentry.dsn=…`. В репозиторий не
+ * кладётся: DSN — это право писать в чужой проект.
+ *
+ * Пустое значение — не ошибка сборки: приложение собирается и работает, просто
+ * отчёты никуда не уходят (см. `CrashReportingConfig`). Иначе один
+ * незаполненный секрет ронял бы сборку всем, включая форки.
+ */
+fun sentryDsn(): String {
+    val fromEnvironment = providers.environmentVariable("SENTRY_DSN").orNull
+    if (!fromEnvironment.isNullOrBlank()) return fromEnvironment.trim()
+
+    val localProperties = providers.fileContents(
+        rootProject.layout.projectDirectory.file("local.properties"),
+    ).asText.orNull ?: return ""
+
+    val properties = Properties().apply { load(localProperties.reader()) }
+    return properties.getProperty("sentry.dsn").orEmpty().trim()
+}
+
+/**
+ * Слать ли отчёты из debug-сборки (issue #74).
+ *
+ * По умолчанию нет: падение на машине разработчика — это работа, а не
+ * инцидент, и панель от них засоряется так, что настоящие падения в ней
+ * теряются. Включается на время отладки самого сбора:
+ * `SENTRY_ENABLED_IN_DEBUG=true` (переменная окружения или `-P`).
+ */
+fun sentryEnabledInDebug(): Boolean {
+    val fromEnvironment = providers.environmentVariable("SENTRY_ENABLED_IN_DEBUG").orNull
+    val fromProperty = providers.gradleProperty("SENTRY_ENABLED_IN_DEBUG").orNull
+    return (fromEnvironment ?: fromProperty).orEmpty().trim().equals("true", ignoreCase = true)
+}
+
+/**
  * Разрешено ли сборке менять адрес бэкенда прямо в приложении (issue #26).
  *
  * В debug — всегда: разработчик и тестировщик каждый день ходят на свой стенд.
@@ -64,6 +101,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "MAPKIT_API_KEY", stringLiteral(mapkitApiKey()))
+        buildConfigField("String", "SENTRY_DSN", stringLiteral(sentryDsn()))
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
@@ -87,6 +125,12 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"https://189-74-96-232.nip.io/api/v1/\"")
             // Адрес бэкенда меняется прямо в приложении (issue #26).
             buildConfigField("boolean", "BACKEND_URL_OVERRIDE", "true")
+            // Отчёты о падениях (issue #74): в debug — только по явному флагу.
+            buildConfigField(
+                "boolean",
+                "CRASH_REPORTING_ENABLED",
+                sentryEnabledInDebug().toString(),
+            )
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -98,6 +142,9 @@ android {
                 "BACKEND_URL_OVERRIDE",
                 backendUrlOverrideEnabled().toString(),
             )
+            // Ради этой сборки задача и делалась: падение у пользователя иначе
+            // не видно никак. Фактически включится только с непустым DSN.
+            buildConfigField("boolean", "CRASH_REPORTING_ENABLED", "true")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -211,6 +258,12 @@ dependencies {
 
     // Карта (эпик 4.2). Инициализация — ленивая, из MapKitInitializer.
     implementation(libs.yandex.mapkit)
+
+    // Отчёты о падениях (issue #74). Автозапуск через ContentProvider выключен
+    // в манифесте: SDK поднимается из MahallaApplication, чтобы решение «слать
+    // или не слать» принималось одним местом (CrashReportingConfig), а событие
+    // проходило через вычистку секретов (CrashScrubber).
+    implementation(libs.sentry.android.core)
 
     implementation(libs.androidx.datastore.preferences)
 

@@ -49,6 +49,15 @@
         android:theme="@style/Theme.Mahalla"
         tools:targetApi="33">
 
+        <!-- Отчёты о падениях (issue #74). Sentry умеет подниматься сам из
+             ContentProvider по DSN в манифесте — так нельзя: DSN приходит из
+             секрета сборки, отчёт обязан пройти вычистку секретов
+             (CrashScrubber), а в debug сбор по умолчанию выключен. Всё это
+             решает MahallaApplication, поэтому автозапуск отключён. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

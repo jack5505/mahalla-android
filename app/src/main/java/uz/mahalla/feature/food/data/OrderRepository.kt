@@ -1,5 +1,9 @@
 package uz.mahalla.feature.food.data
 
+import java.time.format.DateTimeFormatter
+import javax.inject.Inject
+import javax.inject.Singleton
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
@@ -9,9 +13,6 @@ import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartLine
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.Order
-import java.time.format.DateTimeFormatter
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Заказы вертикали «Еда» (эпик 5.3/5.4).
@@ -90,7 +91,7 @@ class DefaultOrderRepository @Inject constructor(
                 lines = order.lines,
             )
             order.lines
-        }.getOrNull()
+        }.reportSwallowed("cart.replaceFromOrder").getOrNull()
 
     private suspend fun ApiResult<Order>.alsoCache(): ApiResult<Order> = also {
         if (it is ApiResult.Success) cache(it.data)

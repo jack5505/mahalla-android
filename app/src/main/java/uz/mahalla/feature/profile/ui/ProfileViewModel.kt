@@ -2,7 +2,9 @@ package uz.mahalla.feature.profile.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
@@ -16,7 +18,6 @@ import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.profile.data.SessionsRepository
 import uz.mahalla.feature.profile.domain.DeviceSession
-import javax.inject.Inject
 
 /**
  * Профиль: кто вошёл, настройки приложения, устройства с открытым входом и
@@ -126,6 +127,7 @@ class ProfileViewModel @Inject constructor(
             // запрос ответит 401. Отказ записи не повод оставить человека в
             // приложении — выход уже случился локально.
             runCatchingCancellable { settingsDataStore.setOnboardingCompleted(false) }
+                .reportSwallowed("settings.setOnboardingCompleted")
             updateState { copy(loggingOut = false) }
             emitEffect(ProfileEffect.LoggedOut)
         }
