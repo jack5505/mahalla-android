@@ -3,12 +3,14 @@ package uz.mahalla.feature.root.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
@@ -16,7 +18,6 @@ import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
-import javax.inject.Inject
 
 /**
  * Состояние корня: пока настройки не прочитаны из DataStore, показывать UI
@@ -90,6 +91,7 @@ class RootViewModel @Inject constructor(
             // Не записался флаг — онбординг всё равно закончен для этого
             // запуска, ронять приложение из-за настройки нельзя.
             runCatchingCancellable { onboardingRepository.markCompleted() }
+                .reportSwallowed("settings.markOnboardingCompleted")
         }
     }
 

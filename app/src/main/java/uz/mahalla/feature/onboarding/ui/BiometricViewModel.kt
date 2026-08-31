@@ -2,12 +2,13 @@ package uz.mahalla.feature.onboarding.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
-import javax.inject.Inject
 
 /**
  * Вход по биометрии (3.5).
@@ -55,6 +56,7 @@ class BiometricViewModel @Inject constructor(
             // не повод оставлять пользователя запертым на шаге: без него
             // биометрия просто выключена, PIN уже настроен и остаётся входом.
             runCatchingCancellable { onboardingRepository.setBiometricEnabled(enabled) }
+                .reportSwallowed("settings.setBiometricEnabled")
             updateState { copy(busy = false) }
             emitEffect(BiometricEffect.Finished)
         }

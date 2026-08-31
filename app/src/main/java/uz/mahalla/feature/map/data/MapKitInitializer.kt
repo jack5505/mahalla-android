@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import uz.mahalla.core.crash.reportSwallowed
 
 /**
  * Тонкая обёртка над статикой `MapKitFactory` (эпик 4.2).
@@ -111,7 +112,7 @@ class MapKitInitializer(
             sdk.setApiKey(apiKey)
             sdk.setLocale(locale)
             sdk.initialize()
-        }
+        }.reportSwallowed("mapkit.initialize")
         // initialized выставляется только при успехе: MapKit не считает
         // неудачную попытку состоявшейся, повтор он разрешает.
         initialized = result.isSuccess

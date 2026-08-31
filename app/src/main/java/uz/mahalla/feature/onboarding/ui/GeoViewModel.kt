@@ -2,11 +2,12 @@ package uz.mahalla.feature.onboarding.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
-import javax.inject.Inject
 
 /**
  * Геолокация (3.6).
@@ -40,6 +41,7 @@ class GeoViewModel @Inject constructor(
                     // пользователя на последнем шаге онбординга из-за
                     // настройки нельзя: город меняется и в профиле.
                     runCatchingCancellable { onboardingRepository.setCity(event.city.id) }
+                        .reportSwallowed("settings.setCity")
                     updateState { copy(busy = false) }
                     emitEffect(GeoEffect.Finished)
                 }

@@ -2,7 +2,9 @@ package uz.mahalla.feature.onboarding.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.network.BackendCertificatePin
@@ -12,7 +14,6 @@ import uz.mahalla.data.network.BackendUrl
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.CleartextPolicy
 import uz.mahalla.data.network.inspector.HttpInspector
-import javax.inject.Inject
 
 /**
  * Ввод адреса бэкенда (issue #26) — первый экран приложения, пока адрес не
@@ -132,6 +133,7 @@ class BackendUrlViewModel @Inject constructor(
             // Не записался пин — доверие всё равно действует на этот запуск
             // (кэш обновлён до записи), запирать пользователя незачем.
             val applied = runCatchingCancellable { certificatePin.save(certificate.sha256) }
+                .reportSwallowed("backend.saveCertificatePin")
                 .getOrDefault(true)
             updateState { copy(checking = false) }
             if (applied) {
@@ -156,6 +158,7 @@ class BackendUrlViewModel @Inject constructor(
             // применён в кэше — на этот запуск приложение рабочее. Ронять экран
             // из-за настройки нельзя, иначе войти в приложение невозможно.
             runCatchingCancellable { backendUrlStore.save(normalized) }
+                .reportSwallowed("backend.saveUrl")
             updateState { copy(url = normalized, error = null) }
             emitEffect(BackendUrlEffect.Saved)
         }
