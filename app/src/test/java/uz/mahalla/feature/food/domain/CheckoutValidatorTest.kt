@@ -4,15 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDateTime
 
 /**
- * Валидация оформления (эпик 5.3). «Сейчас» передаётся параметром — иначе
- * проверка «слишком рано» зависела бы от времени прогона тестов.
+ * Валидация оформления (эпик 5.3).
+ *
+ * Времени доставки в форме больше нет: бэкенд его не принимает (issue #63),
+ * поэтому и проверять нечего.
  */
 class CheckoutValidatorTest {
-
-    private val now: LocalDateTime = LocalDateTime.of(2026, 8, 26, 12, 0)
 
     private val totals = CartTotals(subtotalSum = 50_000)
 
@@ -28,44 +27,6 @@ class CheckoutValidatorTest {
         val errors = validate(CheckoutForm(method = DeliveryMethod.Pickup, address = ""))
 
         assertFalse(errors.contains(CheckoutError.AddressRequired))
-    }
-
-    @Test
-    fun `scheduled order without a time is not allowed`() {
-        val errors = validate(pickup().copy(asap = false, scheduledAt = null))
-
-        assertTrue(errors.contains(CheckoutError.TimeRequired))
-    }
-
-    @Test
-    fun `a time too close to now is rejected`() {
-        val errors = validate(
-            pickup().copy(asap = false, scheduledAt = now.plusMinutes(10)),
-        )
-
-        assertEquals(
-            listOf(CheckoutError.TimeTooSoon(CheckoutValidator.MIN_LEAD_MINUTES)),
-            errors,
-        )
-    }
-
-    @Test
-    fun `a time with enough lead is accepted`() {
-        val form = pickup().copy(
-            asap = false,
-            scheduledAt = now.plusMinutes(CheckoutValidator.MIN_LEAD_MINUTES.toLong()),
-        )
-
-        assertTrue(validate(form).isEmpty())
-    }
-
-    @Test
-    fun `asap ignores a stale scheduled time`() {
-        // Время из прошлого могло остаться от прежнего выбора; включённое
-        // «как можно скорее» его не касается.
-        val form = pickup().copy(asap = true, scheduledAt = now.minusHours(2))
-
-        assertTrue(validate(form).isEmpty())
     }
 
     @Test
@@ -92,61 +53,12 @@ class CheckoutValidatorTest {
 
     @Test
     fun `every problem is reported at once`() {
-        val form = CheckoutForm(
-            method = DeliveryMethod.Delivery,
-            address = "",
-            asap = false,
-            scheduledAt = null,
-        )
+        val form = CheckoutForm(method = DeliveryMethod.Delivery, address = "")
 
         val errors = validate(form, walletBalanceSum = 0)
 
-        assertEquals(3, errors.size)
-        assertFalse(
-            CheckoutValidator.canSubmit(form, totals, false, 0, now),
-        )
-    }
-
-    @Test
-    fun `slots start after the minimum lead and step by half an hour`() {
-        val slots = DeliverySlots.next(LocalDateTime.of(2026, 8, 26, 12, 5), count = 3)
-
-        assertEquals(
-            listOf(
-                LocalDateTime.of(2026, 8, 26, 13, 0),
-                LocalDateTime.of(2026, 8, 26, 13, 30),
-                LocalDateTime.of(2026, 8, 26, 14, 0),
-            ),
-            slots,
-        )
-    }
-
-    @Test
-    fun `the first slot always passes validation`() {
-        // Округление вниз дало бы слот, который валидация тут же и отвергнет.
-        val first = DeliverySlots.next(now, count = 1).single()
-
-        assertTrue(validate(pickup().copy(asap = false, scheduledAt = first)).isEmpty())
-    }
-
-    @Test
-    fun `seconds are rounded up too, so the first slot is never half a minute early`() {
-        // `withSecond(0)` после прибавления запаса отдавал в 12:00:30 слот
-        // 12:30:00 — на полминуты раньше допустимого, и первый же предложенный
-        // слот отвергался как «слишком рано».
-        val withSeconds = LocalDateTime.of(2026, 8, 26, 12, 0, 30)
-        val first = DeliverySlots.next(withSeconds, count = 1).single()
-
-        assertEquals(LocalDateTime.of(2026, 8, 26, 13, 0), first)
-        assertTrue(
-            CheckoutValidator.validate(
-                form = pickup().copy(asap = false, scheduledAt = first),
-                totals = totals,
-                cartIsEmpty = false,
-                walletBalanceSum = 1_000_000,
-                now = withSeconds,
-            ).isEmpty(),
-        )
+        assertEquals(2, errors.size)
+        assertFalse(CheckoutValidator.canSubmit(form, totals, false, 0))
     }
 
     private fun pickup() = CheckoutForm(method = DeliveryMethod.Pickup)
@@ -160,6 +72,5 @@ class CheckoutValidatorTest {
         totals = totals,
         cartIsEmpty = cartIsEmpty,
         walletBalanceSum = walletBalanceSum,
-        now = now,
     )
 }

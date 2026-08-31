@@ -14,13 +14,13 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CartLine
 import uz.mahalla.feature.food.domain.PromoCode
 import uz.mahalla.feature.food.domain.PromoFailure
-import uz.mahalla.feature.food.domain.PromoKind
 import uz.mahalla.feature.food.domain.PromoState
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeMenuRepository
@@ -92,7 +92,7 @@ class CartViewModelTest {
     fun `an applied promo lowers the total and is shown as applied`() = runTest {
         seed(cartLine("osh", unitPriceSum = 100_000))
         menuRepository.promoResult = ApiResult.Success(
-            PromoCode("TEN", PromoKind.Percent, value = 10),
+            PromoCode("TEN", discountSum = 10_000, checkedSubtotalSum = 100_000),
         )
         val viewModel = viewModel()
 
@@ -103,6 +103,26 @@ class CartViewModelTest {
         assertTrue(state.promo is PromoState.Applied)
         assertEquals(10_000L, state.totals.discountSum)
         assertEquals(90_000L, state.totals.totalSum)
+    }
+
+    @Test
+    fun `changing the cart drops the discount checked for the previous one`() = runTest {
+        // Скидку считал сервер для прежней суммы; оставить её значит показать
+        // число, которого не будет в счёте.
+        seed(cartLine("osh", unitPriceSum = 100_000))
+        menuRepository.promoResult = ApiResult.Success(
+            PromoCode("TEN", discountSum = 10_000, checkedSubtotalSum = 100_000),
+        )
+        val viewModel = viewModel()
+        viewModel.onEvent(CartEvent.PromoInputChanged("TEN"))
+        viewModel.onEvent(CartEvent.PromoApplied)
+
+        viewModel.onEvent(CartEvent.QuantityChanged(lineId("osh"), 2))
+
+        val state = viewModel.state.value
+        assertEquals(PromoState.Idle, state.promo)
+        assertEquals(0L, state.totals.discountSum)
+        assertEquals(200_000L, state.totals.totalSum)
     }
 
     @Test
@@ -121,7 +141,7 @@ class CartViewModelTest {
     @Test
     fun `an unknown promo is rejected with its own reason`() = runTest {
         seed(cartLine("osh"))
-        menuRepository.promoResult = ApiResult.Failure(ApiError.NotFound)
+        menuRepository.promoResult = ApiResult.Failure(ApiFailure(ApiError.NotFound))
         val viewModel = viewModel()
 
         viewModel.onEvent(CartEvent.PromoInputChanged("NOPE"))
@@ -143,18 +163,17 @@ class CartViewModelTest {
     }
 
     @Test
-    fun `a valid code that gives no discount here is not applied silently`() = runTest {
+    fun `a code that does not fit this order is not applied silently`() = runTest {
+        // Сервер ответил `valid: false` — репозиторий отдаёт `null`.
         seed(cartLine("osh", unitPriceSum = 30_000))
-        menuRepository.promoResult = ApiResult.Success(
-            PromoCode("BIG", PromoKind.Fixed, value = 10_000, minOrderSum = 100_000),
-        )
+        menuRepository.promoResult = ApiResult.Success(null)
         val viewModel = viewModel()
 
         viewModel.onEvent(CartEvent.PromoInputChanged("BIG"))
         viewModel.onEvent(CartEvent.PromoApplied)
 
         assertEquals(
-            PromoState.Rejected(PromoFailure.MinOrder(100_000)),
+            PromoState.Rejected(PromoFailure.NotApplicable),
             viewModel.state.value.promo,
         )
         assertEquals(0L, viewModel.state.value.totals.discountSum)
@@ -187,7 +206,7 @@ class CartViewModelTest {
     fun `removing the promo returns the full price`() = runTest {
         seed(cartLine("osh", unitPriceSum = 100_000))
         menuRepository.promoResult = ApiResult.Success(
-            PromoCode("TEN", PromoKind.Percent, value = 10),
+            PromoCode("TEN", discountSum = 10_000, checkedSubtotalSum = 100_000),
         )
         val viewModel = viewModel()
         viewModel.onEvent(CartEvent.PromoInputChanged("TEN"))

@@ -1,5 +1,7 @@
 package uz.mahalla.feature.food.data
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -14,6 +16,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.db.dao.OrderDao
 import uz.mahalla.data.db.entity.OrderEntity
+import uz.mahalla.data.db.entity.PlaceEntity
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartLine
@@ -22,18 +25,19 @@ import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.MenuItem
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
-import uz.mahalla.feature.food.domain.PromoKind
 import uz.mahalla.testutil.FakeCartRepository
+import uz.mahalla.testutil.FakePlaceDao
 import uz.mahalla.testutil.cartLine
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import java.time.LocalDateTime
+import java.time.Instant
 import java.util.Locale
 
 /**
  * Репозитории вертикали «Еда» (эпик 5) на настоящем сетевом стеке
  * ([NetworkFactory] + [MockWebServer]): подмена Retrofit фейком не поймала бы
  * ни ошибку в пути запроса, ни несовпадение схемы JSON.
+ *
+ * Тела ответов — из контракта стенда (issue #63): пути под `food`, конверт
+ * `{success, data, error}`, суммы отдельными полями.
  */
 class FoodRepositoriesTest {
 
@@ -53,18 +57,42 @@ class FoodRepositoriesTest {
     // --- Меню ---
 
     @Test
-    fun `menu is mapped with categories, options and the stop list`() = runTest {
+    fun `menu comes from the food path and keeps the stop list`() = runTest {
         server.enqueue(json(MENU_BODY))
 
         val menu = (menuRepository().menu("place-1") as ApiResult.Success).data
 
-        assertEquals("/places/place-1/menu", server.takeRequest().path)
-        assertEquals(listOf("main"), menu.categories.map { it.id })
+        assertEquals("/food/places/place-1/menu", server.takeRequest().path)
+        // «Меню» бэкенда — это категория приложения.
+        assertEquals(listOf("m-1"), menu.categories.map { it.id })
         val items = menu.categories.single().items
         assertEquals(listOf("osh", "somsa"), items.map(MenuItem::id))
         assertFalse(items.last().isAvailable)
-        assertEquals(15_000L, menu.deliverySum)
-        assertEquals(listOf("size"), items.first().optionGroups.map { it.id })
+        assertEquals(30_000L, items.first().priceSum)
+    }
+
+    @Test
+    fun `the place name comes from the catalog cache, not from the menu`() = runTest {
+        // В `MenuResponse` названия заведения нет вовсе, а шапка меню и корзина
+        // его показывают.
+        server.enqueue(json(MENU_BODY))
+        val places = FakePlaceDao().apply { seed(listOf(place("place-1", "Osh markazi"))) }
+
+        val menu = (menuRepository(places).menu("place-1") as ApiResult.Success).data
+
+        assertEquals("Osh markazi", menu.placeName)
+    }
+
+    @Test
+    fun `an unknown place gives an empty menu rather than a crash`() = runTest {
+        // Стенд отвечает на неизвестное заведение `{"success":true,"data":[]}`,
+        // а не 404 — проверено curl'ом.
+        server.enqueue(json("""{"success":true,"data":[]}"""))
+
+        val menu = (menuRepository().menu("place-404") as ApiResult.Success).data
+
+        assertTrue(menu.categories.isEmpty())
+        assertTrue(menu.isEmpty)
     }
 
     @Test
@@ -79,17 +107,15 @@ class FoodRepositoriesTest {
     }
 
     @Test
-    fun `option group bounds are clamped to something achievable`() = runTest {
-        // maxChoices = 0 сделал бы группу невыполнимой, и кнопка «добавить»
-        // не включилась бы никогда.
-        server.enqueue(json(BAD_BOUNDS_MENU_BODY))
+    fun `an envelope with success false is a failure, not an empty menu`() = runTest {
+        server.enqueue(json("""{"success":false,"error":{"code":"PLACE_BLOCKED"}}"""))
 
-        val group = (menuRepository().menu("place-1") as ApiResult.Success)
-            .data.categories.single().items.single().optionGroups.single()
+        val result = menuRepository().menu("place-1")
 
-        assertEquals(1, group.maxChoices)
-        assertEquals(1, group.minChoices)
+        assertEquals(ApiError.Business("PLACE_BLOCKED"), (result as ApiResult.Failure).error)
     }
+
+    // --- Промокод ---
 
     @Test
     fun `promo is checked on the server with the current subtotal`() = runTest {
@@ -98,14 +124,14 @@ class FoodRepositoriesTest {
         val promo = (menuRepository().promo("place-1", " mahalla10 ", 90_000) as ApiResult.Success).data
 
         val request = server.takeRequest()
-        assertEquals("/places/place-1/promo", request.path)
-        val body = request.body.readUtf8()
-        // Код нормализуется до отправки: сервер не обязан знать про пробелы и
-        // регистр, которые набрал человек.
-        assertTrue(body, body.contains("\"code\":\"MAHALLA10\""))
-        assertTrue(body, body.contains("\"subtotal\":90000"))
-        assertEquals(PromoKind.Percent, promo.kind)
-        assertEquals(10L, promo.value)
+        // Промокод живёт в общем модуле акций, а не в «Еде».
+        assertEquals(
+            "/promotions/check?code=MAHALLA10&placeId=place-1&orderAmount=90000",
+            request.path,
+        )
+        assertEquals(9_000L, promo?.discountSum)
+        // Скидка привязана к сумме, с которой её считали.
+        assertEquals(90_000L, promo?.checkedSubtotalSum)
     }
 
     @Test
@@ -119,27 +145,42 @@ class FoodRepositoriesTest {
 
             menuRepository().promo("place-1", "mahalli", 90_000)
 
-            val body = server.takeRequest().body.readUtf8()
-            assertTrue(body, body.contains("\"code\":\"MAHALLI\""))
+            assertTrue(server.takeRequest().path!!.contains("code=MAHALLI"))
         } finally {
             Locale.setDefault(previous)
         }
     }
 
     @Test
-    fun `an unknown promo kind is treated as a fixed amount`() = runTest {
-        // Процент от неизвестного правила разошёлся бы с чеком.
-        server.enqueue(json("""{"code":"X","kind":"magic","value":5000}"""))
+    fun `a code that does not fit the order is not applied`() = runTest {
+        // `valid: false` со скидкой 0 — «код есть, но не подходит»; применить
+        // его молча значит показать скидку 0 без объяснения.
+        server.enqueue(json("""{"success":true,"data":{"valid":false,"discountAmount":0}}"""))
 
-        val promo = (menuRepository().promo("place-1", "X", 50_000) as ApiResult.Success).data
+        val result = menuRepository().promo("place-1", "X", 50_000)
 
-        assertEquals(PromoKind.Fixed, promo.kind)
+        assertNull((result as ApiResult.Success).data)
+    }
+
+    @Test
+    fun `an unknown code is a not found failure`() = runTest {
+        // Ровно то, что отвечает стенд: 404 с кодом NOT_FOUND.
+        server.enqueue(
+            MockResponse().setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"NOT_FOUND","message":"Promo-kod topilmadi"}}"""),
+        )
+
+        val result = menuRepository().promo("place-1", "X", 50_000)
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertEquals("NOT_FOUND", result.failure.server?.code)
     }
 
     // --- Заказы ---
 
     @Test
-    fun `creating an order sends the cart and clears the draft`() = runTest {
+    fun `creating an order sends only what the contract accepts`() = runTest {
         server.enqueue(json(ORDER_BODY))
         val cart = FakeCartRepository()
         val dao = FakeOrderDao()
@@ -148,22 +189,31 @@ class FoodRepositoriesTest {
             cart = Cart(
                 placeId = "place-1",
                 placeName = "Osh markazi",
-                lines = listOf(cartLine("osh", quantity = 2, optionIds = setOf("large"))),
+                lines = listOf(cartLine("osh", quantity = 2)),
             ),
             form = CheckoutForm(
                 method = DeliveryMethod.Delivery,
                 address = "  Amir Temur 1  ",
-                comment = " tez ",
                 payment = PaymentMethod.Wallet,
             ),
         )
 
-        val body = server.takeRequest().body.readUtf8()
+        val request = server.takeRequest()
+        assertEquals("/food/orders", request.path)
+        val body = request.body.readUtf8()
         assertTrue(body, body.contains("\"placeId\":\"place-1\""))
+        assertTrue(body, body.contains("\"itemId\":\"osh\""))
         assertTrue(body, body.contains("\"quantity\":2"))
-        assertTrue(body, body.contains("\"method\":\"delivery\""))
-        assertTrue(body, body.contains("\"address\":\"Amir Temur 1\""))
-        assertEquals(OrderStatus.Created, (result as ApiResult.Success).data.status)
+        assertTrue(body, body.contains("\"fulfillment\":\"DELIVERY\""))
+        assertTrue(body, body.contains("\"paymentMethod\":\"WALLET\""))
+        assertTrue(body, body.contains("\"deliveryAddress\":\"Amir Temur 1\""))
+        val order = (result as ApiResult.Success).data
+        assertEquals(OrderStatus.Created, order.status)
+        assertEquals("A-1042", order.orderNumber)
+        // Итог — число сервера, а не сумма позиций, посчитанная приложением.
+        assertEquals(75_000L, order.totalSum)
+        assertEquals(15_000L, order.totals.deliverySum)
+        assertEquals(Instant.parse("2026-08-26T10:00:00Z"), order.createdAt)
         // Оставленный черновик дал бы оформить тот же заказ второй раз по
         // кнопке «назад».
         assertEquals(listOf("place-1"), cart.clearedPlaceIds)
@@ -183,19 +233,24 @@ class FoodRepositoriesTest {
     }
 
     @Test
-    fun `an asap order sends no scheduled time`() = runTest {
+    fun `a date without a zone is still understood`() = runTest {
+        // Jackson на бэкенде отдаёт `LocalDateTime`; иначе дата пуста у всех.
+        server.enqueue(json(ORDER_BODY.replace("2026-08-26T10:00:00Z", "2026-08-26T10:00:00")))
+
+        val order = (orderRepository().order("o-1") as ApiResult.Success).data
+
+        assertEquals(Instant.parse("2026-08-26T10:00:00Z"), order.createdAt)
+    }
+
+    @Test
+    fun `the order takes the place name from the catalog cache`() = runTest {
+        // `OrderResponse` названия заведения не содержит.
         server.enqueue(json(ORDER_BODY))
+        val places = FakePlaceDao().apply { seed(listOf(place("place-1", "Osh markazi"))) }
 
-        orderRepository().create(
-            cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
-            form = CheckoutForm(
-                method = DeliveryMethod.Pickup,
-                asap = true,
-                scheduledAt = LocalDateTime.of(2026, 8, 26, 19, 0),
-            ),
-        )
+        val order = (orderRepository(places = places).order("o-1") as ApiResult.Success).data
 
-        assertFalse(server.takeRequest().body.readUtf8().contains("scheduledAt"))
+        assertEquals("Osh markazi", order.placeName)
     }
 
     @Test
@@ -214,12 +269,18 @@ class FoodRepositoriesTest {
     }
 
     @Test
-    fun `cancelling returns the updated order`() = runTest {
+    fun `the order is read and cancelled on the food paths`() = runTest {
+        server.enqueue(json(ORDER_BODY))
         server.enqueue(json(CANCELLED_ORDER_BODY))
+        val repository = orderRepository()
 
-        val result = orderRepository().cancel("o-1")
+        repository.order("o-1")
+        val result = repository.cancel("o-1")
 
-        assertEquals("/orders/o-1/cancel", server.takeRequest().path)
+        assertEquals("/food/orders/o-1", server.takeRequest().path)
+        val cancel = server.takeRequest()
+        assertEquals("/food/orders/o-1/cancel", cancel.path)
+        assertEquals("POST", cancel.method)
         assertEquals(OrderStatus.Cancelled, (result as ApiResult.Success).data.status)
     }
 
@@ -283,12 +344,24 @@ class FoodRepositoriesTest {
         )
         .create(FoodApi::class.java)
 
-    private fun menuRepository() = DefaultMenuRepository(api())
+    private fun menuRepository(places: FakePlaceDao = FakePlaceDao()) =
+        DefaultMenuRepository(api(), places)
 
     private fun orderRepository(
         cart: FakeCartRepository = FakeCartRepository(),
         dao: FakeOrderDao = FakeOrderDao(),
-    ) = DefaultOrderRepository(api(), dao, cart)
+        places: FakePlaceDao = FakePlaceDao(),
+    ) = DefaultOrderRepository(api(), dao, places, cart)
+
+    private fun place(id: String, name: String) = PlaceEntity(
+        id = id,
+        name = name,
+        category = "FOOD",
+        rating = 4.5,
+        distanceMeters = 100,
+        isOpenNow = true,
+        updatedAtEpochSeconds = 0,
+    )
 
     private fun json(body: String): MockResponse = MockResponse()
         .setResponseCode(200)
@@ -315,44 +388,39 @@ class FoodRepositoriesTest {
 
     private companion object {
         const val MENU_BODY = """
-            {"placeName":"Osh markazi","deliveryFee":15000,"categories":[
-              {"id":"main","name":"Asosiy","items":[
-                {"id":"osh","name":"Osh","price":30000,"available":true,
-                 "optionGroups":[{"id":"size","name":"Hajmi","minChoices":1,"maxChoices":1,
-                   "options":[{"id":"small","name":"Kichik"},
-                              {"id":"large","name":"Katta","priceDelta":10000}]}]},
-                {"id":"somsa","name":"Somsa","price":12000,"available":false}
+            {"success":true,"data":[
+              {"id":"m-1","name":"Asosiy","items":[
+                {"id":"osh","name":"Osh","price":30000,"isAvailable":true,"prepMinutes":20},
+                {"id":"somsa","name":"Somsa","price":12000,"isAvailable":false}
               ]}
             ]}
         """
 
         const val BROKEN_MENU_BODY = """
-            {"categories":[{"id":"main","name":"Asosiy","items":[
+            {"success":true,"data":[{"id":"m-1","name":"Asosiy","items":[
               {"id":"osh","name":"Osh","price":30000},
               {"id":"","name":"","price":1000}
             ]}]}
         """
 
-        const val BAD_BOUNDS_MENU_BODY = """
-            {"categories":[{"id":"main","name":"Asosiy","items":[
-              {"id":"osh","name":"Osh","price":30000,
-               "optionGroups":[{"id":"size","name":"Hajmi","minChoices":5,"maxChoices":0,
-                 "options":[{"id":"small","name":"Kichik"}]}]}
-            ]}]}
+        const val PROMO_BODY = """
+            {"success":true,"data":{"valid":true,"discountAmount":9000,
+             "finalAmount":81000,"promoCode":"MAHALLA10"}}
         """
 
-        const val PROMO_BODY = """{"code":"MAHALLA10","kind":"percent","value":10,"minOrder":50000}"""
-
         const val ORDER_BODY = """
-            {"id":"o-1","placeId":"place-1","placeName":"Osh markazi","status":"created",
-             "method":"delivery","payment":"wallet","subtotal":60000,"discount":0,"delivery":15000,
-             "items":[{"itemId":"osh","name":"Osh","price":30000,"quantity":2}],
-             "createdAt":1774000000,"etaMinutes":40}
+            {"success":true,"data":{"id":"o-1","placeId":"place-1","orderNumber":"A-1042",
+             "status":"NEW","fulfillment":"DELIVERY","paymentMethod":"WALLET",
+             "itemsAmount":60000,"deliveryAmount":15000,"discountAmount":0,"totalAmount":75000,
+             "items":[{"itemId":"osh","itemName":"Osh","unitPrice":30000,"quantity":2,
+                       "totalPrice":60000}],
+             "createdAt":"2026-08-26T10:00:00Z"}}
         """
 
         const val CANCELLED_ORDER_BODY = """
-            {"id":"o-1","placeId":"place-1","placeName":"Osh markazi","status":"cancelled",
-             "method":"delivery","payment":"wallet","subtotal":60000,"createdAt":1774000000}
+            {"success":true,"data":{"id":"o-1","placeId":"place-1","status":"CANCELLED",
+             "fulfillment":"DELIVERY","paymentMethod":"WALLET","itemsAmount":60000,
+             "totalAmount":60000,"createdAt":"2026-08-26T10:00:00Z"}}
         """
     }
 }

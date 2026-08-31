@@ -118,8 +118,12 @@ fun CartContent(
                     variant = MahallaButtonVariant.Ghost,
                 )
             }
-            item(key = "promo") {
-                PromoBlock(state = state, onEvent = onEvent)
+            // Промокод скрыт, пока его нечем донести до заказа — см.
+            // `CartState.promoSupported`.
+            if (state.promoSupported) {
+                item(key = "promo") {
+                    PromoBlock(state = state, onEvent = onEvent)
+                }
             }
         }
 
@@ -310,10 +314,7 @@ private fun TotalRow(
 private fun PromoFailure.text(): String = when (this) {
     PromoFailure.NotFound -> stringResource(R.string.cart_promo_error_not_found)
     PromoFailure.Expired -> stringResource(R.string.cart_promo_error_expired)
-    is PromoFailure.MinOrder -> stringResource(
-        R.string.cart_promo_error_min_order,
-        MoneyFormatter.withCurrency(minOrderSum, stringResource(R.string.currency_uzs)),
-    )
+    PromoFailure.NotApplicable -> stringResource(R.string.cart_promo_error_not_applicable)
 
     PromoFailure.Network -> stringResource(R.string.cart_promo_error_network)
 }

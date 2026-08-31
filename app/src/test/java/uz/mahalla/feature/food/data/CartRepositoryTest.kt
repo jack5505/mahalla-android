@@ -17,7 +17,6 @@ import uz.mahalla.data.db.MahallaDatabase
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CartLine
 import uz.mahalla.feature.food.domain.PromoCode
-import uz.mahalla.feature.food.domain.PromoKind
 import uz.mahalla.testutil.cartLine
 
 /**
@@ -126,7 +125,7 @@ class CartRepositoryTest {
         // Код был выдан под этот состав — переносить его на следующий заказ
         // значит показать скидку, которой уже нет.
         add(cartLine("osh"))
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
+        repository.applyPromo(PromoCode("TEN", discountSum = 5_000, checkedSubtotalSum = 50_000))
 
         repository.clear(PLACE_ID)
 
@@ -137,7 +136,7 @@ class CartRepositoryTest {
     fun `the promo is visible in the observed cart`() = runTest {
         add(cartLine("osh"))
 
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
+        repository.applyPromo(PromoCode("TEN", discountSum = 5_000, checkedSubtotalSum = 50_000))
 
         assertEquals("TEN", repository.cart(PLACE_ID).first().promo?.code)
     }
@@ -158,7 +157,7 @@ class CartRepositoryTest {
         // Повтор заказа: прежний черновик исчезает вместе с появлением нового,
         // одной транзакцией — а не «сначала почистить, потом добавить».
         repository.add("place-2", "Somsa uyi", 0, cartLine("somsa"))
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
+        repository.applyPromo(PromoCode("TEN", discountSum = 5_000, checkedSubtotalSum = 50_000))
 
         repository.replace(PLACE_ID, "Osh markazi", DELIVERY_SUM, listOf(cartLine("osh", quantity = 2)))
 

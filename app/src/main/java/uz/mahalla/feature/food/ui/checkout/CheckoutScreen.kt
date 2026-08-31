@@ -18,21 +18,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
-import uz.mahalla.core.ui.messageRes
+import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.ui.components.ButtonState
-import uz.mahalla.core.ui.components.FilterChipUi
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
-import uz.mahalla.core.ui.components.MahallaFilterRow
+import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaSegmentedControl
-import uz.mahalla.core.ui.components.MahallaSwitchRow
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
@@ -42,13 +39,12 @@ import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
- * Оформление заказа (эпик 5.3): доставка или самовывоз, адрес, время, оплата,
- * комментарий и итог.
+ * Оформление заказа (эпик 5.3): доставка или самовывоз, адрес, оплата и итог.
+ *
+ * Времени доставки и комментария на экране нет — их не принимает бэкенд
+ * (issue #63).
  */
 @Composable
 fun CheckoutScreen(
@@ -132,83 +128,25 @@ fun CheckoutContent(
                 }
             }
 
-            item(key = "time") {
-                TimeBlock(state = state, onEvent = onEvent)
-            }
-
             item(key = "payment") {
                 PaymentBlock(state = state, onEvent = onEvent)
             }
 
-            item(key = "comment") {
-                MahallaTextField(
-                    value = state.form.comment,
-                    onValueChange = { onEvent(CheckoutEvent.CommentChanged(it)) },
-                    label = stringResource(R.string.checkout_comment),
-                    placeholder = stringResource(R.string.checkout_comment_placeholder),
-                    singleLine = false,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                )
-            }
-
             if (state.submitError != null) {
                 item(key = "submit-error") {
-                    Text(
-                        text = stringResource(state.submitError.messageRes()),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
+                        Text(
+                            text = state.submitError.userMessage(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        state.submitError.server?.let { MahallaErrorDetails(server = it) }
+                    }
                 }
             }
         }
 
         SubmitBar(state = state, currency = currency, onEvent = onEvent)
-    }
-}
-
-@Composable
-private fun TimeBlock(
-    state: CheckoutState,
-    onEvent: (CheckoutEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
-        SectionHeader(title = stringResource(R.string.checkout_time))
-        MahallaSwitchRow(
-            title = stringResource(R.string.checkout_time_asap),
-            checked = state.form.asap,
-            onCheckedChange = { onEvent(CheckoutEvent.AsapToggled(it)) },
-        )
-        if (!state.form.asap) {
-            MahallaFilterRow(
-                items = state.slots.map { slot ->
-                    FilterChipUi(id = slot.slotId(), label = slot.format(SLOT_FORMATTER))
-                },
-                selectedId = state.form.scheduledAt?.slotId(),
-                onSelect = { id ->
-                    state.slots.firstOrNull { it.slotId() == id }
-                        ?.let { onEvent(CheckoutEvent.SlotSelected(it)) }
-                },
-            )
-            val timeError = state.error {
-                it is CheckoutError.TimeRequired || it is CheckoutError.TimeTooSoon
-            }
-            if (timeError != null) {
-                Text(
-                    text = when (timeError) {
-                        is CheckoutError.TimeTooSoon -> pluralStringResource(
-                            R.plurals.checkout_error_time_too_soon,
-                            timeError.minLeadMinutes,
-                            timeError.minLeadMinutes,
-                        )
-
-                        else -> stringResource(R.string.checkout_error_time_required)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
     }
 }
 
@@ -300,6 +238,15 @@ private fun SubmitBar(
                         color = LocalMahallaColors.current.fgMuted,
                     )
                 }
+            } else if (state.form.needsAddress) {
+                // Стоимость доставки бэкенд отдаёт только в ответе на заказ
+                // (issue #63), поэтому итог здесь без неё. Промолчать значит
+                // назвать сумму меньше той, что спишется.
+                Text(
+                    text = stringResource(R.string.checkout_delivery_fee_unknown),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -322,15 +269,3 @@ private fun SubmitBar(
         }
     }
 }
-
-/** Слот идентифицируется своим временем — отдельного id у него нет. */
-private fun LocalDateTime.slotId(): String = format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-
-private fun LocalDateTime.format(formatter: DateTimeFormatter): String = formatter.format(this)
-
-/**
- * Слоты уже посчитаны в зоне приложения (`DateTimeFormatters.AppZone`), поэтому
- * здесь остаётся только вывести часы и минуты.
- */
-private val SLOT_FORMATTER: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)

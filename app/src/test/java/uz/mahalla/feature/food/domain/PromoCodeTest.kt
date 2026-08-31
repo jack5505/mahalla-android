@@ -1,71 +1,81 @@
 package uz.mahalla.feature.food.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.result.ServerError
 
-/** Промокоды (эпик 5.2): расчёт скидки и разбор отказов сервера. */
+/**
+ * Промокоды (эпик 5.2) под контракт `GET promotions/check` (issue #63): скидку
+ * считает сервер, клиент только следит, что она относится к текущей корзине.
+ */
 class PromoCodeTest {
 
     @Test
-    fun `fixed promo subtracts its value`() {
-        val promo = PromoCode("FIX", PromoKind.Fixed, value = 10_000)
+    fun `discount applies to the subtotal it was checked against`() {
+        val promo = PromoCode("FIX", discountSum = 10_000, checkedSubtotalSum = 50_000)
 
         assertEquals(10_000L, promo.discountFor(50_000))
     }
 
     @Test
-    fun `percent promo is rounded down`() {
-        val promo = PromoCode("TEN", PromoKind.Percent, value = 10)
+    fun `a changed cart drops the discount`() {
+        // Сервер считал скидку для 50 000; для другой суммы она уже не его
+        // ответ, и показывать её значит назвать число, которого не будет в чеке.
+        val promo = PromoCode("FIX", discountSum = 10_000, checkedSubtotalSum = 50_000)
 
-        assertEquals(999L, promo.discountFor(9_999))
-    }
-
-    @Test
-    fun `percent promo respects its cap`() {
-        val promo = PromoCode("TEN", PromoKind.Percent, value = 50, maxDiscountSum = 20_000)
-
-        assertEquals(20_000L, promo.discountFor(100_000))
-    }
-
-    @Test
-    fun `promo below the minimum order gives nothing`() {
-        val promo = PromoCode("BIG", PromoKind.Fixed, value = 20_000, minOrderSum = 100_000)
-
-        assertEquals(0L, promo.discountFor(99_999))
-        assertEquals(20_000L, promo.discountFor(100_000))
+        assertTrue(promo.isStaleFor(60_000))
+        assertEquals(0L, promo.discountFor(60_000))
+        assertFalse(promo.isStaleFor(50_000))
     }
 
     @Test
     fun `discount never exceeds the order`() {
-        val promo = PromoCode("HUGE", PromoKind.Fixed, value = 500_000)
+        // Сервер прислал скидку больше заказа — это ошибка данных, а не долг
+        // заведения перед клиентом.
+        val promo = PromoCode("HUGE", discountSum = 500_000, checkedSubtotalSum = 30_000)
 
         assertEquals(30_000L, promo.discountFor(30_000))
     }
 
     @Test
-    fun `a percent above one hundred is clamped`() {
-        // Сервер прислал 150 % — это ошибка данных, а не бесплатный обед плюс
-        // доплата клиенту.
-        val promo = PromoCode("BUG", PromoKind.Percent, value = 150)
+    fun `a negative discount is ignored`() {
+        val promo = PromoCode("BUG", discountSum = -5_000, checkedSubtotalSum = 30_000)
 
-        assertEquals(50_000L, promo.discountFor(50_000))
+        assertEquals(0L, promo.discountFor(30_000))
     }
 
     @Test
-    fun `http codes map to distinct reasons`() {
-        assertEquals(PromoFailure.NotFound, ApiError.NotFound.asPromoFailure())
-        assertEquals(PromoFailure.Expired, ApiError.Http(410, null).asPromoFailure())
+    fun `the server error code decides the reason`() {
+        // Стенд отвечает `404 NOT_FOUND` с текстом «Promo-kod topilmadi».
+        assertEquals(PromoFailure.NotFound, failure(ApiError.NotFound, code = "NOT_FOUND").asPromoFailure())
         assertEquals(
-            PromoFailure.MinOrder(100_000),
-            ApiError.Http(409, null).asPromoFailure(minOrderSum = 100_000),
+            PromoFailure.Expired,
+            failure(ApiError.Http(400, null), code = "PROMO_EXPIRED").asPromoFailure(),
         )
+        assertEquals(
+            PromoFailure.NotApplicable,
+            failure(ApiError.Http(400, null), code = "PROMO_USAGE_LIMIT").asPromoFailure(),
+        )
+    }
+
+    @Test
+    fun `http codes still work without a server code`() {
+        assertEquals(PromoFailure.NotFound, failure(ApiError.NotFound).asPromoFailure())
+        assertEquals(PromoFailure.Expired, failure(ApiError.Http(410, null)).asPromoFailure())
+        assertEquals(PromoFailure.NotApplicable, failure(ApiError.Http(409, null)).asPromoFailure())
     }
 
     @Test
     fun `a network problem is not blamed on the code`() {
         // Иначе человек начнёт переписывать правильные буквы.
-        assertEquals(PromoFailure.Network, ApiError.NoConnection.asPromoFailure())
-        assertEquals(PromoFailure.Network, ApiError.Http(500, null).asPromoFailure())
+        assertEquals(PromoFailure.Network, failure(ApiError.NoConnection).asPromoFailure())
+        assertEquals(PromoFailure.Network, failure(ApiError.Http(500, null)).asPromoFailure())
     }
+
+    private fun failure(error: ApiError, code: String? = null): ApiFailure =
+        ApiFailure(error = error, server = code?.let { ServerError(httpCode = 400, code = it) })
 }

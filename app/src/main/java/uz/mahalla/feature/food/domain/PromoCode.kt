@@ -1,44 +1,33 @@
 package uz.mahalla.feature.food.domain
 
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
+import java.util.Locale
 
 /**
- * Промокод (эпик 5.2). Проверяет его сервер — клиент только показывает
- * результат и считает скидку по тем же правилам, что и бэкенд, чтобы итог на
- * экране совпал с итогом в чеке.
+ * Промокод (эпик 5.2), проверенный сервером (`GET promotions/check`, issue #63).
+ *
+ * Скидку считает бэкенд и присылает готовым числом, а не правилом: повторять у
+ * себя проценты, потолки и минимальные суммы значит однажды разойтись с чеком.
+ * Поэтому [discountSum] привязана к той сумме позиций, с которой код
+ * проверяли ([checkedSubtotalSum]) — для другой корзины она недействительна.
  */
 data class PromoCode(
     val code: String,
-    val kind: PromoKind,
-    /** Проценты для [PromoKind.Percent], сумы для [PromoKind.Fixed]. */
-    val value: Long,
-    /** Минимальная сумма позиций, с которой код работает. */
-    val minOrderSum: Long = 0,
-    /** Потолок скидки для процентных кодов; `null` — без потолка. */
-    val maxDiscountSum: Long? = null,
+    val discountSum: Long,
+    val checkedSubtotalSum: Long,
 ) {
 
+    /** Состав корзины изменился — прежний ответ сервера к нему не относится. */
+    fun isStaleFor(subtotalSum: Long): Boolean = subtotalSum != checkedSubtotalSum
+
     /**
-     * Скидка от суммы позиций. Процент округляется **вниз** до целых сум —
-     * округление вверх дало бы клиенту лишнюю суму за счёт заведения, и на
-     * тысяче заказов это расхождение с бэкендом заметит бухгалтерия.
+     * Скидка от суммы позиций. Для изменившейся корзины — ноль: показать старую
+     * скидку на новом составе значит назвать сумму, которой не будет в счёте.
      */
-    fun discountFor(subtotalSum: Long): Long {
-        if (subtotalSum < minOrderSum) return 0
-        val raw = when (kind) {
-            PromoKind.Percent -> subtotalSum * value.coerceIn(0, PERCENT_MAX) / PERCENT_MAX
-            PromoKind.Fixed -> value
-        }
-        val capped = maxDiscountSum?.let { minOf(raw, it) } ?: raw
-        return capped.coerceIn(0, subtotalSum)
-    }
-
-    private companion object {
-        const val PERCENT_MAX = 100L
-    }
+    fun discountFor(subtotalSum: Long): Long =
+        if (isStaleFor(subtotalSum)) 0 else discountSum.coerceIn(0, subtotalSum)
 }
-
-enum class PromoKind { Percent, Fixed }
 
 /** Состояние поля промокода на экране корзины. */
 sealed interface PromoState {
@@ -52,26 +41,33 @@ sealed interface PromoState {
 sealed interface PromoFailure {
     data object NotFound : PromoFailure
     data object Expired : PromoFailure
-    data class MinOrder(val minOrderSum: Long) : PromoFailure
+
+    /** Код есть и не истёк, но к этому заказу не применяется (`valid: false`). */
+    data object NotApplicable : PromoFailure
     data object Network : PromoFailure
 }
 
 /**
- * HTTP-коды промокода. 404 — кода нет, 410 — истёк, 409/422 — не подходит под
- * заказ (минимальная сумма). Всё остальное — сетевая ошибка: винить в ней
- * введённый код нельзя, человек начнёт переписывать правильные буквы.
+ * Классификация отказа `promotions/check`.
+ *
+ * Сначала смотрим машинный код бэкенда: на неизвестный код стенд отвечает
+ * `404 NOT_FOUND` («Promo-kod topilmadi»), но 404 приходит и от общих
+ * фильтров, а по одному HTTP-коду «кода нет» от «ручки нет» не отличить.
+ * Всё непонятое — сетевая ошибка: винить в ней введённый код нельзя, человек
+ * начнёт переписывать правильные буквы.
  */
-fun ApiError.asPromoFailure(minOrderSum: Long = 0): PromoFailure = when (this) {
-    ApiError.NotFound -> PromoFailure.NotFound
-    is ApiError.Http -> when (code) {
-        HTTP_GONE -> PromoFailure.Expired
-        HTTP_CONFLICT, HTTP_UNPROCESSABLE -> PromoFailure.MinOrder(minOrderSum)
+fun ApiFailure.asPromoFailure(): PromoFailure {
+    val code = server?.code?.trim()?.uppercase(Locale.ROOT).orEmpty()
+    return when {
+        code.contains("EXPIRE") || code.contains("INACTIVE") -> PromoFailure.Expired
+        code.contains("NOT_FOUND") -> PromoFailure.NotFound
+        code.contains("LIMIT") || code.contains("MIN_ORDER") -> PromoFailure.NotApplicable
+        error == ApiError.NotFound -> PromoFailure.NotFound
+        error is ApiError.Http && error.code == HTTP_GONE -> PromoFailure.Expired
+        error is ApiError.Http && error.code in NOT_APPLICABLE_CODES -> PromoFailure.NotApplicable
         else -> PromoFailure.Network
     }
-
-    else -> PromoFailure.Network
 }
 
 private const val HTTP_GONE = 410
-private const val HTTP_CONFLICT = 409
-private const val HTTP_UNPROCESSABLE = 422
+private val NOT_APPLICABLE_CODES = setOf(409, 422)

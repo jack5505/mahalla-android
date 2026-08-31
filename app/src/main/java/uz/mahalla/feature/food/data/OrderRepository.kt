@@ -5,16 +5,17 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.db.dao.OrderDao
+import uz.mahalla.data.db.dao.PlaceDao
+import uz.mahalla.data.network.payload
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartLine
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.Order
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Заказы вертикали «Еда» (эпик 5.3/5.4).
+ * Заказы вертикали «Еда» (эпик 5.3/5.4) — под контракт бэкенда (issue #63).
  *
  * Успешно созданный заказ чистит черновик корзины: оставить его значит дать
  * человеку оформить тот же заказ второй раз, просто нажав «назад».
@@ -39,26 +40,28 @@ interface OrderRepository {
 class DefaultOrderRepository @Inject constructor(
     private val api: FoodApi,
     private val orderDao: OrderDao,
+    private val placeDao: PlaceDao,
     private val cartRepository: CartRepository,
 ) : OrderRepository {
 
+    /**
+     * В заказ уходит только то, что бэкенд принимает: заведение, позиции,
+     * способ получения, способ оплаты и адрес. Промокод, время и комментарий
+     * контракт не знает — на экране их поэтому и не спрашивают.
+     */
     override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<Order> {
         val result = apiCall {
             api.createOrder(
-                CreateOrderDto(
+                PlaceOrderDto(
                     placeId = cart.placeId,
-                    items = cart.lines.map(CartLine::toDto),
-                    method = form.method.apiValue,
-                    payment = form.payment.apiValue,
-                    address = form.address.trim().takeIf { form.needsAddress && it.isNotEmpty() },
-                    comment = form.comment.trim().takeIf(String::isNotEmpty),
-                    scheduledAt = form.scheduledAt
-                        ?.takeIf { !form.asap }
-                        ?.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                    promoCode = cart.promo?.code,
+                    items = cart.lines.map(CartLine::toRequestDto),
+                    fulfillment = form.method.apiValue,
+                    paymentMethod = form.payment.apiValue,
+                    deliveryAddress = form.address.trim()
+                        .takeIf { form.needsAddress && it.isNotEmpty() },
                 ),
-            )
-        }.map(OrderDto::toDomain)
+            ).payload()
+        }.map { dto -> dto.toDomain(placeName = cart.placeName) }
 
         if (result is ApiResult.Success) {
             cache(result.data)
@@ -68,10 +71,10 @@ class DefaultOrderRepository @Inject constructor(
     }
 
     override suspend fun order(orderId: String): ApiResult<Order> =
-        apiCall { api.order(orderId) }.map(OrderDto::toDomain).alsoCache()
+        apiCall { api.order(orderId).payload() }.withPlaceName().alsoCache()
 
     override suspend fun cancel(orderId: String): ApiResult<Order> =
-        apiCall { api.cancelOrder(orderId) }.map(OrderDto::toDomain).alsoCache()
+        apiCall { api.cancelOrder(orderId).payload() }.withPlaceName().alsoCache()
 
     /**
      * Позиции старого заказа как строки корзины. Цены берутся из заказа, а не
@@ -91,6 +94,19 @@ class DefaultOrderRepository @Inject constructor(
             )
             order.lines
         }.getOrNull()
+
+    /**
+     * Названия заведения в `OrderResponse` нет. Берём из кэша каталога — там
+     * запись появляется, когда человек открывает карточку места, то есть до
+     * всякого заказа. Нет записи — пустое имя: шапка покажет заголовок экрана,
+     * а не чужое название.
+     */
+    private suspend fun ApiResult<OrderDto>.withPlaceName(): ApiResult<Order> = map { dto ->
+        dto.toDomain(placeName = placeName(dto.placeId))
+    }
+
+    private suspend fun placeName(placeId: String): String =
+        runCatchingCancellable { placeDao.byId(placeId)?.name }.getOrNull().orEmpty()
 
     private suspend fun ApiResult<Order>.alsoCache(): ApiResult<Order> = also {
         if (it is ApiResult.Success) cache(it.data)

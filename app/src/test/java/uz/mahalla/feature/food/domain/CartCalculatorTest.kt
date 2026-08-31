@@ -87,12 +87,10 @@ class CartCalculatorTest {
     }
 
     @Test
-    fun `percent discount is rounded down to whole sums`() {
-        // Округление вверх дало бы клиенту лишнюю суму за счёт заведения и
-        // разошлось бы с расчётом бэкенда.
+    fun `the discount checked by the server is subtracted`() {
         val cart = cart(
             lines = listOf(cartLine("osh", unitPriceSum = 33_333, quantity = 1)),
-            promo = PromoCode("TEN", PromoKind.Percent, value = 10),
+            promo = PromoCode("TEN", discountSum = 3_333, checkedSubtotalSum = 33_333),
         )
 
         assertEquals(3_333L, CartCalculator.totals(cart).discountSum)
@@ -102,7 +100,7 @@ class CartCalculatorTest {
     fun `discount never exceeds the price of the items`() {
         val cart = cart(
             lines = listOf(cartLine("osh", unitPriceSum = 30_000)),
-            promo = PromoCode("BIG", PromoKind.Fixed, value = 50_000),
+            promo = PromoCode("BIG", discountSum = 50_000, checkedSubtotalSum = 30_000),
         )
 
         val totals = CartCalculator.totals(cart)
@@ -115,7 +113,7 @@ class CartCalculatorTest {
     fun `delivery is added on top and is not discounted`() {
         val cart = cart(
             lines = listOf(cartLine("osh", unitPriceSum = 100_000)),
-            promo = PromoCode("HALF", PromoKind.Percent, value = 50),
+            promo = PromoCode("HALF", discountSum = 50_000, checkedSubtotalSum = 100_000),
         )
 
         val totals = CartCalculator.totals(cart, deliverySum = 15_000)
@@ -125,10 +123,11 @@ class CartCalculatorTest {
     }
 
     @Test
-    fun `a promo below its minimum order gives no discount`() {
+    fun `a promo checked for another cart gives no discount`() {
+        // Состав изменился — ответ сервера к нему не относится.
         val cart = cart(
             lines = listOf(cartLine("osh", unitPriceSum = 30_000)),
-            promo = PromoCode("BIG", PromoKind.Fixed, value = 10_000, minOrderSum = 100_000),
+            promo = PromoCode("BIG", discountSum = 10_000, checkedSubtotalSum = 100_000),
         )
 
         assertEquals(0L, CartCalculator.totals(cart).discountSum)

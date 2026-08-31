@@ -99,10 +99,12 @@ fun order(
     id = id,
     placeId = "place-1",
     placeName = "Osh markazi",
+    orderNumber = "A-1042",
     status = status,
     method = method,
     payment = PaymentMethod.Wallet,
     totals = CartTotals(subtotalSum = CartCalculator.subtotal(lines)),
+    totalSum = CartCalculator.subtotal(lines),
     lines = lines,
     createdAt = Instant.parse("2026-08-26T10:00:00Z"),
 )
@@ -111,7 +113,9 @@ fun order(
 class FakeMenuRepository : MenuRepository {
 
     var menuResult: ApiResult<Menu> = ApiResult.Success(menu())
-    var promoResult: ApiResult<PromoCode> = ApiResult.Failure(ApiError.NotFound)
+
+    /** `Success(null)` — код есть, но к этому заказу не применяется. */
+    var promoResult: ApiResult<PromoCode?> = ApiResult.Failure(ApiError.NotFound)
 
     val promoRequests: MutableList<Triple<String, String, Long>> = mutableListOf()
 
@@ -121,7 +125,7 @@ class FakeMenuRepository : MenuRepository {
         placeId: String,
         code: String,
         subtotalSum: Long,
-    ): ApiResult<PromoCode> {
+    ): ApiResult<PromoCode?> {
         promoRequests += Triple(placeId, code, subtotalSum)
         return promoResult
     }

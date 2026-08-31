@@ -38,7 +38,7 @@ class CartViewModel @Inject constructor(
     init {
         updateState { copy(placeId = placeId) }
         viewModelScope.launch {
-            cartRepository.cart(placeId).collect { cart -> updateState { withCart(cart) } }
+            cartRepository.cart(placeId).collect(::onCart)
         }
     }
 
@@ -77,6 +77,20 @@ class CartViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Скидка, посчитанная сервером, относится к тому составу корзины, с которым
+     * код проверяли. Изменили состав — прежний ответ снимается: показать старую
+     * скидку на новой сумме значит назвать число, которого не будет в счёте.
+     */
+    private fun onCart(cart: Cart) {
+        val stale = cart.promo?.isStaleFor(CartCalculator.subtotal(cart.lines)) == true
+        if (stale) {
+            cartRepository.applyPromo(null)
+            updateState { copy(promo = PromoState.Idle) }
+        }
+        updateState { withCart(cart) }
+    }
+
     private fun CartState.withCart(cart: Cart): CartState = copy(
         placeName = cart.placeName.takeIf(String::isNotBlank) ?: placeName,
         lines = cart.lines,
@@ -87,9 +101,9 @@ class CartViewModel @Inject constructor(
     )
 
     /**
-     * Проверка промокода. Сумма уходит на сервер вместе с кодом: «минимальный
-     * заказ 100 000» проверяется по актуальному составу, а не по тому, что было
-     * в корзине, когда код вводили.
+     * Проверка промокода. Сумма уходит на сервер вместе с кодом: скидку считает
+     * он, и «минимальный заказ 100 000» проверяется по актуальному составу, а не
+     * по тому, что было в корзине, когда код вводили.
      */
     private fun applyPromo() {
         val state = currentState
@@ -101,20 +115,17 @@ class CartViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = menuRepository.promo(placeId, code, subtotal)) {
                 is ApiResult.Failure -> updateState {
-                    copy(promo = PromoState.Rejected(result.error.asPromoFailure()))
+                    copy(promo = PromoState.Rejected(result.failure.asPromoFailure()))
                 }
 
-                is ApiResult.Success -> {
-                    val promo = result.data
-                    // Код валиден сам по себе, но не дотягивает по сумме —
-                    // применять его молча значит показать скидку 0 без причины.
-                    if (promo.discountFor(subtotal) <= 0) {
-                        updateState {
-                            copy(promo = PromoState.Rejected(PromoFailure.MinOrder(promo.minOrderSum)))
-                        }
-                        return@launch
+                // `null` — код есть, но к этому заказу не применяется: молча
+                // показать скидку 0 значит оставить человека без объяснения.
+                is ApiResult.Success -> when (val promo = result.data) {
+                    null -> updateState {
+                        copy(promo = PromoState.Rejected(PromoFailure.NotApplicable))
                     }
-                    cartRepository.applyPromo(promo)
+
+                    else -> cartRepository.applyPromo(promo)
                 }
             }
         }

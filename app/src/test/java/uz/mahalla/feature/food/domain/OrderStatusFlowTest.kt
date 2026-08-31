@@ -24,6 +24,7 @@ class OrderStatusFlowTest {
     fun `final statuses stop the polling`() {
         assertTrue(OrderStatusFlow.isFinal(OrderStatus.Completed))
         assertTrue(OrderStatusFlow.isFinal(OrderStatus.Cancelled))
+        assertTrue(OrderStatusFlow.isFinal(OrderStatus.Refunded))
         assertFalse(OrderStatusFlow.isFinal(OrderStatus.Preparing))
     }
 
@@ -79,7 +80,21 @@ class OrderStatusFlowTest {
             assertEquals(status, OrderStatus.fromApi(status.apiValue))
         }
         // Дефис вместо подчёркивания — частая разница в контрактах.
-        assertEquals(OrderStatus.ReadyForPickup, OrderStatus.fromApi("READY-FOR-PICKUP"))
+        assertEquals(OrderStatus.Delivering, OrderStatus.fromApi("in-delivery"))
+    }
+
+    @Test
+    fun `statuses match the backend enum`() {
+        // Значения сняты со стенда (issue #63): разъехавшееся написание сделало
+        // бы любой заказ «в работе» и убрало бы кнопку отмены.
+        assertEquals(OrderStatus.Created, OrderStatus.fromApi("NEW"))
+        assertEquals(OrderStatus.Confirmed, OrderStatus.fromApi("ACCEPTED"))
+        assertEquals(OrderStatus.Preparing, OrderStatus.fromApi("PREPARING"))
+        assertEquals(OrderStatus.ReadyForPickup, OrderStatus.fromApi("READY"))
+        assertEquals(OrderStatus.Delivering, OrderStatus.fromApi("IN_DELIVERY"))
+        assertEquals(OrderStatus.Completed, OrderStatus.fromApi("DELIVERED"))
+        assertEquals(OrderStatus.Cancelled, OrderStatus.fromApi("CANCELLED"))
+        assertEquals(OrderStatus.Refunded, OrderStatus.fromApi("REFUNDED"))
     }
 
     @Test
@@ -87,6 +102,17 @@ class OrderStatusFlowTest {
         // Неизвестный способ требует адреса — лучше спросить лишнее, чем
         // отправить заказ в никуда.
         assertEquals(DeliveryMethod.Delivery, DeliveryMethod.fromApi("teleport"))
+        assertEquals(DeliveryMethod.Delivery, DeliveryMethod.fromApi("DELIVERY"))
         assertEquals(DeliveryMethod.Pickup, DeliveryMethod.fromApi("PICKUP"))
+        // «Поем на месте» для оформления это тот же самовывоз: адрес не нужен.
+        assertEquals(DeliveryMethod.Pickup, DeliveryMethod.fromApi("DINE_IN"))
+    }
+
+    @Test
+    fun `payment method matches the backend enum`() {
+        assertEquals("WALLET", PaymentMethod.Wallet.apiValue)
+        assertEquals("CASH", PaymentMethod.Cash.apiValue)
+        assertEquals(PaymentMethod.Cash, PaymentMethod.fromApi("CASH"))
+        assertEquals(PaymentMethod.Wallet, PaymentMethod.fromApi("teleport"))
     }
 }

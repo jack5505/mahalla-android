@@ -5,8 +5,10 @@ import java.time.Instant
 /**
  * Статус заказа (эпик 5.4).
  *
- * [Unknown] обязателен: набор статусов задаёт бэкенд, и новый статус не должен
- * ронять экран заказа — он покажет его как «в работе».
+ * Значения — перечисление бэкенда (issue #63): `NEW`, `ACCEPTED`, `PREPARING`,
+ * `READY`, `IN_DELIVERY`, `DELIVERED`, `CANCELLED`, `REFUNDED`. [Unknown]
+ * обязателен: набор задаёт сервер, и новый статус не должен ронять экран
+ * заказа — он покажет его как «в работе».
  */
 enum class OrderStatus {
     Created,
@@ -16,24 +18,26 @@ enum class OrderStatus {
     ReadyForPickup,
     Completed,
     Cancelled,
+    Refunded,
     Unknown,
     ;
 
     val apiValue: String
         get() = when (this) {
-            Created -> "created"
-            Confirmed -> "confirmed"
-            Preparing -> "preparing"
-            Delivering -> "delivering"
-            ReadyForPickup -> "ready_for_pickup"
-            Completed -> "completed"
-            Cancelled -> "cancelled"
-            Unknown -> "unknown"
+            Created -> "NEW"
+            Confirmed -> "ACCEPTED"
+            Preparing -> "PREPARING"
+            Delivering -> "IN_DELIVERY"
+            ReadyForPickup -> "READY"
+            Completed -> "DELIVERED"
+            Cancelled -> "CANCELLED"
+            Refunded -> "REFUNDED"
+            Unknown -> "UNKNOWN"
         }
 
     companion object {
         fun fromApi(value: String?): OrderStatus {
-            val normalized = value?.trim()?.lowercase()?.replace('-', '_') ?: return Unknown
+            val normalized = value?.trim()?.uppercase()?.replace('-', '_') ?: return Unknown
             return entries.firstOrNull { it.apiValue == normalized } ?: Unknown
         }
     }
@@ -42,21 +46,29 @@ enum class OrderStatus {
 /**
  * Заказ. [lines] — снимок корзины на момент оформления: меню поменяется, а чек
  * должен остаться прежним.
+ *
+ * [totalSum] приходит от бэкенда отдельным полем и не пересчитывается из
+ * [totals]: платит человек по числу сервера, и собственная арифметика
+ * приложения не имеет права с ним разойтись. [totals] остаётся ради разбивки
+ * (позиции / скидка / доставка).
+ *
+ * [placeName] бэкенд в заказе не отдаёт — он подставляется из кэша мест, см.
+ * `DefaultOrderRepository`.
  */
 data class Order(
     val id: String,
     val placeId: String,
     val placeName: String,
+    /** Номер для человека («A-1042»); пустой, если сервер его не прислал. */
+    val orderNumber: String = "",
     val status: OrderStatus,
     val method: DeliveryMethod,
     val payment: PaymentMethod,
     val totals: CartTotals,
+    val totalSum: Long,
     val lines: List<CartLine> = emptyList(),
     val createdAt: Instant,
     val address: String? = null,
-    val comment: String? = null,
-    /** Оценка готовности в минутах; `null` — сервер её не прислал. */
-    val etaMinutes: Int? = null,
 )
 
 /**
@@ -89,7 +101,9 @@ object OrderStatusFlow {
 
     /** Дальше статус не изменится — опрос сервера можно прекращать. */
     fun isFinal(status: OrderStatus): Boolean =
-        status == OrderStatus.Completed || status == OrderStatus.Cancelled
+        status == OrderStatus.Completed ||
+            status == OrderStatus.Cancelled ||
+            status == OrderStatus.Refunded
 
     /**
      * Отменить можно, пока кухня не начала готовить: после этого продукты уже

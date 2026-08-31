@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -200,15 +199,13 @@ private fun OrderHeader(order: Order, modifier: Modifier = Modifier) {
             }
             MahallaBadge(text = stringResource(order.status.labelRes()), tone = order.status.tone())
         }
-        if (order.etaMinutes != null && !OrderStatusFlow.isFinal(order.status)) {
+        // Номер заказа — то, что называют на выдаче. Оценки готовности бэкенд
+        // не отдаёт (issue #63), поэтому обещать «примерно 20 минут» нечем.
+        if (order.orderNumber.isNotBlank()) {
             Text(
-                text = pluralStringResource(
-                    R.plurals.order_eta,
-                    order.etaMinutes,
-                    order.etaMinutes,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalMahallaColors.current.fgMuted,
+                text = order.orderNumber,
+                style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
     }
@@ -224,7 +221,10 @@ private fun StagesBlock(
     order: Order,
     modifier: Modifier = Modifier,
 ) {
-    if (order.status == OrderStatus.Cancelled || order.status == OrderStatus.Unknown) return
+    val outOfFlow = order.status == OrderStatus.Cancelled ||
+        order.status == OrderStatus.Refunded ||
+        order.status == OrderStatus.Unknown
+    if (outOfFlow) return
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
         state.stages.forEach { stage ->
@@ -320,9 +320,10 @@ private fun TotalsCard(order: Order, currency: String, modifier: Modifier = Modi
                 color = mahalla.fgMuted,
             )
         }
+        // Итог — число бэкенда, а не наша арифметика: платит человек по нему.
         TotalsRow(
             label = stringResource(R.string.cart_total),
-            value = MoneyFormatter.withCurrency(order.totals.totalSum, currency),
+            value = MoneyFormatter.withCurrency(order.totalSum, currency),
             color = MaterialTheme.colorScheme.onSurface,
             emphasized = true,
         )
@@ -360,12 +361,13 @@ private fun OrderStatus.labelRes(): Int = when (this) {
     OrderStatus.ReadyForPickup -> R.string.order_status_ready
     OrderStatus.Completed -> R.string.order_status_completed
     OrderStatus.Cancelled -> R.string.order_status_cancelled
+    OrderStatus.Refunded -> R.string.order_status_refunded
     OrderStatus.Unknown -> R.string.order_status_unknown
 }
 
 private fun OrderStatus.tone(): MahallaTone = when (this) {
     OrderStatus.Completed -> MahallaTone.Success
-    OrderStatus.Cancelled -> MahallaTone.Error
+    OrderStatus.Cancelled, OrderStatus.Refunded -> MahallaTone.Error
     OrderStatus.Unknown -> MahallaTone.Neutral
     else -> MahallaTone.Info
 }

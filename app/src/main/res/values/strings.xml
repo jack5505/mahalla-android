@@ -337,7 +337,7 @@
     <string name="cart_promo_applied">%1$s promokodi qo\'llandi</string>
     <string name="cart_promo_error_not_found">Bunday promokod topilmadi</string>
     <string name="cart_promo_error_expired">Promokod muddati tugagan</string>
-    <string name="cart_promo_error_min_order">Promokod %1$s dan boshlab ishlaydi</string>
+    <string name="cart_promo_error_not_applicable">Promokod bu buyurtmaga to\'g\'ri kelmadi</string>
     <string name="cart_promo_error_network">Promokodni tekshirib bo\'lmadi</string>
     <string name="cart_conflict_title">Boshqa joyning savati</string>
     <string name="cart_conflict_description">Savatingizda «%1$s» taomlari bor. Ularni o\'chirib, yangi savat ochamizmi?</string>
@@ -350,19 +350,15 @@
     <string name="checkout_method_pickup">Olib ketish</string>
     <string name="checkout_address">Manzil</string>
     <string name="checkout_address_placeholder">Ko\'cha, uy, xonadon</string>
-    <string name="checkout_time">Vaqt</string>
-    <string name="checkout_time_asap">Imkon qadar tezroq</string>
     <string name="checkout_payment">To\'lov</string>
     <string name="checkout_payment_wallet">Hamyon</string>
     <string name="checkout_payment_cash">Naqd pul</string>
     <string name="checkout_wallet_balance">Hamyon balansi: %1$s</string>
     <string name="checkout_top_up">Hamyonni to\'ldirish</string>
-    <string name="checkout_comment">Izoh</string>
-    <string name="checkout_comment_placeholder">Masalan, qo\'ng\'iroq qilmang</string>
     <string name="checkout_delivery_fee">Yetkazib berish</string>
+    <string name="checkout_delivery_fee_unknown">Yetkazib berish narxini muassasa hisoblaydi va u yakuniy summaga qo\'shiladi</string>
     <string name="checkout_submit">Buyurtma berish</string>
     <string name="checkout_error_address">Yetkazib berish uchun manzilni kiriting</string>
-    <string name="checkout_error_time_required">Vaqtni tanlang</string>
     <string name="checkout_error_insufficient_funds">Hamyonda %1$s yetishmayapti</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
@@ -383,6 +379,7 @@
     <string name="order_status_ready">Olib ketishga tayyor</string>
     <string name="order_status_completed">Yakunlandi</string>
     <string name="order_status_cancelled">Bekor qilindi</string>
+    <string name="order_status_refunded">Pul qaytarildi</string>
     <string name="order_status_unknown">Ish jarayonida</string>
 
     <!-- Дни недели -->

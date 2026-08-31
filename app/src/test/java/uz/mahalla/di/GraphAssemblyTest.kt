@@ -175,7 +175,10 @@ class GraphAssemblyTest {
             val api = FoodDataModule.provideFoodApi(retrofit)
             val cartRepository = DefaultCartRepository(DatabaseModule.provideCartDraftDao(database))
 
-            assertNotNull(DefaultMenuRepository(api))
+            val placeDao = DatabaseModule.providePlaceDao(database)
+            // Названия заведения нет ни в меню, ни в заказе (issue #63) — оба
+            // репозитория берут его из кэша каталога.
+            assertNotNull(DefaultMenuRepository(api, placeDao))
             // Кошелёк живёт в своём модуле и на своих ручках (issue #62):
             // `wallet/balance` у бэкенда никогда не было.
             assertNotNull(
@@ -185,6 +188,7 @@ class GraphAssemblyTest {
                 DefaultOrderRepository(
                     api = api,
                     orderDao = DatabaseModule.provideOrderDao(database),
+                    placeDao = placeDao,
                     cartRepository = cartRepository,
                 ),
             )

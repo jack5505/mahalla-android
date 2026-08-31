@@ -26,16 +26,4 @@
         <item quantity="other">%1$d / %2$d raqam kiritildi</item>
     </plurals>
 
-    <!-- Еда: слот доставки не раньше чем через N минут (эпик 5, checkout). -->
-    <plurals name="checkout_error_time_too_soon">
-        <item quantity="one">Vaqt kamida %1$d daqiqadan keyin bo\'lsin</item>
-        <item quantity="other">Vaqt kamida %1$d daqiqadan keyin bo\'lsin</item>
-    </plurals>
-
-    <!-- Еда: сколько ждать заказ. -->
-    <plurals name="order_eta">
-        <item quantity="one">Taxminan %1$d daqiqa</item>
-        <item quantity="other">Taxminan %1$d daqiqa</item>
-    </plurals>
-
 </resources>

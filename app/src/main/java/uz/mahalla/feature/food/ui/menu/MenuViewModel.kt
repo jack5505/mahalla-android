@@ -88,7 +88,7 @@ class MenuViewModel @Inject constructor(
         updateState { copy(menu = ScreenState.Loading) }
         viewModelScope.launch {
             when (val result = menuRepository.menu(placeId)) {
-                is ApiResult.Failure -> updateState { copy(menu = ScreenState.Error(result.error)) }
+                is ApiResult.Failure -> updateState { copy(menu = ScreenState.Error(result.failure)) }
                 is ApiResult.Success -> updateState { withMenu(result.data) }
             }
         }

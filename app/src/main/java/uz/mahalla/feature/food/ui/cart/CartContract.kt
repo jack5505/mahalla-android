@@ -32,6 +32,22 @@ data class CartState(
 
     val canApplyPromo: Boolean
         get() = promoInput.isNotBlank() && promo !is PromoState.Checking && !isEmpty
+
+    /**
+     * Показывать ли поле промокода.
+     *
+     * Выключено, пока `PlaceOrderRequest` бэкенда не принимает код (issue #63):
+     * проверить его (`GET promotions/check`) приложение умеет, а донести до
+     * заказа нечем — скидка, показанная в корзине, в счёт бы не попала. Врать
+     * про деньги хуже, чем не предлагать промокод вовсе. Проверка и разбор
+     * ответа остаются рабочими: как только у заказа появится поле кода, здесь
+     * меняется одна константа.
+     */
+    val promoSupported: Boolean get() = PROMO_SUPPORTED
+
+    private companion object {
+        const val PROMO_SUPPORTED = false
+    }
 }
 
 sealed interface CartEvent : UiEvent {

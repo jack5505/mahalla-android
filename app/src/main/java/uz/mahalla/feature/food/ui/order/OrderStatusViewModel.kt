@@ -85,7 +85,7 @@ class OrderStatusViewModel @Inject constructor(
                         // следующей попытки: моргать экраном на каждом обрыве
                         // связи хуже, чем показать статус минутной давности.
                         if (currentState.data == null) {
-                            updateState { copy(order = ScreenState.Error(result.error)) }
+                            updateState { copy(order = ScreenState.Error(result.failure)) }
                             return@launch
                         }
                     }

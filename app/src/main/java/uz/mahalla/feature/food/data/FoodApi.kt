@@ -6,139 +6,140 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
+import uz.mahalla.data.network.ApiResponse
 
 /**
- * Вертикаль «Еда» (эпик 5): меню, промокод, заказы.
+ * Вертикаль «Еда» (эпик 5) — под реальный контракт бэкенда (issue #63).
  *
- * Контракт бэкенда по этим ручкам ещё не сверен с `MAHALLA-IMPLEMENTATION.md`
- * (в этом прогоне design-репозиторий недоступен) — имена полей подобраны по
- * образцу каталога эпика 4. Все необязательные поля имеют дефолт: отсутствие
- * поля не должно ронять экран.
+ * Прежняя версия была написана по здравому смыслу (design-репозиторий тогда был
+ * недоступен) и на живом сервере не работала ни одним вызовом: пути другие, а
+ * ответы приезжают в общем конверте [ApiResponse], а не «голым» JSON.
+ *
+ * Контракт снят с `https://189-74-96-232.nip.io/v3/api-docs` и проверен
+ * curl'ами: меню отвечает **без токена** (`{"success":true,"data":[]}` для
+ * неизвестного заведения — не 404), все ручки заказов требуют Bearer.
+ * Промокод живёт не в «Еде», а в общем модуле акций (`GET promotions/check`),
+ * поэтому объявлен здесь же: другого потребителя у него в приложении нет.
  */
 interface FoodApi {
 
-    @GET("places/{id}/menu")
-    suspend fun menu(@Path("id") placeId: String): MenuDto
+    @GET("food/places/{placeId}/menu")
+    suspend fun menu(@Path("placeId") placeId: String): ApiResponse<List<MenuSectionDto>>
 
     /**
-     * Проверка промокода. Сумма позиций уходит на сервер: скидка зависит от
-     * неё, и решать «подходит ли код» обязан тот, кто потом выставит счёт.
+     * Проверка промокода. Сумма позиций уходит на сервер: скидку считает он,
+     * и `discountAmount` в ответе — уже готовое число, а не правило.
      */
-    @POST("places/{id}/promo")
-    suspend fun promo(
-        @Path("id") placeId: String,
-        @Body request: PromoRequestDto,
-    ): PromoDto
+    @GET("promotions/check")
+    suspend fun checkPromo(
+        @Query("code") code: String,
+        @Query("placeId") placeId: String,
+        @Query("orderAmount") orderAmountSum: Long,
+    ): ApiResponse<PromoCheckDto>
 
-    @POST("orders")
-    suspend fun createOrder(@Body request: CreateOrderDto): OrderDto
+    @POST("food/orders")
+    suspend fun createOrder(@Body request: PlaceOrderDto): ApiResponse<OrderDto>
 
-    @GET("orders/{id}")
-    suspend fun order(@Path("id") orderId: String): OrderDto
+    @GET("food/orders/{orderId}")
+    suspend fun order(@Path("orderId") orderId: String): ApiResponse<OrderDto>
 
-    @POST("orders/{id}/cancel")
-    suspend fun cancelOrder(@Path("id") orderId: String): OrderDto
+    @POST("food/orders/{orderId}/cancel")
+    suspend fun cancelOrder(@Path("orderId") orderId: String): ApiResponse<OrderDto>
 }
 
+/**
+ * Раздел меню (`MenuResponse`). У бэкенда «меню» и есть категория: заведение
+ * заводит несколько меню, каждое со своим набором позиций.
+ */
 @Serializable
-data class MenuDto(
-    @SerialName("placeName") val placeName: String = "",
-    @SerialName("categories") val categories: List<MenuCategoryDto> = emptyList(),
-    /** Стоимость доставки заведения — показывается в корзине до checkout'а. */
-    @SerialName("deliveryFee") val deliveryFee: Long = 0,
-    @SerialName("minOrder") val minOrder: Long = 0,
-)
-
-@Serializable
-data class MenuCategoryDto(
+data class MenuSectionDto(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String = "",
+    @SerialName("description") val description: String? = null,
     @SerialName("items") val items: List<MenuItemDto> = emptyList(),
 )
 
+/**
+ * Позиция меню (`ItemResponse`).
+ *
+ * Модификаторов («размер», «добавки») в контракте нет вовсе — как и фотографии
+ * позиции. Поля не выдумываем: отправить выбранные модификаторы всё равно
+ * некуда, `PlaceOrderRequest` принимает только `itemId` и количество.
+ */
 @Serializable
 data class MenuItemDto(
     @SerialName("id") val id: String,
     @SerialName("name") val name: String = "",
     @SerialName("description") val description: String? = null,
     @SerialName("price") val price: Long = 0,
-    @SerialName("photoUrl") val photoUrl: String? = null,
+    @SerialName("prepMinutes") val prepMinutes: Int? = null,
     /** Стоп-лист: позиция остаётся в меню, но неактивна. */
-    @SerialName("available") val available: Boolean = true,
-    @SerialName("optionGroups") val optionGroups: List<OptionGroupDto> = emptyList(),
+    @SerialName("isAvailable") val isAvailable: Boolean = true,
+    @SerialName("isHalal") val isHalal: Boolean = false,
 )
 
+/** Ответ `promotions/check`. `valid = false` — код существует, но не подошёл. */
 @Serializable
-data class OptionGroupDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("minChoices") val minChoices: Int = 0,
-    @SerialName("maxChoices") val maxChoices: Int = 1,
-    @SerialName("options") val options: List<MenuOptionDto> = emptyList(),
-)
-
-@Serializable
-data class MenuOptionDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("priceDelta") val priceDelta: Long = 0,
-    @SerialName("available") val available: Boolean = true,
-)
-
-@Serializable
-data class PromoRequestDto(
-    @SerialName("code") val code: String,
-    @SerialName("subtotal") val subtotal: Long,
-)
-
-@Serializable
-data class PromoDto(
-    @SerialName("code") val code: String,
-    /** `percent` или `fixed`; незнакомое значение считаем фиксированной суммой. */
-    @SerialName("kind") val kind: String = "fixed",
-    @SerialName("value") val value: Long = 0,
-    @SerialName("minOrder") val minOrder: Long = 0,
-    @SerialName("maxDiscount") val maxDiscount: Long? = null,
-)
-
-@Serializable
-data class CreateOrderDto(
-    @SerialName("placeId") val placeId: String,
-    @SerialName("items") val items: List<OrderItemDto> = emptyList(),
-    @SerialName("method") val method: String,
-    @SerialName("payment") val payment: String,
-    @SerialName("address") val address: String? = null,
-    @SerialName("comment") val comment: String? = null,
-    /** ISO-8601 без зоны; `null` — «как можно скорее». */
-    @SerialName("scheduledAt") val scheduledAt: String? = null,
+data class PromoCheckDto(
+    @SerialName("valid") val valid: Boolean = false,
+    @SerialName("discountAmount") val discountAmount: Long = 0,
+    @SerialName("finalAmount") val finalAmount: Long = 0,
     @SerialName("promoCode") val promoCode: String? = null,
 )
 
+/**
+ * Тело `POST food/orders` (`PlaceOrderRequest`).
+ *
+ * Больше в заказ положить нечего: ни промокода, ни времени доставки, ни
+ * комментария, ни модификаторов позиции контракт не принимает.
+ */
 @Serializable
-data class OrderItemDto(
-    @SerialName("itemId") val itemId: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("price") val price: Long = 0,
-    @SerialName("quantity") val quantity: Int = 1,
-    @SerialName("optionIds") val optionIds: List<String> = emptyList(),
-    @SerialName("optionsLabel") val optionsLabel: String = "",
+data class PlaceOrderDto(
+    @SerialName("placeId") val placeId: String,
+    @SerialName("items") val items: List<OrderItemRequestDto> = emptyList(),
+    @SerialName("fulfillment") val fulfillment: String,
+    @SerialName("paymentMethod") val paymentMethod: String,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
 )
 
+@Serializable
+data class OrderItemRequestDto(
+    @SerialName("itemId") val itemId: String,
+    @SerialName("quantity") val quantity: Int,
+)
+
+/**
+ * Заказ (`OrderResponse`).
+ *
+ * Названия заведения здесь нет — только [placeId]; суммы разложены самим
+ * бэкендом, и [totalAmount] важнее собственной арифметики приложения: платит
+ * человек по его числу.
+ */
 @Serializable
 data class OrderDto(
     @SerialName("id") val id: String,
     @SerialName("placeId") val placeId: String = "",
-    @SerialName("placeName") val placeName: String = "",
-    @SerialName("status") val status: String = "",
-    @SerialName("method") val method: String = "",
-    @SerialName("payment") val payment: String = "",
-    @SerialName("subtotal") val subtotal: Long = 0,
-    @SerialName("discount") val discount: Long = 0,
-    @SerialName("delivery") val delivery: Long = 0,
+    /** Номер для человека («A-1042») — его называют на выдаче. */
+    @SerialName("orderNumber") val orderNumber: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("fulfillment") val fulfillment: String? = null,
+    @SerialName("paymentMethod") val paymentMethod: String? = null,
+    @SerialName("itemsAmount") val itemsAmount: Long = 0,
+    @SerialName("deliveryAmount") val deliveryAmount: Long = 0,
+    @SerialName("discountAmount") val discountAmount: Long = 0,
+    @SerialName("totalAmount") val totalAmount: Long = 0,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
     @SerialName("items") val items: List<OrderItemDto> = emptyList(),
-    /** Секунды эпохи: часовой пояс клиента на историю заказов влиять не должен. */
-    @SerialName("createdAt") val createdAt: Long = 0,
-    @SerialName("address") val address: String? = null,
-    @SerialName("comment") val comment: String? = null,
-    @SerialName("etaMinutes") val etaMinutes: Int? = null,
+    /** ISO-8601; Jackson на бэкенде отдаёт его без зоны — см. `parseServerInstant`. */
+    @SerialName("createdAt") val createdAt: String? = null,
+)
+
+@Serializable
+data class OrderItemDto(
+    @SerialName("itemId") val itemId: String = "",
+    @SerialName("itemName") val itemName: String = "",
+    @SerialName("quantity") val quantity: Int = 1,
+    @SerialName("unitPrice") val unitPrice: Long = 0,
+    @SerialName("totalPrice") val totalPrice: Long = 0,
 )
