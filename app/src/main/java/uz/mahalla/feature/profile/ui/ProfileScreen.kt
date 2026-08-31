@@ -76,6 +76,7 @@ fun ProfileScreen(
     onLoggedOut: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
+    onOpenServiceOffer: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -102,6 +103,7 @@ fun ProfileScreen(
         onEvent = viewModel::onEvent,
         modifier = modifier,
         onChangeServer = onChangeServer,
+        onOpenServiceOffer = onOpenServiceOffer,
     )
 }
 
@@ -113,6 +115,7 @@ fun ProfileContentScreen(
     onEvent: (ProfileEvent) -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
+    onOpenServiceOffer: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.profile_title))
@@ -155,6 +158,14 @@ fun ProfileContentScreen(
                     )
                 }
             }
+
+            // Выставить услугу (issue #71): анкета исполнителя своя у каждого,
+            // поэтому вход в неё — из профиля, а не из каталога мастеров.
+            MahallaListItem(
+                title = stringResource(R.string.profile_services_title),
+                subtitle = stringResource(R.string.profile_services_subtitle),
+                onClick = onOpenServiceOffer,
+            )
 
             if (onChangeServer != null) {
                 MahallaListItem(

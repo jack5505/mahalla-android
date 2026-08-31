@@ -45,6 +45,10 @@
    `200` с `data: []` на любой радиус (проверено в issue #53). То есть даже
    рабочая главная показывает пустой список — и это ответ сервера, а не баг
    клиента.
+4а. **На карточке места не было ни одной кнопки вертикали** (флаги
+   `hasQueue`/`hasBooking`/`hasOrdering` бэкенд не отдаёт, из категории они не
+   выводились). Починено в issue #71: `PlaceCapabilities.forCategory`.
+
 4. **Карта — заглушка со списком маркеров.** Полотно `MapCanvas` (Yandex
    MapKit) написано и покрыто тестами в эпике 4.2, но `MapScreen.kt:94`
    по-прежнему рисует `MapCanvasPlaceholder`.
@@ -208,6 +212,11 @@ issue #53.
 `totalSeats`, `pricePerHour`, `isAvailable`) → выбор времени и длительности →
 `POST gaming/bookings` → `GET gaming/bookings/my`.
 
+> **Частично сделано в issue #71**: `POST walkin/send` подключён — с карточки
+> мастера открывается форма заказа услуги, а ответ показывается состоянием
+> заявки. Осталось: слоты (`barber-services/…/slots`, `POST appointments`),
+> перечитывание заявки (у бэкенда нет `GET walkin/{id}`) и статусы мастера.
+
 **C3. Мастер/барбер + вызов «сейчас».** `GET barber-services/places/{id}`,
 `GET .../slots` (сетка слотов), `POST appointments`, `GET appointments/my`.
 Отдельно — `POST walkin/send` и статусы `accept/decline/start/complete`: это
@@ -229,6 +238,11 @@ issue #53.
 (`GET/POST/PUT/DELETE fashion/cart*`), `POST fashion/orders`. Отличается от
 еды тем, что корзина живёт на сервере — переиспользовать `CartCalculator`
 не получится, и это надо учесть в оценке.
+
+> **Частично сделано в issue #71**: «стать исполнителем» есть —
+> `GET/POST freelancers/me` и `PUT freelancers/me/toggle-availability` за
+> формой в профиле («Мои услуги»). Осталось: каталог `GET freelancers` с
+> фильтрами по профессии и городу.
 
 **C7. Фрилансеры.** `GET freelancers` (каталог с фильтрами) и «стать
 исполнителем» (`GET/POST freelancers/me`,

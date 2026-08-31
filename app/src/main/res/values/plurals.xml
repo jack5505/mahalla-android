@@ -38,4 +38,11 @@
         <item quantity="other">Taxminan %1$d daqiqa</item>
     </plurals>
 
+
+    <!-- Услуги (issue #71): сколько ждать мастера. -->
+    <plurals name="service_order_wait">
+        <item quantity="one">Taxminan %1$d daqiqa kutish</item>
+        <item quantity="other">Taxminan %1$d daqiqa kutish</item>
+    </plurals>
+
 </resources>

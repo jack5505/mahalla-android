@@ -44,6 +44,9 @@ import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.services.data.DefaultServicesRepository
+import uz.mahalla.feature.services.data.di.ServicesDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
@@ -191,6 +194,26 @@ class GraphAssemblyTest {
         } finally {
             database.close()
         }
+    }
+
+    /**
+     * Услуги (issue #71): обе формы ходят на **основной** Retrofit — и заявка,
+     * и анкета требуют Bearer, а «голый» refresh-клиент его не ставит.
+     */
+    @Test
+    fun `services graph assembles over the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        assertNotNull(
+            DefaultServicesRepository(
+                ServicesDataModule.provideServicesApi(retrofit),
+                PhoneNumberValidator(),
+            ),
+        )
     }
 
     @Test

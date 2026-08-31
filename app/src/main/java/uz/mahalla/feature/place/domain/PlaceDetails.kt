@@ -2,6 +2,7 @@ package uz.mahalla.feature.place.domain
 
 import androidx.compose.runtime.Immutable
 import uz.mahalla.feature.discovery.domain.Place
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -43,13 +44,39 @@ enum class PlaceAction {
     Route,
 }
 
-/** Что место умеет — приходит с сервера, а не выводится из категории. */
+/**
+ * Что место умеет.
+ *
+ * Раньше это приходило с сервера (`hasQueue`/`hasBooking`/`hasOrdering`), но в
+ * реальном контракте таких полей нет (issue #53), и с тех пор набор оставался
+ * пустым: **ни одна кнопка вертикали на карточке не показывалась**. Теперь он
+ * выводится из категории — у каждой вертикали свой контроллер бэкенда
+ * (`walkin/send`, `food/…/menu`, `gaming/…/zones`).
+ */
 @Immutable
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
     val ordering: Boolean = false,
-)
+) {
+    companion object {
+
+        /**
+         * Действие включается, только когда его есть чем выполнить: кнопка,
+         * ведущая на несуществующий экран, хуже её отсутствия.
+         *
+         * - [PlaceCategory.Master] — очередь: форма заказа услуги (issue #71),
+         *   `POST walkin/send`.
+         * - Еда, игровые зоны, кино, больницы: экраны есть не у всех, а у еды
+         *   пути `FoodApi` расходятся с бэкендом (`docs/UI-INVENTORY.md` §3.1)
+         *   — заказ включится вместе с их починкой.
+         */
+        fun forCategory(category: PlaceCategory): PlaceCapabilities = when (category) {
+            PlaceCategory.Master -> PlaceCapabilities(queue = true)
+            else -> PlaceCapabilities()
+        }
+    }
+}
 
 @Immutable
 data class Review(

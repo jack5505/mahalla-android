@@ -167,8 +167,10 @@ class PlaceDetailsViewModelTest {
 
         viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Queue))
 
+        // Имя заведения едет вместе с id: заголовок формы заказа услуги
+        // (issue #71) иначе пустовал бы до отдельного запроса.
         assertEquals(
-            PlaceDetailsEffect.OpenVertical(PlaceAction.Queue, "p-1"),
+            PlaceDetailsEffect.OpenVertical(PlaceAction.Queue, PLACE_ID, PLACE_NAME),
             viewModel.effects.first(),
         )
     }
@@ -229,7 +231,7 @@ class PlaceDetailsViewModelTest {
         capabilities: PlaceCapabilities = PlaceCapabilities(),
         reviews: List<Review> = emptyList(),
     ) = PlaceDetails(
-        place = place(PLACE_ID, name = "Osh markazi", isOpenNow = isOpenNow, point = point),
+        place = place(PLACE_ID, name = PLACE_NAME, isOpenNow = isOpenNow, point = point),
         description = "Eng mazali osh",
         hours = hours,
         contacts = PlaceContacts(phone = phone),
@@ -261,6 +263,7 @@ class PlaceDetailsViewModelTest {
 
     private companion object {
         const val PLACE_ID = "p-1"
+        const val PLACE_NAME = "Osh markazi"
         const val TASHKENT_OFFSET_SECONDS = 5L * 60 * 60
     }
 }
