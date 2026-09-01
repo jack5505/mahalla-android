@@ -98,6 +98,7 @@ class RoutesSerializationTest {
             serializer<OnboardingGraph>().descriptor.serialName,
             serializer<MainGraph>().descriptor.serialName,
             serializer<BackendUrlRoute>().descriptor.serialName,
+            serializer<UpdateRoute>().descriptor.serialName,
             serializer<WelcomeRoute>().descriptor.serialName,
             serializer<PhoneRoute>().descriptor.serialName,
             serializer<PinRoute>().descriptor.serialName,
