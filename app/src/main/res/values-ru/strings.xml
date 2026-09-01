@@ -288,6 +288,21 @@
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
+    <!-- Оставить отзыв (issue #76) -->
+    <string name="place_reviews_empty">Отзывов пока нет. Будьте первым.</string>
+    <string name="place_review_add">Оставить отзыв</string>
+    <string name="place_review_mine">Ваш отзыв</string>
+    <string name="place_review_form_title">Оставить отзыв</string>
+    <string name="place_review_rating_label">Ваша оценка</string>
+    <string name="place_review_rating_required">Поставьте оценку — это главное в отзыве.</string>
+    <string name="place_review_text_label">Отзыв</string>
+    <string name="place_review_text_placeholder">Что понравилось, а что нет?</string>
+    <string name="place_review_text_counter">%1$d / %2$d</string>
+    <string name="place_review_text_too_long">Отзыв слишком длинный — сократите его.</string>
+    <string name="place_review_submit">Отправить</string>
+    <string name="place_review_delete">Удалить отзыв</string>
+    <string name="place_review_delete_title">Удалить отзыв?</string>
+    <string name="place_review_delete_text">Ваша оценка и текст исчезнут с карточки места.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>

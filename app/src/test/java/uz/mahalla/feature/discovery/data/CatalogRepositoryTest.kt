@@ -18,6 +18,7 @@ import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
 import java.time.Instant
@@ -352,6 +353,106 @@ class CatalogRepositoryTest {
         assertNull(dao.byId("p-1"))
     }
 
+    // --- Отзывы: оставить и удалить (issue #76) ---
+
+    @Test
+    fun `a review goes to POST reviews with the place, the rating and the text`() = runTest {
+        server.enqueue(json(ENVELOPE_OK_BODY))
+
+        val result = repository().addReview("p-1", ReviewDraft(rating = 5, text = "  Zo'r  "))
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/reviews", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, body.contains("\"placeId\":\"p-1\""))
+        assertTrue(body, body.contains("\"rating\":5"))
+        assertTrue("текст обрезан по краям: $body", body.contains("\"text\":\"Zo'r\""))
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `a review without text goes without the field, not with null`() = runTest {
+        // `text` у бэкенда необязателен, а `"text":null` — лишний повод для
+        // спора с валидатором на той стороне.
+        server.enqueue(json(ENVELOPE_OK_BODY))
+
+        repository().addReview("p-1", ReviewDraft(rating = 4))
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, body.contains("text"))
+    }
+
+    @Test
+    fun `an unfinished draft never reaches the network`() = runTest {
+        // Оценки нет — 400 от сервера сказал бы то же самое, но экран успел бы
+        // показать спиннер и ожидание.
+        val result = repository().addReview("p-1", ReviewDraft(text = "Zo'r"))
+
+        assertEquals(
+            ApiError.Business(ReviewDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `a rejected review carries the message of the backend`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(409)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(REVIEW_DUPLICATE_BODY),
+        )
+
+        val result = repository().addReview("p-1", ReviewDraft(rating = 5))
+
+        val failure = (result as ApiResult.Failure).failure
+        assertEquals("Siz bu joyga allaqachon sharh qoldirgansiz", failure.serverMessage)
+    }
+
+    @Test
+    fun `a 2xx envelope with success false is a failure, not a sent review`() = runTest {
+        // Иначе форма закрылась бы, а отзыва не появилось: HTTP-код тут 200.
+        server.enqueue(json(REVIEW_ENVELOPE_FAILURE_BODY))
+
+        val result = repository().addReview("p-1", ReviewDraft(rating = 5))
+
+        assertEquals(ApiError.Business("REVIEW_NOT_ALLOWED"), (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `deleting a review goes to DELETE reviews by id`() = runTest {
+        server.enqueue(json(ENVELOPE_OK_BODY))
+
+        val result = repository().deleteReview("r-1")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/reviews/r-1", request.path)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `deleting someone else review is reported, not swallowed`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val result = repository().deleteReview("r-1")
+
+        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `the author id of a review reaches the domain`() = runTest {
+        // Единственный признак «это мой отзыв»: отдельного флага бэкенд не даёт.
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals("u-1", (result as ApiResult.Success).data.reviews.single().authorId)
+    }
+
     private fun repository(): DefaultCatalogRepository {
         val api = NetworkFactory
             .retrofit(
@@ -423,9 +524,22 @@ class CatalogRepositoryTest {
         """
 
         const val REVIEWS_BODY = """
-            {"success":true,"data":{"content":[{"id":"r-1","userName":"Ali","rating":5,
-             "text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
+            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1","userName":"Ali",
+             "rating":5,"text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
              "page":0,"totalPages":1,"totalElements":1,"last":true}}
+        """
+
+        /** Конверт без полезной нагрузки: так отвечают `POST`/`DELETE` отзыва. */
+        const val ENVELOPE_OK_BODY = """{"success":true,"data":{}}"""
+
+        const val REVIEW_ENVELOPE_FAILURE_BODY = """
+            {"success":false,"error":{"code":"REVIEW_NOT_ALLOWED",
+             "message":"Sharh qoldirish mumkin emas"}}
+        """
+
+        const val REVIEW_DUPLICATE_BODY = """
+            {"success":false,"error":{"code":"REVIEW_DUPLICATE",
+             "message":"Siz bu joyga allaqachon sharh qoldirgansiz"}}
         """
     }
 }
