@@ -394,6 +394,16 @@
     <string name="order_status_cancelled">Отменён</string>
     <string name="order_status_unknown">В работе</string>
 
+    <!-- Обновление приложения (issue #80) -->
+    <string name="update_required_title">Обновите приложение</string>
+    <string name="update_required_description">Эта версия приложения больше не работает. Чтобы продолжить, установите новую.</string>
+    <string name="update_available_title">Вышла новая версия</string>
+    <string name="update_available_description">Можно обновиться сейчас или вернуться к этому позже.</string>
+    <string name="update_version">Новая версия: %1$s</string>
+    <string name="update_action">Обновить</string>
+    <string name="update_later">Позже</string>
+    <string name="update_store_unavailable">Не удалось открыть магазин. Скачайте приложение через браузер.</string>
+
     <!-- Дни недели -->
     <string name="day_monday">Понедельник</string>
     <string name="day_tuesday">Вторник</string>

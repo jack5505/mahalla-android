@@ -400,6 +400,16 @@
     <string name="order_status_cancelled">Bekor qilindi</string>
     <string name="order_status_unknown">Ish jarayonida</string>
 
+    <!-- Обновление приложения (issue #80) -->
+    <string name="update_required_title">Ilovani yangilang</string>
+    <string name="update_required_description">Ilovaning bu versiyasi endi ishlamaydi. Davom etish uchun yangi versiyani o\'rnating.</string>
+    <string name="update_available_title">Yangi versiya chiqdi</string>
+    <string name="update_available_description">Ilovani hozir yangilashingiz yoki keyinroq qaytishingiz mumkin.</string>
+    <string name="update_version">Yangi versiya: %1$s</string>
+    <string name="update_action">Yangilash</string>
+    <string name="update_later">Keyinroq</string>
+    <string name="update_store_unavailable">Do\'konni ochib bo\'lmadi. Ilovani brauzer orqali yuklab oling.</string>
+
     <!-- Дни недели -->
     <string name="day_monday">Dushanba</string>
     <string name="day_tuesday">Seshanba</string>

@@ -25,6 +25,7 @@ import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
 /**
@@ -39,6 +40,8 @@ import uz.mahalla.feature.wallet.ui.WalletScreen
  * платный SMS-код; решение принимает `RootViewModel`.
  * @param afterBackendUrl куда уходить с экрана адреса бэкенда, когда он был
  * стартовым (issue #26): дальше начинается обычный старт приложения.
+ * @param afterUpdate куда уходить с экрана обновления (issue #80). Вызывается
+ * только на мягком предложении: обязательное обновление отсюда не выпускает.
  * @param backendUrlOverrideEnabled разрешено ли этой сборке менять адрес
  * бэкенда. Выключено — маршрута и всех входов на него в графе нет: в релизе
  * увести приложение на чужой сервер не должен никто.
@@ -51,6 +54,7 @@ fun MahallaNavHost(
     modifier: Modifier = Modifier,
     onboardingStartDestination: Any = WelcomeRoute,
     afterBackendUrl: Any = OnboardingGraph,
+    afterUpdate: Any = OnboardingGraph,
     backendUrlOverrideEnabled: Boolean = false,
 ) {
     NavHost(
@@ -79,6 +83,21 @@ fun MahallaNavHost(
                     onBack = if (openedAtStart) null else ({ navController.navigateUp() }),
                 )
             }
+        }
+
+        // Обновление приложения (issue #80) — тоже вне графов и всегда в
+        // графе, а не под флагом: экран показывается только когда бэкенд
+        // сказал обновиться, и стартовым его назначает `MainActivity`.
+        composable<UpdateRoute> {
+            AppUpdateScreen(
+                onContinue = {
+                    navController.navigate(afterUpdate) {
+                        // Возвращаться к предложению обновиться некуда: оно
+                        // уже отработано и на этот запуск отложено.
+                        popUpTo(UpdateRoute) { inclusive = true }
+                    }
+                },
+            )
         }
 
         navigation<OnboardingGraph>(startDestination = onboardingStartDestination) {

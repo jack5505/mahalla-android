@@ -47,6 +47,9 @@ import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
+import uz.mahalla.feature.update.data.AppUpdateGate
+import uz.mahalla.feature.update.data.DefaultAppVersionRepository
+import uz.mahalla.feature.update.data.di.UpdateDataModule
 import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
 /**
@@ -234,6 +237,27 @@ class GraphAssemblyTest {
 
         assertNotNull(repository)
         assertFalse(refreshClient.authenticator is TokenAuthenticator)
+    }
+
+    /**
+     * Проверка версии (issue #80) собирается на **основном** Retrofit: `check`
+     * анонимен, а `skip` требует Bearer, который ставит только он. Api создаётся
+     * на голом `OkHttpClient` по той же причине, что и в food-графе: у
+     * `provideRefreshClient` параметры прибавляются с каждым сетевым issue, и
+     * этот тест ломался бы на каждом.
+     */
+    @Test
+    fun `version check assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = UpdateDataModule.provideAppVersionApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(AppUpdateGate(DefaultAppVersionRepository(api)))
     }
 
     /**
