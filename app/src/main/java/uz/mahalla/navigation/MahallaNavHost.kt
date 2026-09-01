@@ -14,6 +14,7 @@ import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
 import uz.mahalla.feature.map.ui.MapScreen
+import uz.mahalla.feature.notifications.ui.NotificationsScreen
 import uz.mahalla.feature.onboarding.ui.BackendUrlScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
 import uz.mahalla.feature.onboarding.ui.GeoScreen
@@ -206,6 +207,7 @@ fun MahallaNavHost(
                         navController.navigate(SearchRoute(categoryId = category?.apiValue))
                     },
                     onMapClick = { navController.navigate(MapRoute) },
+                    onNotificationsClick = { navController.navigate(NotificationsRoute) },
                 )
             }
             composable<OrdersRoute> { OrdersScreen() }
@@ -239,6 +241,18 @@ fun MahallaNavHost(
         composable<SearchRoute> {
             SearchScreen(
                 onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Центр уведомлений (issue #81) — тоже вне графа табов: открывается
+        // иконкой из топбара главной, а возврат ведёт обратно туда же.
+        composable<NotificationsRoute> {
+            NotificationsScreen(
+                // Уведомление о заказе ведёт на его статус. Экран уведомлений
+                // при этом остаётся в стеке: «назад» возвращает к списку, а не
+                // выбрасывает на главную посреди чтения.
+                onOrderClick = { orderId -> navController.navigate(OrderStatusRoute(orderId)) },
                 onBack = { navController.navigateUp() },
             )
         }

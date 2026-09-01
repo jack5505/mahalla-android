@@ -45,6 +45,8 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
+import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.update.data.AppUpdateGate
@@ -258,6 +260,24 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(AppUpdateGate(DefaultAppVersionRepository(api)))
+    }
+
+    /**
+     * Центр уведомлений (issue #81) — тоже на **основном** Retrofit: все три
+     * ручки требуют Bearer, а «голый» `@RefreshClient` его не ставит.
+     */
+    @Test
+    fun `notifications assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = NotificationsDataModule.provideNotificationsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultNotificationsRepository(api))
     }
 
     /**

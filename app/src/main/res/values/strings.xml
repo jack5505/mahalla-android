@@ -164,6 +164,13 @@
     <string name="profile_device_status_pin_required">PIN kerak</string>
     <string name="profile_device_status_pending_pin">PIN o\'rnatilmagan</string>
 
+    <!-- Центр уведомлений (issue #81) -->
+    <string name="notifications_title">Bildirishnomalar</string>
+    <string name="notifications_mark_all_read">Hammasini o\'qilgan deb belgilash</string>
+    <string name="notifications_default_title">Bildirishnoma</string>
+    <string name="notifications_empty_title">Bildirishnomalar yo\'q</string>
+    <string name="notifications_empty_description">Buyurtma, navbat va aksiyalar haqidagi xabarlar shu yerda ko\'rinadi.</string>
+
     <!-- Детали -->
     <string name="place_title">Joy</string>
 

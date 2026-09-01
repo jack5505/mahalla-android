@@ -158,6 +158,13 @@
     <string name="profile_device_status_pin_required">Нужен PIN</string>
     <string name="profile_device_status_pending_pin">PIN не задан</string>
 
+    <!-- Центр уведомлений (issue #81) -->
+    <string name="notifications_title">Уведомления</string>
+    <string name="notifications_mark_all_read">Отметить все прочитанными</string>
+    <string name="notifications_default_title">Уведомление</string>
+    <string name="notifications_empty_title">Уведомлений нет</string>
+    <string name="notifications_empty_description">Здесь появятся сообщения о заказах, очередях и акциях.</string>
+
     <!-- Детали -->
     <string name="place_title">Место</string>
 

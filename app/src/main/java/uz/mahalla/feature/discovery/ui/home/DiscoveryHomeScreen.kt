@@ -3,6 +3,7 @@ package uz.mahalla.feature.discovery.ui.home
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +32,7 @@ import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.discovery.ui.CategoryGrid
 import uz.mahalla.feature.discovery.ui.SearchEntryButton
 import uz.mahalla.feature.discovery.ui.toCardUi
+import uz.mahalla.feature.notifications.ui.NotificationsBadgeAction
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
@@ -45,6 +47,7 @@ fun DiscoveryHomeScreen(
     onPlaceClick: (String) -> Unit,
     onSearchClick: (PlaceCategory?) -> Unit,
     onMapClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DiscoveryHomeViewModel = hiltViewModel(),
 ) {
@@ -64,6 +67,9 @@ fun DiscoveryHomeScreen(
         state = state,
         onEvent = viewModel::onEvent,
         modifier = modifier,
+        // Бейдж непрочитанного считает своя ViewModel (issue #81): к каталогу
+        // он отношения не имеет и обновляется на каждом возврате на главную.
+        actions = { NotificationsBadgeAction(onClick = onNotificationsClick) },
     )
 }
 
@@ -73,9 +79,10 @@ fun DiscoveryHomeContentScreen(
     state: DiscoveryHomeState,
     onEvent: (DiscoveryHomeEvent) -> Unit,
     modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.discovery_title))
+        MahallaTopBar(title = stringResource(R.string.discovery_title), actions = actions)
         MahallaPullToRefresh(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(DiscoveryHomeEvent.Refresh) },
