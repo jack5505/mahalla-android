@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
+import androidx.navigation.toRoute
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
 import uz.mahalla.feature.food.ui.cart.CartScreen
@@ -26,6 +27,9 @@ import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.role.ui.CustomerFormScreen
+import uz.mahalla.feature.role.ui.ProviderFormScreen
+import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
@@ -187,15 +191,10 @@ fun MahallaNavHost(
                 BiometricScreen(onFinished = { navController.navigate(GeoRoute) })
             }
             composable<GeoRoute> {
-                GeoScreen(
-                    onFinished = {
-                        onOnboardingFinished()
-                        navController.navigate(MainGraph) {
-                            // Назад в онбординг возврата нет.
-                            popUpTo(OnboardingGraph) { inclusive = true }
-                        }
-                    },
-                )
+                // Последний шаг регистрации — «кто вы» (issue #84): анкета
+                // покупателя или заявка продавца. Сам экран роли лежит вне
+                // графа: он же открывается из профиля.
+                GeoScreen(onFinished = { navController.navigate(RoleRoute(onboarding = true)) })
             }
         }
 
@@ -225,6 +224,9 @@ fun MahallaNavHost(
                             popUpTo(MainGraph) { inclusive = true }
                         }
                     },
+                    // «Кто вы» и анкеты (issue #84): в онбординге шаг можно
+                    // было пропустить, а роль потом меняется.
+                    onOpenRole = { navController.navigate(RoleRoute()) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -234,6 +236,65 @@ fun MahallaNavHost(
                     },
                 )
             }
+        }
+
+        // Анкеты покупателя и продавца (issue #84) — вне обоих графов: экраны
+        // нужны и последним шагом регистрации, и потом из профиля (роль
+        // меняется). Чем кончается заполнение, решает аргумент `onboarding`:
+        // в регистрации — переходом в приложение, из профиля — возвратом.
+        composable<RoleRoute> { entry ->
+            val onboarding = entry.toRoute<RoleRoute>().onboarding
+            RoleScreen(
+                onCustomerForm = {
+                    navController.navigate(CustomerFormRoute(onboarding = onboarding))
+                },
+                onProviderForm = {
+                    navController.navigate(ProviderFormRoute(onboarding = onboarding))
+                },
+                // Анкету можно отложить: упереться на последнем шаге
+                // регистрации в форму, которую человек пока не хочет
+                // заполнять, — это потерять его у самого входа.
+                onSkip = if (onboarding) {
+                    { finishOnboarding(navController, onOnboardingFinished) }
+                } else {
+                    null
+                },
+                onBack = if (onboarding) null else ({ navController.navigateUp() }),
+            )
+        }
+
+        composable<CustomerFormRoute> { entry ->
+            val onboarding = entry.toRoute<CustomerFormRoute>().onboarding
+            CustomerFormScreen(
+                onSaved = {
+                    if (onboarding) {
+                        finishOnboarding(navController, onOnboardingFinished)
+                    } else {
+                        navController.navigateUp()
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<ProviderFormRoute> { entry ->
+            val onboarding = entry.toRoute<ProviderFormRoute>().onboarding
+            ProviderFormScreen(
+                onFinished = {
+                    if (onboarding) {
+                        finishOnboarding(navController, onOnboardingFinished)
+                    } else {
+                        // Заявка отправлена — возвращаться в заполненную форму
+                        // некуда, поэтому уходит и она, и экран выбора роли.
+                        // Экрана роли в стеке может и не быть (пришли по
+                        // другому пути) — тогда обычный возврат назад.
+                        if (!navController.popBackStack<RoleRoute>(inclusive = true)) {
+                            navController.navigateUp()
+                        }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
         }
 
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,
@@ -323,5 +384,20 @@ fun MahallaNavHost(
                 onBack = { navController.navigateUp() },
             )
         }
+    }
+}
+
+/**
+ * Онбординг пройден: флаг в настройки, дальше основной граф.
+ *
+ * Вынесено функцией, потому что точек выхода стало три (issue #84): «пропустить
+ * анкету», анкета покупателя и заявка продавца. Стек чистится целиком —
+ * `popUpTo(OnboardingGraph)` снимает и экраны анкет, которые лежат выше графа,
+ * а возврата в регистрацию нет.
+ */
+private fun finishOnboarding(navController: NavHostController, onOnboardingFinished: () -> Unit) {
+    onOnboardingFinished()
+    navController.navigate(MainGraph) {
+        popUpTo(OnboardingGraph) { inclusive = true }
     }
 }

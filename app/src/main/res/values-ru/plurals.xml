@@ -48,4 +48,18 @@
         <item quantity="other">%1$d звезды</item>
     </plurals>
 
+    <plurals name="role_error_too_long">
+        <item quantity="one">Не больше %1$d символа</item>
+        <item quantity="few">Не больше %1$d символов</item>
+        <item quantity="many">Не больше %1$d символов</item>
+        <item quantity="other">Не больше %1$d символов</item>
+    </plurals>
+
+    <plurals name="role_error_too_short">
+        <item quantity="one">Не меньше %1$d символа</item>
+        <item quantity="few">Не меньше %1$d символов</item>
+        <item quantity="many">Не меньше %1$d символов</item>
+        <item quantity="other">Не меньше %1$d символов</item>
+    </plurals>
+
 </resources>

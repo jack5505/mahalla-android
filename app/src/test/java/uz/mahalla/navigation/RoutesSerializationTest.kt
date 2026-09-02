@@ -39,6 +39,24 @@ class RoutesSerializationTest {
 
         val order = OrderStatusRoute(orderId = "o-42")
         assertEquals(order, json.decodeFromString<OrderStatusRoute>(json.encodeToString(order)))
+
+        // Анкеты (issue #84): флаг «пришли из регистрации» решает, чем
+        // кончается заполнение, — терять его при сериализации нельзя.
+        val role = RoleRoute(onboarding = true)
+        assertEquals(role, json.decodeFromString<RoleRoute>(json.encodeToString(role)))
+        assertEquals(RoleRoute(), json.decodeFromString<RoleRoute>(json.encodeToString(RoleRoute())))
+
+        val customerForm = CustomerFormRoute(onboarding = true)
+        assertEquals(
+            customerForm,
+            json.decodeFromString<CustomerFormRoute>(json.encodeToString(customerForm)),
+        )
+
+        val providerForm = ProviderFormRoute(onboarding = true)
+        assertEquals(
+            providerForm,
+            json.decodeFromString<ProviderFormRoute>(json.encodeToString(providerForm)),
+        )
     }
 
     /**
@@ -72,6 +90,11 @@ class RoutesSerializationTest {
             serializer<CheckoutRoute>().descriptor.serialName,
             serializer<OrderStatusRoute>().descriptor.serialName,
             serializer<PlaceRoute>().descriptor.serialName,
+            // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
+            // с обеими формами — аргумент у них один и тот же.
+            serializer<RoleRoute>().descriptor.serialName,
+            serializer<CustomerFormRoute>().descriptor.serialName,
+            serializer<ProviderFormRoute>().descriptor.serialName,
         )
 
         assertEquals(serialNames.size, serialNames.toSet().size)

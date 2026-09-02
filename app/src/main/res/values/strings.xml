@@ -425,4 +425,53 @@
     <string name="day_friday">Juma</string>
     <string name="day_saturday">Shanba</string>
     <string name="day_sunday">Yakshanba</string>
+
+    <!-- Анкеты покупателя и продавца (issue #84) -->
+    <string name="role_title">Ilovadan kim sifatida foydalanasiz?</string>
+    <string name="role_subtitle">Buni keyin profilda o\'zgartirishingiz mumkin.</string>
+    <string name="role_skip">Keyinroq to\'ldiraman</string>
+    <string name="role_customer_title">Xaridor</string>
+    <string name="role_customer_description">Xizmatlarni izlayman va buyurtma qilaman</string>
+    <string name="role_provider_title">Sotuvchi</string>
+    <string name="role_provider_description">Xizmat ko\'rsataman: muassasani ro\'yxatdan o\'tkazaman</string>
+    <string name="role_form_filled">Anketa to\'ldirilgan</string>
+    <string name="role_not_selected">Tanlanmagan</string>
+    <string name="role_profile_entry">Mening anketam</string>
+    <string name="role_form_storage_error">Saqlab bo\'lmadi. Yana urinib ko\'ring.</string>
+    <string name="role_customer_form_title">Xaridor anketasi</string>
+    <string name="role_customer_form_subtitle">Bu ma\'lumotlarni ilovaning o\'zi ishlatadi: ism — profilda, shahar — qidiruvda, manzil — buyurtmada.</string>
+    <string name="role_field_name">Ism va familiya</string>
+    <string name="role_field_name_hint">Jahongir Sabirov</string>
+    <string name="role_field_city">Shahar</string>
+    <string name="role_field_address">Yetkazib berish manzili</string>
+    <string name="role_field_address_hint">Chilonzor, 12-kvartal, 4-uy</string>
+    <string name="role_field_address_hint_note">Majburiy emas: buyurtmani o\'zingiz olib ketishingiz ham mumkin.</string>
+    <string name="role_provider_form_title">Sotuvchi anketasi</string>
+    <string name="role_provider_form_subtitle">Ariza moderatsiyaga yuboriladi: muassasa tekshiruvdan keyin katalogda ko\'rinadi.</string>
+    <string name="role_provider_submit">Arizani yuborish</string>
+    <string name="role_field_place_name">Muassasa nomi</string>
+    <string name="role_field_place_name_hint">Osh Markazi</string>
+    <string name="role_field_category">Kategoriya</string>
+    <string name="role_field_place_address">Muassasa manzili</string>
+    <string name="role_field_place_address_note">Xaritada nuqta tanlanmaydi: koordinatalar qurilma yoki shahar bo\'yicha olinadi.</string>
+    <string name="role_field_place_phone">Muassasa telefoni</string>
+    <string name="role_field_description">Tavsif</string>
+    <string name="role_field_description_hint">Nima taklif qilasiz</string>
+    <string name="role_field_website">Sayt</string>
+    <string name="role_field_website_hint">mahalla.uz</string>
+    <string name="role_provider_submitted_title">Ariza yuborildi</string>
+    <string name="role_provider_submitted_subtitle">%1$s moderatsiyaga yuborildi.</string>
+    <string name="role_provider_status_pending">Ariza tekshirilmoqda. Qaror chiqqanda xabar beramiz.</string>
+    <string name="role_provider_status_active">Muassasa allaqachon faol: uni katalogda topasiz.</string>
+    <string name="role_error_name_required">Ismni kiriting</string>
+    <string name="role_error_city_required">Shaharni tanlang</string>
+    <string name="role_error_category_required">Kategoriyani tanlang</string>
+    <string name="role_error_address_required">Manzilni kiriting</string>
+    <string name="role_error_phone_invalid">Telefon raqamini to\'liq kiriting</string>
+    <string name="role_error_website_invalid">Sayt manzili noto\'g\'ri. Masalan: mahalla.uz</string>
+
+    <!-- Общие действия форм (issue #84) -->
+    <string name="action_continue">Davom etish</string>
+    <string name="action_save">Saqlash</string>
+    <string name="action_done">Tayyor</string>
 </resources>

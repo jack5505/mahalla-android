@@ -50,4 +50,15 @@
         <item quantity="other">%1$d yulduz</item>
     </plurals>
 
+    <!-- Анкеты (issue #84): границы длины полей. -->
+    <plurals name="role_error_too_long">
+        <item quantity="one">%1$d belgidan oshmasin</item>
+        <item quantity="other">%1$d belgidan oshmasin</item>
+    </plurals>
+
+    <plurals name="role_error_too_short">
+        <item quantity="one">Kamida %1$d belgi kiriting</item>
+        <item quantity="other">Kamida %1$d belgi kiriting</item>
+    </plurals>
+
 </resources>

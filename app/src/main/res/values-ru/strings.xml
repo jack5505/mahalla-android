@@ -419,4 +419,53 @@
     <string name="day_friday">Пятница</string>
     <string name="day_saturday">Суббота</string>
     <string name="day_sunday">Воскресенье</string>
+
+    <!-- Анкеты покупателя и продавца (issue #84) -->
+    <string name="role_title">Кем вы пользуетесь приложением?</string>
+    <string name="role_subtitle">Это можно изменить позже в профиле.</string>
+    <string name="role_skip">Заполню позже</string>
+    <string name="role_customer_title">Покупатель</string>
+    <string name="role_customer_description">Ищу и заказываю услуги</string>
+    <string name="role_provider_title">Продавец</string>
+    <string name="role_provider_description">Оказываю услуги: зарегистрирую своё заведение</string>
+    <string name="role_form_filled">Анкета заполнена</string>
+    <string name="role_not_selected">Не выбрано</string>
+    <string name="role_profile_entry">Моя анкета</string>
+    <string name="role_form_storage_error">Не удалось сохранить. Попробуйте ещё раз.</string>
+    <string name="role_customer_form_title">Анкета покупателя</string>
+    <string name="role_customer_form_subtitle">Эти данные использует само приложение: имя — в профиле, город — в поиске, адрес — при оформлении заказа.</string>
+    <string name="role_field_name">Имя и фамилия</string>
+    <string name="role_field_name_hint">Жахонгир Сабиров</string>
+    <string name="role_field_city">Город</string>
+    <string name="role_field_address">Адрес доставки</string>
+    <string name="role_field_address_hint">Чиланзар, 12-квартал, дом 4</string>
+    <string name="role_field_address_hint_note">Необязательно: заказ можно забирать самому.</string>
+    <string name="role_provider_form_title">Анкета продавца</string>
+    <string name="role_provider_form_subtitle">Заявка уходит на модерацию: заведение появится в каталоге после проверки.</string>
+    <string name="role_provider_submit">Отправить заявку</string>
+    <string name="role_field_place_name">Название заведения</string>
+    <string name="role_field_place_name_hint">Ош Маркази</string>
+    <string name="role_field_category">Категория</string>
+    <string name="role_field_place_address">Адрес заведения</string>
+    <string name="role_field_place_address_note">Точку на карте выбрать нельзя: координаты берутся от устройства или по городу.</string>
+    <string name="role_field_place_phone">Телефон заведения</string>
+    <string name="role_field_description">Описание</string>
+    <string name="role_field_description_hint">Что вы предлагаете</string>
+    <string name="role_field_website">Сайт</string>
+    <string name="role_field_website_hint">mahalla.uz</string>
+    <string name="role_provider_submitted_title">Заявка отправлена</string>
+    <string name="role_provider_submitted_subtitle">%1$s отправлено на модерацию.</string>
+    <string name="role_provider_status_pending">Заявка на проверке. Мы сообщим, когда будет решение.</string>
+    <string name="role_provider_status_active">Заведение уже активно: найдёте его в каталоге.</string>
+    <string name="role_error_name_required">Укажите имя</string>
+    <string name="role_error_city_required">Выберите город</string>
+    <string name="role_error_category_required">Выберите категорию</string>
+    <string name="role_error_address_required">Укажите адрес</string>
+    <string name="role_error_phone_invalid">Введите номер телефона полностью</string>
+    <string name="role_error_website_invalid">Адрес сайта неверный. Например: mahalla.uz</string>
+
+    <!-- Общие действия форм (issue #84) -->
+    <string name="action_continue">Продолжить</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_done">Готово</string>
 </resources>

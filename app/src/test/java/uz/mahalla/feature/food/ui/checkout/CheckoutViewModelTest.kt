@@ -23,8 +23,11 @@ import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.food.domain.PromoCode
 import uz.mahalla.feature.food.domain.PromoKind
+import uz.mahalla.feature.onboarding.domain.City
+import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeOrderRepository
+import uz.mahalla.testutil.FakeRoleRepository
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -50,6 +53,7 @@ class CheckoutViewModelTest {
     private val cartRepository = FakeCartRepository()
     private val orderRepository = FakeOrderRepository()
     private val walletRepository = FakeWalletRepository()
+    private val roleRepository = FakeRoleRepository()
 
     @Test
     fun `delivery adds the fee of the place, pickup does not`() = runTest {
@@ -73,6 +77,34 @@ class CheckoutViewModelTest {
 
         assertEquals(6_000L, totals.discountSum)
         assertEquals(69_000L, totals.totalSum)
+    }
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84): набирать его заново при
+     * каждом заказе незачем. Уже набранное при этом не затирается — чтение
+     * анкеты асинхронное.
+     */
+    @Test
+    fun `saved delivery address prefills the empty field`() = runTest {
+        seed()
+        roleRepository.saveCustomer(
+            CustomerForm(fullName = "Jahongir", city = City.TASHKENT, address = "Chilonzor 12"),
+        )
+
+        assertEquals("Chilonzor 12", viewModel().state.value.form.address)
+    }
+
+    @Test
+    fun `typed address is not overwritten by the saved one`() = runTest {
+        seed()
+        roleRepository.saveCustomer(
+            CustomerForm(fullName = "Jahongir", city = City.TASHKENT, address = "Chilonzor 12"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        assertEquals("Amir Temur 1", viewModel.state.value.form.address)
     }
 
     @Test
@@ -268,6 +300,7 @@ class CheckoutViewModelTest {
         cartRepository = cartRepository,
         orderRepository = orderRepository,
         walletRepository = walletRepository,
+        roleRepository = roleRepository,
         clock = clock,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )

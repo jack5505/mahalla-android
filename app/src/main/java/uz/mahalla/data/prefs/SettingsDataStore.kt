@@ -32,6 +32,8 @@ class SettingsDataStore @Inject constructor(
                     preferences[PreferenceKeys.PinSalt] != null,
                 biometricEnabled = preferences[PreferenceKeys.BiometricEnabled] ?: false,
                 cityId = preferences[PreferenceKeys.CityId],
+                roleId = preferences[PreferenceKeys.UserRole],
+                deliveryAddress = preferences[PreferenceKeys.DeliveryAddress],
                 backendBaseUrl = preferences[PreferenceKeys.BackendBaseUrl],
                 backendCertificatePin = preferences[PreferenceKeys.BackendCertificatePin],
             )
@@ -61,6 +63,27 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setCityId(cityId: String) {
         dataStore.edit { it[PreferenceKeys.CityId] = cityId }
+    }
+
+    /** Роль из анкеты (issue #84) — значение `UserRole.storedValue`. */
+    suspend fun setUserRole(roleId: String) {
+        dataStore.edit { it[PreferenceKeys.UserRole] = roleId }
+    }
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84). Пустая строка — это
+     * «адреса нет», а не адрес из пробелов: ключ удаляется, иначе оформление
+     * заказа подставляло бы пустое поле поверх набранного.
+     */
+    suspend fun setDeliveryAddress(address: String) {
+        val cleaned = address.trim()
+        dataStore.edit { preferences ->
+            if (cleaned.isEmpty()) {
+                preferences.remove(PreferenceKeys.DeliveryAddress)
+            } else {
+                preferences[PreferenceKeys.DeliveryAddress] = cleaned
+            }
+        }
     }
 
     /** Адрес уже нормализован (`BackendUrl.normalize`) — здесь только запись. */
