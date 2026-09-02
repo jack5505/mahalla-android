@@ -38,6 +38,12 @@
         <item quantity="other">Taxminan %1$d daqiqa</item>
     </plurals>
 
+    <!-- Центр уведомлений: подпись бейджа для TalkBack (issue #81). -->
+    <plurals name="notifications_unread_count">
+        <item quantity="one">%1$d ta o\'qilmagan</item>
+        <item quantity="other">%1$d ta o\'qilmagan</item>
+    </plurals>
+
     <!-- Форма отзыва: подпись звезды для TalkBack (issue #76). -->
     <plurals name="rating_star_description">
         <item quantity="one">%1$d yulduz</item>

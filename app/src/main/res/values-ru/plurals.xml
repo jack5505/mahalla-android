@@ -34,6 +34,13 @@
         <item quantity="other">Примерно %1$d минуты</item>
     </plurals>
 
+    <plurals name="notifications_unread_count">
+        <item quantity="one">%1$d непрочитанное</item>
+        <item quantity="few">%1$d непрочитанных</item>
+        <item quantity="many">%1$d непрочитанных</item>
+        <item quantity="other">%1$d непрочитанных</item>
+    </plurals>
+
     <plurals name="rating_star_description">
         <item quantity="one">%1$d звезда</item>
         <item quantity="few">%1$d звезды</item>
