@@ -94,6 +94,7 @@
     <string name="onboarding_pin_error_wrong">PIN-kod noto\'g\'ri. Qolgan urinishlar: %1$d</string>
     <string name="onboarding_pin_error_attempts">Urinishlar tugadi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
+    <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
 
     <!-- Онбординг: биометрия -->

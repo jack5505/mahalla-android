@@ -21,6 +21,12 @@ enum class OtpFailure {
 
     /** Сеть, таймаут, 5xx — ошибка не про код. */
     Network,
+
+    /**
+     * Код приняли, но ответ пришёл про другой аккаунт (issue #86). Ввод
+     * блокируется: новый код ничего не изменит, а входить надо не сюда.
+     */
+    ForeignAccount,
 }
 
 /**
@@ -37,6 +43,9 @@ enum class OtpFailure {
  * «сессия истекла»: сессии на этом шаге ещё нет.
  */
 fun ApiFailure.asOtpFailure(): OtpFailure {
+    // Отказ, который выставил сам клиент, поймав чужой аккаунт: ответа сервера
+    // за ним нет, и раскладка по кодам ниже приняла бы его за «нет сети».
+    if (isForeignAccount()) return OtpFailure.ForeignAccount
     val code = server?.code?.trim()?.uppercase()
     return code?.let(::byServerCode) ?: byHttpError(error)
 }
