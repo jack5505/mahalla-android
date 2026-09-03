@@ -51,6 +51,7 @@ class MenuViewModelTest {
         val state = viewModel().state.value
 
         assertTrue(state.menu is ScreenState.Content)
+        // Название заведения приходит маршрутом: в ответе меню его нет.
         assertEquals("Osh markazi", state.placeName)
         assertEquals("main", state.visibleCategory?.id)
     }
@@ -258,7 +259,9 @@ class MenuViewModelTest {
     private fun viewModel() = MenuViewModel(
         menuRepository = menuRepository,
         cartRepository = cartRepository,
-        savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
+        savedStateHandle = SavedStateHandle(
+            mapOf("placeId" to PLACE_ID, "placeName" to "Osh markazi"),
+        ),
     )
 
     private companion object {

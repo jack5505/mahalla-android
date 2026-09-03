@@ -5,15 +5,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
-import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
-import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
-import uz.mahalla.feature.food.domain.PromoFailure
-import uz.mahalla.feature.food.domain.PromoState
-import uz.mahalla.feature.food.domain.asPromoFailure
 import uz.mahalla.navigation.CartRoute
 import javax.inject.Inject
 
@@ -22,14 +17,10 @@ import javax.inject.Inject
  *
  * Состав корзины — источник истины в Room: экран подписан на неё и не хранит
  * собственную копию списка, поэтому «+1» из меню сразу виден и здесь.
- *
- * Промокод проверяет сервер: скидку в итоге выставляет он, и посчитанная
- * локально «−20 %» разошлась бы с чеком на первом же коде с ограничениями.
  */
 @HiltViewModel
 class CartViewModel @Inject constructor(
     private val cartRepository: CartRepository,
-    private val menuRepository: MenuRepository,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CartState, CartEvent, CartEffect>(CartState()) {
 
@@ -52,23 +43,12 @@ class CartViewModel @Inject constructor(
                 cartRepository.remove(placeId, event.lineId)
             }
 
-            is CartEvent.PromoInputChanged -> updateState {
-                // Ошибка прошлой попытки исчезает, как только код начали
-                // править: красная надпись под изменённым полем относится уже
-                // не к тому, что в нём написано.
-                copy(promoInput = event.code, promo = promo.resetIfRejected())
-            }
-
-            CartEvent.PromoApplied -> applyPromo()
-
-            CartEvent.PromoRemoved -> {
-                cartRepository.applyPromo(null)
-                updateState { copy(promo = PromoState.Idle, promoInput = "") }
-            }
-
             CartEvent.CartCleared -> viewModelScope.launch { cartRepository.clear(placeId) }
 
-            CartEvent.AddMoreClicked -> emitEffect(CartEffect.OpenMenu(placeId))
+            CartEvent.AddMoreClicked -> emitEffect(
+                CartEffect.OpenMenu(placeId, currentState.placeName),
+            )
+
             CartEvent.CheckoutClicked -> if (currentState.canCheckout) {
                 emitEffect(CartEffect.OpenCheckout(placeId))
             }
@@ -80,49 +60,9 @@ class CartViewModel @Inject constructor(
     private fun CartState.withCart(cart: Cart): CartState = copy(
         placeName = cart.placeName.takeIf(String::isNotBlank) ?: placeName,
         lines = cart.lines,
-        // Доставка добавится на checkout'е, когда станет известен способ.
-        totals = CartCalculator.totals(cart, deliverySum = 0),
-        promo = cart.promo?.let(PromoState::Applied) ?: promo.clearedIfApplied(),
+        // Ни скидки, ни доставки: и то и другое называет сервер при
+        // оформлении — см. KDoc `CartState`.
+        totals = CartCalculator.totals(cart.lines),
         isLoaded = true,
     )
-
-    /**
-     * Проверка промокода. Сумма уходит на сервер вместе с кодом: «минимальный
-     * заказ 100 000» проверяется по актуальному составу, а не по тому, что было
-     * в корзине, когда код вводили.
-     */
-    private fun applyPromo() {
-        val state = currentState
-        if (!state.canApplyPromo) return
-
-        val code = state.promoInput.trim()
-        val subtotal = state.totals.subtotalSum
-        updateState { copy(promo = PromoState.Checking) }
-        viewModelScope.launch {
-            when (val result = menuRepository.promo(placeId, code, subtotal)) {
-                is ApiResult.Failure -> updateState {
-                    copy(promo = PromoState.Rejected(result.error.asPromoFailure()))
-                }
-
-                is ApiResult.Success -> {
-                    val promo = result.data
-                    // Код валиден сам по себе, но не дотягивает по сумме —
-                    // применять его молча значит показать скидку 0 без причины.
-                    if (promo.discountFor(subtotal) <= 0) {
-                        updateState {
-                            copy(promo = PromoState.Rejected(PromoFailure.MinOrder(promo.minOrderSum)))
-                        }
-                        return@launch
-                    }
-                    cartRepository.applyPromo(promo)
-                }
-            }
-        }
-    }
-
-    private fun PromoState.resetIfRejected(): PromoState =
-        if (this is PromoState.Rejected) PromoState.Idle else this
-
-    private fun PromoState.clearedIfApplied(): PromoState =
-        if (this is PromoState.Applied) PromoState.Idle else this
 }

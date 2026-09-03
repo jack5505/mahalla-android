@@ -110,7 +110,11 @@ sealed interface PlaceDetailsEffect : UiEffect {
     data class OpenRoute(val point: GeoPoint, val label: String) : PlaceDetailsEffect
 
     /** Очередь, бронь и заказ — вертикали следующих эпиков. */
-    data class OpenVertical(val action: PlaceAction, val placeId: String) : PlaceDetailsEffect
+    data class OpenVertical(
+        val action: PlaceAction,
+        val placeId: String,
+        val placeName: String,
+    ) : PlaceDetailsEffect
 
     data object NavigateBack : PlaceDetailsEffect
 }

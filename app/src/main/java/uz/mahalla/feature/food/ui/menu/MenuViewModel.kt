@@ -37,12 +37,18 @@ class MenuViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<MenuState, MenuEvent, MenuEffect>(MenuState()) {
 
-    private val placeId: String = savedStateHandle.toRoute<MenuRoute>().placeId
+    private val route: MenuRoute = savedStateHandle.toRoute()
+
+    private val placeId: String = route.placeId
 
     /** Позиция, ждущая ответа на вопрос «очистить корзину другого заведения?». */
     private var pendingLine: CartLine? = null
 
     init {
+        // Название заведения приходит маршрутом: в ответе `food/.../menu` его
+        // нет, а корзина и диалог «корзина другого заведения» без него
+        // показывали бы пустые кавычки.
+        updateState { copy(placeName = route.placeName) }
         load()
         viewModelScope.launch {
             cartRepository.cart(placeId).collect { cart -> updateState { withCart(cart) } }
@@ -88,7 +94,7 @@ class MenuViewModel @Inject constructor(
         updateState { copy(menu = ScreenState.Loading) }
         viewModelScope.launch {
             when (val result = menuRepository.menu(placeId)) {
-                is ApiResult.Failure -> updateState { copy(menu = ScreenState.Error(result.error)) }
+                is ApiResult.Failure -> updateState { copy(menu = ScreenState.Error(result.failure)) }
                 is ApiResult.Success -> updateState { withMenu(result.data) }
             }
         }
@@ -96,7 +102,6 @@ class MenuViewModel @Inject constructor(
 
     private fun MenuState.withMenu(menu: Menu): MenuState = copy(
         menu = if (menu.isEmpty) ScreenState.Empty else ScreenState.Content(menu),
-        placeName = menu.placeName.takeIf(String::isNotBlank) ?: placeName,
         // Категория выбирается один раз: пересчёт на каждой загрузке сбрасывал
         // бы прокрутку человека к первой вкладке.
         selectedCategoryId = selectedCategoryId ?: menu.categories.firstOrNull()?.id,
@@ -154,7 +159,6 @@ class MenuViewModel @Inject constructor(
     }
 
     private fun addToCart(item: MenuItem, selected: Set<String>, quantity: Int) {
-        val menu = currentState.data ?: return
         val options = MenuOptionRules.chosenOptions(item, selected)
         val line = CartLine(
             id = CartCalculator.lineId(item.id, selected),
@@ -174,26 +178,24 @@ class MenuViewModel @Inject constructor(
                 updateState { copy(conflictPlaceName = otherPlaceName) }
                 return@launch
             }
-            store(line, menu)
+            store(line)
         }
     }
 
     private fun onConflictConfirmed() {
         val line = pendingLine ?: return
-        val menu = currentState.data ?: return
         pendingLine = null
         updateState { copy(conflictPlaceName = null) }
         viewModelScope.launch {
             cartRepository.clearAll()
-            store(line, menu)
+            store(line)
         }
     }
 
-    private suspend fun store(line: CartLine, menu: Menu) {
+    private suspend fun store(line: CartLine) {
         cartRepository.add(
             placeId = placeId,
             placeName = currentState.placeName,
-            deliverySum = menu.deliverySum,
             line = line,
         )
         emitEffect(MenuEffect.ItemAdded(line.name))

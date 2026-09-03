@@ -61,7 +61,7 @@ class OrderStatusViewModel @Inject constructor(
             OrderStatusEvent.ScreenStopped -> pollJob?.cancel()
 
             OrderStatusEvent.CancelClicked -> updateState {
-                copy(cancelConfirmVisible = true, cancelFailed = false)
+                copy(cancelConfirmVisible = true, cancelFailure = null)
             }
 
             OrderStatusEvent.CancelDismissed -> updateState { copy(cancelConfirmVisible = false) }
@@ -85,7 +85,7 @@ class OrderStatusViewModel @Inject constructor(
                         // следующей попытки: моргать экраном на каждом обрыве
                         // связи хуже, чем показать статус минутной давности.
                         if (currentState.data == null) {
-                            updateState { copy(order = ScreenState.Error(result.error)) }
+                            updateState { copy(order = ScreenState.Error(result.failure)) }
                             return@launch
                         }
                     }
@@ -104,16 +104,22 @@ class OrderStatusViewModel @Inject constructor(
         val order = currentState.data ?: return
         if (!OrderStatusFlow.canCancel(order.status)) return
 
-        updateState { copy(isCancelling = true, cancelConfirmVisible = false, cancelFailed = false) }
+        updateState {
+            copy(isCancelling = true, cancelConfirmVisible = false, cancelFailure = null)
+        }
         viewModelScope.launch {
             when (val result = repository.cancel(orderId)) {
-                is ApiResult.Failure -> updateState { copy(isCancelling = false, cancelFailed = true) }
+                is ApiResult.Failure -> updateState {
+                    copy(isCancelling = false, cancelFailure = result.failure)
+                }
+
+                // Новое состояние заказа читаем у сервера, а не выводим сами:
+                // ответ на отмену бэкенд отдаёт схемой, которой в приложении
+                // нет (см. `OrderRepository`). Загрузка идёт без скелетона —
+                // заказ уже на экране, и моргать им незачем.
                 is ApiResult.Success -> {
-                    updateState {
-                        copy(isCancelling = false, order = ScreenState.Content(result.data))
-                    }
-                    // Отменённый заказ дальше не меняется — опрос больше не нужен.
-                    if (OrderStatusFlow.isFinal(result.data.status)) pollJob?.cancel()
+                    updateState { copy(isCancelling = false) }
+                    load(showLoading = false)
                 }
             }
         }

@@ -177,7 +177,15 @@ data class PlaceRoute(val placeId: String)
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 
 @Serializable
-data class MenuRoute(val placeId: String)
+data class MenuRoute(
+    val placeId: String,
+    /**
+     * Название заведения. Едет маршрутом, потому что ответ `food/.../menu` его
+     * не содержит: без него шапка меню, корзина и диалог «корзина другого
+     * заведения» остались бы без имени.
+     */
+    val placeName: String = "",
+)
 
 @Serializable
 data class CartRoute(val placeId: String)

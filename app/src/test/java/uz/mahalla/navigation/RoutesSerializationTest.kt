@@ -34,7 +34,9 @@ class RoutesSerializationTest {
         val search = SearchRoute(categoryId = "pharmacy", query = "osh")
         assertEquals(search, json.decodeFromString<SearchRoute>(json.encodeToString(search)))
 
-        val menu = MenuRoute(placeId = "p-42")
+        // Название заведения едет маршрутом: в ответе меню его нет, а корзина
+        // и диалог «корзина другого заведения» без него безымянные.
+        val menu = MenuRoute(placeId = "p-42", placeName = "Osh markazi")
         assertEquals(menu, json.decodeFromString<MenuRoute>(json.encodeToString(menu)))
 
         val order = OrderStatusRoute(orderId = "o-42")
@@ -71,9 +73,16 @@ class RoutesSerializationTest {
             serializer<CartRoute>().descriptor,
             serializer<CheckoutRoute>().descriptor,
         ).forEach { descriptor ->
-            assertEquals(1, descriptor.elementsCount)
             assertEquals("placeId", descriptor.getElementName(0))
         }
+
+        // У меню вторым аргументом едет название заведения: в ответе
+        // `food/places/{id}/menu` его нет, и шапка осталась бы пустой.
+        val menu = serializer<MenuRoute>().descriptor
+        assertEquals(2, menu.elementsCount)
+        assertEquals("placeName", menu.getElementName(1))
+        assertEquals(1, serializer<CartRoute>().descriptor.elementsCount)
+        assertEquals(1, serializer<CheckoutRoute>().descriptor.elementsCount)
 
         val order = serializer<OrderStatusRoute>().descriptor
         assertEquals(1, order.elementsCount)

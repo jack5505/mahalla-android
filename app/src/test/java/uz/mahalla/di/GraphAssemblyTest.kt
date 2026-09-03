@@ -197,6 +197,7 @@ class GraphAssemblyTest {
                     api = api,
                     orderDao = DatabaseModule.provideOrderDao(database),
                     cartRepository = cartRepository,
+                    clock = AppModule.provideClock(),
                 ),
             )
         } finally {

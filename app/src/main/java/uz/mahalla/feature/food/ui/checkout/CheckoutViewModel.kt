@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
-import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
@@ -14,20 +13,13 @@ import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
-import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.DeliverySlots
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.CheckoutRoute
-import java.time.Clock
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 /**
  * Оформление заказа (эпик 5.3).
- *
- * Время берётся из [Clock] графа, а не из `LocalDateTime.now()`: иначе
- * «слот слишком рано» невозможно проверить тестом.
  *
  * Баланс кошелька запрашивается один раз при открытии. Не приехал — оплату
  * кошельком не блокируем: отказать в оформлении из-за неотвеченного запроса
@@ -40,7 +32,6 @@ class CheckoutViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
-    private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
 
@@ -65,17 +56,7 @@ class CheckoutViewModel @Inject constructor(
         when (event) {
             is CheckoutEvent.MethodSelected -> updateForm { copy(method = event.method) }
             is CheckoutEvent.AddressChanged -> updateForm { copy(address = event.address) }
-            is CheckoutEvent.CommentChanged -> updateForm { copy(comment = event.comment) }
             is CheckoutEvent.PaymentSelected -> updateForm { copy(payment = event.payment) }
-
-            is CheckoutEvent.AsapToggled -> updateForm {
-                // Слот сбрасываем вместе с переключением: сохранённое время
-                // «на 19:00» после возврата к «как можно скорее» уехало бы в
-                // прошлое незаметно для человека.
-                copy(asap = event.asap, scheduledAt = if (event.asap) null else scheduledAt)
-            }
-
-            is CheckoutEvent.SlotSelected -> updateForm { copy(asap = false, scheduledAt = event.at) }
 
             CheckoutEvent.SubmitClicked -> submit()
             CheckoutEvent.TopUpClicked -> emitEffect(CheckoutEffect.OpenWallet)
@@ -94,41 +75,24 @@ class CheckoutViewModel @Inject constructor(
     )
 
     /**
-     * Итог, слоты и ошибки считаются вместе от одного «сейчас»: доставка входит
-     * в сумму только при доставке, а от суммы зависит проверка баланса —
+     * Итог и ошибки считаются вместе: от суммы зависит проверка баланса, и
      * считать их по отдельности значит однажды показать итог, не совпадающий с
      * причиной отказа.
      *
-     * Слоты пересчитываются здесь, а не один раз в `init`: список, посчитанный
-     * при открытии экрана, к моменту нажатия «оформить» протухает, и валидатор
-     * начинает отвергать время, которое экран сам же и предлагает. Выбранный
-     * слот, до которого кухня уже не успевает, снимается вместе со списком —
-     * молча передвинуть заказ на полчаса вперёд нельзя, а «слишком рано» на
-     * предложенном слоте объяснить невозможно.
+     * Доставка в сумму не входит: сколько она стоит, бэкенд сообщает только в
+     * ответе о созданном заказе — до оформления её не знает никто.
      */
     private fun CheckoutState.revalidated(): CheckoutState {
-        val now = now()
-        val slots = DeliverySlots.next(now)
-        val form = form.withoutStaleSlot(slots.first())
-        val deliverySum = if (form.method == DeliveryMethod.Delivery) cart.deliverySum else 0
-        val totals = CartCalculator.totals(cart.copy(lines = lines), deliverySum)
+        val totals = CartCalculator.totals(lines)
         return copy(
-            form = form,
-            slots = slots,
             totals = totals,
             errors = CheckoutValidator.validate(
                 form = form,
                 totals = totals,
                 cartIsEmpty = lines.isEmpty(),
                 walletBalanceSum = walletBalanceSum,
-                now = now,
             ),
         )
-    }
-
-    private fun CheckoutForm.withoutStaleSlot(earliest: LocalDateTime): CheckoutForm {
-        val at = scheduledAt ?: return this
-        return if (at.isBefore(earliest)) copy(scheduledAt = null) else this
     }
 
     /**
@@ -186,16 +150,14 @@ class CheckoutViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = orderRepository.create(cart.copy(lines = state.lines), state.form)) {
                 is ApiResult.Failure -> updateState {
-                    copy(isSubmitting = false, submitError = result.error)
+                    copy(isSubmitting = false, submitError = result.failure)
                 }
 
                 is ApiResult.Success -> {
                     updateState { copy(isSubmitting = false) }
-                    emitEffect(CheckoutEffect.OrderCreated(result.data.id))
+                    emitEffect(CheckoutEffect.OrderCreated(result.data))
                 }
             }
         }
     }
-
-    private fun now(): LocalDateTime = LocalDateTime.now(clock.withZone(DateTimeFormatters.AppZone))
 }
