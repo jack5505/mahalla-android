@@ -18,6 +18,19 @@ internal object PreferenceKeys {
     /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
     val CityId = stringPreferencesKey("settings_city_id")
 
+    /**
+     * Роль из анкеты (issue #84): покупатель или продавец. Хранится строкой
+     * (`UserRole.storedValue`), как и город: переименование константы в коде
+     * не должно стирать выбор пользователя.
+     */
+    val UserRole = stringPreferencesKey("settings_user_role")
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84). Подставляется в
+     * оформление заказа — иначе его набирают заново при каждом заказе.
+     */
+    val DeliveryAddress = stringPreferencesKey("settings_delivery_address")
+
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 

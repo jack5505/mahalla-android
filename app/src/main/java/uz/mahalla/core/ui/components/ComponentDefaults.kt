@@ -63,6 +63,14 @@ object MahallaComponentDefaults {
      */
     val ratingStarMinSize: Dp = minTouchTarget
 
+    // --- Анкеты покупателя и продавца (issue #84) ---
+
+    /**
+     * Карточка-выбор роли: заголовок, объяснение в две строки и радиокнопка.
+     * Выше обычной строки списка — объяснение здесь и есть смысл карточки.
+     */
+    val choiceCardMinHeight: Dp = 72.dp
+
     /** Больше 99 порций одного блюда — опечатка (`CartCalculator.MAX_QUANTITY`). */
     const val maxStepperQuantity: Int = 99
 
@@ -94,5 +102,6 @@ object MahallaComponentDefaults {
         "stepper" to stepperMinHeight,
         "menuItem" to menuItemMinHeight,
         "ratingStar" to ratingStarMinSize,
+        "choiceCard" to choiceCardMinHeight,
     )
 }

@@ -16,6 +16,7 @@ import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.DeliverySlots
+import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.CheckoutRoute
 import java.time.Clock
@@ -38,6 +39,7 @@ class CheckoutViewModel @Inject constructor(
     private val cartRepository: CartRepository,
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
+    private val roleRepository: RoleRepository,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
@@ -56,6 +58,7 @@ class CheckoutViewModel @Inject constructor(
             }
         }
         loadBalance()
+        prefillAddress()
     }
 
     override fun onEvent(event: CheckoutEvent) {
@@ -126,6 +129,27 @@ class CheckoutViewModel @Inject constructor(
     private fun CheckoutForm.withoutStaleSlot(earliest: LocalDateTime): CheckoutForm {
         val at = scheduledAt ?: return this
         return if (at.isBefore(earliest)) copy(scheduledAt = null) else this
+    }
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84): набирать его заново при
+     * каждом заказе незачем.
+     *
+     * Подставляется только в пустое поле: чтение асинхронное, и человек может
+     * начать печатать раньше, чем оно закончится, — затирать набранное нельзя.
+     */
+    private fun prefillAddress() {
+        viewModelScope.launch {
+            val saved = roleRepository.current().customer.address
+            if (saved.isBlank()) return@launch
+            updateState {
+                if (form.address.isBlank()) {
+                    copy(form = form.copy(address = saved)).revalidated()
+                } else {
+                    this
+                }
+            }
+        }
     }
 
     private fun loadBalance() {

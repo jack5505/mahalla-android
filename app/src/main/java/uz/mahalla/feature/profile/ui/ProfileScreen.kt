@@ -58,6 +58,8 @@ import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
+import uz.mahalla.feature.role.domain.UserRole
+import uz.mahalla.feature.role.ui.labelRes
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import java.time.Instant
@@ -70,10 +72,14 @@ import java.time.Instant
  * сборке менять адрес не разрешено, строки нет. После входа welcome с той же
  * кнопкой недостижим, а сервер сменить бывает нужно (переехал стенд).
  * @param onLoggedOut вышли из аккаунта: приложение возвращается в онбординг.
+ * @param onOpenRole открыть «кто вы» и анкеты (issue #84): роль меняется —
+ * вчерашний покупатель открывает кафе, — а в онбординге анкету можно было
+ * пропустить.
  */
 @Composable
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
+    onOpenRole: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -100,6 +106,7 @@ fun ProfileScreen(
     ProfileContentScreen(
         state = state,
         onEvent = viewModel::onEvent,
+        onOpenRole = onOpenRole,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -111,6 +118,7 @@ fun ProfileScreen(
 fun ProfileContentScreen(
     state: ProfileState,
     onEvent: (ProfileEvent) -> Unit,
+    onOpenRole: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -125,6 +133,17 @@ fun ProfileContentScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             ProfileHeader(profile = state.profile)
+
+            // Анкеты покупателя и продавца (issue #84). Подпись — текущая
+            // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
+            // человек в приложении числится сейчас.
+            MahallaListItem(
+                title = stringResource(R.string.role_profile_entry),
+                subtitle = stringResource(
+                    UserRole.fromStoredValue(state.settings.roleId).labelRes(),
+                ),
+                onClick = onOpenRole,
+            )
 
             Text(
                 text = stringResource(R.string.profile_language),
@@ -467,6 +486,7 @@ private fun ProfilePreview() {
                 ),
             ),
             onEvent = {},
+            onOpenRole = {},
         )
     }
 }

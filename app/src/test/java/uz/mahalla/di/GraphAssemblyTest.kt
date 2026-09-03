@@ -48,6 +48,10 @@ import uz.mahalla.feature.food.data.di.FoodDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.role.data.DataStoreRoleRepository
+import uz.mahalla.feature.role.data.DefaultProviderRepository
+import uz.mahalla.feature.role.data.di.RoleDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.data.DefaultAppVersionRepository
@@ -278,6 +282,38 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
+     * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
+     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     */
+    @Test
+    fun `role forms assemble on the main retrofit and the data store`() {
+        val dataStore = sharedDataStore(context)
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = RoleDataModule.provideProviderApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(
+            DefaultProviderRepository(
+                api = api,
+                locationSource = AndroidLocationSource(context),
+                phoneValidator = PhoneNumberValidator(),
+            ),
+        )
+        assertNotNull(
+            DataStoreRoleRepository(
+                settings = SettingsDataStore(dataStore),
+                profileStore = DataStoreUserProfileStore(dataStore),
+            ),
+        )
     }
 
     /**
