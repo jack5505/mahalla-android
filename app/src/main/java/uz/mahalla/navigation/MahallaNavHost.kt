@@ -332,7 +332,9 @@ fun MahallaNavHost(
             // маршруте ничего не знает и открывается одинаково из списка и из
             // deep link'а.
             PlaceDetailsScreen(
-                onOrderClick = { placeId -> navController.navigate(MenuRoute(placeId)) },
+                onOrderClick = { placeId, placeName ->
+                    navController.navigate(MenuRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -350,9 +352,12 @@ fun MahallaNavHost(
                 onCheckout = { placeId -> navController.navigate(CheckoutRoute(placeId)) },
                 // «Добавить ещё» — это возврат в меню, а не второй его
                 // экземпляр поверх первого.
-                onAddMore = { placeId ->
-                    navController.navigate(MenuRoute(placeId)) {
-                        popUpTo(MenuRoute(placeId)) { inclusive = true }
+                // popUpTo по типу, а не по значению маршрута: имя заведения в
+                // аргументах может отличаться, а вернуться нужно в то меню,
+                // которое уже лежит в стеке.
+                onAddMore = { placeId, placeName ->
+                    navController.navigate(MenuRoute(placeId, placeName)) {
+                        popUpTo<MenuRoute> { inclusive = true }
                     }
                 },
                 onBack = { navController.navigateUp() },

@@ -1,62 +1,71 @@
 package uz.mahalla.feature.food.domain
 
-import java.time.LocalDateTime
-
-/** Как заказ попадает к человеку (эпик 5.3). */
+/**
+ * Как заказ попадает к человеку (эпик 5.3). Значения — перечисление бэкенда
+ * `Fulfillment` (`DELIVERY`, `PICKUP`, `DINE_IN`).
+ */
 enum class DeliveryMethod {
     Delivery,
     Pickup,
     ;
 
-    val apiValue: String get() = name.lowercase()
+    val apiValue: String get() = if (this == Delivery) "DELIVERY" else "PICKUP"
 
     companion object {
-        /** Неизвестное значение — доставка: она строже по валидации (нужен адрес). */
+        /**
+         * `DINE_IN` («на месте») в приложении отдельным способом не заведён —
+         * от самовывоза он отличается только тем, что заказ не уносят: адрес
+         * не нужен, доставки нет. Неизвестное значение — тоже самовывоз:
+         * назвать доставкой то, чего не понял, значит нарисовать этап
+         * «в пути», которого не будет.
+         */
         fun fromApi(value: String?): DeliveryMethod =
-            entries.firstOrNull { it.apiValue.equals(value?.trim(), ignoreCase = true) } ?: Delivery
+            if (value?.trim().equals(Delivery.apiValue, ignoreCase = true)) Delivery else Pickup
     }
 }
 
 /**
  * Оплата. Кошелёк — основной способ по ТЗ; наличные остаются, потому что без
- * них самовывоз в первый же день упрётся в пустой баланс.
+ * них самовывоз в первый же день упрётся в пустой баланс. Значения —
+ * перечисление бэкенда `PaymentMethod` (`WALLET`, `CASH`).
  */
 enum class PaymentMethod {
     Wallet,
     Cash,
     ;
 
-    val apiValue: String get() = if (this == Wallet) "wallet" else "cash"
+    val apiValue: String get() = if (this == Wallet) "WALLET" else "CASH"
 
     companion object {
         fun fromApi(value: String?): PaymentMethod =
-            entries.firstOrNull { it.apiValue.equals(value?.trim(), ignoreCase = true) } ?: Wallet
+            if (value?.trim().equals(Cash.apiValue, ignoreCase = true)) Cash else Wallet
     }
 }
 
 /**
- * Форма оформления. [scheduledAt] заполнена только когда выключено «как можно
- * скорее»: два независимых поля времени разъезжались бы между собой.
+ * Форма оформления.
+ *
+ * Ни комментария, ни времени заказа здесь нет: `PlaceOrderRequest` бэкенда
+ * принимает только заведение, позиции, способ получения, способ оплаты и
+ * адрес. Поле, которое некуда отправить, обещало бы человеку, что кухня
+ * прочитает его просьбу, — а она о ней не узнает.
  */
 data class CheckoutForm(
     val method: DeliveryMethod = DeliveryMethod.Delivery,
     val address: String = "",
-    val comment: String = "",
     val payment: PaymentMethod = PaymentMethod.Wallet,
-    val asap: Boolean = true,
-    val scheduledAt: LocalDateTime? = null,
 ) {
     val needsAddress: Boolean get() = method == DeliveryMethod.Delivery
+
+    /** Адрес для запроса: пробелы — не адрес, а самовывозу его отправлять незачем. */
+    fun addressOrNull(): String? =
+        address.trim().takeIf { needsAddress && it.isNotEmpty() }
 }
 
 /** Что не так с формой. Каждая ошибка привязана к своему полю на экране. */
 sealed interface CheckoutError {
     data object EmptyCart : CheckoutError
     data object AddressRequired : CheckoutError
-    data object TimeRequired : CheckoutError
-
-    /** Время в прошлом или слишком близко: кухня не успеет. */
-    data class TimeTooSoon(val minLeadMinutes: Int) : CheckoutError
 
     /** На кошельке не хватает; сколько именно — показываем, чтобы было понятно, сколько пополнять. */
     data class InsufficientFunds(val missingSum: Long) : CheckoutError
@@ -66,32 +75,18 @@ sealed interface CheckoutError {
  * Валидация checkout'а (эпик 5.3) — чистая функция от формы, итога и баланса.
  *
  * Проверяется всё сразу: подсвечивать ошибки по одной значит гонять человека
- * по форме кругами. Время сравнивается с переданным «сейчас», а не с
- * `LocalDateTime.now()` — иначе тест на «слишком рано» невозможен.
+ * по форме кругами.
  */
 object CheckoutValidator {
-
-    /** Минимальный запас до заказа на время — меньше кухня физически не успеет. */
-    const val MIN_LEAD_MINUTES = 30
 
     fun validate(
         form: CheckoutForm,
         totals: CartTotals,
         cartIsEmpty: Boolean,
         walletBalanceSum: Long,
-        now: LocalDateTime,
     ): List<CheckoutError> = buildList {
         if (cartIsEmpty) add(CheckoutError.EmptyCart)
         if (form.needsAddress && form.address.isBlank()) add(CheckoutError.AddressRequired)
-
-        if (!form.asap) {
-            val at = form.scheduledAt
-            if (at == null) {
-                add(CheckoutError.TimeRequired)
-            } else if (at.isBefore(now.plusMinutes(MIN_LEAD_MINUTES.toLong()))) {
-                add(CheckoutError.TimeTooSoon(MIN_LEAD_MINUTES))
-            }
-        }
 
         if (form.payment == PaymentMethod.Wallet && !cartIsEmpty) {
             val missing = totals.totalSum - walletBalanceSum
@@ -104,43 +99,5 @@ object CheckoutValidator {
         totals: CartTotals,
         cartIsEmpty: Boolean,
         walletBalanceSum: Long,
-        now: LocalDateTime,
-    ): Boolean = validate(form, totals, cartIsEmpty, walletBalanceSum, now).isEmpty()
-}
-
-/**
- * Слоты времени для заказа «ко времени» (эпик 5.3).
- *
- * Полноценный time picker здесь лишний: выбирать минуты незачем — кухня всё
- * равно работает получасовыми окнами, — а список слотов проверяется тестом и
- * не даёт ткнуть время в прошлом.
- */
-object DeliverySlots {
-
-    const val STEP_MINUTES = 30
-
-    /**
-     * Ближайшие [count] слотов: от «сейчас + минимальный запас», округлённого
-     * **вверх** до получаса. Округление вниз дало бы слот, который валидация
-     * тут же и отвергнет.
-     *
-     * Секунды тоже округляются вверх: `withSecond(0)` после прибавления запаса
-     * возвращал в 12:00:30 слот 12:30:00, то есть на полминуты раньше
-     * допустимого, — и первый же предложенный слот отвергался как «слишком
-     * рано».
-     */
-    fun next(
-        now: LocalDateTime,
-        count: Int = DEFAULT_COUNT,
-        minLeadMinutes: Int = CheckoutValidator.MIN_LEAD_MINUTES,
-    ): List<LocalDateTime> {
-        val lead = now.plusMinutes(minLeadMinutes.toLong())
-        val startOfMinute = lead.withSecond(0).withNano(0)
-        val earliest = if (startOfMinute == lead) lead else startOfMinute.plusMinutes(1)
-        val overflow = earliest.minute % STEP_MINUTES
-        val first = if (overflow == 0) earliest else earliest.plusMinutes((STEP_MINUTES - overflow).toLong())
-        return (0 until count).map { index -> first.plusMinutes((index * STEP_MINUTES).toLong()) }
-    }
-
-    private const val DEFAULT_COUNT = 8
+    ): Boolean = validate(form, totals, cartIsEmpty, walletBalanceSum).isEmpty()
 }

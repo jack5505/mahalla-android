@@ -16,14 +16,12 @@ import org.robolectric.annotation.Config
 import uz.mahalla.data.db.MahallaDatabase
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CartLine
-import uz.mahalla.feature.food.domain.PromoCode
-import uz.mahalla.feature.food.domain.PromoKind
 import uz.mahalla.testutil.cartLine
 
 /**
- * Черновик корзины (эпик 5.2) на настоящей Room: ключ строки, количество и
- * жизнь промокода — то, из-за чего корзина после перезапуска приложения может
- * оказаться не той, что была.
+ * Черновик корзины (эпик 5.2) на настоящей Room: ключ строки и количество — то,
+ * из-за чего корзина после перезапуска приложения может оказаться не той, что
+ * была.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -75,13 +73,12 @@ class CartRepositoryTest {
     }
 
     @Test
-    fun `the place name and the delivery fee live with the draft`() = runTest {
-        // Корзину показывают до загрузки меню и без сети.
+    fun `the place name lives with the draft`() = runTest {
+        // Корзину показывают до загрузки меню и без сети, а в ответе меню
+        // названия заведения нет вовсе.
         add(cartLine("osh"))
 
-        val cart = repository.cart(PLACE_ID).first()
-        assertEquals("Osh markazi", cart.placeName)
-        assertEquals(15_000L, cart.deliverySum)
+        assertEquals("Osh markazi", repository.cart(PLACE_ID).first().placeName)
     }
 
     @Test
@@ -122,30 +119,9 @@ class CartRepositoryTest {
     }
 
     @Test
-    fun `clearing the cart drops the promo with it`() = runTest {
-        // Код был выдан под этот состав — переносить его на следующий заказ
-        // значит показать скидку, которой уже нет.
-        add(cartLine("osh"))
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
-
-        repository.clear(PLACE_ID)
-
-        assertNull(repository.cart(PLACE_ID).first().promo)
-    }
-
-    @Test
-    fun `the promo is visible in the observed cart`() = runTest {
-        add(cartLine("osh"))
-
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
-
-        assertEquals("TEN", repository.cart(PLACE_ID).first().promo?.code)
-    }
-
-    @Test
     fun `clearing one place does not touch another`() = runTest {
         add(cartLine("osh"))
-        repository.add("place-2", "Somsa uyi", 0, cartLine("somsa"))
+        repository.add("place-2", "Somsa uyi", cartLine("somsa"))
 
         repository.clear(PLACE_ID)
 
@@ -157,25 +133,20 @@ class CartRepositoryTest {
     fun `replace swaps the whole draft, including the draft of another place`() = runTest {
         // Повтор заказа: прежний черновик исчезает вместе с появлением нового,
         // одной транзакцией — а не «сначала почистить, потом добавить».
-        repository.add("place-2", "Somsa uyi", 0, cartLine("somsa"))
-        repository.applyPromo(PromoCode("TEN", PromoKind.Percent, value = 10))
+        repository.add("place-2", "Somsa uyi", cartLine("somsa"))
 
-        repository.replace(PLACE_ID, "Osh markazi", DELIVERY_SUM, listOf(cartLine("osh", quantity = 2)))
+        repository.replace(PLACE_ID, "Osh markazi", listOf(cartLine("osh", quantity = 2)))
 
         assertEquals(emptyList<CartLine>(), repository.snapshot("place-2").lines)
         val cart = repository.snapshot(PLACE_ID)
         assertEquals(listOf("osh"), cart.lines.map(CartLine::itemId))
         assertEquals(2, cart.lines.single().quantity)
-        assertEquals(DELIVERY_SUM, cart.deliverySum)
-        // Промокод был выдан под прежний состав.
-        assertNull(cart.promo)
+        assertEquals("Osh markazi", cart.placeName)
     }
 
-    private suspend fun add(line: CartLine) =
-        repository.add(PLACE_ID, "Osh markazi", DELIVERY_SUM, line)
+    private suspend fun add(line: CartLine) = repository.add(PLACE_ID, "Osh markazi", line)
 
     private companion object {
         const val PLACE_ID = "place-1"
-        const val DELIVERY_SUM = 15_000L
     }
 }

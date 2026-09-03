@@ -175,7 +175,8 @@ class PlaceDetailsViewModelTest {
         viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Queue))
 
         assertEquals(
-            PlaceDetailsEffect.OpenVertical(PlaceAction.Queue, "p-1"),
+            // Имя заведения уходит вместе с id: меню его из бэкенда не узнает.
+            PlaceDetailsEffect.OpenVertical(PlaceAction.Queue, "p-1", "Osh markazi"),
             viewModel.effects.first(),
         )
     }
