@@ -88,6 +88,7 @@
     <string name="onboarding_pin_error_wrong">Неверный PIN-код. Осталось попыток: %1$d</string>
     <string name="onboarding_pin_error_attempts">Попытки исчерпаны. Войдите заново по номеру телефона</string>
     <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
+    <string name="onboarding_error_foreign_account">Сервер вернул другой аккаунт. На этом устройстве раньше входил другой номер — вход отменён. Войдите заново по номеру телефона</string>
     <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
 
     <!-- Онбординг: биометрия -->

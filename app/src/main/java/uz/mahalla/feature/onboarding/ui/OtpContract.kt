@@ -44,7 +44,10 @@ data class OtpState(
      * пока не придёт новый код.
      */
     val inputBlocked: Boolean
-        get() = failure == OtpFailure.TooManyAttempts || failure == OtpFailure.Expired
+        get() = failure == OtpFailure.TooManyAttempts ||
+            failure == OtpFailure.Expired ||
+            // Чужой аккаунт (issue #86): код был верный, повторять его незачем.
+            failure == OtpFailure.ForeignAccount
 
     /**
      * Текст бэкенда идёт подписью под ячейками: он точнее собственного «код
