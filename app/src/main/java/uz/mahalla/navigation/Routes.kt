@@ -226,6 +226,29 @@ data class QueueRoute(
     val placeName: String = "",
 )
 
+// --- Вертикаль «Игровые зоны» (эпик #11, issue #98) ---
+
+/**
+ * Игровые зоны заведения: что есть в клубе и во сколько обойдётся час.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что
+ * и у [QueueRoute]: ответ `gaming/places/{id}/zones` его не содержит.
+ */
+@Serializable
+data class GamingRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * «Мои брони» игровых зон. Вне обоих графов, как центр уведомлений:
+ * открывается строкой из профиля и с экрана зон, а возврат ведёт туда же.
+ *
+ * Аргументов нет: `gaming/bookings/my` отдаёт брони всех заведений сразу.
+ */
+@Serializable
+data object GamingBookingsRoute
+
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 
 @Serializable

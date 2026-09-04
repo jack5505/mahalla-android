@@ -543,4 +543,33 @@
     <string name="queue_status_no_show">Вы не пришли</string>
     <string name="queue_status_expired">Срок истёк</string>
     <string name="queue_status_unknown">Состояние неизвестно</string>
+
+    <!-- Игровые зоны (эпик #11, issue #98). -->
+    <string name="gaming_title">Игровые зоны</string>
+    <string name="gaming_zones_empty_title">Зон пока нет</string>
+    <string name="gaming_zones_empty_description">Как только заведение добавит игровые зоны, они появятся здесь.</string>
+    <string name="gaming_zone_unnamed">Зона без названия</string>
+    <string name="gaming_zone_unavailable">Бронь недоступна</string>
+    <string name="gaming_zone_price">%1$s / час</string>
+    <string name="gaming_book">Забронировать</string>
+    <string name="gaming_sheet_time">Время начала</string>
+    <string name="gaming_sheet_duration">На сколько</string>
+    <string name="gaming_total">Итого</string>
+    <string name="gaming_error_time_required">Выберите время начала.</string>
+    <string name="gaming_error_time_too_soon">Это время уже прошло — выберите другое.</string>
+    <string name="gaming_booked">Зона забронирована.</string>
+    <string name="gaming_booked_at">%1$s забронирована на %2$s.</string>
+    <string name="gaming_my_bookings">Мои брони</string>
+    <string name="gaming_bookings_profile_subtitle">Брони игровых зон</string>
+    <string name="gaming_bookings_empty_title">Броней нет</string>
+    <string name="gaming_bookings_empty_description">Забронируйте зону с карточки игрового клуба — бронь появится здесь.</string>
+    <string name="gaming_booking_zone_unknown">Игровая зона</string>
+    <string name="gaming_booking_interval">%1$s — %2$s</string>
+    <string name="gaming_cancel_note">Отменить бронь в приложении нельзя: для этого позвоните в заведение.</string>
+    <string name="gaming_status_confirmed">Подтверждена</string>
+    <string name="gaming_status_active">Идёт сейчас</string>
+    <string name="gaming_status_completed">Завершена</string>
+    <string name="gaming_status_cancelled">Отменена</string>
+    <string name="gaming_status_unknown">Состояние неизвестно</string>
+
 </resources>

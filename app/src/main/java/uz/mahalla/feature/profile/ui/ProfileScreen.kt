@@ -79,12 +79,16 @@ import java.time.Instant
  * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
  * только продавцу: до неё судьбу отправленной заявки в приложении было не
  * видно вовсе.
+ * @param onOpenGamingBookings открыть «мои брони» игровых зон (issue #98).
+ * Строка видна всем: бронь берут с карточки клуба, и другого пути к своим
+ * броням, кроме как найти тот же клуб заново, у человека нет.
  */
 @Composable
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -113,6 +117,7 @@ fun ProfileScreen(
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
+        onOpenGamingBookings = onOpenGamingBookings,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -126,6 +131,7 @@ fun ProfileContentScreen(
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -161,6 +167,15 @@ fun ProfileContentScreen(
                     onClick = onOpenMyPlaces,
                 )
             }
+
+            // «Мои брони» игровых зон (issue #98). Без этой строки бронь можно
+            // было бы найти, только вернувшись на карточку того же клуба, —
+            // а после закрытия приложения его ещё надо вспомнить.
+            MahallaListItem(
+                title = stringResource(R.string.gaming_my_bookings),
+                subtitle = stringResource(R.string.gaming_bookings_profile_subtitle),
+                onClick = onOpenGamingBookings,
+            )
 
             Text(
                 text = stringResource(R.string.profile_language),
@@ -507,6 +522,7 @@ private fun ProfilePreview() {
             onEvent = {},
             onOpenRole = {},
             onOpenMyPlaces = {},
+            onOpenGamingBookings = {},
         )
     }
 }

@@ -121,6 +121,9 @@ class RoutesSerializationTest {
             // Очередь (issue #96): аргументы те же, что у меню, — склеенный
             // serialName увёл бы человека не на тот экран.
             serializer<QueueRoute>().descriptor.serialName,
+            // Игровые зоны (issue #98): аргументы те же, что у очереди.
+            serializer<GamingRoute>().descriptor.serialName,
+            serializer<GamingBookingsRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,
@@ -227,5 +230,26 @@ class RoutesSerializationTest {
 
         val route = QueueRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<QueueRoute>(json.encodeToString(route)))
+    }
+
+    @Test
+    fun `gaming route carries the place and its name`() {
+        // Имя заведения едет маршрутом: ответ `gaming/…/zones` его не
+        // содержит (issue #98).
+        val descriptor = serializer<GamingRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        val route = GamingRoute(placeId = "p-1")
+        assertEquals(route, json.decodeFromString<GamingRoute>(json.encodeToString(route)))
+    }
+
+    @Test
+    fun `my bookings route has no arguments`() {
+        // `gaming/bookings/my` отдаёт брони всех заведений сразу — фильтровать
+        // маршрутом нечего.
+        assertEquals(0, serializer<GamingBookingsRoute>().descriptor.elementsCount)
     }
 }

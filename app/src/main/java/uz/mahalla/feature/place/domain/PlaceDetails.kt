@@ -67,13 +67,18 @@ data class PlaceCapabilities(
          * (`walkin/send`, `walkin/{id}/cancel`, `walkin/barber/dashboard`),
          * и клиентская половина его сделана в issue #96.
          *
-         * [ordering] и [booking] остаются выключенными: «Заказать» — это
-         * вертикаль «Еда» (её экраны есть, но включение кнопки вне объёма
-         * issue #96), а брони (контроллер `appointments`) в приложении нет и
-         * кнопка вела бы в никуда.
+         * Бронь — у игровых зон (`GAMING`): свой контроллер
+         * (`gaming/places/{id}/zones`, `gaming/bookings`) и свои экраны
+         * появились в issue #98. У врачей и мастеров бронь ведёт другой
+         * контроллер (`appointments`), экранов под него нет — поэтому кнопки
+         * там нет тоже.
+         *
+         * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»
+         * (её экраны есть, но включение кнопки вне объёма issue #96 и #98).
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true)
+            PlaceCategory.Playground -> PlaceCapabilities(booking = true)
             else -> PlaceCapabilities()
         }
     }
