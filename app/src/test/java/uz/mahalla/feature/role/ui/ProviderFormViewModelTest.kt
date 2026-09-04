@@ -15,6 +15,7 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.RoleProfile
@@ -179,6 +180,51 @@ class ProviderFormViewModelTest {
         advanceUntilIdle()
 
         assertEquals(PlaceModerationStatus.Active, viewModel.state.value.registered?.status)
+    }
+
+    @Test
+    fun `the map opens at the point already chosen`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        val point = MapPoint(latitude = 41.326543, longitude = 69.228765)
+        viewModel.onEvent(ProviderFormEvent.LocationPicked(point))
+
+        viewModel.onEvent(ProviderFormEvent.PickLocationClicked)
+
+        // Правка точки не должна означать поиск своего заведения заново.
+        assertEquals(ProviderFormEffect.OpenMapPicker(point), viewModel.effects.first())
+    }
+
+    @Test
+    fun `without a chosen point the map decides where to start itself`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(ProviderFormEvent.PickLocationClicked)
+
+        assertEquals(ProviderFormEffect.OpenMapPicker(null), viewModel.effects.first())
+    }
+
+    @Test
+    fun `the point from the map reaches the application`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel(phone = "+998901234567")
+        advanceUntilIdle()
+        fill(viewModel)
+        viewModel.onEvent(
+            ProviderFormEvent.LocationPicked(MapPoint(latitude = 41.3265, longitude = 69.2287)),
+        )
+
+        viewModel.onEvent(ProviderFormEvent.SubmitClicked)
+        advanceUntilIdle()
+
+        assertEquals(
+            MapPoint(latitude = 41.3265, longitude = 69.2287),
+            provider.submitted.single().location,
+        )
     }
 
     private fun fill(viewModel: ProviderFormViewModel) {

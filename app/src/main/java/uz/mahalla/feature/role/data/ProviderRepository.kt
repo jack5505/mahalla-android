@@ -43,15 +43,17 @@ class DefaultProviderRepository @Inject constructor(
 ) : ProviderRepository {
 
     /**
-     * Координаты заведения: измеренная позиция устройства, иначе центр города
-     * из анкеты, иначе центр Ташкента — та же лестница, что у запросов
-     * авторизации (`RequestLocationProvider`), только город берётся из формы,
-     * а не из настроек: человек может регистрировать заведение в другом
-     * городе, чем выбрал для каталога.
+     * Координаты заведения: точка, выбранная на карте (issue #90), иначе
+     * измеренная позиция устройства, иначе центр города из анкеты, иначе центр
+     * Ташкента.
      *
-     * Карты с выбором точки в форме нет — координаты приблизительные, и это
-     * записано в рисках: точный адрес заведения правит модерация или
-     * бизнес-панель (эпик #16).
+     * Выбранная точка старше позиции устройства, и это главное правило здесь:
+     * заявку часто заполняют дома, а заведение стоит в другом месте — и
+     * запомнить надо то, что человек показал сам, а не то, где он в этот
+     * момент сидит. Остальная лестница — та же, что у запросов авторизации
+     * (`RequestLocationProvider`), только город берётся из формы, а не из
+     * настроек: человек может регистрировать заведение в другом городе, чем
+     * выбрал для каталога.
      *
      * Незаполненная форма в сеть не уходит: 400 от сервера сказал бы то же
      * самое, но платой были бы запрос и молчание экрана на время его
@@ -65,15 +67,19 @@ class DefaultProviderRepository @Inject constructor(
         }
 
         val city = trimmed.city ?: City.Default
-        val location = locationSource.lastKnown()
+        val picked = trimmed.location
+        // Позицию устройства не спрашиваем вовсе, когда точка выбрана: это
+        // лишнее обращение к `LocationManager` за ответом, который всё равно
+        // проиграет.
+        val location = if (picked == null) locationSource.lastKnown() else null
         return apiCall {
             api.createPlace(
                 CreatePlaceRequest(
                     name = trimmed.name,
                     category = trimmed.category?.apiValue.orEmpty(),
                     address = trimmed.address,
-                    lat = location?.latitude ?: city.latitude,
-                    lng = location?.longitude ?: city.longitude,
+                    lat = picked?.latitude ?: location?.latitude ?: city.latitude,
+                    lng = picked?.longitude ?: location?.longitude ?: city.longitude,
                     phone = phoneValidator.toE164(trimmed.phoneDigits),
                     city = city.id,
                     description = trimmed.description.takeIf(String::isNotEmpty),

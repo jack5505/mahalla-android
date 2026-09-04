@@ -11,5 +11,12 @@ class FakeLocationSource(
     var location: DeviceLocation? = null,
 ) : LocationSource {
 
-    override suspend fun lastKnown(): DeviceLocation? = location
+    /** Сколько раз спросили: точку с карты позиция устройства не перебивает. */
+    var callCount: Int = 0
+        private set
+
+    override suspend fun lastKnown(): DeviceLocation? {
+        callCount++
+        return location
+    }
 }

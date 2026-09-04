@@ -1,6 +1,11 @@
 package uz.mahalla.feature.role.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +20,7 @@ import uz.mahalla.R
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.FilterChipUi
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaFilterRow
 import uz.mahalla.core.ui.components.MahallaPhoneField
 import uz.mahalla.core.ui.components.MahallaTextField
@@ -22,6 +28,7 @@ import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.onboarding.ui.OnboardingApiError
 import uz.mahalla.feature.onboarding.ui.OnboardingError
@@ -32,6 +39,7 @@ import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.ProviderForm
 import uz.mahalla.feature.role.domain.ProviderFormError
 import uz.mahalla.feature.role.domain.RegisteredPlace
+import uz.mahalla.ui.theme.Spacing
 
 /**
  * Анкета продавца (issue #84): заявка на регистрацию заведения, которое
@@ -44,16 +52,31 @@ import uz.mahalla.feature.role.domain.RegisteredPlace
 @Composable
 fun ProviderFormScreen(
     onFinished: () -> Unit,
+    onPickLocation: (MapPoint?) -> Unit,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    pickedLocation: MapPoint? = null,
+    onPickedLocationHandled: () -> Unit = {},
     viewModel: ProviderFormViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Точка приезжает с карты через `SavedStateHandle` записи стека (граф), а
+    // не эффектом: экран выбора не знает, кто его позвал. Ключ гасится сразу
+    // после применения — иначе та же точка вернулась бы в форму после каждого
+    // возврата на неё.
+    LaunchedEffect(pickedLocation) {
+        if (pickedLocation != null) {
+            viewModel.onEvent(ProviderFormEvent.LocationPicked(pickedLocation))
+            onPickedLocationHandled()
+        }
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 ProviderFormEffect.Finished -> onFinished()
+                is ProviderFormEffect.OpenMapPicker -> onPickLocation(effect.point)
             }
         }
     }
@@ -145,12 +168,19 @@ fun ProviderFormContent(
             onValueChange = { onEvent(ProviderFormEvent.AddressChanged(it)) },
             label = stringResource(R.string.role_field_place_address),
             placeholder = stringResource(R.string.role_field_address_hint),
-            // Точку на карте в форме не выбирают: координаты берутся от
-            // устройства (или от города), а адрес уточняет модерация.
+            // Адрес человек пишет словами, а точку показывает на карте:
+            // геокодера в проекте нет (MapKit взят в варианте `lite`), и одно
+            // из другого не выводится.
             supportingText = stringResource(R.string.role_field_place_address_note),
             errorText = state.addressErrorText(),
             enabled = !state.submitting,
             singleLine = false,
+        )
+
+        PlaceLocationBlock(
+            point = state.form.location,
+            enabled = !state.submitting,
+            onPick = { onEvent(ProviderFormEvent.PickLocationClicked) },
         )
 
         MahallaPhoneField(
@@ -181,6 +211,42 @@ fun ProviderFormContent(
                 ?.let { stringResource(R.string.role_error_website_invalid) },
             enabled = !state.submitting,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        )
+    }
+}
+
+/**
+ * Точка заведения на карте (issue #90).
+ *
+ * Необязательна: без неё координаты берутся от устройства или по городу — и
+ * тогда это прямо написано, а не молча подставлено. Выбранная точка
+ * показывается цифрами: адреса у неё нет (геокодера в проекте нет), и
+ * проверить выбор человеку иначе нечем.
+ */
+@Composable
+private fun PlaceLocationBlock(
+    point: MapPoint?,
+    enabled: Boolean,
+    onPick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        SectionHeader(title = stringResource(R.string.role_field_place_point))
+        Text(
+            text = point?.formatted() ?: stringResource(R.string.role_place_point_empty),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        MahallaButton(
+            text = stringResource(
+                if (point == null) R.string.role_place_point_pick else R.string.role_place_point_change,
+            ),
+            onClick = onPick,
+            variant = MahallaButtonVariant.Secondary,
+            state = ButtonState(enabled = enabled),
         )
     }
 }
@@ -267,6 +333,7 @@ private fun ProviderFormPreview() {
                     city = City.TASHKENT,
                     address = "Chilonzor, 12-kvartal",
                     phoneDigits = "901234567",
+                    location = MapPoint(latitude = 41.311081, longitude = 69.240562),
                 ),
             ),
             onEvent = {},

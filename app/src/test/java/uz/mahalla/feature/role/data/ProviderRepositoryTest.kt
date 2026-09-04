@@ -15,6 +15,7 @@ import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.onboarding.domain.City
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.ProviderForm
@@ -92,6 +93,35 @@ class ProviderRepositoryTest {
         val body = server.takeRequest().body.readUtf8()
         assertTrue(body, """"lat":${City.SAMARKAND.latitude}""" in body)
         assertTrue(body, """"lng":${City.SAMARKAND.longitude}""" in body)
+    }
+
+    @Test
+    fun `the point chosen on the map beats the position of the device`() = runTest {
+        server.enqueue(envelope("""{"id":"p-4","status":"PENDING"}"""))
+        // Заявку часто заполняют дома, а заведение стоит в другом месте:
+        // запомнить надо то, что человек показал сам (issue #90).
+        locationSource.location = DeviceLocation(latitude = 41.2995, longitude = 69.2401)
+
+        repository().registerPlace(
+            validForm().copy(location = MapPoint(latitude = 41.326543, longitude = 69.228765)),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, """"lat":41.326543""" in body)
+        assertTrue(body, """"lng":69.228765""" in body)
+    }
+
+    @Test
+    fun `the device is not even asked when the point is chosen`() = runTest {
+        server.enqueue(envelope("""{"id":"p-5","status":"PENDING"}"""))
+
+        repository().registerPlace(
+            validForm().copy(location = MapPoint(latitude = 41.326543, longitude = 69.228765)),
+        )
+
+        // Лишнее обращение к LocationManager за ответом, который всё равно
+        // проиграет выбранной точке.
+        assertEquals(0, locationSource.callCount)
     }
 
     @Test

@@ -293,6 +293,13 @@
     <string name="map_location_denied">Joylashuv ruxsati berilmadi. Xaritada o\'zingizni ko\'rish uchun sozlamalardan ruxsat bering.</string>
     <string name="map_location_unavailable">Joylashuvni aniqlab bo\'lmadi. Geolokatsiya yoqilganini tekshiring.</string>
 
+    <!-- Xaritada nuqta tanlash (issue #90) -->
+    <string name="map_picker_title">Xaritada nuqtani tanlang</string>
+    <string name="map_picker_hint">Xaritani suring: markazdagi belgi turgan joy tanlanadi.</string>
+    <string name="map_picker_resolving">Joylashuv aniqlanmoqda\u2026</string>
+    <string name="map_picker_confirm">Shu nuqtani tanlash</string>
+    <string name="map_picker_pin">Tanlanadigan nuqta</string>
+
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Ish vaqti</string>
     <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
@@ -442,7 +449,11 @@
     <string name="role_field_place_name_hint">Osh Markazi</string>
     <string name="role_field_category">Kategoriya</string>
     <string name="role_field_place_address">Muassasa manzili</string>
-    <string name="role_field_place_address_note">Xaritada nuqta tanlanmaydi: koordinatalar qurilma yoki shahar bo\'yicha olinadi.</string>
+    <string name="role_field_place_address_note">Manzilni matn bilan yozing, aniq nuqtani esa xaritada ko\'rsating.</string>
+    <string name="role_field_place_point">Xaritadagi nuqta</string>
+    <string name="role_place_point_empty">Tanlanmagan: koordinatalar qurilma yoki shahar bo\'yicha olinadi.</string>
+    <string name="role_place_point_pick">Xaritada tanlash</string>
+    <string name="role_place_point_change">Nuqtani o\'zgartirish</string>
     <string name="role_field_place_phone">Muassasa telefoni</string>
     <string name="role_field_description">Tavsif</string>
     <string name="role_field_description_hint">Nima taklif qilasiz</string>
