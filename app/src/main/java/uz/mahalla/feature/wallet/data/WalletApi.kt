@@ -2,21 +2,23 @@ package uz.mahalla.feature.wallet.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 
 /**
- * Кошелёк (контроллер `wallet`, issue #62).
+ * Кошелёк (контроллер `wallet`, issue #62 и #93).
  *
- * Контракт снят со стенда (`/v3/api-docs` + curl): обе ручки требуют Bearer —
+ * Контракт снят со стенда (`/v3/api-docs` + curl): все ручки требуют Bearer —
  * без токена приходит `401 UNAUTHORIZED`, — поэтому API создаётся на
  * **основном** Retrofit, а не на «голом» `@RefreshClient`. Ответы приезжают в
  * общем конверте `{success, data, error}`.
  *
- * Пополнения (`POST wallet/top-up`) здесь нет намеренно: оно требует выбора
- * платёжного провайдера (`PAYME|CLICK|UZUM`) и возврата из его веб-формы —
- * это задача 8.2 эпика #12, а не строка на экране баланса.
+ * Гео-заголовки обязательны и здесь (`403 GEO_PERMISSION_REQUIRED` без них,
+ * проверено), но их уже ставит `GeoHeaderInterceptor` на обоих клиентах
+ * (issue #53).
  */
 interface WalletApi {
 
@@ -28,6 +30,9 @@ interface WalletApi {
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<TransactionPageDto>
+
+    @POST("wallet/top-up")
+    suspend fun topUp(@Body request: TopUpRequest): ApiResponse<TopUpDto>
 }
 
 /**
@@ -59,6 +64,36 @@ data class TransactionPageDto(
     @SerialName("totalPages") val totalPages: Int? = null,
     @SerialName("first") val first: Boolean? = null,
     @SerialName("last") val last: Boolean? = null,
+)
+
+/**
+ * `TopUpRequest`. Оба поля обязательны, значения по умолчанию не объявлены
+ * намеренно: kotlinx.serialization выбрасывает из тела поля, равные дефолту, и
+ * бэкенд получал бы запрос без суммы (та же грабля, что у `revokeAll` в
+ * issue #61).
+ *
+ * `amount` — **в единицах бэкенда**, не в сумах: перевод делает
+ * [uz.mahalla.feature.wallet.domain.WalletTopUp.toMinor] по делителю, который
+ * вывела выдача баланса.
+ */
+@Serializable
+data class TopUpRequest(
+    @SerialName("amount") val amount: Long,
+    @SerialName("provider") val provider: String,
+)
+
+/**
+ * `TopUpResponse` — ответ на заведённый платёж. Все поля необязательные, как
+ * везде в этом API; без `paymentUrl` платить негде, и это разбирает
+ * репозиторий.
+ */
+@Serializable
+data class TopUpDto(
+    @SerialName("paymentUrl") val paymentUrl: String? = null,
+    @SerialName("transactionId") val transactionId: String? = null,
+    @SerialName("amount") val amount: Long? = null,
+    @SerialName("provider") val provider: String? = null,
+    @SerialName("expiresAt") val expiresAt: String? = null,
 )
 
 /** `TransactionResponse`. */
