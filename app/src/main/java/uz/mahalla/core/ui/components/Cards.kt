@@ -137,12 +137,19 @@ fun PlaceCard(
     }
 }
 
-/** Карточка заказа: статус тоном + текстом, сумма моноширинными цифрами. */
+/**
+ * Карточка заказа: статус тоном + текстом, сумма моноширинными цифрами.
+ *
+ * [onClick] необязателен, как у [TicketCard] и [BookingCard]: в списке «мои
+ * активности» (issue #73) карточкой показываются и те записи, у которых своего
+ * экрана ещё нет. Отдавать им пустой лямбдой значило бы оставить рябь нажатия
+ * и роль кнопки для TalkBack там, где нажатие ничего не делает.
+ */
 @Composable
 fun OrderCard(
     order: OrderCardUi,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     MahallaCard(onClick = onClick, modifier = modifier) {
         Row(
