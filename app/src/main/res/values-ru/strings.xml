@@ -481,6 +481,25 @@
     <string name="role_error_phone_invalid">Введите номер телефона полностью</string>
     <string name="role_error_website_invalid">Адрес сайта неверный. Например: mahalla.uz</string>
 
+    <!-- Мои заведения (issue #94) -->
+    <string name="my_places_title">Мои заведения</string>
+    <string name="my_places_profile_subtitle">Заявки и статус модерации</string>
+    <string name="my_places_empty_title">Заведений нет</string>
+    <string name="my_places_empty_description">Зарегистрируйте заведение — заявка уйдёт на модерацию.</string>
+    <string name="my_places_register">Зарегистрировать заведение</string>
+    <string name="my_places_unnamed">Заведение без названия</string>
+    <string name="my_places_available">Открыто сейчас</string>
+    <string name="my_places_available_description">Если выключить, в каталоге заведение будет закрытым.</string>
+    <string name="my_places_status_pending">На модерации</string>
+    <string name="my_places_status_active">Активно</string>
+    <string name="my_places_status_suspended">Приостановлено</string>
+    <string name="my_places_status_closed">Закрыто</string>
+    <string name="my_places_status_unknown">Статус неизвестен</string>
+    <string name="my_places_status_pending_hint">Заявка на проверке: в каталоге заведение появится после неё.</string>
+    <string name="my_places_status_suspended_hint">Заведение приостановлено. Причину подскажет поддержка.</string>
+    <string name="my_places_role_manager">Вы здесь менеджер</string>
+    <string name="my_places_role_staff">Вы здесь сотрудник: настройки меняет владелец</string>
+
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>

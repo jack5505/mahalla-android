@@ -54,6 +54,7 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.profile.domain.DeviceSession
@@ -75,11 +76,15 @@ import java.time.Instant
  * @param onOpenRole открыть «кто вы» и анкеты (issue #84): роль меняется —
  * вчерашний покупатель открывает кафе, — а в онбординге анкету можно было
  * пропустить.
+ * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
+ * только продавцу: до неё судьбу отправленной заявки в приложении было не
+ * видно вовсе.
  */
 @Composable
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
+    onOpenMyPlaces: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -107,6 +112,7 @@ fun ProfileScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
+        onOpenMyPlaces = onOpenMyPlaces,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -119,6 +125,7 @@ fun ProfileContentScreen(
     state: ProfileState,
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
+    onOpenMyPlaces: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -137,13 +144,23 @@ fun ProfileContentScreen(
             // Анкеты покупателя и продавца (issue #84). Подпись — текущая
             // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
             // человек в приложении числится сейчас.
+            val role = UserRole.fromStoredValue(state.settings.roleId)
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(
-                    UserRole.fromStoredValue(state.settings.roleId).labelRes(),
-                ),
+                subtitle = stringResource(role.labelRes()),
                 onClick = onOpenRole,
             )
+
+            // «Мои заведения» (issue #94) — только продавцу: покупателю
+            // показывать список, который всегда пуст, незачем. Роль он меняет
+            // строкой выше, и тогда строка появится.
+            if (role == UserRole.Provider) {
+                MahallaListItem(
+                    title = stringResource(R.string.my_places_title),
+                    subtitle = stringResource(R.string.my_places_profile_subtitle),
+                    onClick = onOpenMyPlaces,
+                )
+            }
 
             Text(
                 text = stringResource(R.string.profile_language),
@@ -462,6 +479,8 @@ private fun ProfilePreview() {
     PreviewSurface(modifier = Modifier.fillMaxSize()) {
         ProfileContentScreen(
             state = ProfileState(
+                // Продавец: иначе строки «Мои заведения» в превью не видно.
+                settings = AppSettings(roleId = UserRole.Provider.storedValue),
                 profile = UserProfile(
                     phone = "+998 90 123 45 67",
                     fullName = "Jahongir Sabirov",
@@ -487,6 +506,7 @@ private fun ProfilePreview() {
             ),
             onEvent = {},
             onOpenRole = {},
+            onOpenMyPlaces = {},
         )
     }
 }
