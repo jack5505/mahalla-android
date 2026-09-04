@@ -67,4 +67,10 @@
         <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
         <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
+
+    <!-- Безопасность (issue #102): остаток серверной блокировки PIN. -->
+    <plurals name="security_locked">
+        <item quantity="one">PIN-kod vaqtincha bloklangan. %1$d soniya qoldi.</item>
+        <item quantity="other">PIN-kod vaqtincha bloklangan. %1$d soniya qoldi.</item>
+    </plurals>
 </resources>

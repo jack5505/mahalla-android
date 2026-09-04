@@ -30,6 +30,14 @@ interface OnboardingRepository {
     suspend fun setCity(cityId: String)
 
     suspend fun markCompleted()
+
+    /**
+     * Снять флаг: следующий запуск обязан привести на вход. Зовётся при
+     * выходе из аккаунта — в том числе с экрана блокировки по «забыли PIN»
+     * (issue #102). Без этого приложение стартовало бы прямо в main, где
+     * каждый запрос отвечает 401.
+     */
+    suspend fun clearCompleted()
 }
 
 @Singleton
@@ -55,5 +63,9 @@ class DataStoreOnboardingRepository @Inject constructor(
 
     override suspend fun markCompleted() {
         settingsDataStore.setOnboardingCompleted(true)
+    }
+
+    override suspend fun clearCompleted() {
+        settingsDataStore.setOnboardingCompleted(false)
     }
 }

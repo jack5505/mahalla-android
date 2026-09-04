@@ -207,6 +207,22 @@ data class ProviderFormRoute(val onboarding: Boolean = false)
 @Serializable
 data object MyPlacesRoute
 
+/**
+ * Безопасность (issue #102): смена PIN и вход по биометрии. Вне обоих графов —
+ * открывается строкой из профиля.
+ *
+ * Экрана блокировки среди маршрутов **нет** намеренно: замок рисуется
+ * оверлеем поверх всей навигации (см. `MainActivity`). Маршрутом он
+ * вмешивался бы в back stack и в deep links, а накрывать обязан и онбординг,
+ * и экран обновления.
+ */
+@Serializable
+data object SecurityRoute
+
+/** Смена PIN (issue #102) — открывается из [SecurityRoute]. */
+@Serializable
+data object ChangePinRoute
+
 // --- Детали ---
 
 @Serializable
