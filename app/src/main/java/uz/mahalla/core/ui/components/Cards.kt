@@ -48,6 +48,8 @@ data class PlaceCardUi(
     val distanceLabel: String? = null,
     val priceLabel: String? = null,
     val isOpen: Boolean = true,
+    /** Логотип или фото заведения (issue #60); `null` — карточка без картинки. */
+    val photoUrl: String? = null,
 )
 
 @Immutable
@@ -92,6 +94,9 @@ fun PlaceCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.Top,
         ) {
+            // Картинка декоративная: название заведения стоит рядом, и
+            // TalkBack не должен читать его дважды.
+            MahallaThumbnail(url = place.photoUrl, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = place.title,

@@ -474,4 +474,8 @@
     <string name="action_continue">Davom etish</string>
     <string name="action_save">Saqlash</string>
     <string name="action_done">Tayyor</string>
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">%1$s avatari</string>
+    <string name="image_gallery_of">%1$s suratlari</string>
 </resources>

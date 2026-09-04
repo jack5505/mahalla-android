@@ -22,6 +22,7 @@ fun Place.toCardUi(): PlaceCardUi = PlaceCardUi(
     ratingLabel = RatingFormatter.format(rating, reviewCount),
     distanceLabel = distanceLabel(distanceMeters),
     isOpen = isOpenNow,
+    photoUrl = photoUrl,
 )
 
 /** `450 m` / `1,2 km` — число из форматтера, единица из ресурсов. */

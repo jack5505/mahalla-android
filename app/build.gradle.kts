@@ -265,6 +265,10 @@ dependencies {
     // проходило через вычистку секретов (CrashScrubber).
     implementation(libs.sentry.android.core)
 
+    // Картинки (issue #60). ImageLoader собирается в графе и ходит по тому же
+    // OkHttp, что и остальное приложение, — см. MahallaImageLoader.
+    implementation(libs.coil.compose)
+
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.androidx.room.runtime)
