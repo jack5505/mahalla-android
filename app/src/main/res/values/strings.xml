@@ -549,4 +549,33 @@
     <string name="queue_status_no_show">Kelmadingiz</string>
     <string name="queue_status_expired">Muddati o\'tdi</string>
     <string name="queue_status_unknown">Holati aniq emas</string>
+
+    <!-- Игровые зоны (эпик #11, issue #98). -->
+    <string name="gaming_title">O\'yin zonalari</string>
+    <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>
+    <string name="gaming_zones_empty_description">Muassasa o\'yin zonalarini qo\'shgach, ular shu yerda paydo bo\'ladi.</string>
+    <string name="gaming_zone_unnamed">Nomsiz zona</string>
+    <string name="gaming_zone_unavailable">Band qilib bo\'lmaydi</string>
+    <string name="gaming_zone_price">%1$s / soat</string>
+    <string name="gaming_book">Band qilish</string>
+    <string name="gaming_sheet_time">Boshlanish vaqti</string>
+    <string name="gaming_sheet_duration">Qancha vaqtga</string>
+    <string name="gaming_total">Jami</string>
+    <string name="gaming_error_time_required">Boshlanish vaqtini tanlang.</string>
+    <string name="gaming_error_time_too_soon">Bu vaqt o\'tib ketdi — boshqasini tanlang.</string>
+    <string name="gaming_booked">Zona band qilindi.</string>
+    <string name="gaming_booked_at">%1$s %2$s uchun band qilindi.</string>
+    <string name="gaming_my_bookings">Mening bronlarim</string>
+    <string name="gaming_bookings_profile_subtitle">O\'yin zonalari bronlari</string>
+    <string name="gaming_bookings_empty_title">Bronlar yo\'q</string>
+    <string name="gaming_bookings_empty_description">O\'yin klubi kartochkasidan zona band qiling — bron shu yerda ko\'rinadi.</string>
+    <string name="gaming_booking_zone_unknown">O\'yin zonasi</string>
+    <string name="gaming_booking_interval">%1$s — %2$s</string>
+    <string name="gaming_cancel_note">Bronni ilovadan bekor qilib bo\'lmaydi: buning uchun muassasaga qo\'ng\'iroq qiling.</string>
+    <string name="gaming_status_confirmed">Tasdiqlandi</string>
+    <string name="gaming_status_active">Davom etmoqda</string>
+    <string name="gaming_status_completed">Tugadi</string>
+    <string name="gaming_status_cancelled">Bekor qilindi</string>
+    <string name="gaming_status_unknown">Holati aniq emas</string>
+
 </resources>

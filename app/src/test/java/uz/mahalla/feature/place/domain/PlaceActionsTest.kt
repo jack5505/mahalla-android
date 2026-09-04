@@ -98,7 +98,7 @@ class PlaceActionsTest {
     }
 
     @Test
-    fun `queue is offered to barbers and nothing is offered to the rest`() {
+    fun `queue is offered to barbers, booking to gaming clubs, nothing to the rest`() {
         // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
         // следует из категории, и до issue #96 ни одна из них не включалась.
         assertEquals(
@@ -106,18 +106,35 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Master),
         )
 
+        // Игровые зоны (issue #98): у них свой контроллер и свои экраны.
+        assertEquals(
+            PlaceCapabilities(booking = true),
+            PlaceCapabilities.of(PlaceCategory.Playground),
+        )
+
         listOf(
             PlaceCategory.Food,
             PlaceCategory.Pharmacy,
             PlaceCategory.Hospital,
             PlaceCategory.Cinema,
-            PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
-            // Кнопка, ведущая в никуда, хуже отсутствующей: экранов брони в
-            // приложении нет, а «Заказать» — вне объёма issue #96.
+            // Кнопка, ведущая в никуда, хуже отсутствующей: брони у врачей и
+            // мастеров ведёт другой контроллер, экранов под него нет, а
+            // «Заказать» — вне объёма issue #96 и #98.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
+    }
+
+    @Test
+    fun `a gaming club card shows booking as the primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Playground),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        assertEquals(PlaceAction.Booking, PlaceActions.primary(actions))
     }
 
     @Test

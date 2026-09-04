@@ -55,4 +55,21 @@
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
 
+
+    <!-- Игровые зоны (issue #98): места в зоне, часы брони, границы длительности. -->
+    <plurals name="gaming_zone_seats">
+        <item quantity="one">%1$d joy</item>
+        <item quantity="other">%1$d joy</item>
+    </plurals>
+
+    <plurals name="gaming_duration_hours">
+        <item quantity="one">%1$d soat</item>
+        <item quantity="other">%1$d soat</item>
+    </plurals>
+
+    <plurals name="gaming_error_duration">
+        <item quantity="one">%1$d dan %2$d soatgacha tanlang</item>
+        <item quantity="other">%1$d dan %2$d soatgacha tanlang</item>
+    </plurals>
+
 </resources>

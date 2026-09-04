@@ -45,6 +45,8 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.gaming.data.DefaultGamingRepository
+import uz.mahalla.feature.gaming.data.di.GamingDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
@@ -329,6 +331,25 @@ class GraphAssemblyTest {
      * — значит API собирается на **основном** Retrofit. Взятый талон живёт в
      * DataStore, потому что прочитать его у бэкенда нечем.
      */
+    /**
+     * Игровые зоны (issue #98): список зон анонимен, а бронь и «мои брони»
+     * требуют Bearer — значит API собирается на **основном** Retrofit, а не
+     * на «голом» `@RefreshClient`.
+     */
+    @Test
+    fun `gaming assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = GamingDataModule.provideGamingApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultGamingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
     @Test
     fun `queue assembles on the main retrofit and the data store`() {
         val retrofit = NetworkModule.provideRetrofit(
