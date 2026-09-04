@@ -63,4 +63,12 @@
         <item quantity="many">%1$d минут</item>
         <item quantity="other">%1$d минуты</item>
     </plurals>
+
+    <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
+    <plurals name="pharmacy_stock_left">
+        <item quantity="one">Осталась %1$d упаковка</item>
+        <item quantity="few">Осталось %1$d упаковки</item>
+        <item quantity="many">Осталось %1$d упаковок</item>
+        <item quantity="other">Осталось %1$d упаковки</item>
+    </plurals>
 </resources>

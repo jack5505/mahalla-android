@@ -340,6 +340,7 @@
     <string name="place_action_queue">Встать в очередь</string>
     <string name="place_action_booking">Забронировать</string>
     <string name="place_action_order">Заказать</string>
+    <string name="place_action_products">Товары</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
     <string name="action_collapse">Свернуть</string>
@@ -587,4 +588,16 @@
     <string name="appointment_status_completed">Завершена</string>
     <string name="appointment_status_no_show">Вы не пришли</string>
     <string name="appointment_status_unknown">Состояние неизвестно</string>
+
+    <!-- Вертикаль «Аптека» (issue #100): витрина товаров с наличием. -->
+    <string name="pharmacy_title">Аптека</string>
+    <string name="pharmacy_search_hint">Введите название лекарства</string>
+    <string name="pharmacy_stock_in">В наличии</string>
+    <string name="pharmacy_stock_out">Нет в наличии</string>
+    <string name="pharmacy_stock_unknown">Наличие неизвестно</string>
+    <string name="pharmacy_prescription_required">Отпускается по рецепту</string>
+    <string name="pharmacy_empty_title">Список пуст</string>
+    <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
+    <string name="pharmacy_not_found_title">Ничего не нашлось</string>
+    <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
 </resources>

@@ -19,6 +19,7 @@ object PlaceActions {
         if (capabilities.queue) add(PlaceAction.Queue)
         if (capabilities.booking) add(PlaceAction.Booking)
         if (capabilities.ordering) add(PlaceAction.Order)
+        if (capabilities.products) add(PlaceAction.Products)
         if (!contacts.phone.isNullOrBlank()) add(PlaceAction.Call)
         if (place.point != null) add(PlaceAction.Route)
     }

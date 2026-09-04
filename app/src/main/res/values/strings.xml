@@ -346,6 +346,7 @@
     <string name="place_action_queue">Navbatga yozilish</string>
     <string name="place_action_booking">Joy band qilish</string>
     <string name="place_action_order">Buyurtma berish</string>
+    <string name="place_action_products">Dorilar</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
     <string name="place_action_route">Yo\'nalish</string>
     <string name="action_collapse">Yig\'ish</string>
@@ -593,4 +594,16 @@
     <string name="appointment_status_completed">Tugadi</string>
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
+
+    <!-- Вертикаль «Аптека» (issue #100): витрина товаров с наличием. -->
+    <string name="pharmacy_title">Dorixona</string>
+    <string name="pharmacy_search_hint">Dori nomini kiriting</string>
+    <string name="pharmacy_stock_in">Bor</string>
+    <string name="pharmacy_stock_out">Yo\'q</string>
+    <string name="pharmacy_stock_unknown">Aniq emas</string>
+    <string name="pharmacy_prescription_required">Retsept bo\'yicha beriladi</string>
+    <string name="pharmacy_empty_title">Dorilar ro\'yxati bo\'sh</string>
+    <string name="pharmacy_empty_description">Bu dorixona hali dorilarini qo\'shmagan.</string>
+    <string name="pharmacy_not_found_title">Topilmadi</string>
+    <string name="pharmacy_not_found_description">«%1$s» bo\'yicha hech narsa topilmadi. Nomini boshqacha yozib ko\'ring.</string>
 </resources>

@@ -51,6 +51,8 @@ import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository
+import uz.mahalla.feature.pharmacy.data.di.PharmacyDataModule
 import uz.mahalla.feature.role.data.DataStoreRoleRepository
 import uz.mahalla.feature.queue.data.DataStoreWalkInTicketStore
 import uz.mahalla.feature.queue.data.DefaultWalkInRepository
@@ -344,6 +346,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultBookingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Аптека (issue #100): витрина анонимна (`200` без токена, проверено на
+     * стенде), но и лишний `Authorization` ей не мешает — отдельного клиента
+     * ради неё заводить незачем, API собирается на **основном** Retrofit.
+     */
+    @Test
+    fun `pharmacy assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = PharmacyDataModule.providePharmacyApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultPharmacyRepository(api = api))
     }
 
     /**

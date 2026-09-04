@@ -40,6 +40,13 @@ enum class PlaceAction {
     Queue,
     Booking,
     Order,
+
+    /**
+     * Витрина товаров аптеки (issue #100). Это единственное действие, которое
+     * ничего не начинает: заказать товар нечем, поэтому и называется оно
+     * «Товары», а не «Купить».
+     */
+    Products,
     Call,
     Route,
 }
@@ -58,6 +65,7 @@ data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
     val ordering: Boolean = false,
+    val products: Boolean = false,
 ) {
     companion object {
         /**
@@ -70,11 +78,18 @@ data class PlaceCapabilities(
          * экран записи скажет это словами; спрятать кнопку заранее нельзя,
          * список услуг известен только серверу.
          *
+         * У аптек (`PHARMACY`) это витрина товаров (issue #100) — действие,
+         * которое ничего не начинает: заказа у аптеки бэкенд не принимает, и
+         * кнопки «купить» здесь нет. Товаров в аптеке может и не оказаться —
+         * тогда экран скажет это словами; спрятать кнопку заранее нельзя,
+         * витрина известна только серверу.
+         *
          * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
          * её экраны есть, но включение кнопки в объём этих задач не входило.
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
+            PlaceCategory.Pharmacy -> PlaceCapabilities(products = true)
             else -> PlaceCapabilities()
         }
     }

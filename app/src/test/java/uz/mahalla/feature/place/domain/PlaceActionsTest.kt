@@ -14,7 +14,12 @@ class PlaceActionsTest {
     @Test
     fun `actions follow the layout order`() {
         val actions = PlaceActions.resolve(
-            capabilities = PlaceCapabilities(queue = true, booking = true, ordering = true),
+            capabilities = PlaceCapabilities(
+                queue = true,
+                booking = true,
+                ordering = true,
+                products = true,
+            ),
             contacts = PlaceContacts(phone = "+998901234567"),
             place = place("p", point = GeoPoint(41.31, 69.28)),
         )
@@ -24,6 +29,7 @@ class PlaceActionsTest {
                 PlaceAction.Queue,
                 PlaceAction.Booking,
                 PlaceAction.Order,
+                PlaceAction.Products,
                 PlaceAction.Call,
                 PlaceAction.Route,
             ),
@@ -108,19 +114,42 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Master),
         )
 
+        // Витрина аптеки (issue #100) — действие, которое ничего не начинает:
+        // товары бэкенд отдаёт, а заказать их нечем, и `ordering` тут остаётся
+        // выключенным намеренно.
+        assertEquals(
+            PlaceCapabilities(products = true),
+            PlaceCapabilities.of(PlaceCategory.Pharmacy),
+        )
+
         listOf(
             PlaceCategory.Food,
-            PlaceCategory.Pharmacy,
             PlaceCategory.Hospital,
             PlaceCategory.Cinema,
             PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
             // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
-            // бэкенд отдаёт только у мастеров (`barber-services`), а
-            // «Заказать» — вне объёма этих задач.
+            // бэкенд отдаёт только у мастеров (`barber-services`), товары —
+            // только у аптек, а «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
+    }
+
+    @Test
+    fun `a pharmacy card offers the showcase and never a purchase`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Pharmacy),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // «Купить» здесь быть не должно: своей ручки заказа
+        // `pharmacy-controller` не отдаёт, и корзину аптеки бэкенду нечем
+        // принять (issue #100).
+        assertEquals(listOf(PlaceAction.Products, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Products, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Order !in actions)
     }
 
     @Test

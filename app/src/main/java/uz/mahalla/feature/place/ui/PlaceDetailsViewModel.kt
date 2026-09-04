@@ -176,7 +176,11 @@ class PlaceDetailsViewModel @Inject constructor(
             PlaceAction.Route -> details.place.point
                 ?.let { emitEffect(PlaceDetailsEffect.OpenRoute(it, details.place.name)) }
 
-            PlaceAction.Queue, PlaceAction.Booking, PlaceAction.Order ->
+            PlaceAction.Queue,
+            PlaceAction.Booking,
+            PlaceAction.Order,
+            PlaceAction.Products,
+            ->
                 emitEffect(
                     PlaceDetailsEffect.OpenVertical(action, placeId, details.place.name),
                 )

@@ -60,4 +60,10 @@
         <item quantity="one">%1$d daqiqa</item>
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
+
+    <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
+    <plurals name="pharmacy_stock_left">
+        <item quantity="one">%1$d dona qoldi</item>
+        <item quantity="other">%1$d dona qoldi</item>
+    </plurals>
 </resources>
