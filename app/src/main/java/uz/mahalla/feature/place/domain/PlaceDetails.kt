@@ -39,6 +39,13 @@ data class PlaceContacts(
 enum class PlaceAction {
     Queue,
     Booking,
+
+    /**
+     * Запись к врачу (issue #99). Отдельно от [Booking]: у больниц другой
+     * список (врачи, а не услуги) и другой экран — общее действие пришлось бы
+     * ветвить по категории уже в навигации.
+     */
+    Doctor,
     Order,
     Call,
     Route,
@@ -57,6 +64,8 @@ enum class PlaceAction {
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
+    /** Запись к врачу — вертикаль больниц (issue #99). */
+    val doctors: Boolean = false,
     val ordering: Boolean = false,
 ) {
     companion object {
@@ -70,11 +79,16 @@ data class PlaceCapabilities(
          * экран записи скажет это словами; спрятать кнопку заранее нельзя,
          * список услуг известен только серверу.
          *
+         * У больниц (`HOSPITAL`) это запись к врачу (`hospital-controller`,
+         * issue #99): список врачей известен только серверу, поэтому кнопка
+         * показывается всегда, а «врачей пока нет» экран скажет словами.
+         *
          * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
          * её экраны есть, но включение кнопки в объём этих задач не входило.
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
+            PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
             else -> PlaceCapabilities()
         }
     }

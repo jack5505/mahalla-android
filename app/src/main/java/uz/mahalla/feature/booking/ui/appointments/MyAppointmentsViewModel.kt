@@ -1,5 +1,6 @@
 package uz.mahalla.feature.booking.ui.appointments
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -9,10 +10,14 @@ import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.isLoading
+import uz.mahalla.feature.booking.data.AppointmentsSource
 import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentSections
+import uz.mahalla.feature.booking.domain.AppointmentVertical
+import uz.mahalla.feature.hospital.data.HospitalRepository
+import uz.mahalla.navigation.MyAppointmentsArgs
 import java.time.Clock
 import javax.inject.Inject
 
@@ -22,22 +27,47 @@ sealed interface MyAppointmentsEffect : UiEffect
 /**
  * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением.
  *
+ * Экран один на обе вертикали записи — к мастеру и к врачу (issue #99):
+ * модель записи и ручка отмены у них общие, различаются только список
+ * (`appointments/my` против `hospitals/appointments/my`) и заголовок. Источник
+ * выбирается по аргументу маршрута; вторая копия экрана разошлась бы с первой
+ * при первой же правке.
+ *
+ * Аргумент читается из `SavedStateHandle` по имени, а не через `toRoute()`:
+ * тот разбирает маршрут настоящим `Bundle`, которого в JVM-тестах нет.
+ *
  * Список перечитывается на каждом возврате на экран: статус меняет заведение
  * (`PUT appointments/{id}/status`, бизнес-панель — эпик #16), и показанное час
  * назад «ждёт подтверждения» ничего не стоит.
  */
 @HiltViewModel
 class MyAppointmentsViewModel @Inject constructor(
-    private val repository: BookingRepository,
+    bookingRepository: BookingRepository,
+    hospitalRepository: HospitalRepository,
     private val clock: Clock,
+    savedStateHandle: SavedStateHandle,
 ) : MviViewModel<MyAppointmentsState, MyAppointmentsEvent, MyAppointmentsEffect>(
     MyAppointmentsState(),
 ) {
+
+    private val vertical = AppointmentVertical.byName(
+        savedStateHandle[MyAppointmentsArgs.VERTICAL],
+    )
+
+    private val repository: AppointmentsSource = when (vertical) {
+        AppointmentVertical.Barber -> bookingRepository
+        AppointmentVertical.Doctor -> hospitalRepository
+    }
 
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
     init {
+        // Локальная переменная не для красоты: внутри `updateState` приёмник —
+        // само состояние, и `vertical` там означало бы его собственное поле,
+        // то есть экран врача молча остался бы списком записей к мастеру.
+        val source = vertical
+        updateState { copy(vertical = source) }
         load()
     }
 

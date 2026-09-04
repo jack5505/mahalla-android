@@ -345,6 +345,7 @@
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
     <string name="place_action_booking">Joy band qilish</string>
+    <string name="place_action_doctor">Shifokorga yozilish</string>
     <string name="place_action_order">Buyurtma berish</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
     <string name="place_action_route">Yo\'nalish</string>
@@ -593,4 +594,28 @@
     <string name="appointment_status_completed">Tugadi</string>
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
+
+    <!-- Вертикаль «Больницы» (эпик #11, issue #99) -->
+    <string name="doctor_booking_title">Shifokorga yozilish</string>
+    <string name="doctor_booking_doctor_title">Shifokorni tanlang</string>
+    <string name="doctor_booking_doctor_unnamed">Ismi ko\'rsatilmagan shifokor</string>
+    <string name="doctor_booking_doctors_empty_title">Shifokorlar ro\'yxati bo\'sh</string>
+    <string name="doctor_booking_doctors_empty_description">Muassasa hali shifokorlarini kiritmagan. Qo\'ng\'iroq qilib aniqlashtiring.</string>
+    <string name="doctor_booking_price">Qabul narxi: %1$s</string>
+    <string name="doctor_booking_time_title">Qulay vaqtni tanlang</string>
+    <string name="doctor_booking_times_note">Bu — taklif qilingan vaqt. Shifoxona yozuvni tasdiqlaganidan keyin aniq bo\'ladi.</string>
+    <string name="doctor_booking_times_empty">Bugungi qabul tugadi. Boshqa kunni tanlang.</string>
+    <string name="doctor_booking_complaint_title">Shikoyatingiz</string>
+    <string name="doctor_booking_complaint_label">Nimadan shikoyat qilyapsiz? (majburiy emas)</string>
+    <string name="doctor_booking_complaint_placeholder">Masalan: uch kundan beri tomoq og\'riyapti</string>
+    <string name="doctor_booking_complaint_counter">%1$d / %2$d</string>
+    <string name="doctor_booking_pick_time_hint">Yozilish uchun kun va vaqtni tanlang.</string>
+    <string name="doctor_booking_submit">Shifokorga yozilish</string>
+    <string name="doctor_booking_done_title">Siz yozildingiz</string>
+    <string name="doctor_booking_done_description">Shifoxona yozuvni tasdiqlaydi. Holatni «Shifokorga yozuvlarim» bo\'limida ko\'rasiz.</string>
+
+    <string name="my_doctor_appointments_title">Shifokorga yozuvlarim</string>
+    <string name="my_doctor_appointments_profile_subtitle">Shifokorga yozilishlaringiz va ularning holati</string>
+    <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
+    <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
 </resources>
