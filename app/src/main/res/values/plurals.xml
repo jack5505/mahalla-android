@@ -55,4 +55,9 @@
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
 
+    <!-- Бронь (issue #97): длительность услуги. -->
+    <plurals name="booking_duration_minutes">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
 </resources>

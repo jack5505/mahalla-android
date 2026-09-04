@@ -1,14 +1,10 @@
 package uz.mahalla.feature.queue.data
 
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.queue.domain.WalkInTicket
 import java.time.Instant
-import java.time.LocalTime
 
 /**
  * Разбор талона мягкий, как в каталоге (issue #53): талон **без `id`** —
@@ -40,55 +36,9 @@ internal fun WalkInDto.toDomain(
         // Отрицательная позиция — не «минус первый в очереди», а мусор.
         queuePosition = queuePosition?.takeIf { it > 0 },
         estimatedWaitMinutes = estimatedWaitMinutes?.takeIf { it >= 0 },
-        counterTime = parseCounterTime(counterTime),
+        counterTime = parseServerLocalTime(counterTime),
         note = barberNote?.takeIf { it.isNotBlank() },
         createdAt = parseServerInstant(createdAt),
         receivedAt = receivedAt,
     )
 }
-
-/**
- * Время, предложенное мастером вместо запрошенного (`COUNTER_OFFERED`).
- *
- * Принимаются оба вида, потому что из схемы стенда не следует, какой приедет:
- * springdoc описывает `LocalTime` объектом `{hour, minute, second, nano}`, а
- * Jackson с `JavaTimeModule` сериализует его строкой `"14:30:00"`. Живым
- * запросом это не проверить — `walkin/send` требует токена.
- *
- * Неразобранное значение — `null`, а не исключение: время-предложение важно,
- * но не настолько, чтобы из-за него терялся весь талон.
- */
-internal fun parseCounterTime(value: JsonElement?): LocalTime? =
-    when (value) {
-        null -> null
-
-        is JsonPrimitive -> value.contentOrNullSafe()?.let(::parseTimeText)
-
-        is JsonObject -> {
-            val hour = (value["hour"] as? JsonPrimitive)?.intOrNull
-            val minute = (value["minute"] as? JsonPrimitive)?.intOrNull ?: 0
-            if (hour == null || hour !in HOUR_RANGE || minute !in MINUTE_RANGE) {
-                null
-            } else {
-                LocalTime.of(hour, minute)
-            }
-        }
-
-        else -> null
-    }
-
-private fun JsonPrimitive.contentOrNullSafe(): String? =
-    if (isString) content.takeIf { it.isNotBlank() } else null
-
-/** `"14:30"` и `"14:30:00"` — оба вида, что отдаёт Jackson. */
-private fun parseTimeText(text: String): LocalTime? {
-    val parts = text.trim().split(':')
-    if (parts.size < 2) return null
-    val hour = parts[0].toIntOrNull() ?: return null
-    val minute = parts[1].toIntOrNull() ?: return null
-    if (hour !in HOUR_RANGE || minute !in MINUTE_RANGE) return null
-    return LocalTime.of(hour, minute)
-}
-
-private val HOUR_RANGE = 0..23
-private val MINUTE_RANGE = 0..59

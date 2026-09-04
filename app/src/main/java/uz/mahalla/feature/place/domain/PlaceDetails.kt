@@ -63,17 +63,18 @@ data class PlaceCapabilities(
         /**
          * Действие включается только там, где его есть чем выполнить.
          *
-         * Очередь — у мастеров (`BARBER`): у бэкенда это walk-in-контроллер
-         * (`walkin/send`, `walkin/{id}/cancel`, `walkin/barber/dashboard`),
-         * и клиентская половина его сделана в issue #96.
+         * У мастеров (`BARBER`) это оба способа попасть к мастеру, и они
+         * дополняют друг друга: очередь — прийти сейчас (walk-in-контроллер,
+         * issue #96), бронь — занять время заранее (`barber-services` +
+         * `appointments`, issue #97). Услуг у заведения может и не быть — тогда
+         * экран записи скажет это словами; спрятать кнопку заранее нельзя,
+         * список услуг известен только серверу.
          *
-         * [ordering] и [booking] остаются выключенными: «Заказать» — это
-         * вертикаль «Еда» (её экраны есть, но включение кнопки вне объёма
-         * issue #96), а брони (контроллер `appointments`) в приложении нет и
-         * кнопка вела бы в никуда.
+         * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
+         * её экраны есть, но включение кнопки в объём этих задач не входило.
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
-            PlaceCategory.Master -> PlaceCapabilities(queue = true)
+            PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
             else -> PlaceCapabilities()
         }
     }

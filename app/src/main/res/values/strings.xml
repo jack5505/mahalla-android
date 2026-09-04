@@ -549,4 +549,48 @@
     <string name="queue_status_no_show">Kelmadingiz</string>
     <string name="queue_status_expired">Muddati o\'tdi</string>
     <string name="queue_status_unknown">Holati aniq emas</string>
+
+    <!-- Вертикаль «Бронь» (эпик #11, issue #97): запись на время. -->
+    <string name="booking_title">Yozilish</string>
+    <string name="booking_service_title">Xizmatni tanlang</string>
+    <string name="booking_service_unnamed">Nomsiz xizmat</string>
+    <string name="booking_services_empty_title">Yozilish uchun xizmat yo\'q</string>
+    <string name="booking_services_empty_description">Muassasa hali xizmatlarini kiritmagan. Navbat orqali murojaat qiling yoki qo\'ng\'iroq qiling.</string>
+    <string name="booking_date_title">Kunni tanlang</string>
+    <string name="booking_date_today">Bugun</string>
+    <string name="booking_date_tomorrow">Ertaga</string>
+    <string name="booking_date_weekday">%1$s, %2$s</string>
+    <string name="booking_slot_title">Vaqtni tanlang</string>
+    <string name="booking_slots_empty">Bu kunga bo\'sh vaqt qolmadi. Boshqa kunni tanlang.</string>
+    <string name="booking_pick_slot_hint">Yozilish uchun kun va vaqtni tanlang.</string>
+    <string name="booking_summary_when">%1$s, %2$s</string>
+    <string name="booking_submit">Yozilish</string>
+    <string name="booking_done_title">Siz yozildingiz</string>
+    <string name="booking_done_description">Muassasa yozuvni tasdiqlaydi. Holatni «Mening yozuvlarim» bo\'limida ko\'rasiz.</string>
+    <string name="weekday_short_mon">dush</string>
+    <string name="weekday_short_tue">sesh</string>
+    <string name="weekday_short_wed">chor</string>
+    <string name="weekday_short_thu">pay</string>
+    <string name="weekday_short_fri">jum</string>
+    <string name="weekday_short_sat">shan</string>
+    <string name="weekday_short_sun">yak</string>
+
+    <string name="my_appointments_title">Mening yozuvlarim</string>
+    <string name="my_appointments_profile_subtitle">Vaqtga yozilishlaringiz va ularning holati</string>
+    <string name="my_appointments_upcoming">Faol</string>
+    <string name="my_appointments_past">O\'tgan</string>
+    <string name="my_appointments_empty_title">Yozuvlar yo\'q</string>
+    <string name="my_appointments_empty_description">Muassasa kartochkasidan «Yozilish» tugmasi orqali vaqtga yozilishingiz mumkin.</string>
+    <string name="my_appointments_unnamed_service">Xizmat ko\'rsatilmagan</string>
+    <string name="my_appointments_time_unknown">Vaqti ko\'rsatilmagan</string>
+    <string name="my_appointments_cancel">Yozuvni bekor qilish</string>
+    <string name="my_appointments_cancel_keep">Qoldirish</string>
+    <string name="my_appointments_cancel_title">Yozuvni bekor qilasizmi?</string>
+    <string name="my_appointments_cancel_message">Vaqt boshqa mijozga o\'tadi, qayta yozilish kerak bo\'ladi.</string>
+    <string name="appointment_status_pending">Tasdiqlash kutilmoqda</string>
+    <string name="appointment_status_confirmed">Tasdiqlandi</string>
+    <string name="appointment_status_cancelled">Bekor qilindi</string>
+    <string name="appointment_status_completed">Tugadi</string>
+    <string name="appointment_status_no_show">Kelmadingiz</string>
+    <string name="appointment_status_unknown">Holati aniq emas</string>
 </resources>

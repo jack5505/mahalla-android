@@ -69,7 +69,8 @@ data class SendWalkInRequest(
  * `JavaTimeModule` отдаёт строку `"14:30:00"`. Проверить живым запросом
  * нельзя (нужен токен), а ошибка в типе уронила бы разбор **всего** талона —
  * то есть удачную запись превратила бы в «не удалось». Разбирает оба вида
- * [parseCounterTime].
+ * `parseServerLocalTime` (`core/format`) — та же беда у записи на время в
+ * issue #97, поэтому правило общее.
  */
 @Serializable
 data class WalkInDto(

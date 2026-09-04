@@ -79,12 +79,16 @@ import java.time.Instant
  * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
  * только продавцу: до неё судьбу отправленной заявки в приложении было не
  * видно вовсе.
+ * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
+ * всем: записаться может кто угодно, а следить за записью больше негде —
+ * своего таба у брони нет.
  */
 @Composable
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenMyAppointments: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -113,6 +117,7 @@ fun ProfileScreen(
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
+        onOpenMyAppointments = onOpenMyAppointments,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -126,6 +131,7 @@ fun ProfileContentScreen(
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenMyAppointments: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -161,6 +167,14 @@ fun ProfileContentScreen(
                     onClick = onOpenMyPlaces,
                 )
             }
+
+            // «Мои записи» (issue #97) — всем: записаться на время может
+            // любой, а следить за записью больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.my_appointments_title),
+                subtitle = stringResource(R.string.my_appointments_profile_subtitle),
+                onClick = onOpenMyAppointments,
+            )
 
             Text(
                 text = stringResource(R.string.profile_language),
@@ -507,6 +521,7 @@ private fun ProfilePreview() {
             onEvent = {},
             onOpenRole = {},
             onOpenMyPlaces = {},
+            onOpenMyAppointments = {},
         )
     }
 }

@@ -1,6 +1,7 @@
 package uz.mahalla.core.format
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -22,6 +23,7 @@ object DateTimeFormatters {
     private val datePattern = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT)
     private val timePattern = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
     private val dateTimePattern = DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm", Locale.ROOT)
+    private val dayMonthPattern = DateTimeFormatter.ofPattern("dd.MM", Locale.ROOT)
 
     fun date(instant: Instant, zone: ZoneId = AppZone): String =
         datePattern.format(instant.atZone(zone))
@@ -31,6 +33,17 @@ object DateTimeFormatters {
 
     fun dateTime(instant: Instant, zone: ZoneId = AppZone): String =
         dateTimePattern.format(instant.atZone(zone))
+
+    /**
+     * День и месяц без года (`04.09`) — календарь записи (issue #97): год в
+     * чипе дня лишний, выбирают ближайшие две недели. Название дня недели
+     * подставляет экран из ресурсов: месяц и число одинаковы на обоих языках,
+     * а «чт»/«pay» — нет.
+     */
+    fun dayMonth(date: LocalDate): String = dayMonthPattern.format(date)
+
+    /** Дата целиком — там, где день может быть и не из ближайших недель. */
+    fun date(date: LocalDate): String = datePattern.format(date)
 
     /**
      * Время без даты — то, что бэкенд отдаёт как `LocalTime`: например время,
