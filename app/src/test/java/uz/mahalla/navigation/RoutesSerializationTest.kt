@@ -8,6 +8,7 @@ import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 
 /**
  * Typed routes держатся на kotlinx.serialization: если маршрут перестанет
@@ -123,6 +124,10 @@ class RoutesSerializationTest {
             serializer<QueueRoute>().descriptor.serialName,
             // Бронь (issue #97): аргументы те же, что у очереди и меню.
             serializer<BookingRoute>().descriptor.serialName,
+            // Больницы (issue #99): и аргументы те же, и экран соседний —
+            // склеенный serialName увёл бы с записи к врачу на запись к
+            // мастеру.
+            serializer<DoctorBookingRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,
@@ -246,9 +251,42 @@ class RoutesSerializationTest {
     }
 
     @Test
-    fun `my appointments route has no arguments`() {
-        // Список грузится с сервера целиком: аргументов ему не нужно, а лишний
-        // сделал бы из одного экрана два разных destination.
-        assertEquals(0, serializer<MyAppointmentsRoute>().descriptor.elementsCount)
+    fun `doctor booking route carries the place and its name`() {
+        // Имени больницы нет ни в ответе `hospitals/.../doctors`, ни в
+        // `AppointmentResponse` — оно едет маршрутом (issue #99).
+        val descriptor = serializer<DoctorBookingRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        val route = DoctorBookingRoute(placeId = "p-1")
+        assertEquals(
+            route,
+            json.decodeFromString<DoctorBookingRoute>(json.encodeToString(route)),
+        )
+    }
+
+    /**
+     * Экран «мои записи» один на обе вертикали (issue #99), и различает их
+     * единственный аргумент. Имя аргумента ViewModel читает из
+     * `SavedStateHandle` по константе — разойдись они, и экран врача молча
+     * показывал бы записи к мастеру.
+     */
+    @Test
+    fun `my appointments route carries the vertical its view model reads`() {
+        val descriptor = serializer<MyAppointmentsRoute>().descriptor
+        assertEquals(1, descriptor.elementsCount)
+        assertEquals(MyAppointmentsArgs.VERTICAL, descriptor.getElementName(0))
+
+        // Умолчание — записи к мастеру: маршрут без аргумента открывают из
+        // профиля и с экрана подтверждения брони.
+        assertEquals(AppointmentVertical.Barber.name, MyAppointmentsRoute().vertical)
+
+        val route = MyAppointmentsRoute(AppointmentVertical.Doctor.name)
+        assertEquals(
+            route,
+            json.decodeFromString<MyAppointmentsRoute>(json.encodeToString(route)),
+        )
     }
 }

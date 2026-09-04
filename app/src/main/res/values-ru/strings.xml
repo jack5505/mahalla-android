@@ -339,6 +339,7 @@
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>
     <string name="place_action_booking">Забронировать</string>
+    <string name="place_action_doctor">Записаться к врачу</string>
     <string name="place_action_order">Заказать</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
@@ -598,4 +599,28 @@
     <string name="media_error_unreadable">Не удалось открыть файл. Выберите другое фото.</string>
     <string name="media_error_unsupported">Это не изображение. Подойдут JPEG, PNG или WebP.</string>
     <string name="media_error_too_large">Фото слишком большое. Выберите снимок меньше.</string>
+
+    <!-- Вертикаль «Больницы» (эпик #11, issue #99) -->
+    <string name="doctor_booking_title">Запись к врачу</string>
+    <string name="doctor_booking_doctor_title">Выберите врача</string>
+    <string name="doctor_booking_doctor_unnamed">Врач без имени</string>
+    <string name="doctor_booking_doctors_empty_title">Список врачей пуст</string>
+    <string name="doctor_booking_doctors_empty_description">Больница ещё не завела врачей. Уточните по телефону.</string>
+    <string name="doctor_booking_price">Приём: %1$s</string>
+    <string name="doctor_booking_time_title">Выберите удобное время</string>
+    <string name="doctor_booking_times_note">Это желаемое время. Больница подтвердит его вместе с записью.</string>
+    <string name="doctor_booking_times_empty">Приём на сегодня закончился. Выберите другой день.</string>
+    <string name="doctor_booking_complaint_title">Жалоба</string>
+    <string name="doctor_booking_complaint_label">На что жалуетесь? (необязательно)</string>
+    <string name="doctor_booking_complaint_placeholder">Например: третий день болит горло</string>
+    <string name="doctor_booking_complaint_counter">%1$d / %2$d</string>
+    <string name="doctor_booking_pick_time_hint">Чтобы записаться, выберите день и время.</string>
+    <string name="doctor_booking_submit">Записаться к врачу</string>
+    <string name="doctor_booking_done_title">Вы записаны</string>
+    <string name="doctor_booking_done_description">Больница подтвердит запись. Состояние видно в «Моих записях к врачу».</string>
+
+    <string name="my_doctor_appointments_title">Мои записи к врачу</string>
+    <string name="my_doctor_appointments_profile_subtitle">Записи к врачам и их состояние</string>
+    <string name="my_doctor_appointments_empty_description">Записаться можно с карточки больницы — кнопкой «Записаться к врачу».</string>
+    <string name="my_doctor_appointments_unnamed">Врач не указан</string>
 </resources>

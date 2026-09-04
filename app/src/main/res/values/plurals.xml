@@ -60,4 +60,11 @@
         <item quantity="one">%1$d daqiqa</item>
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
+
+    <!-- Больницы (issue #99): лимит жалобы. Число постоянное (1000), но форма
+         слова от него зависит — lint правильно требует plurals. -->
+    <plurals name="doctor_booking_complaint_too_long">
+        <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
 </resources>

@@ -47,6 +47,8 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
+import uz.mahalla.feature.hospital.data.di.HospitalDataModule
 import uz.mahalla.feature.media.data.AndroidImageCompressor
 import uz.mahalla.feature.media.data.DefaultMediaRepository
 import uz.mahalla.feature.media.data.di.MediaDataModule
@@ -347,6 +349,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultBookingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Больницы (issue #99): врачи анонимны, но запись, свои записи и отмена
+     * требуют Bearer — значит API собирается на **основном** Retrofit, как и
+     * бронь.
+     */
+    @Test
+    fun `hospital assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = HospitalDataModule.provideHospitalApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultHospitalRepository(api = api, clock = AppModule.provideClock()))
     }
 
     /**
