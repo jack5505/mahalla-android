@@ -18,6 +18,19 @@ internal object PreferenceKeys {
     /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
     val CityId = stringPreferencesKey("settings_city_id")
 
+    /**
+     * Роль из анкеты (issue #84): покупатель или продавец. Хранится строкой
+     * (`UserRole.storedValue`), как и город: переименование константы в коде
+     * не должно стирать выбор пользователя.
+     */
+    val UserRole = stringPreferencesKey("settings_user_role")
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84). Подставляется в
+     * оформление заказа — иначе его набирают заново при каждом заказе.
+     */
+    val DeliveryAddress = stringPreferencesKey("settings_delivery_address")
+
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 
@@ -26,6 +39,16 @@ internal object PreferenceKeys {
 
     /** Идентификатор установки для сессий устройства на бэкенде (issue #42). */
     val DeviceId = stringPreferencesKey("device_id")
+
+    /**
+     * Профиль вошедшего пользователя (issue #61). Приезжает только с ответом
+     * на вход — `GET /users/me` у бэкенда нет, спросить его заново нечем,
+     * поэтому шапка профиля читается отсюда.
+     */
+    val ProfileUserId = stringPreferencesKey("profile_user_id")
+    val ProfilePhone = stringPreferencesKey("profile_phone")
+    val ProfileFullName = stringPreferencesKey("profile_full_name")
+    val ProfileAvatarUrl = stringPreferencesKey("profile_avatar_url")
 
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")

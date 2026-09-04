@@ -1,24 +1,29 @@
 package uz.mahalla.feature.onboarding.ui
 
+import java.security.GeneralSecurityException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.crash.CrashReporting
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
+import uz.mahalla.feature.auth.domain.PhoneIdentity
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeCrashReporter
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.MainDispatcherRule
-import java.security.GeneralSecurityException
 
 /**
  * PIN (3.4): установка с повтором, ввод сохранённого кода и лимит попыток.
@@ -30,8 +35,14 @@ class PinViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authRepository = FakeAuthRepository(initialAuthorized = true)
+    private val crashReporter = FakeCrashReporter()
 
     private fun viewModel(pinStorage: FakePinStorage) = PinViewModel(pinStorage, authRepository)
+
+    @After
+    fun tearDown() {
+        CrashReporting.reset()
+    }
 
     @Test
     fun `without a stored pin the screen asks to create one`() = runTest(
@@ -215,6 +226,26 @@ class PinViewModelTest {
     }
 
     @Test
+    fun `a keystore failure reaches the crash reports`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Отказ Keystore пользователю показан текстом, но без отчёта (issue #74)
+        // о нём никто не узнает: воспроизводится он только на конкретной прошивке.
+        CrashReporting.install(crashReporter)
+        val storage = FakePinStorage(initialPin = "1234")
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+        storage.failure = GeneralSecurityException("хранилище недоступно")
+
+        viewModel.onEvent(PinEvent.PinChanged("1234"))
+        advanceUntilIdle()
+
+        val operations = crashReporter.reports.map { it.operation }
+        assertTrue(operations.toString(), operations.contains("pin.verify"))
+        assertEquals(PinError.STORAGE, viewModel.state.value.error)
+    }
+
+    @Test
     fun `a keystore failure on verify does not spend an attempt`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
@@ -350,6 +381,34 @@ class PinViewModelTest {
         assertNull("непринятый сервером код локальным не становится", storage.storedPin)
         // Счётчик попыток ведёт сервер: свой стёр бы сессию раньше времени.
         assertEquals(PinState.MAX_ATTEMPTS, state.attemptsLeft)
+    }
+
+    @Test
+    fun `a foreign account restarts the login instead of letting the user in`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // `pin-login` вернул прежнего владельца устройства (issue #86):
+        // репозиторий токены не сохранил, экрану остаётся объяснить и увести
+        // на вход заново.
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Enter)
+        authRepository.completeServerPinResult = ApiResult.Failure(
+            ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE),
+        )
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("654321"))
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.AuthRestartRequired, effect)
+        val state = viewModel.state.value
+        assertEquals(PinError.FOREIGN_ACCOUNT, state.error)
+        // Своё объяснение, а не текст сервера: отказ выставил сам клиент.
+        assertNull(state.apiFailure)
+        assertNull("чужой код локальным PIN'ом не становится", storage.storedPin)
+        // Повторять PIN нечем: испытание выброшено вместе с ответом.
+        assertNull(state.serverStep)
     }
 
     @Test

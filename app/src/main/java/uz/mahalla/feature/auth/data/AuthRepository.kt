@@ -2,9 +2,11 @@ package uz.mahalla.feature.auth.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
@@ -16,14 +18,18 @@ import uz.mahalla.data.network.auth.TelegramCheckRequest
 import uz.mahalla.data.network.auth.TelegramCheckResponse
 import uz.mahalla.data.network.auth.TelegramInitRequest
 import uz.mahalla.data.network.auth.TokenPairDto
+import uz.mahalla.data.network.auth.UserDto
 import uz.mahalla.data.network.auth.VerifyOtpRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.network.payload
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
+import uz.mahalla.feature.auth.domain.PhoneIdentity
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
@@ -46,6 +52,12 @@ interface AuthRepository {
     /** Есть ли сохранённая сессия. Источник — [SessionStore], а не память. */
     val isAuthorized: Flow<Boolean>
 
+    /**
+     * Запросить код. Успешный запрос начинает вход под этим номером, а значит
+     * отменяет прежний: сессия, профиль и локальный PIN другого аккаунта на
+     * устройстве не переживают начало входа под чужим для них номером
+     * (issue #86).
+     */
     suspend fun requestCode(phoneE164: String): ApiResult<OtpChallenge>
 
     /**
@@ -71,6 +83,11 @@ interface AuthRepository {
     /**
      * Завершить вход PIN'ом: `auth/setup-pin` либо `auth/pin-login` — что
      * именно, решает [pendingServerPin]. Успех сохраняет сессию.
+     *
+     * `pin-login` опознаёт человека по устройству, а не по подтверждённому
+     * номеру, поэтому ответ может прийти про другого владельца этого телефона.
+     * Такие токены не сохраняются, а отказ приезжает с кодом
+     * `PhoneIdentity.FOREIGN_ACCOUNT_CODE` (issue #86).
      */
     suspend fun completeServerPin(pin: String): ApiResult<LoginResult>
 
@@ -101,6 +118,7 @@ interface AuthRepository {
 class DefaultAuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
+    private val userProfileStore: UserProfileStore,
     private val pinStorage: PinStorage,
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
@@ -108,6 +126,20 @@ class DefaultAuthRepository @Inject constructor(
 ) : AuthRepository {
 
     override val isAuthorized: Flow<Boolean> = sessionStore.session.map { it != null }
+
+    /**
+     * Номер, под которым идёт вход прямо сейчас (issue #86).
+     *
+     * Нужен, потому что дальше по цепочке номера нет ни в одном запросе:
+     * `verify-otp` ходит по `otpToken`, а `pin-login` — по устройству. Только
+     * этим полем клиент может отличить «вошли, куда просили» от «сервер отдал
+     * прежнего владельца устройства».
+     *
+     * В памяти процесса, как и [pendingServerPin]: переживать перезапуск ему
+     * незачем — вместе с процессом умирает и сам незавершённый вход.
+     */
+    @Volatile
+    private var pendingPhone: String? = null
 
     override suspend fun requestCode(phoneE164: String): ApiResult<OtpChallenge> {
         val device = deviceInfoProvider.current().toDto()
@@ -126,6 +158,13 @@ class DefaultAuthRepository @Inject constructor(
 
         return when (result) {
             is ApiResult.Success -> {
+                pendingPhone = phoneE164
+                // Код ушёл — вход под этим номером начат, и прежняя личность
+                // на устройстве больше не действует. Иначе сессия, профиль и
+                // локальный PIN прошлого аккаунта переживали бы вход под
+                // другим номером, и разблокировка прежним PIN'ом пускала бы в
+                // чужое приложение вообще без единого запроса (issue #86).
+                discardOtherAccount(phoneE164)
                 val otpToken = result.data.otpToken
                 // Без токена проверить код нечем: уходить на экран ввода
                 // означало бы гарантированную ошибку после шестой цифры.
@@ -176,11 +215,16 @@ class DefaultAuthRepository @Inject constructor(
 
         return when (result) {
             is ApiResult.Success -> {
+                // Сервер ответил про другой аккаунт — дальше идти нельзя ни в
+                // ту, ни в другую ветку (issue #86).
+                if (isForeignAccount(result.data.user)) return foreignAccount()
+
                 val login = LoginResult(isNewUser = result.data.user?.fullName.isNullOrBlank())
                 val session = result.data.tokens.toSession(sessionId = result.data.sessionId)
                 if (session != null) {
                     pendingServerPin = null
                     sessionStore.save(session)
+                    saveProfile(result.data.user)
                     return ApiResult.Success(VerificationResult.Authorized(login))
                 }
 
@@ -230,7 +274,7 @@ class DefaultAuthRepository @Inject constructor(
             is ApiResult.Success -> saveLogin(
                 tokens = result.data.tokens,
                 sessionId = result.data.sessionId ?: sessionId,
-                fullName = result.data.user?.fullName,
+                user = result.data.user,
             )
 
             is ApiResult.Failure -> result
@@ -256,7 +300,7 @@ class DefaultAuthRepository @Inject constructor(
             is ApiResult.Success -> saveLogin(
                 tokens = result.data.tokens,
                 sessionId = result.data.sessionId,
-                fullName = result.data.user?.fullName,
+                user = result.data.user,
             )
 
             is ApiResult.Failure -> result
@@ -267,13 +311,87 @@ class DefaultAuthRepository @Inject constructor(
     private suspend fun saveLogin(
         tokens: TokenPairDto?,
         sessionId: String?,
-        fullName: String?,
+        user: UserDto?,
     ): ApiResult<LoginResult> {
+        // Здесь чужой аккаунт и приезжает на практике: `pin-login` ищет
+        // пользователя по устройству, а не по подтверждённому номеру, и на
+        // телефоне прежнего владельца отдаёт его токены (issue #86). Токены
+        // настоящие и рабочие — тем важнее их не сохранять.
+        if (isForeignAccount(user)) return foreignAccount()
+
         val session = tokens.toSession(sessionId = sessionId)
             ?: return ApiResult.Failure(ApiError.Serialization)
         sessionStore.save(session)
+        saveProfile(user)
         pendingServerPin = null
-        return ApiResult.Success(LoginResult(isNewUser = fullName.isNullOrBlank()))
+        return ApiResult.Success(LoginResult(isNewUser = user?.fullName.isNullOrBlank()))
+    }
+
+    /**
+     * Тот ли аккаунт вернул сервер, под которым входят (issue #86).
+     *
+     * Вопрос имеет смысл только внутри начатого по SMS входа: [pendingPhone]
+     * пуст на Telegram-пути (там номера не вводят вовсе) и после перезапуска
+     * процесса — в обоих случаях сравнивать не с чем, и вход идёт как прежде.
+     */
+    private fun isForeignAccount(user: UserDto?): Boolean =
+        PhoneIdentity.isForeignAccount(expectedPhone = pendingPhone, accountPhone = user?.phone)
+
+    /**
+     * Чужой аккаунт: токены не сохраняем и незавершённый вход выбрасываем —
+     * повторять PIN бессмысленно, ответ будет тот же. Заодно чистим локальные
+     * следы прежнего владельца устройства, чтобы разблокировка его PIN'ом не
+     * стала вторым входом в тот же аккаунт.
+     */
+    private suspend fun foreignAccount(): ApiResult<Nothing> {
+        pendingServerPin = null
+        clearLocalIdentity()
+        return ApiResult.Failure(ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE))
+    }
+
+    /**
+     * Начат вход под номером, который не совпадает с сохранённым аккаунтом, —
+     * прежняя личность на устройстве больше не действует.
+     *
+     * Неизвестный сохранённый номер считается чужим: это либо пусто (чистить
+     * нечего), либо аккаунт, о котором приложение знает слишком мало, чтобы
+     * оставлять его сессию живой на время чужого входа.
+     */
+    private suspend fun discardOtherAccount(phoneE164: String) {
+        if (PhoneIdentity.isSame(userProfileStore.current().phone, phoneE164)) return
+        clearLocalIdentity()
+    }
+
+    /**
+     * Сессия, профиль и локальный PIN — всё, чем устройство помнит вошедшего.
+     *
+     * Каждая запись умеет отказать (DataStore недоступен, Keystore потерял
+     * ключ), и ни один отказ не должен уронить вход: это уборка по дороге, а
+     * не то, ради чего пользователь нажал кнопку. Поэтому три независимых
+     * попытки, а не одна цепочка.
+     */
+    private suspend fun clearLocalIdentity() {
+        runCatchingCancellable { sessionStore.clear() }.reportSwallowed("auth.clearSession")
+        runCatchingCancellable { userProfileStore.clear() }.reportSwallowed("auth.clearProfile")
+        runCatchingCancellable { pinStorage.clear() }.reportSwallowed("auth.clearPin")
+    }
+
+    /**
+     * Кто вошёл — единственный источник этих данных (issue #61): отдельного
+     * `GET /users/me` у бэкенда нет, спросить профиль потом будет нечем.
+     * Ответ без блока `user` прежний профиль не стирает: это не «пользователь
+     * стал безымянным», а «эндпоинт про другое».
+     */
+    private suspend fun saveProfile(user: UserDto?) {
+        if (user == null) return
+        userProfileStore.save(
+            UserProfile(
+                id = user.id,
+                phone = user.phone,
+                fullName = user.fullName,
+                avatarUrl = user.avatarUrl,
+            ),
+        )
     }
 
     override suspend fun startTelegramLogin(): ApiResult<TelegramChallenge> {
@@ -370,6 +488,7 @@ class DefaultAuthRepository @Inject constructor(
         ).toSession(sessionId = null) ?: return ApiResult.Failure(ApiError.Serialization)
 
         sessionStore.save(session)
+        saveProfile(response.user)
         return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
     }
 
@@ -415,9 +534,12 @@ class DefaultAuthRepository @Inject constructor(
             apiCall { authApi.logout(sessionId = session.sessionId, allDevices = false) }
         }
         sessionStore.clear()
+        // Имя и номер прошлого пользователя после выхода не показываем.
+        userProfileStore.clear()
         // Незавершённый вход тоже сбрасываем: `sessionId` от прошлой попытки
         // после выхода не значит ничего.
         pendingServerPin = null
+        pendingPhone = null
         // PIN защищает именно эту сессию — оставлять его от прошлого
         // пользователя нельзя.
         pinStorage.clear()

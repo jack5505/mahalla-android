@@ -14,6 +14,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.crash.NoopCrashReporter
+import uz.mahalla.core.crash.di.CrashModule
 import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.device.AndroidDeviceInfoProvider
@@ -23,13 +25,14 @@ import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
-import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.network.tls.PinnedCertificateHostnameVerifier
 import uz.mahalla.data.prefs.DataStoreSessionStore
+import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
@@ -41,9 +44,19 @@ import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
-import uz.mahalla.feature.food.data.DefaultWalletRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
+import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.role.data.DataStoreRoleRepository
+import uz.mahalla.feature.role.data.DefaultProviderRepository
+import uz.mahalla.feature.role.data.di.RoleDataModule
+import uz.mahalla.feature.wallet.data.DefaultWalletRepository
+import uz.mahalla.feature.update.data.AppUpdateGate
+import uz.mahalla.feature.update.data.DefaultAppVersionRepository
+import uz.mahalla.feature.update.data.di.UpdateDataModule
+import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
 /**
  * Сборка графа (эпик 1.1).
@@ -174,12 +187,17 @@ class GraphAssemblyTest {
             val cartRepository = DefaultCartRepository(DatabaseModule.provideCartDraftDao(database))
 
             assertNotNull(DefaultMenuRepository(api))
-            assertNotNull(DefaultWalletRepository(api))
+            // Кошелёк живёт в своём модуле и на своих ручках (issue #62):
+            // `wallet/balance` у бэкенда никогда не было.
+            assertNotNull(
+                DefaultWalletRepository(WalletDataModule.provideWalletApi(retrofit)),
+            )
             assertNotNull(
                 DefaultOrderRepository(
                     api = api,
                     orderDao = DatabaseModule.provideOrderDao(database),
                     cartRepository = cartRepository,
+                    clock = AppModule.provideClock(),
                 ),
             )
         } finally {
@@ -217,6 +235,7 @@ class GraphAssemblyTest {
         val repository = DefaultAuthRepository(
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
+            userProfileStore = DataStoreUserProfileStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
@@ -225,6 +244,97 @@ class GraphAssemblyTest {
 
         assertNotNull(repository)
         assertFalse(refreshClient.authenticator is TokenAuthenticator)
+    }
+
+    /**
+     * Проверка версии (issue #80) собирается на **основном** Retrofit: `check`
+     * анонимен, а `skip` требует Bearer, который ставит только он. Api создаётся
+     * на голом `OkHttpClient` по той же причине, что и в food-графе: у
+     * `provideRefreshClient` параметры прибавляются с каждым сетевым issue, и
+     * этот тест ломался бы на каждом.
+     */
+    @Test
+    fun `version check assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = UpdateDataModule.provideAppVersionApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(AppUpdateGate(DefaultAppVersionRepository(api)))
+    }
+
+    /**
+     * Центр уведомлений (issue #81) — тоже на **основном** Retrofit: все три
+     * ручки требуют Bearer, а «голый» `@RefreshClient` его не ставит.
+     */
+    @Test
+    fun `notifications assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = NotificationsDataModule.provideNotificationsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
+     * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
+     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     */
+    @Test
+    fun `role forms assemble on the main retrofit and the data store`() {
+        val dataStore = sharedDataStore(context)
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = RoleDataModule.provideProviderApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(
+            DefaultProviderRepository(
+                api = api,
+                locationSource = AndroidLocationSource(context),
+                phoneValidator = PhoneNumberValidator(),
+            ),
+        )
+        assertNotNull(
+            DataStoreRoleRepository(
+                settings = SettingsDataStore(dataStore),
+                profileStore = DataStoreUserProfileStore(dataStore),
+            ),
+        )
+    }
+
+    /**
+     * Отчёты о падениях (issue #74). В тестовой сборке секрета `SENTRY_DSN`
+     * нет, и граф обязан отдать заглушку: SDK тогда не поднимается вовсе, а
+     * не поднимается «вхолостую» с пустым адресом.
+     */
+    @Test
+    fun `crash graph falls back to the noop reporter without a dsn`() {
+        val config = CrashModule.provideCrashReportingConfig()
+        val reporter = CrashModule.provideCrashReporter(context, config)
+
+        // Юнит-тесты идут по debug-конфигурации, а там сбор выключен даже с
+        // заданным секретом: включает его только SENTRY_ENABLED_IN_DEBUG.
+        assertEquals("debug", config.environment)
+        assertFalse(config.isEnabled)
+        assertTrue(reporter === NoopCrashReporter)
+        assertFalse(reporter.isEnabled)
+        // Версия сборки в отчёте обязательна: без неё непонятно, где падает.
+        assertTrue(config.release, config.release.startsWith("uz.mahalla@"))
     }
 
     @Test

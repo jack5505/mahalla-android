@@ -29,6 +29,13 @@ yandexMapkit = "4.42.0-lite"
 # собственный сетевой модуль и Compose Multiplatform; здесь нужен ровно
 # Android + OkHttp, который в проекте уже настроен.
 coil = "2.7.0"
+# Отчёты о падениях (issue #74) — Sentry, а не Crashlytics: Crashlytics
+# работает через Google Play Services, а устройства без сервисов Google в
+# Узбекистане обычны (та же причина, по которой в эпике 4.2 выбран Yandex
+# MapKit). Берётся только `-core`: JVM-падения и ANR. Вариант `-ndk` кладёт в
+# APK ещё по нативной библиотеке на каждую ABI, а размер сборки и без того
+# отдельная задача (T13).
+sentry = "7.14.0"
 junit = "4.13.2"
 robolectric = "4.14.1"
 androidxTestCore = "1.6.1"
@@ -66,6 +73,7 @@ chucker = { group = "com.github.chuckerteam.chucker", name = "library", version.
 chucker-no-op = { group = "com.github.chuckerteam.chucker", name = "library-no-op", version.ref = "chucker" }
 yandex-mapkit = { group = "com.yandex.android", name = "maps.mobile", version.ref = "yandexMapkit" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+sentry-android-core = { group = "io.sentry", name = "sentry-android-core", version.ref = "sentry" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }

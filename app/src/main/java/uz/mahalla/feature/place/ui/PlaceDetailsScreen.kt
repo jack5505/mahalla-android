@@ -17,15 +17,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -39,23 +43,34 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
+import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.ButtonCaption
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaAsyncImage
 import uz.mahalla.core.ui.components.MahallaAvatar
 import uz.mahalla.core.ui.components.MahallaBadge
+import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
+import uz.mahalla.core.ui.components.MahallaDialog
+import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaListItem
+import uz.mahalla.core.ui.components.MahallaRatingInput
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
+import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.ui.distanceLabel
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
+import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import java.time.DayOfWeek
@@ -73,7 +88,7 @@ import java.util.Locale
 fun PlaceDetailsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onOrderClick: (String) -> Unit = {},
+    onOrderClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -103,7 +118,7 @@ fun PlaceDetailsScreen(
                 // Заказ — вертикаль «Еда» (эпик 5); очередь и бронь ждут
                 // своих эпиков.
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
-                    PlaceAction.Order -> onOrderClick(effect.placeId)
+                    PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
             }
@@ -137,6 +152,21 @@ fun PlaceDetailsContent(
         ) { details ->
             DetailsList(details = details, state = state, onEvent = onEvent)
         }
+    }
+
+    state.reviewForm?.let { form ->
+        ReviewFormSheet(form = form, onEvent = onEvent)
+    }
+
+    state.reviewPendingDelete?.let {
+        MahallaDialog(
+            title = stringResource(R.string.place_review_delete_title),
+            text = stringResource(R.string.place_review_delete_text),
+            confirmLabel = stringResource(R.string.action_delete),
+            onConfirm = { onEvent(PlaceDetailsEvent.ReviewDeleteConfirmed) },
+            onDismiss = { onEvent(PlaceDetailsEvent.ReviewDeleteDismissed) },
+            destructive = true,
+        )
     }
 }
 
@@ -208,7 +238,11 @@ private fun DetailsList(
  */
 @Composable
 private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
-    if (photos.isEmpty()) return
+    // Ключ элемента LazyRow — сама ссылка, а дубликат ключа роняет список.
+    // Бэкенд повторов и пустых строк не обещает, поэтому чистим здесь: то же
+    // решение, что у SearchHistory.decode (PR #23).
+    val items = remember(photos) { photos.filter(String::isNotBlank).distinct() }
+    if (items.isEmpty()) return
     val description = stringResource(R.string.image_gallery_of, placeName)
     LazyRow(
         modifier = modifier
@@ -374,17 +408,61 @@ private fun LazyListScope.contacts(
     }
 }
 
+/**
+ * Блок отзывов (issue #76). Заголовок и кнопка «оставить отзыв» показываются и
+ * на пустом списке: раньше секция целиком исчезала, и оставить первый отзыв о
+ * месте было негде.
+ */
 private fun LazyListScope.reviews(
     state: PlaceDetailsState,
     onEvent: (PlaceDetailsEvent) -> Unit,
 ) {
+    val details = state.data ?: return
     val reviews = state.visibleReviews
-    if (reviews.isEmpty()) return
+    // Карточка из кэша про отзывы не знает ничего: пустой список здесь значит
+    // «не загружали», а не «отзывов нет», и обещать форму тоже нельзя.
+    if (details.fromCache && reviews.isEmpty()) return
 
     item(key = "reviews-header") {
         SectionHeader(title = stringResource(R.string.place_reviews_title))
     }
-    items(items = reviews, key = { "review-${it.id}" }) { review -> ReviewCard(review = review) }
+
+    if (state.canAddReview) {
+        item(key = "reviews-add") {
+            MahallaButton(
+                text = stringResource(R.string.place_review_add),
+                onClick = { onEvent(PlaceDetailsEvent.AddReviewClicked) },
+                variant = MahallaButtonVariant.Secondary,
+                icon = Icons.Outlined.RateReview,
+            )
+        }
+    }
+
+    // Отказ на удалении: текст сервера (issue #34), а не молчаливо оставшийся
+    // на месте отзыв.
+    state.reviewDeleteFailure?.let { failure ->
+        item(key = "reviews-failure") { ReviewFailure(failure = failure) }
+    }
+
+    if (reviews.isEmpty()) {
+        item(key = "reviews-empty") {
+            Text(
+                text = stringResource(R.string.place_reviews_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+        return
+    }
+
+    items(items = reviews, key = { "review-${it.id}" }) { review ->
+        ReviewCard(
+            review = review,
+            isMine = state.isMine(review),
+            deleting = state.deletingReview,
+            onDelete = { onEvent(PlaceDetailsEvent.ReviewDeleteRequested(review)) },
+        )
+    }
     if (state.hasHiddenReviews) {
         item(key = "reviews-more") {
             MahallaButton(
@@ -397,7 +475,28 @@ private fun LazyListScope.reviews(
 }
 
 @Composable
-private fun ReviewCard(review: Review, modifier: Modifier = Modifier) {
+private fun ReviewFailure(failure: ApiFailure, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item / 2),
+    ) {
+        Text(
+            text = failure.userMessage(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+        failure.server?.let { server -> MahallaErrorDetails(server = server) }
+    }
+}
+
+@Composable
+private fun ReviewCard(
+    review: Review,
+    modifier: Modifier = Modifier,
+    isMine: Boolean = false,
+    deleting: Boolean = false,
+    onDelete: () -> Unit = {},
+) {
     MahallaCard(modifier = modifier) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -407,7 +506,7 @@ private fun ReviewCard(review: Review, modifier: Modifier = Modifier) {
             // Имя автора стоит следующей строкой — аватар только рисуется.
             MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
             Text(
-                text = author,
+                text = if (isMine) stringResource(R.string.place_review_mine) else author,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -416,6 +515,16 @@ private fun ReviewCard(review: Review, modifier: Modifier = Modifier) {
                 text = RatingFormatter.format(review.rating.toDouble()).orEmpty(),
                 tone = MahallaTone.Accent,
             )
+            // Удалять можно только свой отзыв: чужой не удалит и бэкенд, а
+            // кнопка, которая всегда отвечает отказом, — обещание впустую.
+            if (isMine) {
+                MahallaIconButton(
+                    icon = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.place_review_delete),
+                    onClick = onDelete,
+                    enabled = !deleting,
+                )
+            }
         }
         if (review.createdAt != null) {
             Text(
@@ -431,6 +540,66 @@ private fun ReviewCard(review: Review, modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Start,
         )
+    }
+}
+
+/**
+ * Форма отзыва (issue #76): оценка и необязательный текст.
+ *
+ * Отказ сервера остаётся **в шторке**, рядом с набранным текстом: закрыть её
+ * значило бы потерять и объяснение, и работу человека. Кнопка выключена, пока
+ * оценки нет, а подпись под ней говорит, чего не хватает — выключенная кнопка
+ * без причины читается как поломка.
+ */
+// Дефолтное значение sheetState в MahallaBottomSheet — экспериментальный API
+// Material 3; opt-in нужен на стороне вызова.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewFormSheet(
+    form: ReviewFormState,
+    onEvent: (PlaceDetailsEvent) -> Unit,
+) {
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PlaceDetailsEvent.ReviewFormDismissed) },
+        title = stringResource(R.string.place_review_form_title),
+    ) {
+        Text(
+            text = stringResource(R.string.place_review_rating_label),
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+        MahallaRatingInput(
+            rating = form.draft.rating,
+            onRatingChange = { onEvent(PlaceDetailsEvent.ReviewRatingSelected(it)) },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = form.draft.text,
+            onValueChange = { onEvent(PlaceDetailsEvent.ReviewTextChanged(it)) },
+            label = stringResource(R.string.place_review_text_label),
+            placeholder = stringResource(R.string.place_review_text_placeholder),
+            supportingText = stringResource(
+                R.string.place_review_text_counter,
+                form.draft.trimmedText.length,
+                ReviewDraft.MAX_TEXT_LENGTH,
+            ),
+            errorText = if (form.draft.isTooLong) {
+                stringResource(R.string.place_review_text_too_long, ReviewDraft.MAX_TEXT_LENGTH)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        form.failure?.let { failure -> ReviewFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.place_review_submit),
+            onClick = { onEvent(PlaceDetailsEvent.ReviewSubmitted) },
+            state = ButtonState(enabled = form.draft.canSubmit, loading = form.submitting),
+        )
+        if (!form.draft.isRated) {
+            ButtonCaption(text = stringResource(R.string.place_review_rating_required))
+        }
     }
 }
 

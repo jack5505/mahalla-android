@@ -139,6 +139,16 @@ class OtpFailureTest {
         )
     }
 
+    @Test
+    fun `a foreign account is not a network error`() {
+        // Отказ выставил сам клиент (issue #86): ответа сервера за ним нет, и
+        // раскладка по HTTP-коду приняла бы его за «нет сети».
+        assertEquals(
+            OtpFailure.ForeignAccount,
+            ApiFailure(ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE)).asOtpFailure(),
+        )
+    }
+
     private fun httpFailure(httpCode: Int, code: String? = null): ApiFailure = ApiFailure(
         error = ApiError.fromHttpCode(httpCode),
         server = ServerError(httpCode = httpCode, code = code),

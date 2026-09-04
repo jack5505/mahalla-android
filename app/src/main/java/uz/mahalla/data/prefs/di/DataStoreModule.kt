@@ -16,7 +16,9 @@ import dagger.hilt.components.SingletonComponent
 import uz.mahalla.core.locale.AndroidAppLocaleManager
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.data.prefs.DataStoreSessionStore
+import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.prefs.UserProfileStore
 import javax.inject.Singleton
 
 @Module
@@ -49,6 +51,10 @@ interface StorageBindingsModule {
 
     @Binds
     fun bindSessionStore(impl: DataStoreSessionStore): SessionStore
+
+    /** Профиль вошедшего пользователя (issue #61): пишет вход, читает профиль. */
+    @Binds
+    fun bindUserProfileStore(impl: DataStoreUserProfileStore): UserProfileStore
 
     @Binds
     fun bindAppLocaleManager(impl: AndroidAppLocaleManager): AppLocaleManager

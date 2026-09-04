@@ -34,11 +34,50 @@ class RoutesSerializationTest {
         val search = SearchRoute(categoryId = "pharmacy", query = "osh")
         assertEquals(search, json.decodeFromString<SearchRoute>(json.encodeToString(search)))
 
-        val menu = MenuRoute(placeId = "p-42")
+        // Название заведения едет маршрутом: в ответе меню его нет, а корзина
+        // и диалог «корзина другого заведения» без него безымянные.
+        val menu = MenuRoute(placeId = "p-42", placeName = "Osh markazi")
         assertEquals(menu, json.decodeFromString<MenuRoute>(json.encodeToString(menu)))
 
         val order = OrderStatusRoute(orderId = "o-42")
         assertEquals(order, json.decodeFromString<OrderStatusRoute>(json.encodeToString(order)))
+
+        // Анкеты (issue #84): флаг «пришли из регистрации» решает, чем
+        // кончается заполнение, — терять его при сериализации нельзя.
+        val role = RoleRoute(onboarding = true)
+        assertEquals(role, json.decodeFromString<RoleRoute>(json.encodeToString(role)))
+        assertEquals(RoleRoute(), json.decodeFromString<RoleRoute>(json.encodeToString(RoleRoute())))
+
+        val customerForm = CustomerFormRoute(onboarding = true)
+        assertEquals(
+            customerForm,
+            json.decodeFromString<CustomerFormRoute>(json.encodeToString(customerForm)),
+        )
+
+        val providerForm = ProviderFormRoute(onboarding = true)
+        assertEquals(
+            providerForm,
+            json.decodeFromString<ProviderFormRoute>(json.encodeToString(providerForm)),
+        )
+
+        // Выбор точки на карте (issue #90): аргумент необязателен — карта
+        // открывается и без ранее выбранной точки.
+        val picker = MapPickerRoute(point = "41.311081,69.240562")
+        assertEquals(picker, json.decodeFromString<MapPickerRoute>(json.encodeToString(picker)))
+        assertEquals(
+            MapPickerRoute(),
+            json.decodeFromString<MapPickerRoute>(json.encodeToString(MapPickerRoute())),
+        )
+    }
+
+    @Test
+    fun `map picker argument is named the way its view model reads it`() {
+        // ViewModel читает аргумент из `SavedStateHandle` по имени: опечатка
+        // здесь означала бы карту, всегда открывающуюся заново.
+        val descriptor = serializer<MapPickerRoute>().descriptor
+
+        assertEquals(1, descriptor.elementsCount)
+        assertEquals(MapPickerArgs.POINT, descriptor.getElementName(0))
     }
 
     /**
@@ -53,9 +92,16 @@ class RoutesSerializationTest {
             serializer<CartRoute>().descriptor,
             serializer<CheckoutRoute>().descriptor,
         ).forEach { descriptor ->
-            assertEquals(1, descriptor.elementsCount)
             assertEquals("placeId", descriptor.getElementName(0))
         }
+
+        // У меню вторым аргументом едет название заведения: в ответе
+        // `food/places/{id}/menu` его нет, и шапка осталась бы пустой.
+        val menu = serializer<MenuRoute>().descriptor
+        assertEquals(2, menu.elementsCount)
+        assertEquals("placeName", menu.getElementName(1))
+        assertEquals(1, serializer<CartRoute>().descriptor.elementsCount)
+        assertEquals(1, serializer<CheckoutRoute>().descriptor.elementsCount)
 
         val order = serializer<OrderStatusRoute>().descriptor
         assertEquals(1, order.elementsCount)
@@ -72,6 +118,11 @@ class RoutesSerializationTest {
             serializer<CheckoutRoute>().descriptor.serialName,
             serializer<OrderStatusRoute>().descriptor.serialName,
             serializer<PlaceRoute>().descriptor.serialName,
+            // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
+            // с обеими формами — аргумент у них один и тот же.
+            serializer<RoleRoute>().descriptor.serialName,
+            serializer<CustomerFormRoute>().descriptor.serialName,
+            serializer<ProviderFormRoute>().descriptor.serialName,
         )
 
         assertEquals(serialNames.size, serialNames.toSet().size)
@@ -98,6 +149,7 @@ class RoutesSerializationTest {
             serializer<OnboardingGraph>().descriptor.serialName,
             serializer<MainGraph>().descriptor.serialName,
             serializer<BackendUrlRoute>().descriptor.serialName,
+            serializer<UpdateRoute>().descriptor.serialName,
             serializer<WelcomeRoute>().descriptor.serialName,
             serializer<PhoneRoute>().descriptor.serialName,
             serializer<PinRoute>().descriptor.serialName,
@@ -108,6 +160,7 @@ class RoutesSerializationTest {
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
+            serializer<NotificationsRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.

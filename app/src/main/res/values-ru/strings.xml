@@ -88,6 +88,7 @@
     <string name="onboarding_pin_error_wrong">Неверный PIN-код. Осталось попыток: %1$d</string>
     <string name="onboarding_pin_error_attempts">Попытки исчерпаны. Войдите заново по номеру телефона</string>
     <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
+    <string name="onboarding_error_foreign_account">Сервер вернул другой аккаунт. На этом устройстве раньше входил другой номер — вход отменён. Войдите заново по номеру телефона</string>
     <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
 
     <!-- Онбординг: биометрия -->
@@ -124,11 +125,46 @@
     <string name="orders_title">Заказы</string>
     <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
     <string name="wallet_title">Кошелёк</string>
-    <string name="wallet_subtitle">Баланс, пополнение и история платежей.</string>
+    <string name="wallet_available">Можно потратить</string>
+    <string name="wallet_balance_total">На счету</string>
+    <string name="wallet_held">Заморожено</string>
+    <string name="wallet_bonus">Бонусы</string>
+    <string name="wallet_status_blocked">Кошелёк заблокирован</string>
+    <string name="wallet_history_title">История операций</string>
+    <string name="wallet_history_empty">Операций пока нет.</string>
+    <string name="wallet_transaction_default_title">Операция</string>
+    <string name="wallet_transaction_pending">В обработке</string>
+    <string name="wallet_transaction_failed">Не прошла</string>
+    <string name="wallet_transaction_bonus">Бонус</string>
     <string name="profile_title">Профиль</string>
-    <string name="profile_subtitle">Язык, тема и настройки аккаунта.</string>
     <string name="profile_language">Язык</string>
     <string name="profile_theme">Тема</string>
+    <string name="profile_name_unknown">Имя не указано</string>
+    <string name="profile_phone_unknown">Номер неизвестен</string>
+    <string name="profile_logout">Выйти</string>
+    <string name="profile_logout_title">Выйти из аккаунта?</string>
+    <string name="profile_logout_message">Чтобы войти снова, понадобится код подтверждения.</string>
+    <string name="profile_devices_title">Мои устройства</string>
+    <string name="profile_devices_empty">Активных устройств нет</string>
+    <string name="profile_device_unknown">Неизвестное устройство</string>
+    <string name="profile_device_current">Это устройство</string>
+    <string name="profile_device_last_activity">Последняя активность: %1$s</string>
+    <string name="profile_device_ip">IP: %1$s</string>
+    <string name="profile_device_trusted">Доверенное устройство</string>
+    <string name="profile_device_trusted_description">На доверенном устройстве вход проходит проще.</string>
+    <string name="profile_device_revoke">Отозвать</string>
+    <string name="profile_device_revoke_title">Отозвать устройство?</string>
+    <string name="profile_device_revoke_message">Вход на «%1$s» будет завершён. Чтобы войти снова, понадобится код подтверждения.</string>
+    <string name="profile_device_status_locked">Заблокировано</string>
+    <string name="profile_device_status_pin_required">Нужен PIN</string>
+    <string name="profile_device_status_pending_pin">PIN не задан</string>
+
+    <!-- Центр уведомлений (issue #81) -->
+    <string name="notifications_title">Уведомления</string>
+    <string name="notifications_mark_all_read">Отметить все прочитанными</string>
+    <string name="notifications_default_title">Уведомление</string>
+    <string name="notifications_empty_title">Уведомлений нет</string>
+    <string name="notifications_empty_description">Здесь появятся сообщения о заказах, очередях и акциях.</string>
 
     <!-- Детали -->
     <string name="place_title">Место</string>
@@ -244,12 +280,19 @@
 
     <!-- Discovery: карта (эпик 4.2) -->
     <string name="map_title">Карта</string>
-    <string name="map_sdk_pending">SDK карты ещё не выбран: здесь показан список маркеров.</string>
-    <string name="map_markers_count">Маркеров: %1$d, масштаб %2$d</string>
-    <string name="map_cluster_places">Мест: %1$d</string>
     <string name="map_zoom_in">Приблизить</string>
     <string name="map_zoom_out">Отдалить</string>
     <string name="map_my_location">Моё местоположение</string>
+    <string name="map_empty_places">Здесь пока нет мест</string>
+    <string name="map_location_denied">Разрешение на геолокацию не выдано. Чтобы видеть себя на карте, включите его в настройках.</string>
+    <string name="map_location_unavailable">Не удалось определить местоположение. Проверьте, включена ли геолокация.</string>
+
+    <!-- Выбор точки на карте (issue #90) -->
+    <string name="map_picker_title">Выберите точку на карте</string>
+    <string name="map_picker_hint">Двигайте карту: выбирается место под меткой в центре.</string>
+    <string name="map_picker_resolving">Определяем местоположение\u2026</string>
+    <string name="map_picker_confirm">Выбрать эту точку</string>
+    <string name="map_picker_pin">Выбираемая точка</string>
 
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Часы работы</string>
@@ -260,6 +303,21 @@
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
+    <!-- Оставить отзыв (issue #76) -->
+    <string name="place_reviews_empty">Отзывов пока нет. Будьте первым.</string>
+    <string name="place_review_add">Оставить отзыв</string>
+    <string name="place_review_mine">Ваш отзыв</string>
+    <string name="place_review_form_title">Оставить отзыв</string>
+    <string name="place_review_rating_label">Ваша оценка</string>
+    <string name="place_review_rating_required">Поставьте оценку — это главное в отзыве.</string>
+    <string name="place_review_text_label">Отзыв</string>
+    <string name="place_review_text_placeholder">Что понравилось, а что нет?</string>
+    <string name="place_review_text_counter">%1$d / %2$d</string>
+    <string name="place_review_text_too_long">Отзыв слишком длинный — сократите его.</string>
+    <string name="place_review_submit">Отправить</string>
+    <string name="place_review_delete">Удалить отзыв</string>
+    <string name="place_review_delete_title">Удалить отзыв?</string>
+    <string name="place_review_delete_text">Ваша оценка и текст исчезнут с карточки места.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>
@@ -297,14 +355,6 @@
     <string name="cart_discount">Скидка</string>
     <string name="cart_total">Итого</string>
     <string name="cart_checkout">Оформить</string>
-    <string name="cart_promo_label">Промокод</string>
-    <string name="cart_promo_placeholder">Например, MAHALLA10</string>
-    <string name="cart_promo_apply">Применить</string>
-    <string name="cart_promo_applied">Промокод %1$s применён</string>
-    <string name="cart_promo_error_not_found">Такого промокода нет</string>
-    <string name="cart_promo_error_expired">Срок действия промокода истёк</string>
-    <string name="cart_promo_error_min_order">Промокод работает от %1$s</string>
-    <string name="cart_promo_error_network">Не удалось проверить промокод</string>
     <string name="cart_conflict_title">Корзина другого заведения</string>
     <string name="cart_conflict_description">В корзине блюда из «%1$s». Очистить её и начать новую?</string>
     <string name="cart_conflict_confirm">Очистить корзину</string>
@@ -316,23 +366,19 @@
     <string name="checkout_method_pickup">Самовывоз</string>
     <string name="checkout_address">Адрес</string>
     <string name="checkout_address_placeholder">Улица, дом, квартира</string>
-    <string name="checkout_time">Время</string>
-    <string name="checkout_time_asap">Как можно скорее</string>
     <string name="checkout_payment">Оплата</string>
     <string name="checkout_payment_wallet">Кошелёк</string>
     <string name="checkout_payment_cash">Наличные</string>
     <string name="checkout_wallet_balance">Баланс кошелька: %1$s</string>
     <string name="checkout_top_up">Пополнить кошелёк</string>
-    <string name="checkout_comment">Комментарий</string>
-    <string name="checkout_comment_placeholder">Например, не звонить в дверь</string>
     <string name="checkout_delivery_fee">Доставка</string>
     <string name="checkout_submit">Заказать</string>
     <string name="checkout_error_address">Укажите адрес доставки</string>
-    <string name="checkout_error_time_required">Выберите время</string>
     <string name="checkout_error_insufficient_funds">На кошельке не хватает %1$s</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Заказ</string>
+    <string name="order_number">№ %1$s</string>
     <string name="order_items_title">Состав</string>
     <string name="order_line_name">%1$s × %2$d</string>
     <string name="order_repeat">Повторить заказ</string>
@@ -340,16 +386,26 @@
     <string name="order_cancel_keep">Оставить</string>
     <string name="order_cancel_confirm_title">Отменить заказ?</string>
     <string name="order_cancel_confirm_description">Отменённый заказ вернуть не получится.</string>
-    <string name="order_cancel_failed">Не удалось отменить заказ</string>
     <string name="order_repeat_failed">Не удалось собрать корзину, попробуйте ещё раз</string>
     <string name="order_status_created">Принят</string>
     <string name="order_status_confirmed_food">Подтверждён</string>
     <string name="order_status_preparing">Готовится</string>
     <string name="order_status_delivering">В пути</string>
-    <string name="order_status_ready">Готов к выдаче</string>
+    <string name="order_status_ready">Готов</string>
     <string name="order_status_completed">Завершён</string>
     <string name="order_status_cancelled">Отменён</string>
+    <string name="order_status_refunded">Деньги возвращены</string>
     <string name="order_status_unknown">В работе</string>
+
+    <!-- Обновление приложения (issue #80) -->
+    <string name="update_required_title">Обновите приложение</string>
+    <string name="update_required_description">Эта версия приложения больше не работает. Чтобы продолжить, установите новую.</string>
+    <string name="update_available_title">Вышла новая версия</string>
+    <string name="update_available_description">Можно обновиться сейчас или вернуться к этому позже.</string>
+    <string name="update_version">Новая версия: %1$s</string>
+    <string name="update_action">Обновить</string>
+    <string name="update_later">Позже</string>
+    <string name="update_store_unavailable">Не удалось открыть магазин. Скачайте приложение через браузер.</string>
 
     <!-- Дни недели -->
     <string name="day_monday">Понедельник</string>
@@ -363,4 +419,57 @@
     <!-- Картинки (issue #60) — подписи для TalkBack -->
     <string name="image_avatar_of">Аватар: %1$s</string>
     <string name="image_gallery_of">Фотографии: %1$s</string>
+
+    <!-- Анкеты покупателя и продавца (issue #84) -->
+    <string name="role_title">Кем вы пользуетесь приложением?</string>
+    <string name="role_subtitle">Это можно изменить позже в профиле.</string>
+    <string name="role_skip">Заполню позже</string>
+    <string name="role_customer_title">Покупатель</string>
+    <string name="role_customer_description">Ищу и заказываю услуги</string>
+    <string name="role_provider_title">Продавец</string>
+    <string name="role_provider_description">Оказываю услуги: зарегистрирую своё заведение</string>
+    <string name="role_form_filled">Анкета заполнена</string>
+    <string name="role_not_selected">Не выбрано</string>
+    <string name="role_profile_entry">Моя анкета</string>
+    <string name="role_form_storage_error">Не удалось сохранить. Попробуйте ещё раз.</string>
+    <string name="role_customer_form_title">Анкета покупателя</string>
+    <string name="role_customer_form_subtitle">Эти данные использует само приложение: имя — в профиле, город — в поиске, адрес — при оформлении заказа.</string>
+    <string name="role_field_name">Имя и фамилия</string>
+    <string name="role_field_name_hint">Жахонгир Сабиров</string>
+    <string name="role_field_city">Город</string>
+    <string name="role_field_address">Адрес доставки</string>
+    <string name="role_field_address_hint">Чиланзар, 12-квартал, дом 4</string>
+    <string name="role_field_address_hint_note">Необязательно: заказ можно забирать самому.</string>
+    <string name="role_provider_form_title">Анкета продавца</string>
+    <string name="role_provider_form_subtitle">Заявка уходит на модерацию: заведение появится в каталоге после проверки.</string>
+    <string name="role_provider_submit">Отправить заявку</string>
+    <string name="role_field_place_name">Название заведения</string>
+    <string name="role_field_place_name_hint">Ош Маркази</string>
+    <string name="role_field_category">Категория</string>
+    <string name="role_field_place_address">Адрес заведения</string>
+    <string name="role_field_place_address_note">Адрес напишите словами, а точное место покажите на карте.</string>
+    <string name="role_field_place_point">Точка на карте</string>
+    <string name="role_place_point_empty">Не выбрана: координаты возьмём от устройства или по городу.</string>
+    <string name="role_place_point_pick">Выбрать на карте</string>
+    <string name="role_place_point_change">Изменить точку</string>
+    <string name="role_field_place_phone">Телефон заведения</string>
+    <string name="role_field_description">Описание</string>
+    <string name="role_field_description_hint">Что вы предлагаете</string>
+    <string name="role_field_website">Сайт</string>
+    <string name="role_field_website_hint">mahalla.uz</string>
+    <string name="role_provider_submitted_title">Заявка отправлена</string>
+    <string name="role_provider_submitted_subtitle">%1$s отправлено на модерацию.</string>
+    <string name="role_provider_status_pending">Заявка на проверке. Мы сообщим, когда будет решение.</string>
+    <string name="role_provider_status_active">Заведение уже активно: найдёте его в каталоге.</string>
+    <string name="role_error_name_required">Укажите имя</string>
+    <string name="role_error_city_required">Выберите город</string>
+    <string name="role_error_category_required">Выберите категорию</string>
+    <string name="role_error_address_required">Укажите адрес</string>
+    <string name="role_error_phone_invalid">Введите номер телефона полностью</string>
+    <string name="role_error_website_invalid">Адрес сайта неверный. Например: mahalla.uz</string>
+
+    <!-- Общие действия форм (issue #84) -->
+    <string name="action_continue">Продолжить</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_done">Готово</string>
 </resources>

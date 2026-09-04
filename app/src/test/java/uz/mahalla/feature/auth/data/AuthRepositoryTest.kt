@@ -20,9 +20,11 @@ import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
+import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
+import uz.mahalla.feature.auth.domain.PhoneIdentity
 import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramLoginState
@@ -31,6 +33,7 @@ import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
+import uz.mahalla.testutil.FakeUserProfileStore
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -49,6 +52,7 @@ class AuthRepositoryTest {
 
     private lateinit var server: MockWebServer
     private lateinit var sessionStore: FakeSessionStore
+    private lateinit var userProfileStore: FakeUserProfileStore
     private lateinit var pinStorage: FakePinStorage
 
     private val deviceInfoProvider = FakeDeviceInfoProvider()
@@ -64,6 +68,7 @@ class AuthRepositoryTest {
         server = MockWebServer()
         server.start()
         sessionStore = FakeSessionStore()
+        userProfileStore = FakeUserProfileStore()
         pinStorage = FakePinStorage(initialPin = "1234")
     }
 
@@ -480,6 +485,59 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `login stores the profile for the profile screen`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567","fullName":"Alisher Usmonov",
+                           "avatarUrl":"https://cdn.mahalla.uz/a.png"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        // Другого источника у профиля нет: `GET /users/me` бэкенд не отдаёт
+        // (issue #61), поэтому имя и номер сохраняет сам вход.
+        assertEquals(
+            UserProfile(
+                id = "u-1",
+                phone = "+998901234567",
+                fullName = "Alisher Usmonov",
+                avatarUrl = "https://cdn.mahalla.uz/a.png",
+            ),
+            userProfileStore.current(),
+        )
+    }
+
+    @Test
+    fun `pin step stores the profile too`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"SETUP_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        repository.completeServerPin("123456")
+
+        assertEquals("+998901234567", userProfileStore.current().phone)
+    }
+
+    @Test
+    fun `logout forgets who was logged in`() = runTest {
+        userProfileStore.save(UserProfile(phone = "+998901234567", fullName = "Alisher"))
+
+        repository().logout()
+
+        // Имя прошлого пользователя в шапке профиля после выхода — это
+        // сообщение «вы всё ещё здесь», которого не было.
+        assertEquals(UserProfile(), userProfileStore.current())
+    }
+
+    @Test
     fun `logout names the session in the header and wipes local data`() = runTest {
         sessionStore.save(Session("a-1", "r-1", sessionId = "s-1"))
         server.enqueue(envelope("{}"))
@@ -676,9 +734,182 @@ class AuthRepositoryTest {
         )
     }
 
+    // --- Чужой аккаунт на устройстве (issue #86) -------------------------
+    //
+    // `pin-login` ищет пользователя по устройству: тело — `{pin, device, lat,
+    // lng}`, ни номера, ни `otpToken`, ни `sessionId`. На телефоне, где раньше
+    // входил другой человек, шаг PIN отдаёт **его** токены — какой бы номер ни
+    // ввели в форму. Проверено на стенде: с незнакомого устройства тот же
+    // запрос отвечает `DEVICE_UNKNOWN`.
+
+    @Test
+    fun `pin login answering about another account does not authorize`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-2","refreshToken":"r-2"},
+                   "user":{"id":"u-old","phone":"+998937555505","fullName":"Telegram"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.requestCode("+998901234567")
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("654321")
+
+        // Токены настоящие и рабочие — тем важнее их не сохранять.
+        assertEquals(
+            ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertNull(sessionStore.current())
+        assertEquals(UserProfile(), userProfileStore.current())
+        assertNull(pinStorage.storedPin)
+        // Повторять PIN бессмысленно: ответ будет тот же.
+        assertNull(repository.pendingServerPin)
+    }
+
+    @Test
+    fun `pin login answering about the same account still authorizes`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-2","refreshToken":"r-2"},
+                   "user":{"phone":"998901234567","fullName":"Alisher"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.requestCode("+998901234567")
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("654321")
+
+        // Тот же номер в другой записи — тот же человек.
+        assertEquals(ApiResult.Success(LoginResult(isNewUser = false)), result)
+        assertEquals("a-2", sessionStore.current()?.accessToken)
+    }
+
+    @Test
+    fun `an answer without a phone is not treated as a foreign account`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+        server.enqueue(
+            envelope("""{"tokens":{"accessToken":"a-2","refreshToken":"r-2"}}"""),
+        )
+
+        val repository = repository()
+        repository.requestCode("+998901234567")
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("654321")
+
+        assertTrue(result is ApiResult.Success)
+        assertEquals("a-2", sessionStore.current()?.accessToken)
+    }
+
+    @Test
+    fun `verify answering about another account does not authorize`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"phone":"+998937555505"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.requestCode("+998901234567")
+        val result = repository.verifyCode("otp-1", "123456")
+
+        assertEquals(
+            ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertNull(sessionStore.current())
+    }
+
+    @Test
+    fun `telegram login has no typed number and stays untouched`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"accessToken":"a-1","refreshToken":"r-1","requiresPhoneVerify":false,
+                   "user":{"phone":"+998937555505","fullName":"Telegram"}}""",
+            ),
+        )
+
+        // Номер на этом пути не вводят вовсе — сравнивать не с чем, и вход
+        // обязан пройти как прежде.
+        val result = repository().checkTelegramLogin("dl-1")
+
+        assertTrue(result is ApiResult.Success)
+        assertEquals("a-1", sessionStore.current()?.accessToken)
+    }
+
+    @Test
+    fun `requesting a code for another number drops the previous account`() = runTest {
+        sessionStore = FakeSessionStore(
+            Session(accessToken = "old", refreshToken = "old-r", sessionId = "s-old"),
+        )
+        userProfileStore = FakeUserProfileStore(UserProfile(phone = "+998937555505"))
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+
+        repository().requestCode("+998901234567")
+
+        // Иначе прежний локальный PIN открывал бы чужое приложение вообще без
+        // единого запроса: `PinViewModel` разблокировал бы живую сессию.
+        assertNull(sessionStore.current())
+        assertEquals(UserProfile(), userProfileStore.current())
+        assertNull(pinStorage.storedPin)
+    }
+
+    @Test
+    fun `requesting a code for the same number keeps the session and the pin`() = runTest {
+        sessionStore = FakeSessionStore(
+            Session(accessToken = "old", refreshToken = "old-r", sessionId = "s-old"),
+        )
+        userProfileStore = FakeUserProfileStore(UserProfile(phone = "998901234567"))
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+
+        repository().requestCode("+998901234567")
+
+        // Повторный вход под своим номером не должен стоить человеку сессии.
+        assertEquals("old", sessionStore.current()?.accessToken)
+        assertEquals("1234", pinStorage.storedPin)
+    }
+
+    @Test
+    fun `a failed code request keeps the previous account`() = runTest {
+        sessionStore = FakeSessionStore(
+            Session(accessToken = "old", refreshToken = "old-r", sessionId = "s-old"),
+        )
+        userProfileStore = FakeUserProfileStore(UserProfile(phone = "+998937555505"))
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        repository().requestCode("+998901234567")
+
+        // Опечатка в номере не должна выкидывать человека из аккаунта: вход
+        // начат только тогда, когда код действительно ушёл.
+        assertEquals("old", sessionStore.current()?.accessToken)
+        assertEquals("1234", pinStorage.storedPin)
+    }
+
+    @Test
+    fun `unavailable keystore does not break the code request`() = runTest {
+        userProfileStore = FakeUserProfileStore(UserProfile(phone = "+998937555505"))
+        pinStorage.failure = IllegalStateException("keystore")
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
+
+        val result = repository().requestCode("+998901234567")
+
+        // Уборка по дороге не то, ради чего человек нажал кнопку.
+        assertTrue(result is ApiResult.Success)
+    }
+
     private fun repository(): AuthRepository = DefaultAuthRepository(
         authApi = authApi(),
         sessionStore = sessionStore,
+        userProfileStore = userProfileStore,
         pinStorage = pinStorage,
         deviceInfoProvider = deviceInfoProvider,
         locationProvider = locationProvider,

@@ -3,12 +3,14 @@ package uz.mahalla.feature.root.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
@@ -16,7 +18,8 @@ import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
-import javax.inject.Inject
+import uz.mahalla.feature.update.data.AppUpdateGate
+import uz.mahalla.feature.update.domain.UpdateDecision
 
 /**
  * Состояние корня: пока настройки не прочитаны из DataStore, показывать UI
@@ -35,6 +38,9 @@ sealed interface RootUiState {
      * с его ввода, иначе первый же запрос уйдёт в никуда.
      * @param backendUrlOverrideEnabled сборке разрешено менять адрес бэкенда:
      * от этого зависит и стартовый экран, и кнопки «сменить сервер».
+     * @param showUpdate бэкенд просит обновиться (issue #80). Отказ проверки
+     * сюда не доезжает: `false` — это и «обновляться не надо», и «спросить не
+     * удалось».
      */
     data class Ready(
         val settings: AppSettings,
@@ -42,6 +48,7 @@ sealed interface RootUiState {
         val resumeOnboardingAtPin: Boolean = false,
         val needsBackendUrl: Boolean = false,
         val backendUrlOverrideEnabled: Boolean = false,
+        val showUpdate: Boolean = false,
     ) : RootUiState
 }
 
@@ -52,6 +59,7 @@ class RootViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val backendUrlStore: BackendUrlStore,
     private val backendCertificatePin: BackendCertificatePin,
+    private val appUpdateGate: AppUpdateGate,
 ) : ViewModel() {
 
     /**
@@ -77,6 +85,7 @@ class RootViewModel @Inject constructor(
                 resumeOnboardingAtPin = start.atPin,
                 needsBackendUrl = start.needsBackendUrl,
                 backendUrlOverrideEnabled = backendUrlStore.overrideEnabled,
+                showUpdate = start.showUpdate,
             )
         }
         .stateIn(
@@ -90,6 +99,7 @@ class RootViewModel @Inject constructor(
             // Не записался флаг — онбординг всё равно закончен для этого
             // запуска, ронять приложение из-за настройки нельзя.
             runCatchingCancellable { onboardingRepository.markCompleted() }
+                .reportSwallowed("settings.markOnboardingCompleted")
         }
     }
 
@@ -107,12 +117,19 @@ class RootViewModel @Inject constructor(
         // сертификата читается на потоке OkHttp во время handshake (issue #32).
         backendCertificatePin.hydrate()
         val withOnboarding = !settings.onboardingCompleted
+        // Сборка без права менять адрес спрашивать его не должна: она ходит на
+        // адрес из BuildConfig.
+        val needsBackendUrl =
+            backendUrlStore.overrideEnabled && settings.backendBaseUrl == null
         return Start(
             withOnboarding = withOnboarding,
             atPin = withOnboarding && authRepository.isAuthorized.first(),
-            // Сборка без права менять адрес спрашивать его не должна:
-            // она ходит на адрес из BuildConfig.
-            needsBackendUrl = backendUrlStore.overrideEnabled && settings.backendBaseUrl == null,
+            needsBackendUrl = needsBackendUrl,
+            // Пока адрес сервера не введён, спрашивать его о версии
+            // бессмысленно: запрос ушёл бы на адрес из сборки, то есть не туда,
+            // куда пользователь как раз собирается направить приложение
+            // (issue #26). За версией сходим при следующем запуске.
+            showUpdate = !needsBackendUrl && appUpdateGate.check() != UpdateDecision.None,
         )
     }
 
@@ -121,5 +138,6 @@ class RootViewModel @Inject constructor(
         val withOnboarding: Boolean,
         val atPin: Boolean,
         val needsBackendUrl: Boolean,
+        val showUpdate: Boolean,
     )
 }

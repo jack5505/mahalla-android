@@ -3,6 +3,7 @@ package uz.mahalla.feature.food.ui.cart
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -13,21 +14,18 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import uz.mahalla.core.result.ApiError
-import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CartLine
-import uz.mahalla.feature.food.domain.PromoCode
-import uz.mahalla.feature.food.domain.PromoFailure
-import uz.mahalla.feature.food.domain.PromoKind
-import uz.mahalla.feature.food.domain.PromoState
 import uz.mahalla.testutil.FakeCartRepository
-import uz.mahalla.testutil.FakeMenuRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.cartLine
 
-/** Корзина (эпик 5.2): количество, промокод, итог. */
+/**
+ * Корзина (эпик 5.2): количество и итог.
+ *
+ * Промокода нет — приложить его к заказу бэкенду нечем (см. `MenuRepository`).
+ */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -37,7 +35,6 @@ class CartViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val cartRepository = FakeCartRepository()
-    private val menuRepository = FakeMenuRepository()
 
     @Test
     fun `the cart is read from the draft, not from the screen`() = runTest {
@@ -89,114 +86,27 @@ class CartViewModelTest {
     }
 
     @Test
-    fun `an applied promo lowers the total and is shown as applied`() = runTest {
+    fun `the cart shows no discount and no delivery of its own`() = runTest {
+        // И то и другое называет сервер при оформлении: показать здесь
+        // придуманное число значит соврать про деньги.
         seed(cartLine("osh", unitPriceSum = 100_000))
-        menuRepository.promoResult = ApiResult.Success(
-            PromoCode("TEN", PromoKind.Percent, value = 10),
-        )
-        val viewModel = viewModel()
 
-        viewModel.onEvent(CartEvent.PromoInputChanged("ten"))
-        viewModel.onEvent(CartEvent.PromoApplied)
+        val totals = viewModel().state.value.totals
 
-        val state = viewModel.state.value
-        assertTrue(state.promo is PromoState.Applied)
-        assertEquals(10_000L, state.totals.discountSum)
-        assertEquals(90_000L, state.totals.totalSum)
+        assertEquals(0L, totals.discountSum)
+        assertEquals(0L, totals.deliverySum)
+        assertEquals(100_000L, totals.totalSum)
     }
 
     @Test
-    fun `the current subtotal is sent with the promo`() = runTest {
-        // «Минимальный заказ» проверяется по актуальному составу, а не по
-        // тому, что было в корзине, когда код вводили.
-        seed(cartLine("osh", unitPriceSum = 50_000, quantity = 2))
-        val viewModel = viewModel()
-
-        viewModel.onEvent(CartEvent.PromoInputChanged("TEN"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        assertEquals(100_000L, menuRepository.promoRequests.single().third)
-    }
-
-    @Test
-    fun `an unknown promo is rejected with its own reason`() = runTest {
-        seed(cartLine("osh"))
-        menuRepository.promoResult = ApiResult.Failure(ApiError.NotFound)
-        val viewModel = viewModel()
-
-        viewModel.onEvent(CartEvent.PromoInputChanged("NOPE"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        assertEquals(PromoState.Rejected(PromoFailure.NotFound), viewModel.state.value.promo)
-    }
-
-    @Test
-    fun `a network problem is not blamed on the code`() = runTest {
-        seed(cartLine("osh"))
-        menuRepository.promoResult = ApiResult.Failure(ApiError.NoConnection)
-        val viewModel = viewModel()
-
-        viewModel.onEvent(CartEvent.PromoInputChanged("TEN"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        assertEquals(PromoState.Rejected(PromoFailure.Network), viewModel.state.value.promo)
-    }
-
-    @Test
-    fun `a valid code that gives no discount here is not applied silently`() = runTest {
-        seed(cartLine("osh", unitPriceSum = 30_000))
-        menuRepository.promoResult = ApiResult.Success(
-            PromoCode("BIG", PromoKind.Fixed, value = 10_000, minOrderSum = 100_000),
-        )
-        val viewModel = viewModel()
-
-        viewModel.onEvent(CartEvent.PromoInputChanged("BIG"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        assertEquals(
-            PromoState.Rejected(PromoFailure.MinOrder(100_000)),
-            viewModel.state.value.promo,
-        )
-        assertEquals(0L, viewModel.state.value.totals.discountSum)
-    }
-
-    @Test
-    fun `editing the code clears the previous rejection`() = runTest {
-        seed(cartLine("osh"))
-        menuRepository.promoResult = ApiResult.Failure(ApiError.NotFound)
-        val viewModel = viewModel()
-        viewModel.onEvent(CartEvent.PromoInputChanged("NOPE"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        viewModel.onEvent(CartEvent.PromoInputChanged("NOPE2"))
-
-        assertEquals(PromoState.Idle, viewModel.state.value.promo)
-    }
-
-    @Test
-    fun `an empty code is not sent to the server`() = runTest {
+    fun `add more carries the place name back to the menu`() = runTest {
+        // Меню не знает названия заведения — в ответе бэкенда его нет.
         seed(cartLine("osh"))
         val viewModel = viewModel()
 
-        viewModel.onEvent(CartEvent.PromoApplied)
+        viewModel.onEvent(CartEvent.AddMoreClicked)
 
-        assertTrue(menuRepository.promoRequests.isEmpty())
-    }
-
-    @Test
-    fun `removing the promo returns the full price`() = runTest {
-        seed(cartLine("osh", unitPriceSum = 100_000))
-        menuRepository.promoResult = ApiResult.Success(
-            PromoCode("TEN", PromoKind.Percent, value = 10),
-        )
-        val viewModel = viewModel()
-        viewModel.onEvent(CartEvent.PromoInputChanged("TEN"))
-        viewModel.onEvent(CartEvent.PromoApplied)
-
-        viewModel.onEvent(CartEvent.PromoRemoved)
-
-        assertEquals(PromoState.Idle, viewModel.state.value.promo)
-        assertEquals(100_000L, viewModel.state.value.totals.totalSum)
+        assertEquals(CartEffect.OpenMenu(PLACE_ID, "Osh markazi"), viewModel.effects.first())
     }
 
     @Test
@@ -208,12 +118,7 @@ class CartViewModelTest {
 
     private fun seed(vararg lines: CartLine) {
         cartRepository.seed(
-            Cart(
-                placeId = PLACE_ID,
-                placeName = "Osh markazi",
-                deliverySum = 15_000,
-                lines = lines.toList(),
-            ),
+            Cart(placeId = PLACE_ID, placeName = "Osh markazi", lines = lines.toList()),
         )
     }
 
@@ -221,7 +126,6 @@ class CartViewModelTest {
 
     private fun viewModel() = CartViewModel(
         cartRepository = cartRepository,
-        menuRepository = menuRepository,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )
 

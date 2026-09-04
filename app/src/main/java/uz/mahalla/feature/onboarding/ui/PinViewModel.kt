@@ -2,8 +2,10 @@ package uz.mahalla.feature.onboarding.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
@@ -12,7 +14,7 @@ import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinStep
-import javax.inject.Inject
+import uz.mahalla.feature.auth.domain.isForeignAccount
 
 /**
  * PIN-код (3.4): установка с повтором либо ввод уже сохранённого.
@@ -58,6 +60,7 @@ class PinViewModel @Inject constructor(
             // Хранилище недоступно — считаем, что PIN не настроен: установка
             // сработает и перезапишет его, а падение на старте экрана нет.
             val savedLength = runCatchingCancellable { pinStorage.configuredLength() }
+                .reportSwallowed("pin.configuredLength")
                 .getOrNull()
             if (savedLength != null) {
                 updateState {
@@ -121,7 +124,10 @@ class PinViewModel @Inject constructor(
 
             // Keystore умеет отказать (ключ инвалидирован сменой блокировки
             // экрана, хранилище недоступно) — это ошибка шага, а не крэш.
-            if (runCatchingCancellable { pinStorage.save(pin) }.isFailure) {
+            if (runCatchingCancellable { pinStorage.save(pin) }
+                    .reportSwallowed("pin.save")
+                    .isFailure
+            ) {
                 firstEntry = null
                 updateState {
                     copy(
@@ -152,19 +158,36 @@ class PinViewModel @Inject constructor(
 
             is ApiResult.Failure -> {
                 firstEntry = null
-                updateState {
-                    copy(
-                        // Установка начинается заново: подтверждать нечего,
-                        // код бэкенд не принял.
-                        stage = if (serverStep == ServerPinStep.Setup) {
-                            PinStage.Create
-                        } else {
-                            stage
-                        },
-                        busy = false,
-                        pin = pin(),
-                        apiFailure = result.failure,
-                    )
+                // Сервер отдал чужой аккаунт (issue #86). Повторять PIN
+                // бессмысленно — ответ будет тот же, — а текста сервера тут
+                // нет вовсе: отказ выставил сам клиент. Объясняем своими
+                // словами и уводим на вход с начала.
+                if (result.failure.isForeignAccount()) {
+                    updateState {
+                        copy(
+                            stage = PinStage.Create,
+                            busy = false,
+                            pin = pin(),
+                            serverStep = null,
+                            error = PinError.FOREIGN_ACCOUNT,
+                        )
+                    }
+                    emitEffect(PinEffect.AuthRestartRequired)
+                } else {
+                    updateState {
+                        copy(
+                            // Установка начинается заново: подтверждать нечего,
+                            // код бэкенд не принял.
+                            stage = if (serverStep == ServerPinStep.Setup) {
+                                PinStage.Create
+                            } else {
+                                stage
+                            },
+                            busy = false,
+                            pin = pin(),
+                            apiFailure = result.failure,
+                        )
+                    }
                 }
                 false
             }
@@ -177,18 +200,21 @@ class PinViewModel @Inject constructor(
             // `ENTER_PIN` код проверяет сервер, он же выдаёт токены.
             if (currentState.serverStep == ServerPinStep.Enter) {
                 if (!completeServerPin(pin)) return@launch
-                runCatchingCancellable { pinStorage.save(pin) }
+                runCatchingCancellable { pinStorage.save(pin) }.reportSwallowed("pin.save")
                 updateState { copy(busy = false, pin = pin()) }
                 emitEffect(PinEffect.PinReady)
                 return@launch
             }
 
-            val matches = runCatchingCancellable { pinStorage.verify(pin) }.getOrElse {
-                // Хранилище не ответило — попытку не тратим: пользователь не
-                // виноват, а лимит привёл бы к сбросу сессии на ровном месте.
-                updateState { copy(busy = false, pin = pin(), error = PinError.STORAGE) }
-                return@launch
-            }
+            val matches = runCatchingCancellable { pinStorage.verify(pin) }
+                .reportSwallowed("pin.verify")
+                .getOrElse {
+                    // Хранилище не ответило — попытку не тратим: пользователь
+                    // не виноват, а лимит привёл бы к сбросу сессии на ровном
+                    // месте.
+                    updateState { copy(busy = false, pin = pin(), error = PinError.STORAGE) }
+                    return@launch
+                }
 
             if (matches) {
                 updateState { copy(busy = false, pin = pin(), attemptsLeft = PinState.MAX_ATTEMPTS) }
@@ -256,8 +282,8 @@ class PinViewModel @Inject constructor(
      * дальнейший сценарий один и тот же: вход заново по SMS.
      */
     private suspend fun clearCredentials() {
-        runCatchingCancellable { pinStorage.clear() }
-        runCatchingCancellable { authRepository.logout() }
+        runCatchingCancellable { pinStorage.clear() }.reportSwallowed("pin.clear")
+        runCatchingCancellable { authRepository.logout() }.reportSwallowed("auth.logout")
     }
 
     /**

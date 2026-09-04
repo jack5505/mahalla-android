@@ -26,6 +26,7 @@ fun MahallaApp(
     modifier: Modifier = Modifier,
     onboardingStartDestination: Any = WelcomeRoute,
     afterBackendUrl: Any = OnboardingGraph,
+    afterUpdate: Any = OnboardingGraph,
     backendUrlOverrideEnabled: Boolean = false,
     navController: NavHostController = rememberNavController(),
 ) {
@@ -66,6 +67,7 @@ fun MahallaApp(
             modifier = Modifier.padding(innerPadding),
             onboardingStartDestination = onboardingStartDestination,
             afterBackendUrl = afterBackendUrl,
+            afterUpdate = afterUpdate,
             backendUrlOverrideEnabled = backendUrlOverrideEnabled,
         )
     }

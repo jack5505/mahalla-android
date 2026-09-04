@@ -94,6 +94,7 @@
     <string name="onboarding_pin_error_wrong">PIN-kod noto\'g\'ri. Qolgan urinishlar: %1$d</string>
     <string name="onboarding_pin_error_attempts">Urinishlar tugadi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
+    <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
 
     <!-- Онбординг: биометрия -->
@@ -130,11 +131,46 @@
     <string name="orders_title">Buyurtmalar</string>
     <string name="orders_subtitle">Faol buyurtmalar, navbatlar va bandlovlar.</string>
     <string name="wallet_title">Hamyon</string>
-    <string name="wallet_subtitle">Balans, to\'ldirish va to\'lovlar tarixi.</string>
+    <string name="wallet_available">Sarflash mumkin</string>
+    <string name="wallet_balance_total">Hisobda</string>
+    <string name="wallet_held">Muzlatilgan</string>
+    <string name="wallet_bonus">Bonuslar</string>
+    <string name="wallet_status_blocked">Hamyon bloklangan</string>
+    <string name="wallet_history_title">Amallar tarixi</string>
+    <string name="wallet_history_empty">Hozircha amallar yo\'q.</string>
+    <string name="wallet_transaction_default_title">Amal</string>
+    <string name="wallet_transaction_pending">Bajarilmoqda</string>
+    <string name="wallet_transaction_failed">Bajarilmadi</string>
+    <string name="wallet_transaction_bonus">Bonus</string>
     <string name="profile_title">Profil</string>
-    <string name="profile_subtitle">Til, mavzu va hisob sozlamalari.</string>
     <string name="profile_language">Til</string>
     <string name="profile_theme">Mavzu</string>
+    <string name="profile_name_unknown">Ism ko\'rsatilmagan</string>
+    <string name="profile_phone_unknown">Raqam noma\'lum</string>
+    <string name="profile_logout">Chiqish</string>
+    <string name="profile_logout_title">Hisobdan chiqasizmi?</string>
+    <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_devices_title">Mening qurilmalarim</string>
+    <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
+    <string name="profile_device_unknown">Noma\'lum qurilma</string>
+    <string name="profile_device_current">Bu qurilma</string>
+    <string name="profile_device_last_activity">Oxirgi faollik: %1$s</string>
+    <string name="profile_device_ip">IP: %1$s</string>
+    <string name="profile_device_trusted">Ishonchli qurilma</string>
+    <string name="profile_device_trusted_description">Ishonchli qurilmada kirish soddalashadi.</string>
+    <string name="profile_device_revoke">Chiqarish</string>
+    <string name="profile_device_revoke_title">Qurilmani chiqarasizmi?</string>
+    <string name="profile_device_revoke_message">%1$s qurilmasidagi kirish tugatiladi. Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_device_status_locked">Bloklangan</string>
+    <string name="profile_device_status_pin_required">PIN kerak</string>
+    <string name="profile_device_status_pending_pin">PIN o\'rnatilmagan</string>
+
+    <!-- Центр уведомлений (issue #81) -->
+    <string name="notifications_title">Bildirishnomalar</string>
+    <string name="notifications_mark_all_read">Hammasini o\'qilgan deb belgilash</string>
+    <string name="notifications_default_title">Bildirishnoma</string>
+    <string name="notifications_empty_title">Bildirishnomalar yo\'q</string>
+    <string name="notifications_empty_description">Buyurtma, navbat va aksiyalar haqidagi xabarlar shu yerda ko\'rinadi.</string>
 
     <!-- Детали -->
     <string name="place_title">Joy</string>
@@ -250,12 +286,19 @@
 
     <!-- Discovery: карта (эпик 4.2) -->
     <string name="map_title">Xarita</string>
-    <string name="map_sdk_pending">Xarita SDK hali tanlanmagan: bu yerda belgilar ro\'yxati ko\'rsatilmoqda.</string>
-    <string name="map_markers_count">%1$d ta belgi, masshtab %2$d</string>
-    <string name="map_cluster_places">%1$d ta joy</string>
     <string name="map_zoom_in">Yaqinlashtirish</string>
     <string name="map_zoom_out">Uzoqlashtirish</string>
     <string name="map_my_location">Mening joylashuvim</string>
+    <string name="map_empty_places">Bu hududda joy topilmadi</string>
+    <string name="map_location_denied">Joylashuv ruxsati berilmadi. Xaritada o\'zingizni ko\'rish uchun sozlamalardan ruxsat bering.</string>
+    <string name="map_location_unavailable">Joylashuvni aniqlab bo\'lmadi. Geolokatsiya yoqilganini tekshiring.</string>
+
+    <!-- Xaritada nuqta tanlash (issue #90) -->
+    <string name="map_picker_title">Xaritada nuqtani tanlang</string>
+    <string name="map_picker_hint">Xaritani suring: markazdagi belgi turgan joy tanlanadi.</string>
+    <string name="map_picker_resolving">Joylashuv aniqlanmoqda\u2026</string>
+    <string name="map_picker_confirm">Shu nuqtani tanlash</string>
+    <string name="map_picker_pin">Tanlanadigan nuqta</string>
 
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Ish vaqti</string>
@@ -266,6 +309,21 @@
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
+    <!-- Sharh qoldirish (issue #76) -->
+    <string name="place_reviews_empty">Hozircha sharhlar yo\'q. Birinchi bo\'ling.</string>
+    <string name="place_review_add">Sharh qoldirish</string>
+    <string name="place_review_mine">Sizning sharhingiz</string>
+    <string name="place_review_form_title">Sharh qoldirish</string>
+    <string name="place_review_rating_label">Bahoyingiz</string>
+    <string name="place_review_rating_required">Baho qo\'ying — sharhning asosiy qismi shu.</string>
+    <string name="place_review_text_label">Sharh</string>
+    <string name="place_review_text_placeholder">Nima yoqdi, nima yoqmadi?</string>
+    <string name="place_review_text_counter">%1$d / %2$d</string>
+    <string name="place_review_text_too_long">Sharh juda uzun — qisqartiring.</string>
+    <string name="place_review_submit">Yuborish</string>
+    <string name="place_review_delete">Sharhni o\'chirish</string>
+    <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
+    <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
@@ -303,14 +361,6 @@
     <string name="cart_discount">Chegirma</string>
     <string name="cart_total">Jami</string>
     <string name="cart_checkout">Rasmiylashtirish</string>
-    <string name="cart_promo_label">Promokod</string>
-    <string name="cart_promo_placeholder">Masalan, MAHALLA10</string>
-    <string name="cart_promo_apply">Qo\'llash</string>
-    <string name="cart_promo_applied">%1$s promokodi qo\'llandi</string>
-    <string name="cart_promo_error_not_found">Bunday promokod topilmadi</string>
-    <string name="cart_promo_error_expired">Promokod muddati tugagan</string>
-    <string name="cart_promo_error_min_order">Promokod %1$s dan boshlab ishlaydi</string>
-    <string name="cart_promo_error_network">Promokodni tekshirib bo\'lmadi</string>
     <string name="cart_conflict_title">Boshqa joyning savati</string>
     <string name="cart_conflict_description">Savatingizda «%1$s» taomlari bor. Ularni o\'chirib, yangi savat ochamizmi?</string>
     <string name="cart_conflict_confirm">Savatni tozalash</string>
@@ -322,23 +372,19 @@
     <string name="checkout_method_pickup">Olib ketish</string>
     <string name="checkout_address">Manzil</string>
     <string name="checkout_address_placeholder">Ko\'cha, uy, xonadon</string>
-    <string name="checkout_time">Vaqt</string>
-    <string name="checkout_time_asap">Imkon qadar tezroq</string>
     <string name="checkout_payment">To\'lov</string>
     <string name="checkout_payment_wallet">Hamyon</string>
     <string name="checkout_payment_cash">Naqd pul</string>
     <string name="checkout_wallet_balance">Hamyon balansi: %1$s</string>
     <string name="checkout_top_up">Hamyonni to\'ldirish</string>
-    <string name="checkout_comment">Izoh</string>
-    <string name="checkout_comment_placeholder">Masalan, qo\'ng\'iroq qilmang</string>
     <string name="checkout_delivery_fee">Yetkazib berish</string>
     <string name="checkout_submit">Buyurtma berish</string>
     <string name="checkout_error_address">Yetkazib berish uchun manzilni kiriting</string>
-    <string name="checkout_error_time_required">Vaqtni tanlang</string>
     <string name="checkout_error_insufficient_funds">Hamyonda %1$s yetishmayapti</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Buyurtma</string>
+    <string name="order_number">№ %1$s</string>
     <string name="order_items_title">Tarkibi</string>
     <string name="order_line_name">%1$s × %2$d</string>
     <string name="order_repeat">Buyurtmani takrorlash</string>
@@ -346,16 +392,26 @@
     <string name="order_cancel_keep">Qoldirish</string>
     <string name="order_cancel_confirm_title">Buyurtmani bekor qilasizmi?</string>
     <string name="order_cancel_confirm_description">Bekor qilingan buyurtmani qaytarib bo\'lmaydi.</string>
-    <string name="order_cancel_failed">Buyurtmani bekor qilib bo\'lmadi</string>
     <string name="order_repeat_failed">Savatni yig\'ib bo\'lmadi, qaytadan urinib ko\'ring</string>
     <string name="order_status_created">Qabul qilindi</string>
     <string name="order_status_confirmed_food">Tasdiqlandi</string>
     <string name="order_status_preparing">Tayyorlanmoqda</string>
     <string name="order_status_delivering">Yo\'lda</string>
-    <string name="order_status_ready">Olib ketishga tayyor</string>
+    <string name="order_status_ready">Tayyor</string>
     <string name="order_status_completed">Yakunlandi</string>
     <string name="order_status_cancelled">Bekor qilindi</string>
+    <string name="order_status_refunded">Pul qaytarildi</string>
     <string name="order_status_unknown">Ish jarayonida</string>
+
+    <!-- Обновление приложения (issue #80) -->
+    <string name="update_required_title">Ilovani yangilang</string>
+    <string name="update_required_description">Ilovaning bu versiyasi endi ishlamaydi. Davom etish uchun yangi versiyani o\'rnating.</string>
+    <string name="update_available_title">Yangi versiya chiqdi</string>
+    <string name="update_available_description">Ilovani hozir yangilashingiz yoki keyinroq qaytishingiz mumkin.</string>
+    <string name="update_version">Yangi versiya: %1$s</string>
+    <string name="update_action">Yangilash</string>
+    <string name="update_later">Keyinroq</string>
+    <string name="update_store_unavailable">Do\'konni ochib bo\'lmadi. Ilovani brauzer orqali yuklab oling.</string>
 
     <!-- Дни недели -->
     <string name="day_monday">Dushanba</string>
@@ -369,4 +425,57 @@
     <!-- Картинки (issue #60) — подписи для TalkBack -->
     <string name="image_avatar_of">%1$s avatari</string>
     <string name="image_gallery_of">%1$s suratlari</string>
+
+    <!-- Анкеты покупателя и продавца (issue #84) -->
+    <string name="role_title">Ilovadan kim sifatida foydalanasiz?</string>
+    <string name="role_subtitle">Buni keyin profilda o\'zgartirishingiz mumkin.</string>
+    <string name="role_skip">Keyinroq to\'ldiraman</string>
+    <string name="role_customer_title">Xaridor</string>
+    <string name="role_customer_description">Xizmatlarni izlayman va buyurtma qilaman</string>
+    <string name="role_provider_title">Sotuvchi</string>
+    <string name="role_provider_description">Xizmat ko\'rsataman: muassasani ro\'yxatdan o\'tkazaman</string>
+    <string name="role_form_filled">Anketa to\'ldirilgan</string>
+    <string name="role_not_selected">Tanlanmagan</string>
+    <string name="role_profile_entry">Mening anketam</string>
+    <string name="role_form_storage_error">Saqlab bo\'lmadi. Yana urinib ko\'ring.</string>
+    <string name="role_customer_form_title">Xaridor anketasi</string>
+    <string name="role_customer_form_subtitle">Bu ma\'lumotlarni ilovaning o\'zi ishlatadi: ism — profilda, shahar — qidiruvda, manzil — buyurtmada.</string>
+    <string name="role_field_name">Ism va familiya</string>
+    <string name="role_field_name_hint">Jahongir Sabirov</string>
+    <string name="role_field_city">Shahar</string>
+    <string name="role_field_address">Yetkazib berish manzili</string>
+    <string name="role_field_address_hint">Chilonzor, 12-kvartal, 4-uy</string>
+    <string name="role_field_address_hint_note">Majburiy emas: buyurtmani o\'zingiz olib ketishingiz ham mumkin.</string>
+    <string name="role_provider_form_title">Sotuvchi anketasi</string>
+    <string name="role_provider_form_subtitle">Ariza moderatsiyaga yuboriladi: muassasa tekshiruvdan keyin katalogda ko\'rinadi.</string>
+    <string name="role_provider_submit">Arizani yuborish</string>
+    <string name="role_field_place_name">Muassasa nomi</string>
+    <string name="role_field_place_name_hint">Osh Markazi</string>
+    <string name="role_field_category">Kategoriya</string>
+    <string name="role_field_place_address">Muassasa manzili</string>
+    <string name="role_field_place_address_note">Manzilni matn bilan yozing, aniq nuqtani esa xaritada ko\'rsating.</string>
+    <string name="role_field_place_point">Xaritadagi nuqta</string>
+    <string name="role_place_point_empty">Tanlanmagan: koordinatalar qurilma yoki shahar bo\'yicha olinadi.</string>
+    <string name="role_place_point_pick">Xaritada tanlash</string>
+    <string name="role_place_point_change">Nuqtani o\'zgartirish</string>
+    <string name="role_field_place_phone">Muassasa telefoni</string>
+    <string name="role_field_description">Tavsif</string>
+    <string name="role_field_description_hint">Nima taklif qilasiz</string>
+    <string name="role_field_website">Sayt</string>
+    <string name="role_field_website_hint">mahalla.uz</string>
+    <string name="role_provider_submitted_title">Ariza yuborildi</string>
+    <string name="role_provider_submitted_subtitle">%1$s moderatsiyaga yuborildi.</string>
+    <string name="role_provider_status_pending">Ariza tekshirilmoqda. Qaror chiqqanda xabar beramiz.</string>
+    <string name="role_provider_status_active">Muassasa allaqachon faol: uni katalogda topasiz.</string>
+    <string name="role_error_name_required">Ismni kiriting</string>
+    <string name="role_error_city_required">Shaharni tanlang</string>
+    <string name="role_error_category_required">Kategoriyani tanlang</string>
+    <string name="role_error_address_required">Manzilni kiriting</string>
+    <string name="role_error_phone_invalid">Telefon raqamini to\'liq kiriting</string>
+    <string name="role_error_website_invalid">Sayt manzili noto\'g\'ri. Masalan: mahalla.uz</string>
+
+    <!-- Общие действия форм (issue #84) -->
+    <string name="action_continue">Davom etish</string>
+    <string name="action_save">Saqlash</string>
+    <string name="action_done">Tayyor</string>
 </resources>

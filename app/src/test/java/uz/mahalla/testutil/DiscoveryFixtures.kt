@@ -12,6 +12,7 @@ import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
+import uz.mahalla.feature.place.domain.ReviewDraft
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -50,8 +51,18 @@ class FakeCatalogRepository : CatalogRepository {
     var pages: MutableMap<Int, ApiResult<PlacePage>> = mutableMapOf()
     var details: ApiResult<PlaceDetails> = ApiResult.Failure(ApiError.NotFound)
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
+    var addReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var deleteReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
+
+    /** Черновики отправленных отзывов — тест проверяет, что уехало на сервер. */
+    val addedReviews: MutableList<Pair<String, ReviewDraft>> = mutableListOf()
+    val deletedReviews: MutableList<String> = mutableListOf()
+
+    /** Сколько раз запрашивалась карточка: перезапрос после отзыва — часть контракта. */
+    var detailsRequests: Int = 0
+        private set
 
     fun respondWith(items: List<Place>, page: Int = 0, hasMore: Boolean = false, fromCache: Boolean = false) {
         pages[page] = ApiResult.Success(PlacePage(items, page, hasMore, fromCache))
@@ -66,9 +77,22 @@ class FakeCatalogRepository : CatalogRepository {
         return pages[page] ?: ApiResult.Failure(ApiError.NotFound)
     }
 
-    override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> = details
+    override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> {
+        detailsRequests++
+        return details
+    }
 
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> = reviews
+
+    override suspend fun addReview(placeId: String, draft: ReviewDraft): ApiResult<Unit> {
+        addedReviews += placeId to draft
+        return addReviewResult
+    }
+
+    override suspend fun deleteReview(reviewId: String): ApiResult<Unit> {
+        deletedReviews += reviewId
+        return deleteReviewResult
+    }
 }
 
 /**

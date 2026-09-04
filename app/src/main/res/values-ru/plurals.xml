@@ -20,18 +20,32 @@
         <item quantity="other">Введено %1$d из %2$d цифр</item>
     </plurals>
 
-    <plurals name="checkout_error_time_too_soon">
-        <item quantity="one">Выберите время не раньше чем через %1$d минуту</item>
-        <item quantity="few">Выберите время не раньше чем через %1$d минуты</item>
-        <item quantity="many">Выберите время не раньше чем через %1$d минут</item>
-        <item quantity="other">Выберите время не раньше чем через %1$d минуты</item>
+    <plurals name="notifications_unread_count">
+        <item quantity="one">%1$d непрочитанное</item>
+        <item quantity="few">%1$d непрочитанных</item>
+        <item quantity="many">%1$d непрочитанных</item>
+        <item quantity="other">%1$d непрочитанных</item>
     </plurals>
 
-    <plurals name="order_eta">
-        <item quantity="one">Примерно %1$d минуту</item>
-        <item quantity="few">Примерно %1$d минуты</item>
-        <item quantity="many">Примерно %1$d минут</item>
-        <item quantity="other">Примерно %1$d минуты</item>
+    <plurals name="rating_star_description">
+        <item quantity="one">%1$d звезда</item>
+        <item quantity="few">%1$d звезды</item>
+        <item quantity="many">%1$d звёзд</item>
+        <item quantity="other">%1$d звезды</item>
+    </plurals>
+
+    <plurals name="role_error_too_long">
+        <item quantity="one">Не больше %1$d символа</item>
+        <item quantity="few">Не больше %1$d символов</item>
+        <item quantity="many">Не больше %1$d символов</item>
+        <item quantity="other">Не больше %1$d символов</item>
+    </plurals>
+
+    <plurals name="role_error_too_short">
+        <item quantity="one">Не меньше %1$d символа</item>
+        <item quantity="few">Не меньше %1$d символов</item>
+        <item quantity="many">Не меньше %1$d символов</item>
+        <item quantity="other">Не меньше %1$d символов</item>
     </plurals>
 
 </resources>

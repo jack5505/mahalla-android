@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.disk.DiskCache
 import coil.intercept.Interceptor
 import coil.memory.MemoryCache
+import coil.request.ErrorResult
 import coil.request.ImageResult
 import okhttp3.Authenticator
 import okhttp3.Call
@@ -33,13 +34,31 @@ class BackendImageUrlInterceptor @Inject constructor(
         if (data !is String) return chain.proceed(chain.request)
 
         val resolved = ImageUrl.resolve(backendUrlStore.current, data)
-        // Ссылка не приводится к загружаемому виду — пропускаем как есть:
-        // Coil вернёт ошибку, а компонент нарисует фоллбэк-иконку.
-        if (resolved == null || resolved == data) return chain.proceed(chain.request)
+        // Ссылка не прошла [ImageUrl] — грузить её нельзя. Пропустить дальше
+        // «пусть Coil сам ошибётся» не годится: `file://`, `content://` и
+        // `android.resource://` Coil грузит штатными фетчерами, и белый список
+        // схем оказался бы декорацией — подменённый бэкенд (адрес сервера в
+        // debug вводит пользователь, issue #26) показал бы вместо фото
+        // заведения кусок локального хранилища.
+        if (resolved == null) {
+            return ErrorResult(
+                drawable = null,
+                request = chain.request,
+                throwable = UnsupportedImageUrl(data),
+            )
+        }
+        if (resolved == data) return chain.proceed(chain.request)
 
         return chain.proceed(chain.request.newBuilder().data(resolved).build())
     }
 }
+
+/**
+ * Ссылка отвергнута [ImageUrl]: недопустимая схема либо не приводится к
+ * абсолютному адресу. Для пользователя это то же самое, что не загрузившееся
+ * фото, — компонент рисует фоллбэк-иконку.
+ */
+class UnsupportedImageUrl(url: String) : IllegalArgumentException("Unsupported image url: $url")
 
 /**
  * Сборка [ImageLoader] (issue #60). Вынесена из DI-модуля по той же причине,

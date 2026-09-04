@@ -9,13 +9,7 @@ package uz.mahalla.feature.food.domain
  */
 data class Menu(
     val placeId: String,
-    /** Название заведения: корзина показывает его до всякой сети. */
-    val placeName: String = "",
     val categories: List<MenuCategory>,
-    /** Стоимость доставки заведения; 0 — бесплатно или самовывоз. */
-    val deliverySum: Long = 0,
-    /** Минимальная сумма заказа; 0 — ограничения нет. */
-    val minOrderSum: Long = 0,
 ) {
     val isEmpty: Boolean get() = categories.all { it.items.isEmpty() }
 
@@ -37,6 +31,13 @@ data class MenuCategory(
  *
  * [optionGroups] пуст у простых позиций: шторка модификаторов тогда не нужна и
  * позиция кладётся в корзину одним нажатием.
+ *
+ * **Сейчас он пуст всегда**: модификаторов в контракте бэкенда нет ни в меню
+ * (`ItemResponse` — только цена, доступность и «халяль»), ни в заказе
+ * (`OrderItemRequest` — только позиция и количество). Правила выбора и шторка
+ * оставлены готовыми: когда бэкенд начнёт отдавать группы, их подключает одно
+ * поле в `MenuItemDto`. Придумывать группы на клиенте нельзя — заказ всё
+ * равно уедет без них, и человек получит не то, что выбрал.
  */
 data class MenuItem(
     val id: String,
