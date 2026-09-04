@@ -101,8 +101,10 @@ class PlaceActionsTest {
     fun `queue is offered to barbers and nothing is offered to the rest`() {
         // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
         // следует из категории, и до issue #96 ни одна из них не включалась.
+        // Бронь добавилась в issue #97: у мастера это второй способ попасть к
+        // нему — не «прямо сейчас», а на выбранное время.
         assertEquals(
-            PlaceCapabilities(queue = true),
+            PlaceCapabilities(queue = true, booking = true),
             PlaceCapabilities.of(PlaceCategory.Master),
         )
 
@@ -114,8 +116,9 @@ class PlaceActionsTest {
             PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
-            // Кнопка, ведущая в никуда, хуже отсутствующей: экранов брони в
-            // приложении нет, а «Заказать» — вне объёма issue #96.
+            // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
+            // бэкенд отдаёт только у мастеров (`barber-services`), а
+            // «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
     }
@@ -128,6 +131,13 @@ class PlaceActionsTest {
             place = place("p"),
         )
 
+        // Очередь остаётся главной: «прийти сейчас» — то, за чем в
+        // парикмахерскую заходят чаще, а запись на время стоит рядом второй
+        // кнопкой (issue #97).
         assertEquals(PlaceAction.Queue, PlaceActions.primary(actions))
+        assertEquals(
+            listOf(PlaceAction.Queue, PlaceAction.Booking, PlaceAction.Call),
+            actions,
+        )
     }
 }

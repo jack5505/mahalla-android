@@ -543,4 +543,48 @@
     <string name="queue_status_no_show">Вы не пришли</string>
     <string name="queue_status_expired">Срок истёк</string>
     <string name="queue_status_unknown">Состояние неизвестно</string>
+
+    <!-- Вертикаль «Бронь» (эпик #11, issue #97): запись на время. -->
+    <string name="booking_title">Запись</string>
+    <string name="booking_service_title">Выберите услугу</string>
+    <string name="booking_service_unnamed">Услуга без названия</string>
+    <string name="booking_services_empty_title">Записаться пока не на что</string>
+    <string name="booking_services_empty_description">Заведение ещё не завело услуги. Попробуйте очередь или позвоните.</string>
+    <string name="booking_date_title">Выберите день</string>
+    <string name="booking_date_today">Сегодня</string>
+    <string name="booking_date_tomorrow">Завтра</string>
+    <string name="booking_date_weekday">%1$s, %2$s</string>
+    <string name="booking_slot_title">Выберите время</string>
+    <string name="booking_slots_empty">На этот день свободного времени не осталось. Выберите другой день.</string>
+    <string name="booking_pick_slot_hint">Чтобы записаться, выберите день и время.</string>
+    <string name="booking_summary_when">%1$s, %2$s</string>
+    <string name="booking_submit">Записаться</string>
+    <string name="booking_done_title">Вы записаны</string>
+    <string name="booking_done_description">Заведение подтвердит запись. Состояние видно в «Моих записях».</string>
+    <string name="weekday_short_mon">пн</string>
+    <string name="weekday_short_tue">вт</string>
+    <string name="weekday_short_wed">ср</string>
+    <string name="weekday_short_thu">чт</string>
+    <string name="weekday_short_fri">пт</string>
+    <string name="weekday_short_sat">сб</string>
+    <string name="weekday_short_sun">вс</string>
+
+    <string name="my_appointments_title">Мои записи</string>
+    <string name="my_appointments_profile_subtitle">Записи на время и их состояние</string>
+    <string name="my_appointments_upcoming">Активные</string>
+    <string name="my_appointments_past">Прошедшие</string>
+    <string name="my_appointments_empty_title">Записей нет</string>
+    <string name="my_appointments_empty_description">Записаться на время можно с карточки заведения — кнопкой «Записаться».</string>
+    <string name="my_appointments_unnamed_service">Услуга не указана</string>
+    <string name="my_appointments_time_unknown">Время не указано</string>
+    <string name="my_appointments_cancel">Отменить запись</string>
+    <string name="my_appointments_cancel_keep">Оставить</string>
+    <string name="my_appointments_cancel_title">Отменить запись?</string>
+    <string name="my_appointments_cancel_message">Время отдадут другому клиенту, записываться придётся заново.</string>
+    <string name="appointment_status_pending">Ждёт подтверждения</string>
+    <string name="appointment_status_confirmed">Подтверждена</string>
+    <string name="appointment_status_cancelled">Отменена</string>
+    <string name="appointment_status_completed">Завершена</string>
+    <string name="appointment_status_no_show">Вы не пришли</string>
+    <string name="appointment_status_unknown">Состояние неизвестно</string>
 </resources>

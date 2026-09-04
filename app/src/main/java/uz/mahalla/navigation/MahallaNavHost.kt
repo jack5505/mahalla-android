@@ -10,6 +10,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.feature.booking.ui.BookingScreen
+import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
 import uz.mahalla.feature.food.ui.cart.CartScreen
@@ -235,6 +237,8 @@ fun MahallaNavHost(
                     onOpenRole = { navController.navigate(RoleRoute()) },
                     // «Мои заведения» (issue #94): судьба заявки продавца.
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
+                    // «Мои записи» (issue #97): своего таба у брони нет.
+                    onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -394,8 +398,33 @@ fun MahallaNavHost(
                 onQueueClick = { placeId, placeName ->
                     navController.navigate(QueueRoute(placeId, placeName))
                 },
+                // Бронь (issue #97): запись на время — второе действие тех же
+                // мастеров, для тех, кому очередь «прямо сейчас» не подходит.
+                onBookingClick = { placeId, placeName ->
+                    navController.navigate(BookingRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Бронь» (эпик #11, issue #97): записываются с карточки
+        // места, а следят за записью в «моих записях» — туда же ведёт и
+        // подтверждение.
+        composable<BookingRoute> {
+            BookingScreen(
+                // Экран записи из стека уходит: возвращаться в собранную форму
+                // после того, как запись создана, некуда.
+                onOpenMyAppointments = {
+                    navController.navigate(MyAppointmentsRoute) {
+                        popUpTo<BookingRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MyAppointmentsRoute> {
+            MyAppointmentsScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки

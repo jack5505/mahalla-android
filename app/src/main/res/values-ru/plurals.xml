@@ -56,4 +56,11 @@
         <item quantity="other">%1$d минуты</item>
     </plurals>
 
+    <!-- Бронь (issue #97): длительность услуги. -->
+    <plurals name="booking_duration_minutes">
+        <item quantity="one">%1$d минута</item>
+        <item quantity="few">%1$d минуты</item>
+        <item quantity="many">%1$d минут</item>
+        <item quantity="other">%1$d минуты</item>
+    </plurals>
 </resources>

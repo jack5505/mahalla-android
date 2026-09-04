@@ -38,6 +38,8 @@ import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
+import uz.mahalla.feature.booking.data.DefaultBookingRepository
+import uz.mahalla.feature.booking.data.di.BookingDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
@@ -322,6 +324,26 @@ class GraphAssemblyTest {
                 profileStore = DataStoreUserProfileStore(dataStore),
             ),
         )
+    }
+
+    /**
+     * Бронь (issue #97): запись, «мои записи» и отмена требуют Bearer, значит
+     * API собирается на **основном** Retrofit. Услуги и слоты анонимны, но
+     * лишний заголовок им не мешает — отдельного клиента ради них заводить
+     * незачем.
+     */
+    @Test
+    fun `booking assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = BookingDataModule.provideBookingApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultBookingRepository(api = api, clock = AppModule.provideClock()))
     }
 
     /**
