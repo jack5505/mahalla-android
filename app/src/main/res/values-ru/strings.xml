@@ -587,4 +587,15 @@
     <string name="appointment_status_completed">Завершена</string>
     <string name="appointment_status_no_show">Вы не пришли</string>
     <string name="appointment_status_unknown">Состояние неизвестно</string>
+
+    <!-- Загрузка изображений (issue #101) -->
+    <string name="profile_avatar_title">Фото профиля</string>
+    <string name="profile_avatar_present">Фото загружено</string>
+    <string name="profile_avatar_absent">Фото пока не загружено</string>
+    <string name="profile_avatar_pick">Выбрать фото</string>
+    <string name="profile_avatar_replace">Заменить фото</string>
+    <string name="profile_avatar_uploading">Загрузка: %1$d%%</string>
+    <string name="media_error_unreadable">Не удалось открыть файл. Выберите другое фото.</string>
+    <string name="media_error_unsupported">Это не изображение. Подойдут JPEG, PNG или WebP.</string>
+    <string name="media_error_too_large">Фото слишком большое. Выберите снимок меньше.</string>
 </resources>

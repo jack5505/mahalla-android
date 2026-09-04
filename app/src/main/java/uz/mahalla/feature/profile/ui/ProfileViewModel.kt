@@ -3,6 +3,7 @@ package uz.mahalla.feature.profile.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.locale.AppLocaleManager
@@ -15,7 +16,9 @@ import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfileStore
+import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.auth.data.AuthRepository
+import uz.mahalla.feature.media.data.MediaRepository
 import uz.mahalla.feature.profile.data.SessionsRepository
 import uz.mahalla.feature.profile.domain.DeviceSession
 
@@ -35,7 +38,11 @@ class ProfileViewModel @Inject constructor(
     private val userProfileStore: UserProfileStore,
     private val sessionsRepository: SessionsRepository,
     private val authRepository: AuthRepository,
+    private val mediaRepository: MediaRepository,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
+
+    /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
+    private var avatarJob: Job? = null
 
     init {
         updateState { copy(httpInspectorAvailable = httpInspector.isAvailable) }
@@ -102,7 +109,79 @@ class ProfileViewModel @Inject constructor(
                 currentState.confirmRevoke?.let { session -> revoke(session) }
 
             is ProfileEvent.SessionTrustToggled -> setTrusted(event.session, event.trusted)
+
+            is ProfileEvent.AvatarPicked -> uploadAvatar(event.source)
+
+            ProfileEvent.AvatarUploadCancelled -> cancelAvatarUpload()
         }
+    }
+
+    /**
+     * Фото профиля (issue #101): сжать, отправить, запомнить адрес.
+     *
+     * **Адрес сохраняется только локально**, и это не выбор клиента: у бэкенда
+     * нет ни `PUT /users/me`, ни другой ручки, которой можно сообщить аватар
+     * (`UserInfo.avatarUrl` он отдаёт, но принимать не умеет — проверено по
+     * полной схеме). Значит после следующего входа профиль перезапишется
+     * ответом сервера, и адрес пропадёт вместе с ним. Сам файл при этом
+     * остаётся на сервере и числится за загрузившим (`ownerId`).
+     *
+     * `entityId` — id пользователя, когда он известен: по нему загруженное
+     * потом находится (`GET media/entity/{id}`). `entityType` не отправляется:
+     * словаря его значений в схеме нет, а выдуманное значение бэкенд запомнит,
+     * и разбирать это придётся руками.
+     */
+    private fun uploadAvatar(source: String) {
+        if (currentState.avatarUpload.inProgress) return
+        updateState { copy(avatarUpload = AvatarUpload(inProgress = true)) }
+        avatarJob = viewModelScope.launch {
+            val result = mediaRepository.uploadImage(
+                source = source,
+                entityId = currentState.profile.id?.takeIf { it.isNotBlank() },
+                // Прогресс приезжает с потока OkHttp; updateState на
+                // MutableStateFlow потокобезопасен.
+                onProgress = { percent ->
+                    updateState { copy(avatarUpload = avatarUpload.copy(percent = percent)) }
+                },
+            )
+            when (result) {
+                is ApiResult.Success -> {
+                    saveAvatar(result.data.url)
+                    updateState { copy(avatarUpload = AvatarUpload()) }
+                }
+
+                is ApiResult.Failure -> updateState {
+                    copy(avatarUpload = AvatarUpload(failure = result.failure))
+                }
+            }
+            avatarJob = null
+        }
+    }
+
+    /**
+     * Профиль перечитывается перед записью, а не берётся из состояния экрана:
+     * `save` пишет все поля разом, и запись по устаревшему снимку стёрла бы
+     * имя или номер, приехавшие, пока шла загрузка.
+     *
+     * Отказ хранилища не отменяет загрузку: файл на сервере уже лежит, а
+     * молчаливая ошибка записи уходит в отчёты (issue #74).
+     */
+    private suspend fun saveAvatar(url: String) {
+        runCatchingCancellable {
+            val stored: UserProfile = userProfileStore.current()
+            userProfileStore.save(stored.copy(avatarUrl = url))
+        }.reportSwallowed("profile.saveAvatar")
+    }
+
+    /**
+     * Отмена: корутина снимается, Retrofit обрывает вызов, недописанное тело
+     * до сервера не доезжает. Состояние сбрасывается здесь — отменённая
+     * корутина до своего `when` уже не дойдёт.
+     */
+    private fun cancelAvatarUpload() {
+        avatarJob?.cancel()
+        avatarJob = null
+        updateState { copy(avatarUpload = AvatarUpload()) }
     }
 
     /**

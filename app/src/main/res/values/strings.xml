@@ -593,4 +593,15 @@
     <string name="appointment_status_completed">Tugadi</string>
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
+
+    <!-- Загрузка изображений (issue #101) -->
+    <string name="profile_avatar_title">Profil rasmi</string>
+    <string name="profile_avatar_present">Rasm yuklangan</string>
+    <string name="profile_avatar_absent">Rasm hali yuklanmagan</string>
+    <string name="profile_avatar_pick">Rasm tanlash</string>
+    <string name="profile_avatar_replace">Rasmni almashtirish</string>
+    <string name="profile_avatar_uploading">Yuklanmoqda: %1$d%%</string>
+    <string name="media_error_unreadable">Faylni ochib bo\'lmadi. Boshqa rasm tanlang.</string>
+    <string name="media_error_unsupported">Bu fayl rasm emas. JPEG, PNG yoki WebP tanlang.</string>
+    <string name="media_error_too_large">Rasm juda katta. Kichikroq rasm tanlang.</string>
 </resources>

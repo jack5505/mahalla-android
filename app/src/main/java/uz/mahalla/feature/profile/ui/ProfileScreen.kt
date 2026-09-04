@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,6 +58,8 @@ import uz.mahalla.core.ui.userMessage
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.media.ui.mediaMessage
+import uz.mahalla.feature.media.ui.rememberPhotoPicker
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
 import uz.mahalla.feature.role.domain.UserRole
@@ -112,6 +115,13 @@ fun ProfileScreen(
         viewModel.onEvent(ProfileEvent.ScreenResumed)
     }
 
+    // Photo picker живёт здесь, а не в ProfileContentScreen: в превью реестра
+    // результатов активити нет, и `rememberLauncherForActivityResult` там
+    // упал бы (issue #101).
+    val pickAvatar = rememberPhotoPicker { source ->
+        viewModel.onEvent(ProfileEvent.AvatarPicked(source))
+    }
+
     ProfileContentScreen(
         state = state,
         onEvent = viewModel::onEvent,
@@ -120,6 +130,7 @@ fun ProfileScreen(
         onOpenMyAppointments = onOpenMyAppointments,
         modifier = modifier,
         onChangeServer = onChangeServer,
+        onPickAvatar = pickAvatar,
     )
 }
 
@@ -134,6 +145,7 @@ fun ProfileContentScreen(
     onOpenMyAppointments: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
+    onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.profile_title))
@@ -146,6 +158,13 @@ fun ProfileContentScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             ProfileHeader(profile = state.profile)
+
+            AvatarUploadSection(
+                upload = state.avatarUpload,
+                hasPhoto = !state.profile.avatarUrl.isNullOrBlank(),
+                onPick = onPickAvatar,
+                onCancel = { onEvent(ProfileEvent.AvatarUploadCancelled) },
+            )
 
             // Анкеты покупателя и продавца (issue #84). Подпись — текущая
             // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
@@ -320,6 +339,81 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
 }
 
 /**
+ * Фото профиля (issue #101): выбрать снимок, отправить, отменить.
+ *
+ * Самого фото здесь не видно, и это не забывчивость: показывать картинку по
+ * адресу пока нечем — загрузчик изображений это задача #60. Поэтому строка
+ * честно говорит, есть загруженное фото или нет, а появится Coil — в шапке
+ * встанет уже сохранённый `avatarUrl`.
+ *
+ * Прогресс — полоска с процентами, а не крутилка: на медленной связи она
+ * единственное, что отличает работу от зависшего экрана. Кнопка «Отменить»
+ * появляется на её месте — отменить длинную загрузку человек должен мочь, не
+ * закрывая приложение.
+ */
+@Composable
+private fun AvatarUploadSection(
+    upload: AvatarUpload,
+    hasPhoto: Boolean,
+    onPick: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MahallaCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
+            Text(
+                text = stringResource(R.string.profile_avatar_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(
+                    if (hasPhoto) R.string.profile_avatar_present else R.string.profile_avatar_absent,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+
+            if (upload.inProgress) {
+                LinearProgressIndicator(
+                    progress = { upload.percent / PERCENT_SCALE },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(R.string.profile_avatar_uploading, upload.percent),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
+                MahallaButton(
+                    text = stringResource(R.string.action_cancel),
+                    onClick = onCancel,
+                    variant = MahallaButtonVariant.Ghost,
+                )
+            } else {
+                MahallaButton(
+                    text = stringResource(
+                        if (hasPhoto) R.string.profile_avatar_replace else R.string.profile_avatar_pick,
+                    ),
+                    onClick = onPick,
+                    variant = MahallaButtonVariant.Secondary,
+                )
+            }
+
+            upload.failure?.let { failure ->
+                Text(
+                    text = failure.mediaMessage(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                // Клиентский отказ (файл не читается, не влезает) сервер не
+                // видел — подробностей ответа у него нет.
+                failure.server?.let { server -> MahallaErrorDetails(server = server) }
+            }
+        }
+    }
+}
+
+/**
  * Устройства с открытым входом.
  *
  * Состояния разложены руками, а не `ScreenStateHost`: экран прокручивается
@@ -485,6 +579,9 @@ private fun ThemeMode.labelRes(): Int = when (this) {
 }
 
 private val AVATAR_SIZE = 56.dp
+
+/** Проценты загрузки → доля для полоски прогресса. */
+private const val PERCENT_SCALE = 100f
 private const val DEVICE_SKELETONS = 2
 
 @ThemeLanguagePreviews
