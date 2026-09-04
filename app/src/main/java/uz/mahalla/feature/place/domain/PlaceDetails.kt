@@ -2,6 +2,7 @@ package uz.mahalla.feature.place.domain
 
 import androidx.compose.runtime.Immutable
 import uz.mahalla.feature.discovery.domain.Place
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -43,13 +44,40 @@ enum class PlaceAction {
     Route,
 }
 
-/** Что место умеет — приходит с сервера, а не выводится из категории. */
+/**
+ * Что можно сделать в этом месте.
+ *
+ * Флагов `hasQueue`/`hasBooking`/`hasOrdering` в контракте нет вовсе (issue
+ * #53) — у каждой вертикали свой контроллер, и что место умеет, следует из его
+ * категории. До issue #96 это было записано комментарием в `PlaceMappers`, но
+ * не сделано: все три флага оставались `false`, то есть ни одна вертикаль с
+ * карточки места не открывалась.
+ */
 @Immutable
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
     val ordering: Boolean = false,
-)
+) {
+    companion object {
+        /**
+         * Действие включается только там, где его есть чем выполнить.
+         *
+         * Очередь — у мастеров (`BARBER`): у бэкенда это walk-in-контроллер
+         * (`walkin/send`, `walkin/{id}/cancel`, `walkin/barber/dashboard`),
+         * и клиентская половина его сделана в issue #96.
+         *
+         * [ordering] и [booking] остаются выключенными: «Заказать» — это
+         * вертикаль «Еда» (её экраны есть, но включение кнопки вне объёма
+         * issue #96), а брони (контроллер `appointments`) в приложении нет и
+         * кнопка вела бы в никуда.
+         */
+        fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
+            PlaceCategory.Master -> PlaceCapabilities(queue = true)
+            else -> PlaceCapabilities()
+        }
+    }
+}
 
 /**
  * @param authorId id автора с сервера. Единственный признак, по которому свой

@@ -118,6 +118,9 @@ class RoutesSerializationTest {
             serializer<CheckoutRoute>().descriptor.serialName,
             serializer<OrderStatusRoute>().descriptor.serialName,
             serializer<PlaceRoute>().descriptor.serialName,
+            // Очередь (issue #96): аргументы те же, что у меню, — склеенный
+            // serialName увёл бы человека не на тот экран.
+            serializer<QueueRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,
@@ -210,5 +213,19 @@ class RoutesSerializationTest {
             ),
             fields,
         )
+    }
+
+    @Test
+    fun `queue route carries the place and its name`() {
+        // Имя заведения едет маршрутом: в ответе `walkin/send` его нет, а
+        // талон без имени места читается как чужой (issue #96).
+        val descriptor = serializer<QueueRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        val route = QueueRoute(placeId = "p-1")
+        assertEquals(route, json.decodeFromString<QueueRoute>(json.encodeToString(route)))
     }
 }

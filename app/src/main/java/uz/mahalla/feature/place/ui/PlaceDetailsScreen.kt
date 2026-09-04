@@ -84,6 +84,7 @@ fun PlaceDetailsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onOrderClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onQueueClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -110,10 +111,11 @@ fun PlaceDetailsScreen(
                     ),
                 )
 
-                // Заказ — вертикаль «Еда» (эпик 5); очередь и бронь ждут
-                // своих эпиков.
+                // Заказ — вертикаль «Еда» (эпик 5), очередь — walk-in
+                // (issue #96); бронь ждёт своего эпика.
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
                     PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
+                    PlaceAction.Queue -> onQueueClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
             }

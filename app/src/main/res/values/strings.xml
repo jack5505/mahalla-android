@@ -510,4 +510,43 @@
     <string name="action_continue">Davom etish</string>
     <string name="action_save">Saqlash</string>
     <string name="action_done">Tayyor</string>
+
+    <!-- Очередь (walk-in, issue #96) -->
+    <string name="queue_title">Navbat</string>
+    <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
+    <string name="queue_field_name">Ismingiz</string>
+    <string name="queue_field_name_placeholder">Jahongir</string>
+    <string name="queue_field_name_hint">Usta sizni ism bilan chaqiradi.</string>
+    <string name="queue_error_name_required">Ismingizni kiriting</string>
+    <string name="queue_field_service">Xizmat</string>
+    <string name="queue_field_service_placeholder">Soch olish</string>
+    <string name="queue_field_service_hint">Majburiy emas: nima kerakligini yozsangiz, usta oldindan tayyorlanadi.</string>
+    <string name="queue_submit">Navbat olish</string>
+    <string name="queue_ticket_title">Sizning navbatingiz</string>
+    <string name="queue_ticket_service">Xizmat: %1$s</string>
+    <string name="queue_ticket_note">Ustaning izohi: %1$s</string>
+    <string name="queue_ticket_counter_time">Usta %1$s vaqtini taklif qiladi</string>
+    <string name="queue_ticket_as_of">Holat %1$s dagi ma\'lumot bo\'yicha</string>
+    <string name="queue_ticket_notice">Usta javob bersa, xabar bildirishnomalarga keladi.</string>
+    <string name="queue_open_notifications">Bildirishnomalarni ochish</string>
+    <string name="queue_position_label">Navbatdagi o\'rningiz</string>
+    <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
+    <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
+    <string name="queue_wait_label">Taxminiy kutish: %1$s</string>
+    <string name="queue_wait_hours">%1$s soat</string>
+    <string name="queue_cancel">Navbatni bekor qilish</string>
+    <string name="queue_cancel_keep">Qoldirish</string>
+    <string name="queue_cancel_confirm_title">Navbatni bekor qilasizmi?</string>
+    <string name="queue_cancel_confirm_description">O\'rningiz boshqa mijozga o\'tadi, qayta yozilish kerak bo\'ladi.</string>
+    <string name="queue_status_pending">Tasdiqlash kutilmoqda</string>
+    <string name="queue_status_accepted">Usta tasdiqladi</string>
+    <string name="queue_status_declined">Usta rad etdi</string>
+    <string name="queue_status_counter_offered">Boshqa vaqt taklif qilindi</string>
+    <string name="queue_status_waiting">Navbatda</string>
+    <string name="queue_status_in_chair">Xizmat boshlandi</string>
+    <string name="queue_status_completed">Tugadi</string>
+    <string name="queue_status_cancelled">Bekor qilindi</string>
+    <string name="queue_status_no_show">Kelmadingiz</string>
+    <string name="queue_status_expired">Muddati o\'tdi</string>
+    <string name="queue_status_unknown">Holati aniq emas</string>
 </resources>

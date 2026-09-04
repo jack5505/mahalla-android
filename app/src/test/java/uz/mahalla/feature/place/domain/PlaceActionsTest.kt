@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.feature.discovery.domain.GeoPoint
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.testutil.place
 
 /** Действия карточки (эпик 4.4): показываем только выполнимое. */
@@ -94,5 +95,39 @@ class PlaceActionsTest {
         )
 
         assertEquals(listOf(PlaceAction.Queue, PlaceAction.Route), details.actions)
+    }
+
+    @Test
+    fun `queue is offered to barbers and nothing is offered to the rest`() {
+        // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
+        // следует из категории, и до issue #96 ни одна из них не включалась.
+        assertEquals(
+            PlaceCapabilities(queue = true),
+            PlaceCapabilities.of(PlaceCategory.Master),
+        )
+
+        listOf(
+            PlaceCategory.Food,
+            PlaceCategory.Pharmacy,
+            PlaceCategory.Hospital,
+            PlaceCategory.Cinema,
+            PlaceCategory.Playground,
+            PlaceCategory.Other,
+        ).forEach {
+            // Кнопка, ведущая в никуда, хуже отсутствующей: экранов брони в
+            // приложении нет, а «Заказать» — вне объёма issue #96.
+            assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
+        }
+    }
+
+    @Test
+    fun `a barber card shows taking a ticket as the primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Master),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        assertEquals(PlaceAction.Queue, PlaceActions.primary(actions))
     }
 }

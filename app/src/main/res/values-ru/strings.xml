@@ -504,4 +504,43 @@
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
     <string name="action_done">Готово</string>
+
+    <!-- Очередь (walk-in, issue #96) -->
+    <string name="queue_title">Очередь</string>
+    <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
+    <string name="queue_field_name">Ваше имя</string>
+    <string name="queue_field_name_placeholder">Жахонгир</string>
+    <string name="queue_field_name_hint">Мастер зовёт по имени.</string>
+    <string name="queue_error_name_required">Введите имя</string>
+    <string name="queue_field_service">Услуга</string>
+    <string name="queue_field_service_placeholder">Стрижка</string>
+    <string name="queue_field_service_hint">Необязательно: если написать, мастер подготовится заранее.</string>
+    <string name="queue_submit">Взять талон</string>
+    <string name="queue_ticket_title">Ваш талон</string>
+    <string name="queue_ticket_service">Услуга: %1$s</string>
+    <string name="queue_ticket_note">Комментарий мастера: %1$s</string>
+    <string name="queue_ticket_counter_time">Мастер предлагает %1$s</string>
+    <string name="queue_ticket_as_of">Состояние на %1$s</string>
+    <string name="queue_ticket_notice">Когда мастер ответит, сообщение придёт в уведомления.</string>
+    <string name="queue_open_notifications">Открыть уведомления</string>
+    <string name="queue_position_label">Ваше место в очереди</string>
+    <string name="queue_position_unknown">Место появится, когда мастер подтвердит запись.</string>
+    <string name="queue_position_outdated">Очередь могла измениться: дождитесь следующего сообщения.</string>
+    <string name="queue_wait_label">Примерное ожидание: %1$s</string>
+    <string name="queue_wait_hours">%1$s ч</string>
+    <string name="queue_cancel">Отменить запись</string>
+    <string name="queue_cancel_keep">Оставить</string>
+    <string name="queue_cancel_confirm_title">Отменить запись?</string>
+    <string name="queue_cancel_confirm_description">Место уйдёт другому клиенту, записываться придётся заново.</string>
+    <string name="queue_status_pending">Ждём подтверждения</string>
+    <string name="queue_status_accepted">Мастер подтвердил</string>
+    <string name="queue_status_declined">Мастер отказал</string>
+    <string name="queue_status_counter_offered">Предложено другое время</string>
+    <string name="queue_status_waiting">В очереди</string>
+    <string name="queue_status_in_chair">Обслуживание началось</string>
+    <string name="queue_status_completed">Завершено</string>
+    <string name="queue_status_cancelled">Отменено</string>
+    <string name="queue_status_no_show">Вы не пришли</string>
+    <string name="queue_status_expired">Срок истёк</string>
+    <string name="queue_status_unknown">Состояние неизвестно</string>
 </resources>

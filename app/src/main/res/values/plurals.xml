@@ -49,4 +49,10 @@
         <item quantity="other">Kamida %1$d belgi kiriting</item>
     </plurals>
 
+    <!-- Очередь (issue #96): примерное ожидание до часа. -->
+    <plurals name="queue_wait_minutes">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+
 </resources>
