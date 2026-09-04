@@ -50,6 +50,9 @@ import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.DataStoreRoleRepository
+import uz.mahalla.feature.queue.data.DataStoreWalkInTicketStore
+import uz.mahalla.feature.queue.data.DefaultWalkInRepository
+import uz.mahalla.feature.queue.data.di.QueueDataModule
 import uz.mahalla.feature.role.data.DefaultProviderRepository
 import uz.mahalla.feature.role.data.di.RoleDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
@@ -317,6 +320,34 @@ class GraphAssemblyTest {
             DataStoreRoleRepository(
                 settings = SettingsDataStore(dataStore),
                 profileStore = DataStoreUserProfileStore(dataStore),
+            ),
+        )
+    }
+
+    /**
+     * Очередь (issue #96): `walkin/send` и `walkin/{id}/cancel` требуют Bearer
+     * — значит API собирается на **основном** Retrofit. Взятый талон живёт в
+     * DataStore, потому что прочитать его у бэкенда нечем.
+     */
+    @Test
+    fun `queue assembles on the main retrofit and the data store`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = QueueDataModule.provideWalkInApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(
+            DefaultWalkInRepository(
+                api = api,
+                store = DataStoreWalkInTicketStore(
+                    dataStore = sharedDataStore(context),
+                    clock = AppModule.provideClock(),
+                ),
+                clock = AppModule.provideClock(),
             ),
         )
     }

@@ -211,6 +211,21 @@ data object MyPlacesRoute
 @Serializable
 data class PlaceRoute(val placeId: String)
 
+// --- Вертикаль «Очередь» (эпик #10, issue #96) ---
+
+/**
+ * Электронная очередь заведения: взять талон и следить за ним.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что
+ * и у [MenuRoute]: ответ `walkin/send` его не содержит, а талон без имени
+ * места читается как чужой.
+ */
+@Serializable
+data class QueueRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 
 @Serializable

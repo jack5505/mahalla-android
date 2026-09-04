@@ -31,6 +31,7 @@ import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.queue.ui.QueueScreen
 import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
@@ -388,6 +389,21 @@ fun MahallaNavHost(
                 onOrderClick = { placeId, placeName ->
                     navController.navigate(MenuRoute(placeId, placeName))
                 },
+                // Очередь (issue #96): у мастеров это главное действие
+                // карточки.
+                onQueueClick = { placeId, placeName ->
+                    navController.navigate(QueueRoute(placeId, placeName))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки
+        // места, а о решении мастера сообщают уведомления — поэтому с экрана
+        // талона есть путь в их центр.
+        composable<QueueRoute> {
+            QueueScreen(
+                onOpenNotifications = { navController.navigate(NotificationsRoute) },
                 onBack = { navController.navigateUp() },
             )
         }

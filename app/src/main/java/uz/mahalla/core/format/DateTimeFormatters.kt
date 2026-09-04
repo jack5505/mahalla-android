@@ -1,6 +1,7 @@
 package uz.mahalla.core.format
 
 import java.time.Instant
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -30,6 +31,13 @@ object DateTimeFormatters {
 
     fun dateTime(instant: Instant, zone: ZoneId = AppZone): String =
         dateTimePattern.format(instant.atZone(zone))
+
+    /**
+     * Время без даты — то, что бэкенд отдаёт как `LocalTime`: например время,
+     * которое мастер предложил вместо запрошенного (issue #96). Зоны здесь нет
+     * по построению: это уже местное время заведения.
+     */
+    fun time(value: LocalTime): String = timePattern.format(value)
 
     /**
      * Ожидание в очереди: до часа — минуты (`12`), дальше — `ч:мм` (`1:05`).

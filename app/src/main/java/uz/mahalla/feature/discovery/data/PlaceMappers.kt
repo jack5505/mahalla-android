@@ -7,6 +7,7 @@ import uz.mahalla.feature.discovery.domain.GeoDistance
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
@@ -80,13 +81,16 @@ fun PlaceDetailDto.toDomain(from: DeviceLocation? = null): Place {
 /**
  * Карточка. Расписания бэкенд не отдаёт (`hours` пуст), а вертикали —
  * очередь, бронь, заказ — определяются категорией: у каждой из них свой
- * контроллер (`food/…/menu`, `barber-services/…`, `gaming/…/zones`).
+ * контроллер (`food/…/menu`, `walkin/…`, `gaming/…/zones`). Правило живёт в
+ * [PlaceCapabilities.of] — до issue #96 оно было здесь только комментарием, и
+ * ни одно действие вертикали на карточке не появлялось.
  */
 fun PlaceDetailDto.toDetails(
     reviews: List<Review> = emptyList(),
     from: DeviceLocation? = null,
 ): PlaceDetails = PlaceDetails(
     place = toDomain(from),
+    capabilities = PlaceCapabilities.of(PlaceCategory.fromApi(category)),
     description = description?.takeIf(String::isNotBlank),
     // Обложка первой: логотип это иконка, а не фотография заведения.
     photos = listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct(),
@@ -152,6 +156,9 @@ fun PlaceEntity.toDomain(): Place = Place(
  */
 fun PlaceEntity.toCachedDetails(): PlaceDetails = PlaceDetails(
     place = toDomain(),
+    // Категория лежит и в кэше, а очередь — единственное действие, которому
+    // хватает одного `placeId`: записаться можно и с карточки без сети.
+    capabilities = PlaceCapabilities.of(PlaceCategory.fromApi(category)),
     description = description,
     photos = listOfNotNull(photoUrl),
     contacts = PlaceContacts(phone = phone, website = website, address = address),
