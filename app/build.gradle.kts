@@ -259,6 +259,10 @@ dependencies {
     // Карта (эпик 4.2). Инициализация — ленивая, из MapKitInitializer.
     implementation(libs.yandex.mapkit)
 
+    // Картинки (issue #60). ImageLoader собирается в графе и ходит по тому же
+    // OkHttp, что и остальное приложение, — см. MahallaImageLoader.
+    implementation(libs.coil.compose)
+
     // Отчёты о падениях (issue #74). Автозапуск через ContentProvider выключен
     // в манифесте: SDK поднимается из MahallaApplication, чтобы решение «слать
     // или не слать» принималось одним местом (CrashReportingConfig), а событие

@@ -416,6 +416,10 @@
     <string name="day_saturday">Суббота</string>
     <string name="day_sunday">Воскресенье</string>
 
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">Аватар: %1$s</string>
+    <string name="image_gallery_of">Фотографии: %1$s</string>
+
     <!-- Анкеты покупателя и продавца (issue #84) -->
     <string name="role_title">Кем вы пользуетесь приложением?</string>
     <string name="role_subtitle">Это можно изменить позже в профиле.</string>

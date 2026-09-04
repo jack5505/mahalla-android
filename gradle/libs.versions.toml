@@ -25,6 +25,10 @@ biometric = "1.1.0"
 # маркеры, кластеризация, слой «моё местоположение». Search/Routing/Panorama
 # из варианта full приложению пока не нужны и тянут лишние мегабайты.
 yandexMapkit = "4.42.0-lite"
+# Coil 2.x (issue #60) — загрузчик изображений для Compose. Третья ветка тянет
+# собственный сетевой модуль и Compose Multiplatform; здесь нужен ровно
+# Android + OkHttp, который в проекте уже настроен.
+coil = "2.7.0"
 # Отчёты о падениях (issue #74) — Sentry, а не Crashlytics: Crashlytics
 # работает через Google Play Services, а устройства без сервисов Google в
 # Узбекистане обычны (та же причина, по которой в эпике 4.2 выбран Yandex
@@ -68,6 +72,7 @@ okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-i
 chucker = { group = "com.github.chuckerteam.chucker", name = "library", version.ref = "chucker" }
 chucker-no-op = { group = "com.github.chuckerteam.chucker", name = "library-no-op", version.ref = "chucker" }
 yandex-mapkit = { group = "com.yandex.android", name = "maps.mobile", version.ref = "yandexMapkit" }
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 sentry-android-core = { group = "io.sentry", name = "sentry-android-core", version.ref = "sentry" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
