@@ -34,6 +34,7 @@ import uz.mahalla.feature.profile.ui.ProfileScreen
 import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
+import uz.mahalla.feature.role.ui.places.MyPlacesScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
@@ -231,6 +232,8 @@ fun MahallaNavHost(
                     // «Кто вы» и анкеты (issue #84): в онбординге шаг можно
                     // было пропустить, а роль потом меняется.
                     onOpenRole = { navController.navigate(RoleRoute()) },
+                    // «Мои заведения» (issue #94): судьба заявки продавца.
+                    onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -312,6 +315,21 @@ fun MahallaNavHost(
                         }
                     }
                 },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // «Мои заведения» (issue #94) — вне обоих графов, как центр
+        // уведомлений: открывается строкой из профиля, возврат ведёт туда же.
+        composable<MyPlacesRoute> {
+            MyPlacesScreen(
+                // Карточка в каталоге есть только у того, что модерация
+                // пропустила: экран сам не даст нажать на заявку `PENDING`.
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                // Зарегистрировать ещё одно (или первое) — та же анкета
+                // продавца, что и из «Моей анкеты». Возврат из неё приведёт
+                // назад в список, где заявка уже будет видна.
+                onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
                 onBack = { navController.navigateUp() },
             )
         }

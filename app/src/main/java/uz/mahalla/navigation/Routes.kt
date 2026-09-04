@@ -196,6 +196,16 @@ data class CustomerFormRoute(val onboarding: Boolean = false)
 @Serializable
 data class ProviderFormRoute(val onboarding: Boolean = false)
 
+/**
+ * «Мои заведения» со статусом модерации (issue #94). Вне обоих графов, как
+ * центр уведомлений: открывается строкой из профиля, а возврат ведёт туда же.
+ *
+ * Аргументов нет: список грузится целиком, а конкретное заведение ведёт на
+ * свою карточку в каталоге ([PlaceRoute]).
+ */
+@Serializable
+data object MyPlacesRoute
+
 // --- Детали ---
 
 @Serializable

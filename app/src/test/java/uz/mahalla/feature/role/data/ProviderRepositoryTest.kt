@@ -20,6 +20,7 @@ import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.ProviderForm
 import uz.mahalla.testutil.FakeLocationSource
+import uz.mahalla.testutil.FakeRequestLocationProvider
 
 /**
  * Заявка продавца (issue #84) на настоящем сетевом стеке ([NetworkFactory] +
@@ -35,6 +36,7 @@ class ProviderRepositoryTest {
 
     private lateinit var server: MockWebServer
     private val locationSource = FakeLocationSource()
+    private val requestLocation = FakeRequestLocationProvider()
 
     @Before
     fun setUp() {
@@ -211,6 +213,7 @@ class ProviderRepositoryTest {
             )
             .create(ProviderApi::class.java),
         locationSource = locationSource,
+        requestLocation = requestLocation,
         phoneValidator = PhoneNumberValidator(),
     )
 

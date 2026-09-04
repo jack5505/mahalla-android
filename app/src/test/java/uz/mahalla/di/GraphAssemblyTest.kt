@@ -306,6 +306,10 @@ class GraphAssemblyTest {
             DefaultProviderRepository(
                 api = api,
                 locationSource = AndroidLocationSource(context),
+                // «Мои заведения» (issue #94): переключатель доступности
+                // отправляет координаты устройства той же лестницей, что и
+                // запросы авторизации.
+                requestLocation = locationProvider(context),
                 phoneValidator = PhoneNumberValidator(),
             ),
         )

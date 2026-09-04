@@ -487,6 +487,25 @@
     <string name="role_error_phone_invalid">Telefon raqamini to\'liq kiriting</string>
     <string name="role_error_website_invalid">Sayt manzili noto\'g\'ri. Masalan: mahalla.uz</string>
 
+    <!-- Мои заведения (issue #94) -->
+    <string name="my_places_title">Mening muassasalarim</string>
+    <string name="my_places_profile_subtitle">Arizalar va moderatsiya holati</string>
+    <string name="my_places_empty_title">Muassasa yo\'q</string>
+    <string name="my_places_empty_description">Muassasani ro\'yxatdan o\'tkazing — ariza moderatsiyaga tushadi.</string>
+    <string name="my_places_register">Muassasani ro\'yxatdan o\'tkazish</string>
+    <string name="my_places_unnamed">Nomsiz muassasa</string>
+    <string name="my_places_available">Hozir ochiq</string>
+    <string name="my_places_available_description">O\'chirilsa, muassasa katalogda yopiq ko\'rinadi.</string>
+    <string name="my_places_status_pending">Moderatsiyada</string>
+    <string name="my_places_status_active">Faol</string>
+    <string name="my_places_status_suspended">To\'xtatilgan</string>
+    <string name="my_places_status_closed">Yopilgan</string>
+    <string name="my_places_status_unknown">Holati aniq emas</string>
+    <string name="my_places_status_pending_hint">Ariza tekshirilmoqda: muassasa katalogda tekshiruvdan keyin ko\'rinadi.</string>
+    <string name="my_places_status_suspended_hint">Muassasa to\'xtatilgan. Sababini bilish uchun qo\'llab-quvvatlashga murojaat qiling.</string>
+    <string name="my_places_role_manager">Siz bu yerda menejersiz</string>
+    <string name="my_places_role_staff">Siz bu yerda xodimsiz: sozlamalarni egasi o\'zgartiradi</string>
+
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Davom etish</string>
     <string name="action_save">Saqlash</string>

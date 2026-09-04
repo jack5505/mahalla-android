@@ -161,6 +161,8 @@ class RoutesSerializationTest {
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
             serializer<NotificationsRoute>().descriptor.serialName,
+            // «Мои заведения» (issue #94): вне обоих графов, как уведомления.
+            serializer<MyPlacesRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
