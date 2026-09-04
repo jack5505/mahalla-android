@@ -40,6 +40,8 @@ import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
+import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.di.ActivityDataModule
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
@@ -283,6 +285,24 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * «Мои активности» (issue #73) — пять источников на **основном** Retrofit:
+     * все они требуют Bearer, а «голый» `@RefreshClient` его не ставит.
+     */
+    @Test
+    fun `activities assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = ActivityDataModule.provideActivityApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultActivityRepository(api))
     }
 
     /**

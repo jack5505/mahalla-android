@@ -122,8 +122,6 @@
 
     <!-- Основные разделы -->
     <string name="discovery_title">Рядом</string>
-    <string name="orders_title">Заказы</string>
-    <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
     <string name="wallet_title">Кошелёк</string>
     <string name="wallet_available">Можно потратить</string>
     <string name="wallet_balance_total">На счету</string>
@@ -468,4 +466,46 @@
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
     <string name="action_done">Готово</string>
+
+    <!-- Мои активности (issue #73) -->
+    <string name="activity_title">Мои активности</string>
+    <string name="activity_filter_active">Активные</string>
+    <string name="activity_filter_history">История</string>
+    <string name="activity_empty_title">Здесь пока пусто</string>
+    <string name="activity_empty_description">Заказы, брони, очереди и билеты будут собираться здесь.</string>
+    <string name="activity_empty_action">Посмотреть, что рядом</string>
+    <string name="activity_empty_active_title">Активных нет</string>
+    <string name="activity_empty_active_description">Все заказы и брони завершены — они во вкладке «История».</string>
+    <string name="activity_empty_history_title">История пуста</string>
+    <string name="activity_empty_history_description">Завершённые заказы и брони попадут сюда.</string>
+    <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
+    <string name="activity_source_failed">Не удалось загрузить: %1$s</string>
+    <string name="activity_source_orders">заказы</string>
+    <string name="activity_source_gaming_bookings">брони игровых зон</string>
+    <string name="activity_source_master_appointments">записи к мастеру</string>
+    <string name="activity_source_doctor_appointments">записи к врачу</string>
+    <string name="activity_source_cinema_tickets">билеты в кино</string>
+    <!-- Вид активности: названия заведения бэкенд не отдаёт ни в одном ответе -->
+    <string name="activity_kind_food_order">Заказ еды</string>
+    <string name="activity_kind_clothing_order">Заказ одежды</string>
+    <string name="activity_kind_pharmacy_order">Заказ в аптеке</string>
+    <string name="activity_kind_cinema_order">Заказ в кино</string>
+    <string name="activity_kind_gaming_order">Заказ в игровой зоне</string>
+    <string name="activity_kind_other_order">Заказ</string>
+    <string name="activity_kind_gaming_booking">Бронь игровой зоны</string>
+    <string name="activity_kind_master_appointment">Запись к мастеру</string>
+    <string name="activity_kind_doctor_appointment">Запись к врачу</string>
+    <string name="activity_kind_cinema_ticket">Билет в кино</string>
+    <!-- Общий вид статусов пяти источников -->
+    <string name="activity_status_placed">Принят</string>
+    <string name="activity_status_confirmed">Подтверждён</string>
+    <string name="activity_status_in_progress">Выполняется</string>
+    <string name="activity_status_ready">Готово</string>
+    <string name="activity_status_on_the_way">В пути</string>
+    <string name="activity_status_completed">Выполнен</string>
+    <string name="activity_status_cancelled">Отменён</string>
+    <string name="activity_status_refunded">Возврат</string>
+    <string name="activity_status_missed">Не пришли</string>
+    <string name="activity_status_unknown">В работе</string>
+    <string name="activity_no_date">Дата не указана</string>
 </resources>
