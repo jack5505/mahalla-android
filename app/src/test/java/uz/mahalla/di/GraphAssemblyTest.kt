@@ -51,6 +51,8 @@ import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.di.HospitalDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
+import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
+import uz.mahalla.feature.promotions.data.di.PromotionsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.DataStoreRoleRepository
@@ -290,6 +292,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * Акции (issue #104) — тоже на **основном** Retrofit: обе читающие ручки
+     * анонимны, но им нужны гео-заголовки, а разводить их по двум клиентам
+     * ради отсутствующего `Authorization` незачем.
+     */
+    @Test
+    fun `promotions assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = PromotionsDataModule.providePromotionsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultPromotionsRepository(api))
     }
 
     /**

@@ -67,6 +67,8 @@ import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.feature.promotions.domain.Promotion
+import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import java.time.DayOfWeek
@@ -202,6 +204,8 @@ private fun DetailsList(
         if (details.actions.isNotEmpty()) {
             item(key = "actions") { Actions(actions = details.actions, onEvent = onEvent) }
         }
+
+        promotions(promotions = state.promotions)
 
         if (!details.description.isNullOrBlank()) {
             item(key = "description") {
@@ -392,6 +396,24 @@ private fun LazyListScope.contacts(
                 onClick = { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call)) },
             )
         }
+    }
+}
+
+/**
+ * Акции заведения (issue #104). Секции нет, пока акций нет: заголовок над
+ * пустотой обещает скидку, которой не существует.
+ *
+ * Карточки здесь не нажимаются: вести им некуда — заведение уже открыто, а
+ * экрана самой акции в приложении нет.
+ */
+private fun LazyListScope.promotions(promotions: List<Promotion>) {
+    if (promotions.isEmpty()) return
+
+    item(key = "promotions-header") {
+        SectionHeader(title = stringResource(R.string.promotions_title))
+    }
+    items(items = promotions, key = { "promotion-${it.id}" }) { promotion ->
+        PromotionCard(promotion = promotion)
     }
 }
 
