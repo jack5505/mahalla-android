@@ -1,5 +1,6 @@
 package uz.mahalla.feature.notifications.ui
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -202,6 +203,168 @@ class NotificationsViewModelTest {
         assertFalse((state.items as ScreenState.Content).data.single().isRead)
         assertEquals(1, state.unreadCount)
         assertFalse(state.isMarkingRead)
+    }
+
+    @Test
+    fun `an opened notification is marked read in place and the badge drops by one`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(
+            listOf(notification("n-1"), notification("n-2")),
+            hasMore = false,
+        )
+        repository.unreadCount = ApiResult.Success(2)
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        val state = viewModel.state.value
+        val items = (state.items as ScreenState.Content).data
+        assertTrue(items.single { it.id == "n-1" }.isRead)
+        // Соседнее уведомление не трогаем: прочитали одно.
+        assertFalse(items.single { it.id == "n-2" }.isRead)
+        assertEquals(1, state.unreadCount)
+        assertEquals(listOf("n-1"), repository.markReadIds)
+        assertNull(state.actionFailure)
+        // Перезапроса нет: он сбросил бы догруженный хвост к первой странице.
+        assertEquals(listOf(0), repository.requestedPages)
+    }
+
+    @Test
+    fun `a notification without a target is marked read too`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(
+            listOf(notification("n-1", type = NotificationType.PromotionCreated, entityId = null)),
+            hasMore = false,
+        )
+        repository.unreadCount = ApiResult.Success(1)
+        val viewModel = NotificationsViewModel(repository)
+
+        // Уведомление остаётся текстом в списке, но человек его уже прочёл.
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        assertEquals(listOf("n-1"), repository.markReadIds)
+        assertEquals(0, viewModel.state.value.unreadCount)
+    }
+
+    @Test
+    fun `an already read notification is not sent to the server again`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(
+            listOf(notification("n-1", isRead = true)),
+            hasMore = false,
+        )
+        val viewModel = NotificationsViewModel(repository)
+
+        // Второй тап по прочитанному — и по только что прочитанному тоже:
+        // гасить погашенное незачем.
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        assertTrue(repository.markReadIds.isEmpty())
+    }
+
+    @Test
+    fun `a second tap does not send a second mark read request`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
+        repository.unreadCount = ApiResult.Success(1)
+        val gate = CompletableDeferred<Unit>()
+        repository.markReadGate = gate
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+        // Ответ ещё не пришёл, а человек нажал второй раз: на экране строка
+        // уже прочитана, гасить её повторно нечем.
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+        gate.complete(Unit)
+
+        assertEquals(listOf("n-1"), repository.markReadIds)
+        assertEquals(0, viewModel.state.value.unreadCount)
+    }
+
+    @Test
+    fun `a failed mark read rolls the notification back and explains itself`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
+        repository.unreadCount = ApiResult.Success(1)
+        repository.markRead = ApiResult.Failure(
+            ApiFailure(
+                error = ApiError.Http(500, "Internal Server Error"),
+                server = ServerError(httpCode = 500, message = "Xatolik yuz berdi"),
+            ),
+        )
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        val state = viewModel.state.value
+        assertFalse((state.items as ScreenState.Content).data.single().isRead)
+        assertEquals(1, state.unreadCount)
+        assertEquals("Xatolik yuz berdi", state.actionFailure?.serverMessage)
+    }
+
+    @Test
+    fun `a failed mark read is retried by the same notification`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
+        repository.unreadCount = ApiResult.Success(1)
+        repository.markRead = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = NotificationsViewModel(repository)
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        repository.markRead = ApiResult.Success(Unit)
+        viewModel.onEvent(NotificationsEvent.RetryAction)
+
+        val state = viewModel.state.value
+        assertTrue((state.items as ScreenState.Content).data.single().isRead)
+        assertEquals(0, state.unreadCount)
+        assertNull(state.actionFailure)
+        assertEquals(listOf("n-1", "n-1"), repository.markReadIds)
+        // Повтор отметки одного уведомления не превращается в «прочитать всё».
+        assertEquals(0, repository.markAllReadCalls)
+    }
+
+    @Test
+    fun `a failed mark all read is retried by the same button`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
+        repository.unreadCount = ApiResult.Success(1)
+        repository.markAllRead = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = NotificationsViewModel(repository)
+        viewModel.onEvent(NotificationsEvent.MarkAllRead)
+
+        repository.markAllRead = ApiResult.Success(Unit)
+        viewModel.onEvent(NotificationsEvent.RetryAction)
+
+        assertEquals(2, repository.markAllReadCalls)
+        assertTrue(repository.markReadIds.isEmpty())
+        assertEquals(0, viewModel.state.value.unreadCount)
+    }
+
+    @Test
+    fun `a late failure does not resurrect what the server already called read`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
+        repository.unreadCount = ApiResult.Success(1)
+        repository.markRead = ApiResult.Failure(ApiError.NoConnection)
+        val gate = CompletableDeferred<Unit>()
+        repository.markReadGate = gate
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+        // Пока отказ ехал, список перезапросили — и сервер сказал, что
+        // уведомление прочитано. Откат вернул бы бейдж вверх на пустом месте.
+        repository.defaultPage = page(listOf(notification("n-1", isRead = true)), hasMore = false)
+        repository.unreadCount = ApiResult.Success(0)
+        repository.markReadGate = null
+        viewModel.onEvent(NotificationsEvent.ScreenResumed)
+        gate.complete(Unit)
+
+        val state = viewModel.state.value
+        assertTrue((state.items as ScreenState.Content).data.single().isRead)
+        assertEquals(0, state.unreadCount)
+        // Причина отказа при этом всё равно показывается.
+        assertEquals(ApiError.NoConnection, state.actionFailure?.error)
     }
 
     @Test

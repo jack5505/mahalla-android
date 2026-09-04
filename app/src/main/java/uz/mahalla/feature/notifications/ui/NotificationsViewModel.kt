@@ -33,6 +33,25 @@ class NotificationsViewModel @Inject constructor(
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
+    /**
+     * Уведомления, отметку которых сервер ещё не подтвердил. Второй тап по той
+     * же строке нового запроса не заводит: на экране она уже прочитана, а
+     * гасить прочитанное дважды незачем.
+     */
+    private val pendingRead = mutableSetOf<String>()
+
+    /**
+     * Сколько раз состояние «прочитано» переписывалось поверх (перезагрузка
+     * списка или успешное «прочитать всё»). Нужен для откатов: пришедший
+     * позже отказ одиночной отметки не должен возвращать в непрочитанные то,
+     * о чём сервер уже сказал своё слово, — иначе бейдж уехал бы вверх на
+     * пустом месте.
+     */
+    private var readEpoch = 0
+
+    /** Что повторить по [NotificationsEvent.RetryAction]. */
+    private var failedAction: NotificationsEvent? = null
+
     init {
         load()
     }
@@ -51,13 +70,30 @@ class NotificationsViewModel @Inject constructor(
             NotificationsEvent.Retry -> load()
             NotificationsEvent.LoadMore -> loadMore()
             NotificationsEvent.MarkAllRead -> markAllRead()
+            NotificationsEvent.RetryAction -> retryAction()
             is NotificationsEvent.NotificationClicked -> open(event.id)
+        }
+    }
+
+    /**
+     * Повтор отказавшего действия. Отказ без запомненного действия повторять
+     * нечем — строка отказа просто останется на экране, а не превратится в
+     * кнопку, которая ничего не делает.
+     */
+    private fun retryAction() {
+        when (val action = failedAction) {
+            NotificationsEvent.MarkAllRead -> markAllRead()
+            is NotificationsEvent.NotificationClicked -> markRead(action.id)
+            else -> Unit
         }
     }
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadMoreJob?.cancel()
         loadedPage = 0
+        // Дальше «прочитано» приезжает с сервера: откатывать его по чужому
+        // отказу больше нельзя.
+        readEpoch++
         updateState {
             copy(
                 items = if (showLoading) ScreenState.Loading else items,
@@ -150,8 +186,8 @@ class NotificationsViewModel @Inject constructor(
     }
 
     /**
-     * «Прочитать всё». Отдельного эндпоинта «прочитать одно» у бэкенда нет,
-     * поэтому это единственный способ погасить бейдж.
+     * «Прочитать всё» — единственный способ погасить непрочитанное на
+     * страницах, которые ещё не загружены.
      *
      * Загруженные страницы помечаются прочитанными на месте, а не
      * перезапрашиваются: сервер уже подтвердил успех, а полная перезагрузка
@@ -162,20 +198,66 @@ class NotificationsViewModel @Inject constructor(
         updateState { copy(isMarkingRead = true, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.markAllRead()) {
-                is ApiResult.Failure -> updateState {
-                    copy(isMarkingRead = false, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    failedAction = NotificationsEvent.MarkAllRead
+                    updateState { copy(isMarkingRead = false, actionFailure = result.failure) }
                 }
 
-                is ApiResult.Success -> updateState {
-                    copy(
-                        items = (items as? ScreenState.Content)
-                            ?.let { content ->
-                                ScreenState.Content(content.data.map { it.copy(isRead = true) })
-                            }
-                            ?: items,
-                        unreadCount = 0,
-                        isMarkingRead = false,
-                    )
+                is ApiResult.Success -> {
+                    readEpoch++
+                    updateState {
+                        copy(
+                            items = items.withRead(isRead = true),
+                            unreadCount = 0,
+                            isMarkingRead = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Открытое уведомление становится прочитанным (issue #95) — и то, что
+     * ведёт на экран, и то, что остаётся текстом в списке: человек его уже
+     * прочёл, а гасить каждое кнопкой «прочитать всё» значит терять остальные
+     * непрочитанные заодно.
+     *
+     * Отметка на месте, без перезапроса: перезагрузка сбросила бы догруженный
+     * хвост списка к первой странице (то же правило, что у [markAllRead]).
+     * Ответа сервера экран не ждёт — переход и перекраска происходят сразу,
+     * иначе уведомление, по которому только что ушли, встречало бы человека
+     * на обратном пути всё ещё непрочитанным.
+     *
+     * Отказ **виден**: состояние возвращается как было и показывается текст
+     * бэкенда (issue #34). Молча перекрасить обратно значило бы соврать про
+     * бейдж, который на следующем запросе всё равно приедет с сервера.
+     */
+    private fun markRead(id: String) {
+        if (!pendingRead.add(id)) return
+        val epoch = readEpoch
+        updateState {
+            copy(
+                items = items.withRead(id = id, isRead = true),
+                unreadCount = (unreadCount - 1).coerceAtLeast(0),
+                actionFailure = null,
+            )
+        }
+        viewModelScope.launch {
+            val result = repository.markRead(id)
+            pendingRead -= id
+            if (result is ApiResult.Failure) {
+                failedAction = NotificationsEvent.NotificationClicked(id)
+                updateState {
+                    if (epoch == readEpoch) {
+                        copy(
+                            items = items.withRead(id = id, isRead = false),
+                            unreadCount = unreadCount + 1,
+                            actionFailure = result.failure,
+                        )
+                    } else {
+                        copy(actionFailure = result.failure)
+                    }
                 }
             }
         }
@@ -184,16 +266,34 @@ class NotificationsViewModel @Inject constructor(
     /**
      * Переход по уведомлению. Цель разбирает [NotificationTarget]: для типов,
      * у которых экрана ещё нет (очередь, бронь, акции, подписки), эффекта нет
-     * вовсе — строка списка такого уведомления и не кликабельна.
+     * вовсе — такое уведомление просто гасится.
      */
     private fun open(id: String) {
         val notification = (currentState.items as? ScreenState.Content)
             ?.data
             ?.firstOrNull { it.id == id }
             ?: return
+        if (!notification.isRead) markRead(id)
         when (val target = NotificationTarget.of(notification)) {
             is NotificationTarget.Order -> emitEffect(NotificationsEffect.OpenOrder(target.orderId))
             NotificationTarget.None -> Unit
         }
     }
 }
+
+/**
+ * Перекраска «прочитано» в загруженных страницах. `id == null` — все
+ * уведомления списка; состояние, отличное от [ScreenState.Content],
+ * остаётся как есть (гасить нечего).
+ */
+private fun ScreenState<List<AppNotification>>.withRead(
+    id: String? = null,
+    isRead: Boolean,
+): ScreenState<List<AppNotification>> =
+    (this as? ScreenState.Content)?.let { content ->
+        ScreenState.Content(
+            content.data.map { item ->
+                if (id == null || item.id == id) item.copy(isRead = isRead) else item
+            },
+        )
+    } ?: this
