@@ -1,5 +1,6 @@
 package uz.mahalla.testutil
 
+import kotlinx.coroutines.CompletableDeferred
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.notifications.data.NotificationsRepository
 import uz.mahalla.feature.notifications.domain.NotificationPage
@@ -19,7 +20,16 @@ class FakeNotificationsRepository : NotificationsRepository {
 
     var markAllRead: ApiResult<Unit> = ApiResult.Success(Unit)
 
+    /** Отметка одного уведомления (issue #95). */
+    var markRead: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Пока не завершён, [markRead] не отвечает. `null` — отвечает сразу. */
+    var markReadGate: CompletableDeferred<Unit>? = null
+
     val requestedPages = mutableListOf<Int>()
+
+    /** Кого отмечали прочитанным — в порядке запросов. */
+    val markReadIds = mutableListOf<String>()
 
     var unreadCalls: Int = 0
         private set
@@ -40,5 +50,13 @@ class FakeNotificationsRepository : NotificationsRepository {
     override suspend fun markAllRead(): ApiResult<Unit> {
         markAllReadCalls++
         return markAllRead
+    }
+
+    override suspend fun markRead(id: String): ApiResult<Unit> {
+        markReadIds += id
+        // Ответ можно задержать: иначе не проверить, что происходит с
+        // состоянием, пока отметка едет (issue #95).
+        markReadGate?.await()
+        return markRead
     }
 }

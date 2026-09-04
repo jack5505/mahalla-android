@@ -24,7 +24,8 @@ import java.time.Instant
  *
  * Контракт снят со стенда: `GET notifications?page&size` → страница
  * `Notification`, `GET notifications/unread-count` → число,
- * `PUT notifications/read-all` → конверт без нагрузки.
+ * `PUT notifications/read-all` и `PUT notifications/{id}/read` (issue #95) →
+ * конверт без нагрузки.
  */
 class NotificationsRepositoryTest {
 
@@ -152,6 +153,61 @@ class NotificationsRepositoryTest {
         assertEquals("PUT", request.method)
         assertEquals("/notifications/read-all", request.path)
         assertEquals(0L, request.bodySize)
+    }
+
+    @Test
+    fun `mark read is a put by id without a body`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":true}"""),
+        )
+
+        assertTrue(repository().markRead("n-1") is ApiResult.Success)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/notifications/n-1/read", request.path)
+        // Что делать с уведомлением, сказано путём: тела у ручки нет.
+        assertEquals(0L, request.bodySize)
+    }
+
+    @Test
+    fun `mark read reports the server message`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"NOTIFICATION_NOT_FOUND",
+                       "message":"Bildirishnoma topilmadi"}}""",
+                ),
+        )
+
+        val failure = (repository().markRead("n-1") as ApiResult.Failure).failure
+
+        assertEquals(ApiError.Business("NOTIFICATION_NOT_FOUND"), failure.error)
+        assertEquals("Bildirishnoma topilmadi", failure.serverMessage)
+    }
+
+    @Test
+    fun `mark read without a token is unauthorized`() = runTest {
+        // Стенд отвечает ровно так: `401` c кодом `UNAUTHORIZED` (issue #95).
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"UNAUTHORIZED",
+                       "message":"Kirish uchun autentifikatsiya talab qilinadi"}}""",
+                ),
+        )
+
+        val failure = (repository().markRead("n-1") as ApiResult.Failure).failure
+
+        assertEquals(ApiError.Unauthorized, failure.error)
+        assertEquals("Kirish uchun autentifikatsiya talab qilinadi", failure.serverMessage)
     }
 
     @Test

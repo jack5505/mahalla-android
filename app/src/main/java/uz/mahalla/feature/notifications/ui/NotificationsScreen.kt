@@ -50,7 +50,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.notifications.domain.AppNotification
 import uz.mahalla.feature.notifications.domain.NotificationType
-import uz.mahalla.feature.notifications.domain.isActionable
+import uz.mahalla.feature.notifications.domain.isTappable
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -127,13 +127,14 @@ fun NotificationsContentScreen(
                 contentPadding = PaddingValues(Spacing.gutter),
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
-                // Отказ «прочитать всё» — над списком, а не вместо него:
-                // уведомления уже на экране, и прятать их незачем.
+                // Отказ отметки прочитанным — над списком, а не вместо него:
+                // уведомления уже на экране, и прятать их незачем. Что именно
+                // повторять, знает ViewModel (issue #95).
                 state.actionFailure?.let { failure ->
                     item(key = "action-failure") {
                         InlineFailure(
                             failure = failure,
-                            onRetry = { onEvent(NotificationsEvent.MarkAllRead) },
+                            onRetry = { onEvent(NotificationsEvent.RetryAction) },
                         )
                     }
                 }
@@ -196,8 +197,9 @@ private fun LazyListScope.notificationItems(
  * начертанием: одним цветом фона разницу не видно ни при высокой яркости, ни
  * в монохромном режиме доступности.
  *
- * Кликабельно только то, у чего есть куда вести ([isActionable]): нажатие без
- * последствий читается как сломанный экран.
+ * Кликабельно то, у чего есть последствия ([isTappable]): переход на экран
+ * либо отметка прочитанным (issue #95). Прочитанное уведомление, которое
+ * никуда не ведёт, нажатия не принимает — оно читалось бы как сломанное.
  */
 @Composable
 private fun NotificationCard(
@@ -208,7 +210,7 @@ private fun NotificationCard(
     val colors = LocalMahallaColors.current
     MahallaCard(
         modifier = modifier,
-        onClick = if (notification.isActionable) onClick else null,
+        onClick = if (notification.isTappable) onClick else null,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
