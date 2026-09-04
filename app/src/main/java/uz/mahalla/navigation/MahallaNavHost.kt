@@ -1,7 +1,9 @@
 package uz.mahalla.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,7 +16,9 @@ import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.MapScreen
+import uz.mahalla.feature.map.ui.picker.MapPickerScreen
 import uz.mahalla.feature.notifications.ui.NotificationsScreen
 import uz.mahalla.feature.onboarding.ui.BackendUrlScreen
 import uz.mahalla.feature.onboarding.ui.BiometricScreen
@@ -279,7 +283,22 @@ fun MahallaNavHost(
 
         composable<ProviderFormRoute> { entry ->
             val onboarding = entry.toRoute<ProviderFormRoute>().onboarding
+            // Точка с карты (issue #90) приезжает в `SavedStateHandle` этой же
+            // записи стека: экран выбора не знает, кто его позвал, и класть
+            // результат ему некуда, кроме предыдущей записи.
+            val picked by entry.savedStateHandle
+                .getStateFlow<String?>(MapPickerArgs.RESULT_POINT, null)
+                .collectAsStateWithLifecycle()
             ProviderFormScreen(
+                onPickLocation = { point ->
+                    navController.navigate(MapPickerRoute(point = point?.encode()))
+                },
+                pickedLocation = MapPoint.decode(picked),
+                // Ключ гасится после применения: иначе точка возвращалась бы в
+                // форму каждый раз, когда экран снова оказывается наверху.
+                onPickedLocationHandled = {
+                    entry.savedStateHandle[MapPickerArgs.RESULT_POINT] = null
+                },
                 onFinished = {
                     if (onboarding) {
                         finishOnboarding(navController, onOnboardingFinished)
@@ -321,6 +340,22 @@ fun MahallaNavHost(
         composable<MapRoute> {
             MapScreen(
                 onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Выбор точки на карте (issue #90). Результат кладётся в предыдущую
+        // запись стека, а не отдаётся коллбэком: экран, открывший карту, к
+        // этому моменту может пережить смерть процесса, и живой ссылки на него
+        // здесь нет.
+        composable<MapPickerRoute> {
+            MapPickerScreen(
+                onPicked = { point ->
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(MapPickerArgs.RESULT_POINT, point.encode())
+                    navController.navigateUp()
+                },
                 onBack = { navController.navigateUp() },
             )
         }

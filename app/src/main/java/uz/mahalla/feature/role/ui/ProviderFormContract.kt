@@ -5,6 +5,7 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.ProviderForm
 import uz.mahalla.feature.role.domain.ProviderFormError
@@ -45,6 +46,13 @@ sealed interface ProviderFormEvent : UiEvent {
     data class PhoneChanged(val digits: String) : ProviderFormEvent
     data class DescriptionChanged(val description: String) : ProviderFormEvent
     data class WebsiteChanged(val website: String) : ProviderFormEvent
+
+    /** «Выбрать на карте» (issue #90) — дальше решает граф. */
+    data object PickLocationClicked : ProviderFormEvent
+
+    /** Точка вернулась с карты. */
+    data class LocationPicked(val point: MapPoint) : ProviderFormEvent
+
     data object SubmitClicked : ProviderFormEvent
 
     /** «Готово» на экране подтверждения. */
@@ -54,4 +62,11 @@ sealed interface ProviderFormEvent : UiEvent {
 sealed interface ProviderFormEffect : UiEffect {
     /** Заявка отправлена и подтверждение прочитано. Дальше решает граф. */
     data object Finished : ProviderFormEffect
+
+    /**
+     * Открыть карту выбора точки (issue #90). [point] — то, что выбрано
+     * сейчас: карта начинается с него, а не с города, иначе правка точки
+     * означала бы искать своё заведение заново.
+     */
+    data class OpenMapPicker(val point: MapPoint?) : ProviderFormEffect
 }

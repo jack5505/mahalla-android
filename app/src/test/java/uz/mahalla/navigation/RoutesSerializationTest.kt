@@ -59,6 +59,25 @@ class RoutesSerializationTest {
             providerForm,
             json.decodeFromString<ProviderFormRoute>(json.encodeToString(providerForm)),
         )
+
+        // Выбор точки на карте (issue #90): аргумент необязателен — карта
+        // открывается и без ранее выбранной точки.
+        val picker = MapPickerRoute(point = "41.311081,69.240562")
+        assertEquals(picker, json.decodeFromString<MapPickerRoute>(json.encodeToString(picker)))
+        assertEquals(
+            MapPickerRoute(),
+            json.decodeFromString<MapPickerRoute>(json.encodeToString(MapPickerRoute())),
+        )
+    }
+
+    @Test
+    fun `map picker argument is named the way its view model reads it`() {
+        // ViewModel читает аргумент из `SavedStateHandle` по имени: опечатка
+        // здесь означала бы карту, всегда открывающуюся заново.
+        val descriptor = serializer<MapPickerRoute>().descriptor
+
+        assertEquals(1, descriptor.elementsCount)
+        assertEquals(MapPickerArgs.POINT, descriptor.getElementName(0))
     }
 
     /**

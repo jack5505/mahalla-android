@@ -58,6 +58,11 @@ class ProviderFormViewModel @Inject constructor(
 
             is ProviderFormEvent.WebsiteChanged -> updateForm { copy(website = event.website) }
 
+            is ProviderFormEvent.LocationPicked -> updateForm { copy(location = event.point) }
+
+            ProviderFormEvent.PickLocationClicked ->
+                emitEffect(ProviderFormEffect.OpenMapPicker(currentState.form.location))
+
             ProviderFormEvent.SubmitClicked -> submit()
             ProviderFormEvent.DoneClicked -> emitEffect(ProviderFormEffect.Finished)
         }

@@ -287,6 +287,13 @@
     <string name="map_location_denied">Разрешение на геолокацию не выдано. Чтобы видеть себя на карте, включите его в настройках.</string>
     <string name="map_location_unavailable">Не удалось определить местоположение. Проверьте, включена ли геолокация.</string>
 
+    <!-- Выбор точки на карте (issue #90) -->
+    <string name="map_picker_title">Выберите точку на карте</string>
+    <string name="map_picker_hint">Двигайте карту: выбирается место под меткой в центре.</string>
+    <string name="map_picker_resolving">Определяем местоположение\u2026</string>
+    <string name="map_picker_confirm">Выбрать эту точку</string>
+    <string name="map_picker_pin">Выбираемая точка</string>
+
     <!-- Карточка места (эпик 4.4) -->
     <string name="place_hours_title">Часы работы</string>
     <string name="place_hours_unknown">Часы работы неизвестны</string>
@@ -436,7 +443,11 @@
     <string name="role_field_place_name_hint">Ош Маркази</string>
     <string name="role_field_category">Категория</string>
     <string name="role_field_place_address">Адрес заведения</string>
-    <string name="role_field_place_address_note">Точку на карте выбрать нельзя: координаты берутся от устройства или по городу.</string>
+    <string name="role_field_place_address_note">Адрес напишите словами, а точное место покажите на карте.</string>
+    <string name="role_field_place_point">Точка на карте</string>
+    <string name="role_place_point_empty">Не выбрана: координаты возьмём от устройства или по городу.</string>
+    <string name="role_place_point_pick">Выбрать на карте</string>
+    <string name="role_place_point_change">Изменить точку</string>
     <string name="role_field_place_phone">Телефон заведения</string>
     <string name="role_field_description">Описание</string>
     <string name="role_field_description_hint">Что вы предлагаете</string>

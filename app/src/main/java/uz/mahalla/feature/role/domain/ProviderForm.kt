@@ -1,6 +1,7 @@
 package uz.mahalla.feature.role.domain
 
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.onboarding.domain.City
 
 /**
@@ -14,6 +15,10 @@ import uz.mahalla.feature.onboarding.domain.City
  *
  * Телефон хранится национальными цифрами (без `+998`), как на экране ввода
  * номера: форматированием занимается поле кита, а домен работает с цифрами.
+ *
+ * @param location точка, выбранная на карте (issue #90). Необязательна:
+ * заведение регистрируют и не глядя на карту, и тогда координаты берутся от
+ * устройства или по городу — но выбранная точка всегда важнее их обоих.
  */
 data class ProviderForm(
     val name: String = "",
@@ -23,6 +28,7 @@ data class ProviderForm(
     val city: City? = null,
     val phoneDigits: String = "",
     val website: String = "",
+    val location: MapPoint? = null,
 ) {
 
     fun trimmed(): ProviderForm = copy(
