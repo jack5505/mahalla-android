@@ -618,4 +618,55 @@
     <string name="my_doctor_appointments_profile_subtitle">Shifokorga yozilishlaringiz va ularning holati</string>
     <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
     <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
+
+    <!-- Подписки (эпик #13, issue #103) -->
+    <!-- Язык приложения для полей, которые бэкенд отдаёт на двух языках
+         (`name`/`nameUz` у тарифа): значение читает экран подписки. -->
+    <string name="plan_name_language">uz</string>
+    <string name="subscription_title">Obuna</string>
+    <string name="subscription_profile_entry">Obuna</string>
+    <string name="subscription_profile_subtitle">Tariflar, sinov davri va avtomatik uzaytirish</string>
+    <string name="subscription_current_title">Sizning obunangiz</string>
+    <string name="subscription_none_title">Faol obuna yo\'q</string>
+    <string name="subscription_none_description">Quyidagi tariflardan birini tanlang. Bepul imkoniyatlar obunasiz ham ishlaydi.</string>
+    <string name="subscription_plan_unnamed">Tarif nomi ko\'rsatilmagan</string>
+    <string name="subscription_status_active">Faol</string>
+    <string name="subscription_status_expired">Muddati tugagan</string>
+    <string name="subscription_status_cancelled">Bekor qilingan</string>
+    <string name="subscription_status_unknown">Holati aniq emas</string>
+    <string name="subscription_trial_badge">Sinov davri</string>
+    <string name="subscription_period_label">To\'lov davri</string>
+    <string name="subscription_price_paid">To\'langan</string>
+    <string name="subscription_expires">Amal qiladi</string>
+    <string name="subscription_grace">To\'langan muddat tugadi, ammo kirish vaqtincha saqlanib turibdi.</string>
+    <string name="subscription_auto_renew">Avtomatik uzaytirish</string>
+    <string name="subscription_auto_renew_description">Muddat tugaganda obuna o\'zi uzayadi va pul yechiladi.</string>
+    <string name="subscription_cancel">Obunani bekor qilish</string>
+    <string name="subscription_cancel_keep">Qoldirish</string>
+    <string name="subscription_cancel_title">Obunani bekor qilasizmi?</string>
+    <string name="subscription_cancel_message">To\'langan muddat oxirigacha imkoniyatlar saqlanadi, keyin pul yechilmaydi.</string>
+    <string name="subscription_plans_title">Tariflar</string>
+    <string name="subscription_plans_empty_title">Tariflar yo\'q</string>
+    <string name="subscription_plans_empty_description">Hozircha bironta tarif taklif qilinmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="subscription_period_monthly">Oylik</string>
+    <string name="subscription_period_yearly">Yillik</string>
+    <string name="subscription_price_monthly">%1$s / oy</string>
+    <string name="subscription_price_yearly">%1$s / yil</string>
+    <string name="subscription_free">Bepul</string>
+    <string name="subscription_popular">Ommabop</string>
+    <string name="subscription_current_plan">Sizning tarifingiz</string>
+    <string name="subscription_savings">%1$d%% tejaysiz</string>
+    <string name="subscription_subscribe">Obuna bo\'lish</string>
+    <string name="subscription_change_period">To\'lov davrini o\'zgartirish</string>
+    <string name="subscription_notice_subscribed">Obuna rasmiylashtirildi.</string>
+    <string name="subscription_notice_trial">Sinov davri boshlandi.</string>
+    <string name="subscription_notice_cancelled">Obuna bekor qilindi.</string>
+    <string name="subscription_feature_no_ads">Reklamasiz</string>
+    <string name="subscription_feature_verified_badge">Tasdiqlangan belgi</string>
+    <string name="subscription_feature_featured_listing">Ro\'yxatda yuqorida ko\'rinish</string>
+    <string name="subscription_feature_priority_support">Ustuvor qo\'llab-quvvatlash</string>
+    <string name="subscription_feature_multi_staff">Bir nechta xodim</string>
+    <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
+    <string name="subscription_feature_api_access">API orqali kirish</string>
+    <string name="subscription_analytics">Tahlil: %1$s</string>
 </resources>

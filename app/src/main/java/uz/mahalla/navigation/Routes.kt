@@ -207,6 +207,17 @@ data class ProviderFormRoute(val onboarding: Boolean = false)
 @Serializable
 data object MyPlacesRoute
 
+/**
+ * Подписка (issue #103, эпик #13): тарифы и то, что оформлено сейчас. Вне
+ * обоих графов, как «мои заведения»: открывается строкой из профиля, возврат
+ * ведёт туда же.
+ *
+ * Аргументов нет: и набор тарифов, и текущая подписка приезжают с сервера — их
+ * незачем передавать маршрутом, а пережив смерть процесса, они бы устарели.
+ */
+@Serializable
+data object SubscriptionRoute
+
 // --- Детали ---
 
 @Serializable
