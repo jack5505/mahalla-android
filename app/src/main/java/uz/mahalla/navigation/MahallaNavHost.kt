@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
@@ -18,6 +19,7 @@ import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
+import uz.mahalla.feature.hospital.ui.DoctorBookingScreen
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.MapScreen
 import uz.mahalla.feature.map.ui.picker.MapPickerScreen
@@ -238,7 +240,14 @@ fun MahallaNavHost(
                     // «Мои заведения» (issue #94): судьба заявки продавца.
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
-                    onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute) },
+                    onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
+                    // «Мои записи к врачу» (issue #99): тот же экран, другой
+                    // список — у больниц своя ручка `hospitals/appointments/my`.
+                    onOpenMyDoctorAppointments = {
+                        navController.navigate(
+                            MyAppointmentsRoute(AppointmentVertical.Doctor.name),
+                        )
+                    },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -403,6 +412,28 @@ fun MahallaNavHost(
                 onBookingClick = { placeId, placeName ->
                     navController.navigate(BookingRoute(placeId, placeName))
                 },
+                // Больницы (issue #99): у них своя запись — к врачу, а не на
+                // услугу заведения.
+                onDoctorClick = { placeId, placeName ->
+                    navController.navigate(DoctorBookingRoute(placeId, placeName))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Вертикаль «Больницы» (эпик #11, issue #99): к врачу записываются с
+        // карточки места, а следят за записью в «моих записях к врачу».
+        composable<DoctorBookingRoute> {
+            DoctorBookingScreen(
+                // Экран записи из стека уходит: возвращаться в собранную форму
+                // после того, как запись создана, некуда.
+                onOpenMyAppointments = {
+                    navController.navigate(
+                        MyAppointmentsRoute(AppointmentVertical.Doctor.name),
+                    ) {
+                        popUpTo<DoctorBookingRoute> { inclusive = true }
+                    }
+                },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -415,7 +446,7 @@ fun MahallaNavHost(
                 // Экран записи из стека уходит: возвращаться в собранную форму
                 // после того, как запись создана, некуда.
                 onOpenMyAppointments = {
-                    navController.navigate(MyAppointmentsRoute) {
+                    navController.navigate(MyAppointmentsRoute()) {
                         popUpTo<BookingRoute> { inclusive = true }
                     }
                 },

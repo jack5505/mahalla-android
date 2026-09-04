@@ -28,7 +28,7 @@ import javax.inject.Singleton
  *
  * Интерфейс — ради тестов ViewModel: экраны проверяются без MockWebServer.
  */
-interface BookingRepository {
+interface BookingRepository : AppointmentsSource {
 
     /**
      * Услуги, на которые записывают. Выключенные (`isActive: false`) в список
@@ -54,15 +54,6 @@ interface BookingRepository {
         date: LocalDate,
         time: LocalTime,
     ): ApiResult<Appointment>
-
-    /** Свои записи, страницами. */
-    suspend fun myAppointments(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<AppointmentPage>
-
-    /**
-     * Отменить свою запись. Возвращается состояние после отмены — либо из
-     * ответа сервера, либо выведенное из самого факта успешной отмены.
-     */
-    suspend fun cancel(appointment: Appointment): ApiResult<Appointment>
 
     companion object {
         /** Код отказа, когда записываться нечем ещё до запроса. */

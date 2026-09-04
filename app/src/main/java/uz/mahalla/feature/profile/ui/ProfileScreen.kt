@@ -82,6 +82,10 @@ import java.time.Instant
  * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
  * всем: записаться может кто угодно, а следить за записью больше негде —
  * своего таба у брони нет.
+ * @param onOpenMyDoctorAppointments открыть «мои записи к врачу» (issue #99).
+ * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
+ * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
+ * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
  */
 @Composable
 fun ProfileScreen(
@@ -89,6 +93,7 @@ fun ProfileScreen(
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
+    onOpenMyDoctorAppointments: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -118,6 +123,7 @@ fun ProfileScreen(
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
         onOpenMyAppointments = onOpenMyAppointments,
+        onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -132,6 +138,7 @@ fun ProfileContentScreen(
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
+    onOpenMyDoctorAppointments: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -174,6 +181,13 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_appointments_title),
                 subtitle = stringResource(R.string.my_appointments_profile_subtitle),
                 onClick = onOpenMyAppointments,
+            )
+
+            // «Мои записи к врачу» (issue #99): тот же экран, другой список.
+            MahallaListItem(
+                title = stringResource(R.string.my_doctor_appointments_title),
+                subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
+                onClick = onOpenMyDoctorAppointments,
             )
 
             Text(
@@ -522,6 +536,7 @@ private fun ProfilePreview() {
             onOpenRole = {},
             onOpenMyPlaces = {},
             onOpenMyAppointments = {},
+            onOpenMyDoctorAppointments = {},
         )
     }
 }

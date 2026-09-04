@@ -3,6 +3,7 @@ package uz.mahalla.navigation
 import kotlinx.serialization.Serializable
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 
 /**
  * Typed routes навигации (эпик 1.2). Маршрут — это `@Serializable`-класс, а не
@@ -246,11 +247,54 @@ data class BookingRoute(
  * открывается строкой из профиля и с экрана подтверждения записи, а возврат
  * ведёт туда, откуда пришли.
  *
- * Аргументов нет: список грузится с сервера целиком, а конкретная запись
- * никуда не ведёт — своего экрана у неё нет.
+ * @param vertical к мастеру или к врачу — имя константы
+ * [uz.mahalla.feature.booking.domain.AppointmentVertical], а не само
+ * перечисление: типизированные маршруты кладут аргументы в `Bundle`, и для
+ * enum понадобился бы собственный `NavType` (то же решение, что у канала
+ * доставки кода в [OtpRoute] и у точки на карте в [MapPickerRoute]).
+ *
+ * Экран один на обе вертикали, а не два одинаковых: у бэкенда это одна модель
+ * записи и одна ручка отмены, а две копии разошлись бы при первой же правке
+ * (то же решение, что у [RoleRoute] в issue #84). Списки при этом разные —
+ * `appointments/my` и `hospitals/appointments/my`.
+ *
+ * Других аргументов нет: список грузится с сервера целиком, а конкретная
+ * запись никуда не ведёт — своего экрана у неё нет.
  */
 @Serializable
-data object MyAppointmentsRoute
+data class MyAppointmentsRoute(
+    val vertical: String = AppointmentVertical.Barber.name,
+)
+
+/**
+ * Имена аргументов [MyAppointmentsRoute] — ViewModel читает их из
+ * `SavedStateHandle` напрямую, как [OtpArgs]: `toRoute()` разбирает маршрут
+ * через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
+ * аргументы молча читаются как `null`. Совпадение имён с полями маршрута
+ * проверяет `RoutesSerializationTest`.
+ */
+object MyAppointmentsArgs {
+    const val VERTICAL = "vertical"
+}
+
+// --- Вертикаль «Больницы» (эпик #11, issue #99) ---
+
+/**
+ * Запись к врачу: врач → день → время → жалоба → подтверждение.
+ *
+ * Отдельный маршрут, а не [BookingRoute] с флагом: у больниц другой список
+ * (врачи, а не услуги), другое тело запроса (`doctorId` вместо `serviceId`) и
+ * лишнее поле жалобы — общий экран пришлось бы ветвить на каждом шаге.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что и
+ * у [BookingRoute]: ни в ответе `hospitals/.../doctors`, ни в
+ * `AppointmentResponse` его нет, а шапка без имени места читается как чужая.
+ */
+@Serializable
+data class DoctorBookingRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
 
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 

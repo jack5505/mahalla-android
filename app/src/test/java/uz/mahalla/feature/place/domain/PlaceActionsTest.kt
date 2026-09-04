@@ -108,17 +108,23 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Master),
         )
 
+        // Больницы добавились в issue #99: у них своя запись — к врачу
+        // (`hospital-controller`), а не на услугу заведения.
+        assertEquals(
+            PlaceCapabilities(doctors = true),
+            PlaceCapabilities.of(PlaceCategory.Hospital),
+        )
+
         listOf(
             PlaceCategory.Food,
             PlaceCategory.Pharmacy,
-            PlaceCategory.Hospital,
             PlaceCategory.Cinema,
             PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
             // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
-            // бэкенд отдаёт только у мастеров (`barber-services`), а
-            // «Заказать» — вне объёма этих задач.
+            // бэкенд отдаёт у мастеров (`barber-services`) и у больниц
+            // (`hospitals`), а «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
     }
@@ -139,5 +145,19 @@ class PlaceActionsTest {
             listOf(PlaceAction.Queue, PlaceAction.Booking, PlaceAction.Call),
             actions,
         )
+    }
+
+    @Test
+    fun `a hospital card shows the doctor as its primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Hospital),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Запись к врачу — единственное, что больница умеет в приложении:
+        // очередь и бронь у неё выключены, вести им некуда (issue #99).
+        assertEquals(PlaceAction.Doctor, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Doctor, PlaceAction.Call), actions)
     }
 }

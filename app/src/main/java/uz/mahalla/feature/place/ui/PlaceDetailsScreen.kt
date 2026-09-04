@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +87,7 @@ fun PlaceDetailsScreen(
     onOrderClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onQueueClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onBookingClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onDoctorClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -113,11 +115,13 @@ fun PlaceDetailsScreen(
                 )
 
                 // Заказ — вертикаль «Еда» (эпик 5), очередь — walk-in
-                // (issue #96), бронь — запись на время (issue #97).
+                // (issue #96), бронь — запись на время (issue #97), врач —
+                // больницы (issue #99).
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
                     PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
                     PlaceAction.Queue -> onQueueClick(effect.placeId, effect.placeName)
                     PlaceAction.Booking -> onBookingClick(effect.placeId, effect.placeName)
+                    PlaceAction.Doctor -> onDoctorClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
             }
@@ -599,6 +603,7 @@ private fun OpeningHours.label(): String = when {
 private fun PlaceAction.labelRes(): Int = when (this) {
     PlaceAction.Queue -> R.string.place_action_queue
     PlaceAction.Booking -> R.string.place_action_booking
+    PlaceAction.Doctor -> R.string.place_action_doctor
     PlaceAction.Order -> R.string.place_action_order
     PlaceAction.Call -> R.string.place_action_call
     PlaceAction.Route -> R.string.place_action_route
@@ -607,6 +612,7 @@ private fun PlaceAction.labelRes(): Int = when (this) {
 private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Queue -> Icons.Outlined.ConfirmationNumber
     PlaceAction.Booking -> Icons.Outlined.EventAvailable
+    PlaceAction.Doctor -> Icons.Outlined.MedicalServices
     PlaceAction.Order -> Icons.Outlined.ShoppingBag
     PlaceAction.Call -> Icons.Outlined.Call
     PlaceAction.Route -> Icons.Outlined.Directions
