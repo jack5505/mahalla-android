@@ -275,6 +275,16 @@
     <string name="discovery_section_nearby">Yaqin atrofda</string>
     <string name="discovery_section_recommended">Tavsiya etamiz</string>
     <string name="discovery_open_map">Xaritada ochish</string>
+
+    <!-- Акции (issue #104): блок на главной и на карточке места -->
+    <string name="promotions_title">Aksiyalar</string>
+    <string name="promo_discount_percent">%1$d%% chegirma</string>
+    <string name="promo_discount_amount">%1$s chegirma</string>
+    <string name="promo_free_delivery">Bepul yetkazib berish</string>
+    <string name="promo_min_order">%1$s dan buyurtmaga</string>
+    <string name="promo_code">Promo-kod: %1$s</string>
+    <string name="promo_until">%1$s gacha</string>
+
     <string name="distance_meters">%1$s m</string>
     <string name="distance_kilometers">%1$s km</string>
     <string name="state_offline_cache">Saqlangan ma\'lumot ko\'rsatilmoqda</string>
@@ -345,6 +355,8 @@
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
     <string name="place_action_booking">Joy band qilish</string>
+    <string name="place_action_doctor">Shifokorga yozilish</string>
+    <string name="place_action_cinema">Chipta olish</string>
     <string name="place_action_order">Buyurtma berish</string>
     <string name="place_action_products">Dorilar</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
@@ -595,6 +607,213 @@
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
 
+    <!-- Вертикаль «Больницы» (эпик #11, issue #99) -->
+    <string name="doctor_booking_title">Shifokorga yozilish</string>
+    <string name="doctor_booking_doctor_title">Shifokorni tanlang</string>
+    <string name="doctor_booking_doctor_unnamed">Ismi ko\'rsatilmagan shifokor</string>
+    <string name="doctor_booking_doctors_empty_title">Shifokorlar ro\'yxati bo\'sh</string>
+    <string name="doctor_booking_doctors_empty_description">Muassasa hali shifokorlarini kiritmagan. Qo\'ng\'iroq qilib aniqlashtiring.</string>
+    <string name="doctor_booking_price">Qabul narxi: %1$s</string>
+    <string name="doctor_booking_time_title">Qulay vaqtni tanlang</string>
+    <string name="doctor_booking_times_note">Bu — taklif qilingan vaqt. Shifoxona yozuvni tasdiqlaganidan keyin aniq bo\'ladi.</string>
+    <string name="doctor_booking_times_empty">Bugungi qabul tugadi. Boshqa kunni tanlang.</string>
+    <string name="doctor_booking_complaint_title">Shikoyatingiz</string>
+    <string name="doctor_booking_complaint_label">Nimadan shikoyat qilyapsiz? (majburiy emas)</string>
+    <string name="doctor_booking_complaint_placeholder">Masalan: uch kundan beri tomoq og\'riyapti</string>
+    <string name="doctor_booking_complaint_counter">%1$d / %2$d</string>
+    <string name="doctor_booking_pick_time_hint">Yozilish uchun kun va vaqtni tanlang.</string>
+    <string name="doctor_booking_submit">Shifokorga yozilish</string>
+    <string name="doctor_booking_done_title">Siz yozildingiz</string>
+    <string name="doctor_booking_done_description">Shifoxona yozuvni tasdiqlaydi. Holatni «Shifokorga yozuvlarim» bo\'limida ko\'rasiz.</string>
+
+    <string name="my_doctor_appointments_title">Shifokorga yozuvlarim</string>
+    <string name="my_doctor_appointments_profile_subtitle">Shifokorga yozilishlaringiz va ularning holati</string>
+    <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
+    <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
+
+    <!-- Вертикаль «Мастера» (issue #107) -->
+    <string name="freelancers_title">Ustalar</string>
+    <string name="freelancers_home_subtitle">Santexnik, elektrik, usta — chaqirib xizmat buyurtma qiling</string>
+    <string name="freelancers_search_hint">Mutaxassislik: santexnik, elektrik…</string>
+    <string name="freelancers_empty_title">Usta topilmadi</string>
+    <string name="freelancers_empty_description">Hozircha bironta usta ro\'yxatdan o\'tmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="freelancers_empty_filtered">Bu mutaxassislik bo\'yicha usta yo\'q. So\'rovni o\'zgartirib ko\'ring.</string>
+    <string name="freelancer_unnamed">Ismi ko\'rsatilmagan usta</string>
+    <string name="freelancer_rate">%1$s / soat</string>
+    <string name="freelancer_available">Buyurtma qabul qiladi</string>
+    <string name="freelancer_unavailable">Hozir band</string>
+    <string name="freelancer_unavailable_note">Usta hozir buyurtma qabul qilmayapti. Keyinroq urinib ko\'ring yoki qo\'ng\'iroq qiling.</string>
+    <string name="freelancer_call">Qo\'ng\'iroq qilish: %1$s</string>
+    <string name="freelancer_services_title">Xizmatlari</string>
+    <string name="freelancer_services_empty_title">Xizmatlar ro\'yxati bo\'sh</string>
+    <string name="freelancer_services_empty_description">Usta hali xizmatlarini kiritmagan. Shartlarni telefon orqali kelishing.</string>
+    <string name="freelancer_service_unnamed">Xizmat nomi ko\'rsatilmagan</string>
+    <string name="freelancer_when_title">Qachon kelsin</string>
+    <string name="freelancer_time_asap">Imkon qadar tezroq</string>
+    <string name="freelancer_times_note">Bu — taklif qilingan vaqt. Usta buyurtmani qabul qilganidan keyin aniq bo\'ladi.</string>
+    <string name="freelancer_times_empty">Bugungi kun tugadi. Boshqa kunni tanlang yoki «Imkon qadar tezroq»ni qoldiring.</string>
+    <string name="freelancer_order_details_title">Manzil va izoh</string>
+    <string name="freelancer_address_label">Manzil (majburiy emas)</string>
+    <string name="freelancer_address_placeholder">Masalan: Chilonzor 7, 12-uy, 4-xonadon</string>
+    <string name="freelancer_comment_label">Izoh (majburiy emas)</string>
+    <string name="freelancer_comment_placeholder">Masalan: kran oqyapti, ehtiyot qism kerak</string>
+    <string name="freelancer_comment_counter">%1$d / %2$d</string>
+    <string name="freelancer_order_submit">Xizmatni buyurtma qilish</string>
+    <string name="freelancer_order_done_title">Buyurtma yuborildi</string>
+    <string name="freelancer_order_done_description">Usta buyurtmani qabul qiladi yoki rad etadi. Holatni «Ustalardagi buyurtmalarim» bo\'limida ko\'rasiz.</string>
+    <string name="freelancer_order_open_my">Buyurtmalarim</string>
+    <string name="freelancer_order_status_pending">Javob kutilmoqda</string>
+    <string name="freelancer_order_status_accepted">Qabul qilindi</string>
+    <string name="freelancer_order_status_rejected">Rad etildi</string>
+    <string name="freelancer_order_status_completed">Bajarildi</string>
+
+    <string name="my_freelancer_orders_title">Ustalardagi buyurtmalarim</string>
+    <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
+    <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
+    <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
+    <!-- Вертикаль «Одежда» (issue #108) -->
+    <string name="category_fashion">Kiyim</string>
+    <string name="place_action_shop">Do\'kon</string>
+
+    <string name="fashion_catalog_title">Do\'kon</string>
+    <string name="fashion_category_all">Hammasi</string>
+    <string name="fashion_catalog_empty_title">Bu yerda hozircha tovar yo\'q</string>
+    <string name="fashion_catalog_empty_description">Do\'kon vitrinani hali to\'ldirmagan. Keyinroq kirib ko\'ring.</string>
+
+    <string name="fashion_product_title">Tovar</string>
+    <string name="fashion_product_unnamed">Nomi ko\'rsatilmagan tovar</string>
+    <string name="fashion_product_unavailable">Tovar topilmadi</string>
+    <string name="fashion_product_no_variants">Do\'kon bu tovarning o\'lchamlarini kiritmagan — buyurtma berib bo\'lmaydi.</string>
+    <string name="fashion_product_added">Savatga qo\'shildi</string>
+    <string name="fashion_badge_new">Yangi</string>
+    <string name="fashion_badge_bestseller">Ko\'p sotilgan</string>
+    <string name="fashion_colors">Rang</string>
+    <string name="fashion_sizes">O\'lcham</string>
+    <string name="fashion_size_unnamed">O\'lchamsiz</string>
+    <string name="fashion_material">Tarkibi</string>
+    <string name="fashion_care">Parvarish</string>
+    <string name="fashion_size_guide">O\'lchamlar jadvali</string>
+    <string name="fashion_add_to_cart">Savatga qo\'shish</string>
+    <string name="fashion_variant_out_of_stock">Tanlangan o\'lcham qolmagan. Boshqa o\'lcham yoki rangni tanlang.</string>
+    <string name="fashion_open_cart">Savatni ochish</string>
+
+    <string name="fashion_cart_title">Savat</string>
+    <string name="fashion_cart_empty_title">Savat bo\'sh</string>
+    <string name="fashion_cart_empty_description">Do\'kon vitrinasidan tovar tanlang — u shu yerda paydo bo\'ladi.</string>
+    <string name="fashion_cart_store">Do\'kon buyurtmasi</string>
+    <string name="fashion_cart_total">Jami</string>
+    <string name="fashion_cart_remove_title">Tovarni olib tashlaymizmi?</string>
+    <string name="fashion_cart_remove_message">Qator savatdan o\'chiriladi. Uni vitrinadan qayta qo\'shsa bo\'ladi.</string>
+    <string name="fashion_cart_remove_keep">Qoldirish</string>
+    <string name="fashion_checkout">Buyurtma berish</string>
+
+    <string name="fashion_checkout_title">Buyurtmani rasmiylashtirish</string>
+    <string name="fashion_checkout_items">Buyurtma tarkibi</string>
+    <string name="fashion_checkout_empty">Bu do\'kon bo\'yicha savat bo\'sh.</string>
+    <string name="fashion_checkout_delivery_note">Yetkazib berish narxini do\'kon buyurtma rasmiylashtirilgach hisoblaydi.</string>
+    <string name="fashion_checkout_submit">Buyurtmani tasdiqlash</string>
+    <string name="fashion_order_created">Buyurtma qabul qilindi</string>
+    <string name="fashion_open_orders">Buyurtmalarim</string>
+
+    <string name="fashion_orders_title">Kiyim buyurtmalarim</string>
+    <string name="fashion_orders_profile_subtitle">Kiyim buyurtmalari va ularning holati</string>
+    <string name="fashion_orders_empty_title">Buyurtmalar yo\'q</string>
+    <string name="fashion_orders_empty_description">Do\'kon vitrinasidan tovar tanlang — buyurtmangiz shu yerda ko\'rinadi.</string>
+    <string name="fashion_order_unnamed">Buyurtma</string>
+    <string name="fashion_order_line">%1$s × %2$d</string>
+    <string name="fashion_order_cancel">Buyurtmani bekor qilish</string>
+    <string name="fashion_order_cancel_title">Buyurtma bekor qilinsinmi?</string>
+    <string name="fashion_order_cancel_message">Do\'kon buyurtmani yig\'ishni to\'xtatadi. Bu amalni qaytarib bo\'lmaydi.</string>
+    <string name="fashion_order_cancel_keep">Qoldirish</string>
+
+    <!-- Подписки (эпик #13, issue #103) -->
+    <!-- Язык приложения для полей, которые бэкенд отдаёт на двух языках
+         (`name`/`nameUz` у тарифа): значение читает экран подписки. -->
+    <string name="plan_name_language">uz</string>
+    <string name="subscription_title">Obuna</string>
+    <string name="subscription_profile_entry">Obuna</string>
+    <string name="subscription_profile_subtitle">Tariflar, sinov davri va avtomatik uzaytirish</string>
+    <string name="subscription_current_title">Sizning obunangiz</string>
+    <string name="subscription_none_title">Faol obuna yo\'q</string>
+    <string name="subscription_none_description">Quyidagi tariflardan birini tanlang. Bepul imkoniyatlar obunasiz ham ishlaydi.</string>
+    <string name="subscription_plan_unnamed">Tarif nomi ko\'rsatilmagan</string>
+    <string name="subscription_status_active">Faol</string>
+    <string name="subscription_status_expired">Muddati tugagan</string>
+    <string name="subscription_status_cancelled">Bekor qilingan</string>
+    <string name="subscription_status_unknown">Holati aniq emas</string>
+    <string name="subscription_trial_badge">Sinov davri</string>
+    <string name="subscription_period_label">To\'lov davri</string>
+    <string name="subscription_price_paid">To\'langan</string>
+    <string name="subscription_expires">Amal qiladi</string>
+    <string name="subscription_grace">To\'langan muddat tugadi, ammo kirish vaqtincha saqlanib turibdi.</string>
+    <string name="subscription_auto_renew">Avtomatik uzaytirish</string>
+    <string name="subscription_auto_renew_description">Muddat tugaganda obuna o\'zi uzayadi va pul yechiladi.</string>
+    <string name="subscription_cancel">Obunani bekor qilish</string>
+    <string name="subscription_cancel_keep">Qoldirish</string>
+    <string name="subscription_cancel_title">Obunani bekor qilasizmi?</string>
+    <string name="subscription_cancel_message">To\'langan muddat oxirigacha imkoniyatlar saqlanadi, keyin pul yechilmaydi.</string>
+    <string name="subscription_plans_title">Tariflar</string>
+    <string name="subscription_plans_empty_title">Tariflar yo\'q</string>
+    <string name="subscription_plans_empty_description">Hozircha bironta tarif taklif qilinmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="subscription_period_monthly">Oylik</string>
+    <string name="subscription_period_yearly">Yillik</string>
+    <string name="subscription_price_monthly">%1$s / oy</string>
+    <string name="subscription_price_yearly">%1$s / yil</string>
+    <string name="subscription_free">Bepul</string>
+    <string name="subscription_popular">Ommabop</string>
+    <string name="subscription_current_plan">Sizning tarifingiz</string>
+    <string name="subscription_savings">%1$d%% tejaysiz</string>
+    <string name="subscription_subscribe">Obuna bo\'lish</string>
+    <string name="subscription_change_period">To\'lov davrini o\'zgartirish</string>
+    <string name="subscription_notice_subscribed">Obuna rasmiylashtirildi.</string>
+    <string name="subscription_notice_trial">Sinov davri boshlandi.</string>
+    <string name="subscription_notice_cancelled">Obuna bekor qilindi.</string>
+    <string name="subscription_feature_no_ads">Reklamasiz</string>
+    <string name="subscription_feature_verified_badge">Tasdiqlangan belgi</string>
+    <string name="subscription_feature_featured_listing">Ro\'yxatda yuqorida ko\'rinish</string>
+    <string name="subscription_feature_priority_support">Ustuvor qo\'llab-quvvatlash</string>
+    <string name="subscription_feature_multi_staff">Bir nechta xodim</string>
+    <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
+    <string name="subscription_feature_api_access">API orqali kirish</string>
+    <string name="subscription_analytics">Tahlil: %1$s</string>
+
+    <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
+    <string name="cinema_title">Afisha</string>
+    <string name="cinema_empty_title">Afisha bo\'sh</string>
+    <string name="cinema_empty_description">Kinoteatr hali film kiritmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="cinema_movie_unnamed">Nomi ko\'rsatilmagan film</string>
+    <string name="cinema_sessions_title">Seanslar</string>
+    <string name="cinema_sessions_empty_title">Bu kunga seans yo\'q</string>
+    <string name="cinema_sessions_empty_description">Boshqa kunni tanlang: afishada yaqin ikki hafta bor.</string>
+    <string name="cinema_session_time_unknown">Vaqti ko\'rsatilmagan</string>
+    <string name="cinema_buy_title">Chipta olish</string>
+    <string name="cinema_buy_session">%1$s, %2$s</string>
+    <string name="cinema_buy_seat_label">Joy (majburiy emas)</string>
+    <string name="cinema_buy_seat_placeholder">Masalan: C7</string>
+    <string name="cinema_buy_seat_note">Zal sxemasi yo\'q: bo\'sh joylarni kinoteatr biladi. Joyni yozmasangiz, uni kinoteatr o\'zi belgilaydi.</string>
+    <string name="cinema_buy_submit">Chiptani olish</string>
+    <string name="cinema_buy_payment_note">Chipta band qilinadi, to\'lovni kinoteatrda amalga oshirasiz.</string>
+    <string name="cinema_bought_title">Chipta olindi</string>
+    <string name="cinema_bought_description">Kodni kassada yoki nazoratchiga ko\'rsating. Chipta «Chiptalarim» bo\'limida saqlanadi.</string>
+    <string name="cinema_ticket_code">Kod: %1$s</string>
+    <string name="cinema_ticket_seat">Joy: %1$s</string>
+    <string name="cinema_ticket_seat_unknown">Joyni kinoteatr belgilaydi</string>
+    <string name="cinema_ticket_status_active">Amal qiladi</string>
+    <string name="cinema_ticket_status_used">Foydalanilgan</string>
+    <string name="cinema_ticket_status_cancelled">Bekor qilindi</string>
+    <string name="cinema_ticket_status_refunded">Qaytarildi</string>
+    <string name="cinema_ticket_status_unknown">Holati aniq emas</string>
+
+    <string name="my_tickets_title">Chiptalarim</string>
+    <string name="my_tickets_profile_subtitle">Kino chiptalari va ularning holati</string>
+    <string name="my_tickets_empty_title">Chiptangiz yo\'q</string>
+    <string name="my_tickets_empty_description">Kinoteatr kartochkasidagi «Chipta olish» tugmasi orqali chipta olishingiz mumkin.</string>
+    <string name="my_tickets_item_title">Kino chiptasi</string>
+    <string name="my_tickets_bought_at">Olingan: %1$s</string>
+    <string name="my_tickets_cancel">Chiptani qaytarish</string>
+    <string name="my_tickets_cancel_title">Chiptani qaytarasizmi?</string>
+    <string name="my_tickets_cancel_message">Joy bo\'shatiladi. Qaytarish shartlarini kinoteatr belgilaydi.</string>
+    <string name="my_tickets_cancel_keep">Qoldirish</string>
     <!-- Вертикаль «Аптека» (issue #100): витрина товаров с наличием. -->
     <string name="pharmacy_title">Dorixona</string>
     <string name="pharmacy_search_hint">Dori nomini kiriting</string>

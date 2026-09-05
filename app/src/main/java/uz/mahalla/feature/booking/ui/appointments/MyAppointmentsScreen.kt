@@ -50,6 +50,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentSections
 import uz.mahalla.feature.booking.domain.AppointmentStatus
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -93,7 +94,7 @@ fun MyAppointmentsContentScreen(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(
-            title = stringResource(R.string.my_appointments_title),
+            title = stringResource(state.vertical.titleRes()),
             onBack = onBack,
         )
         MahallaPullToRefresh(
@@ -145,7 +146,7 @@ private fun LazyListScope.appointmentItems(
         is ScreenState.Empty -> item(key = "empty") {
             EmptyState(
                 title = stringResource(R.string.my_appointments_empty_title),
-                description = stringResource(R.string.my_appointments_empty_description),
+                description = stringResource(state.vertical.emptyDescriptionRes()),
                 icon = Icons.Outlined.EventAvailable,
             )
         }
@@ -195,6 +196,7 @@ private fun LazyListScope.section(
     items(appointments, key = Appointment::id) { appointment ->
         AppointmentCard(
             appointment = appointment,
+            vertical = state.vertical,
             pending = state.pendingCancelId == appointment.id,
             // Пока идёт отмена по одной строке, остальные не трогаем: ответы
             // приехали бы на список, которого уже нет.
@@ -207,6 +209,7 @@ private fun LazyListScope.section(
 @Composable
 private fun AppointmentCard(
     appointment: Appointment,
+    vertical: AppointmentVertical,
     pending: Boolean,
     enabled: Boolean,
     onEvent: (MyAppointmentsEvent) -> Unit,
@@ -221,7 +224,7 @@ private fun AppointmentCard(
         ) {
             Text(
                 text = appointment.serviceName
-                    ?: stringResource(R.string.my_appointments_unnamed_service),
+                    ?: stringResource(vertical.unnamedRes()),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -307,6 +310,33 @@ private fun LoadMoreItem(
     ) {
         CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
     }
+}
+
+/**
+ * Тексты, которые у двух вертикалей записи разные. Всё остальное на экране
+ * одинаково: список, разделы, отмена и статусы приезжают из одной модели.
+ */
+@StringRes
+private fun AppointmentVertical.titleRes(): Int = when (this) {
+    AppointmentVertical.Barber -> R.string.my_appointments_title
+    AppointmentVertical.Doctor -> R.string.my_doctor_appointments_title
+}
+
+@StringRes
+private fun AppointmentVertical.emptyDescriptionRes(): Int = when (this) {
+    AppointmentVertical.Barber -> R.string.my_appointments_empty_description
+    AppointmentVertical.Doctor -> R.string.my_doctor_appointments_empty_description
+}
+
+/**
+ * Чем подписана запись, у которой сервер не назвал услугу. У врача её место
+ * занимает не «услуга», а сам приём: «Xizmat ko'rsatilmagan» на карточке
+ * записи к врачу читалось бы как чужой текст.
+ */
+@StringRes
+private fun AppointmentVertical.unnamedRes(): Int = when (this) {
+    AppointmentVertical.Barber -> R.string.my_appointments_unnamed_service
+    AppointmentVertical.Doctor -> R.string.my_doctor_appointments_unnamed
 }
 
 /** Подписи статусов: домен знает состояние, ресурсы — формулировку. */

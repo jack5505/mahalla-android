@@ -1,5 +1,6 @@
 package uz.mahalla.feature.booking.ui.appointments
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -15,7 +16,10 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
+import uz.mahalla.feature.booking.domain.AppointmentVertical
+import uz.mahalla.navigation.MyAppointmentsArgs
 import uz.mahalla.testutil.FakeBookingRepository
+import uz.mahalla.testutil.FakeHospitalRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Clock
 import java.time.Instant
@@ -33,6 +37,7 @@ class MyAppointmentsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val repository = FakeBookingRepository()
+    private val hospitalRepository = FakeHospitalRepository()
 
     @Test
     fun `appointments are split into upcoming and past`() = runTest {
@@ -228,6 +233,61 @@ class MyAppointmentsViewModelTest {
         assertEquals(listOf("a-1"), viewModel.state.value.sections.past.map { it.id })
     }
 
+    /**
+     * Экран один на обе вертикали (issue #99), и ошибка в выборе источника
+     * означала бы чужой список: записи к врачу показывались бы вперемешку с
+     * записями к мастеру или вместо них.
+     */
+    @Test
+    fun `the doctor vertical reads the hospital endpoint`() = runTest {
+        repository.defaultPage = page(listOf(appointment("barber", LocalDate.of(2026, 9, 5))))
+        hospitalRepository.defaultPage = page(
+            listOf(appointment("doctor", LocalDate.of(2026, 9, 5))),
+        )
+
+        val state = viewModel(vertical = AppointmentVertical.Doctor).state.value
+
+        assertEquals(AppointmentVertical.Doctor, state.vertical)
+        assertEquals(listOf("doctor"), state.sections.upcoming.map(Appointment::id))
+        assertEquals(listOf(0), hospitalRepository.requestedPages)
+        assertTrue(repository.requestedPages.isEmpty())
+    }
+
+    @Test
+    fun `the doctor vertical cancels through its own source`() = runTest {
+        hospitalRepository.defaultPage = page(
+            listOf(appointment("a-1", LocalDate.of(2026, 9, 5))),
+        )
+        val viewModel = viewModel(vertical = AppointmentVertical.Doctor)
+
+        viewModel.onEvent(MyAppointmentsEvent.CancelRequested("a-1"))
+        viewModel.onEvent(MyAppointmentsEvent.CancelConfirmed)
+
+        assertEquals(listOf("a-1"), hospitalRepository.cancelled)
+        assertTrue(repository.cancelled.isEmpty())
+        assertEquals(
+            AppointmentStatus.Cancelled,
+            viewModel.state.value.sections.past.single().status,
+        )
+    }
+
+    /** Без аргумента и с мусором в нём экран остаётся списком записей к мастеру. */
+    @Test
+    fun `an unknown vertical falls back to the barber list`() = runTest {
+        repository.defaultPage = page(listOf(appointment("barber", LocalDate.of(2026, 9, 5))))
+
+        val state = MyAppointmentsViewModel(
+            bookingRepository = repository,
+            hospitalRepository = hospitalRepository,
+            clock = Clock.fixed(NOW, ZoneOffset.UTC),
+            savedStateHandle = SavedStateHandle(mapOf(MyAppointmentsArgs.VERTICAL to "nonsense")),
+        ).state.value
+
+        assertEquals(AppointmentVertical.Barber, state.vertical)
+        assertEquals(listOf("barber"), state.sections.upcoming.map(Appointment::id))
+        assertTrue(hospitalRepository.requestedPages.isEmpty())
+    }
+
     private fun appointment(
         id: String,
         date: LocalDate,
@@ -244,8 +304,19 @@ class MyAppointmentsViewModelTest {
     private fun page(items: List<Appointment>, hasMore: Boolean = false) =
         ApiResult.Success(AppointmentPage(items = items, hasMore = hasMore))
 
-    private fun viewModel(clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC)) =
-        MyAppointmentsViewModel(repository = repository, clock = clock)
+    private fun viewModel(
+        clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        vertical: AppointmentVertical? = null,
+    ) = MyAppointmentsViewModel(
+        bookingRepository = repository,
+        hospitalRepository = hospitalRepository,
+        clock = clock,
+        // Аргумент маршрута читается по имени, а не через `toRoute()` — иначе
+        // тест пришлось бы гонять под Robolectric ради одной строки.
+        savedStateHandle = SavedStateHandle(
+            vertical?.let { mapOf(MyAppointmentsArgs.VERTICAL to it.name) }.orEmpty(),
+        ),
+    )
 
     /** Часы, которые можно подвинуть: деление на разделы зависит от них. */
     private class MovableClock(var now: Instant) : Clock() {

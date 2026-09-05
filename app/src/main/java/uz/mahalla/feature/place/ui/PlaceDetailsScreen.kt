@@ -21,8 +21,11 @@ import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.LocalPharmacy
+import androidx.compose.material.icons.outlined.MedicalServices
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -67,6 +70,8 @@ import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.feature.promotions.domain.Promotion
+import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import java.time.DayOfWeek
@@ -87,6 +92,9 @@ fun PlaceDetailsScreen(
     onOrderClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onQueueClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onBookingClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onDoctorClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onCinemaClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onShopClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onProductsClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
@@ -115,12 +123,16 @@ fun PlaceDetailsScreen(
                 )
 
                 // Заказ — вертикаль «Еда» (эпик 5), очередь — walk-in
-                // (issue #96), бронь — запись на время (issue #97), товары —
-                // витрина аптеки (issue #100).
+                // (issue #96), бронь — запись на время (issue #97), врач —
+                // больницы (issue #99), магазин — одежда (issue #108),
+                // товары — витрина аптеки (issue #100).
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
                     PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
                     PlaceAction.Queue -> onQueueClick(effect.placeId, effect.placeName)
                     PlaceAction.Booking -> onBookingClick(effect.placeId, effect.placeName)
+                    PlaceAction.Doctor -> onDoctorClick(effect.placeId, effect.placeName)
+                    PlaceAction.Cinema -> onCinemaClick(effect.placeId, effect.placeName)
+                    PlaceAction.Shop -> onShopClick(effect.placeId, effect.placeName)
                     PlaceAction.Products -> onProductsClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
@@ -202,6 +214,8 @@ private fun DetailsList(
         if (details.actions.isNotEmpty()) {
             item(key = "actions") { Actions(actions = details.actions, onEvent = onEvent) }
         }
+
+        promotions(promotions = state.promotions)
 
         if (!details.description.isNullOrBlank()) {
             item(key = "description") {
@@ -392,6 +406,24 @@ private fun LazyListScope.contacts(
                 onClick = { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call)) },
             )
         }
+    }
+}
+
+/**
+ * Акции заведения (issue #104). Секции нет, пока акций нет: заголовок над
+ * пустотой обещает скидку, которой не существует.
+ *
+ * Карточки здесь не нажимаются: вести им некуда — заведение уже открыто, а
+ * экрана самой акции в приложении нет.
+ */
+private fun LazyListScope.promotions(promotions: List<Promotion>) {
+    if (promotions.isEmpty()) return
+
+    item(key = "promotions-header") {
+        SectionHeader(title = stringResource(R.string.promotions_title))
+    }
+    items(items = promotions, key = { "promotion-${it.id}" }) { promotion ->
+        PromotionCard(promotion = promotion)
     }
 }
 
@@ -603,7 +635,10 @@ private fun OpeningHours.label(): String = when {
 private fun PlaceAction.labelRes(): Int = when (this) {
     PlaceAction.Queue -> R.string.place_action_queue
     PlaceAction.Booking -> R.string.place_action_booking
+    PlaceAction.Doctor -> R.string.place_action_doctor
+    PlaceAction.Cinema -> R.string.place_action_cinema
     PlaceAction.Order -> R.string.place_action_order
+    PlaceAction.Shop -> R.string.place_action_shop
     PlaceAction.Products -> R.string.place_action_products
     PlaceAction.Call -> R.string.place_action_call
     PlaceAction.Route -> R.string.place_action_route
@@ -612,7 +647,10 @@ private fun PlaceAction.labelRes(): Int = when (this) {
 private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Queue -> Icons.Outlined.ConfirmationNumber
     PlaceAction.Booking -> Icons.Outlined.EventAvailable
+    PlaceAction.Doctor -> Icons.Outlined.MedicalServices
+    PlaceAction.Cinema -> Icons.Outlined.Movie
     PlaceAction.Order -> Icons.Outlined.ShoppingBag
+    PlaceAction.Shop -> Icons.Outlined.Storefront
     PlaceAction.Products -> Icons.Outlined.LocalPharmacy
     PlaceAction.Call -> Icons.Outlined.Call
     PlaceAction.Route -> Icons.Outlined.Directions

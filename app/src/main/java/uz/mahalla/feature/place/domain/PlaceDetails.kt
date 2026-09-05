@@ -39,7 +39,27 @@ data class PlaceContacts(
 enum class PlaceAction {
     Queue,
     Booking,
+
+    /**
+     * Запись к врачу (issue #99). Отдельно от [Booking]: у больниц другой
+     * список (врачи, а не услуги) и другой экран — общее действие пришлось бы
+     * ветвить по категории уже в навигации.
+     */
+    Doctor,
+
+    /**
+     * Билет в кино (issue #106). Тоже отдельно: у кинотеатра сначала афиша, а
+     * «забронировать» ведёт к услугам мастера, которых у него нет.
+     */
+    Cinema,
     Order,
+
+    /**
+     * Витрина магазина одежды (issue #108). Отдельно от [Order]: у «Еды» это
+     * меню заведения с корзиной в Room, а здесь каталог товаров с вариантами и
+     * корзиной на сервере — общего у них только слово «заказать».
+     */
+    Shop,
 
     /**
      * Витрина товаров аптеки (issue #100). Это единственное действие, которое
@@ -64,7 +84,14 @@ enum class PlaceAction {
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
+    /** Запись к врачу — вертикаль больниц (issue #99). */
+    val doctors: Boolean = false,
+    /** Билет в кино — вертикаль кинотеатров (issue #106). */
+    val cinema: Boolean = false,
     val ordering: Boolean = false,
+    /** Витрина магазина одежды — вертикаль «Одежда» (issue #108). */
+    val shopping: Boolean = false,
+    /** Витрина товаров аптеки — вертикаль «Аптека» (issue #100). */
     val products: Boolean = false,
 ) {
     companion object {
@@ -78,6 +105,18 @@ data class PlaceCapabilities(
          * экран записи скажет это словами; спрятать кнопку заранее нельзя,
          * список услуг известен только серверу.
          *
+         * У больниц (`HOSPITAL`) это запись к врачу (`hospital-controller`,
+         * issue #99): список врачей известен только серверу, поэтому кнопка
+         * показывается всегда, а «врачей пока нет» экран скажет словами.
+         *
+         * У кинотеатров (`CINEMA`) это билет (`cinema-controller`, issue
+         * #106): афиша и расписание тоже известны только серверу — «афиша
+         * пуста» экран скажет словами.
+         *
+         * У магазинов одежды (`FASHION`) это витрина (`fashion-controller`,
+         * issue #108): каталог известен только серверу, поэтому кнопка
+         * показывается всегда, а «товаров пока нет» экран скажет словами.
+         *
          * У аптек (`PHARMACY`) это витрина товаров (issue #100) — действие,
          * которое ничего не начинает: заказа у аптеки бэкенд не принимает, и
          * кнопки «купить» здесь нет. Товаров в аптеке может и не оказаться —
@@ -89,6 +128,9 @@ data class PlaceCapabilities(
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
+            PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
+            PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
+            PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
             PlaceCategory.Pharmacy -> PlaceCapabilities(products = true)
             else -> PlaceCapabilities()
         }

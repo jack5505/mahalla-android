@@ -46,6 +46,32 @@ enum class AppointmentStatus(val apiValue: String) {
 }
 
 /**
+ * К кому запись: к мастеру (issue #97) или к врачу (issue #99).
+ *
+ * Модель записи у обеих вертикалей одна — у бэкенда это буквально одна схема
+ * `AppointmentResponse` и одна ручка отмены (`POST appointments/{id}/cancel`),
+ * — а вот списки разные: `appointments/my` против `hospitals/appointments/my`.
+ * Поэтому вертикаль — не поле самой записи (сервер её не сообщает), а признак
+ * того, откуда список пришёл: он выбирает источник и заголовок экрана.
+ *
+ * Незнакомое значение аргумента маршрута читается как [Barber] (см.
+ * [byName]) — на экран без списка это не уводит.
+ */
+enum class AppointmentVertical {
+    /** Мастера: `barber-services` + `appointments` (issue #97). */
+    Barber,
+
+    /** Больницы: `hospitals/appointments` (issue #99). */
+    Doctor,
+    ;
+
+    companion object {
+        fun byName(value: String?): AppointmentVertical =
+            entries.firstOrNull { it.name.equals(value?.trim(), ignoreCase = true) } ?: Barber
+    }
+}
+
+/**
  * Запись на время.
  *
  * @param id идентификатор с сервера. **Может быть пустым**, и только в одном

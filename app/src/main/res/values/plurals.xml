@@ -61,6 +61,83 @@
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
 
+    <!-- Больницы (issue #99): лимит жалобы. Число постоянное (1000), но форма
+         слова от него зависит — lint правильно требует plurals. -->
+    <plurals name="doctor_booking_complaint_too_long">
+        <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
+
+    <!-- Мастера (issue #107). Опыт и длительность услуги — числа переменные,
+         лимит текста постоянный, но форма слова зависит от него всё равно. -->
+    <plurals name="freelancer_experience">
+        <item quantity="one">%1$d yil tajriba</item>
+        <item quantity="other">%1$d yil tajriba</item>
+    </plurals>
+    <plurals name="freelancer_service_duration">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+    <plurals name="freelancer_text_too_long">
+        <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
+
+    <!-- Сколько единиц в корзине одежды (issue #108): бейдж на кнопке. -->
+    <plurals name="fashion_cart_action_count">
+        <item quantity="one">Savat: %1$d ta tovar</item>
+        <item quantity="other">Savat: %1$d ta tovar</item>
+    </plurals>
+
+    <!-- Подписки (issue #103): остаток срока и длина пробного периода. -->
+    <plurals name="subscription_days_left">
+        <item quantity="one">%1$d kun qoldi</item>
+        <item quantity="other">%1$d kun qoldi</item>
+    </plurals>
+
+    <plurals name="subscription_trial_days">
+        <item quantity="one">%1$d kun bepul sinab ko\'rish</item>
+        <item quantity="other">%1$d kun bepul sinab ko\'rish</item>
+    </plurals>
+
+    <!-- Подписки (issue #103): числовые лимиты тарифа. Число приходит от
+         бэкенда и меняется от тарифа к тарифу — lint правильно требует plurals. -->
+    <plurals name="subscription_limit_places">
+        <item quantity="one">%1$d tagacha muassasa</item>
+        <item quantity="other">%1$d tagacha muassasa</item>
+    </plurals>
+
+    <plurals name="subscription_limit_listings">
+        <item quantity="one">%1$d tagacha e\'lon</item>
+        <item quantity="other">%1$d tagacha e\'lon</item>
+    </plurals>
+
+    <plurals name="subscription_limit_photos">
+        <item quantity="one">Har bir e\'longa %1$d tagacha rasm</item>
+        <item quantity="other">Har bir e\'longa %1$d tagacha rasm</item>
+    </plurals>
+
+    <plurals name="subscription_limit_promotions">
+        <item quantity="one">Oyiga %1$d ta bepul reklama</item>
+        <item quantity="other">Oyiga %1$d ta bepul reklama</item>
+    </plurals>
+
+    <!-- Кино (issue #106): длительность фильма, остаток мест, лимит поля места. -->
+    <plurals name="cinema_movie_duration">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+
+    <plurals name="cinema_seats_left">
+        <item quantity="one">%1$d joy qoldi</item>
+        <item quantity="other">%1$d joy qoldi</item>
+    </plurals>
+
+    <plurals name="cinema_buy_seat_too_long">
+        <item quantity="one">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
+
     <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
     <plurals name="pharmacy_stock_left">
         <item quantity="one">%1$d dona qoldi</item>
