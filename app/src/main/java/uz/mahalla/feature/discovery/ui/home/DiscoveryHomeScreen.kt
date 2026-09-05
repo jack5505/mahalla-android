@@ -3,14 +3,16 @@ package uz.mahalla.feature.discovery.ui.home
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
@@ -48,6 +51,7 @@ fun DiscoveryHomeScreen(
     onSearchClick: (PlaceCategory?) -> Unit,
     onMapClick: () -> Unit,
     onNotificationsClick: () -> Unit,
+    onFreelancersClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DiscoveryHomeViewModel = hiltViewModel(),
 ) {
@@ -67,6 +71,9 @@ fun DiscoveryHomeScreen(
         state = state,
         onEvent = viewModel::onEvent,
         modifier = modifier,
+        // Мастера — не заведения, и через ViewModel каталога этот переход не
+        // идёт: у него другой источник данных и другой экран (issue #107).
+        onFreelancersClick = onFreelancersClick,
         // Бейдж непрочитанного считает своя ViewModel (issue #81): к каталогу
         // он отношения не имеет и обновляется на каждом возврате на главную.
         actions = { NotificationsBadgeAction(onClick = onNotificationsClick) },
@@ -79,6 +86,7 @@ fun DiscoveryHomeContentScreen(
     state: DiscoveryHomeState,
     onEvent: (DiscoveryHomeEvent) -> Unit,
     modifier: Modifier = Modifier,
+    onFreelancersClick: () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -109,6 +117,7 @@ fun DiscoveryHomeContentScreen(
                     content = content,
                     categories = state.categories,
                     onEvent = onEvent,
+                    onFreelancersClick = onFreelancersClick,
                 )
             }
         }
@@ -120,6 +129,7 @@ private fun HomeList(
     content: DiscoveryHomeContent,
     categories: List<PlaceCategory>,
     onEvent: (DiscoveryHomeEvent) -> Unit,
+    onFreelancersClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -142,6 +152,18 @@ private fun HomeList(
             CategoryGrid(
                 categories = categories,
                 onCategoryClick = { onEvent(DiscoveryHomeEvent.CategoryClicked(it)) },
+            )
+        }
+
+        // Мастера-фрилансеры (issue #107). Отдельной строкой, а не плиткой в
+        // сетке категорий: плитка ведёт в каталог заведений, а мастер —
+        // человек с собственным профилем и услугами, и список у него свой.
+        item(key = "freelancers") {
+            MahallaListItem(
+                title = stringResource(R.string.freelancers_title),
+                subtitle = stringResource(R.string.freelancers_home_subtitle),
+                leadingIcon = Icons.Outlined.Handyman,
+                onClick = onFreelancersClick,
             )
         }
 

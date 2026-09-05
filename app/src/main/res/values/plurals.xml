@@ -68,6 +68,21 @@
         <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
 
+    <!-- Мастера (issue #107). Опыт и длительность услуги — числа переменные,
+         лимит текста постоянный, но форма слова зависит от него всё равно. -->
+    <plurals name="freelancer_experience">
+        <item quantity="one">%1$d yil tajriba</item>
+        <item quantity="other">%1$d yil tajriba</item>
+    </plurals>
+    <plurals name="freelancer_service_duration">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+    <plurals name="freelancer_text_too_long">
+        <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
+
     <!-- Сколько единиц в корзине одежды (issue #108): бейдж на кнопке. -->
     <plurals name="fashion_cart_action_count">
         <item quantity="one">Savat: %1$d ta tovar</item>
