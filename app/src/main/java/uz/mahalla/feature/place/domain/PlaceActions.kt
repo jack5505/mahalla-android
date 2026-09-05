@@ -22,6 +22,7 @@ object PlaceActions {
         if (capabilities.cinema) add(PlaceAction.Cinema)
         if (capabilities.shopping) add(PlaceAction.Shop)
         if (capabilities.ordering) add(PlaceAction.Order)
+        if (capabilities.products) add(PlaceAction.Products)
         if (!contacts.phone.isNullOrBlank()) add(PlaceAction.Call)
         if (place.point != null) add(PlaceAction.Route)
     }

@@ -165,4 +165,12 @@
         <item quantity="many">Слишком длинно: не больше %1$d символов.</item>
         <item quantity="other">Слишком длинно: не больше %1$d символа.</item>
     </plurals>
+
+    <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
+    <plurals name="pharmacy_stock_left">
+        <item quantity="one">Осталась %1$d упаковка</item>
+        <item quantity="few">Осталось %1$d упаковки</item>
+        <item quantity="many">Осталось %1$d упаковок</item>
+        <item quantity="other">Осталось %1$d упаковки</item>
+    </plurals>
 </resources>

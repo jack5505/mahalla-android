@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.RateReview
@@ -94,6 +95,7 @@ fun PlaceDetailsScreen(
     onDoctorClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onCinemaClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onShopClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onProductsClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -122,7 +124,8 @@ fun PlaceDetailsScreen(
 
                 // Заказ — вертикаль «Еда» (эпик 5), очередь — walk-in
                 // (issue #96), бронь — запись на время (issue #97), врач —
-                // больницы (issue #99), магазин — одежда (issue #108).
+                // больницы (issue #99), магазин — одежда (issue #108),
+                // товары — витрина аптеки (issue #100).
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
                     PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
                     PlaceAction.Queue -> onQueueClick(effect.placeId, effect.placeName)
@@ -130,6 +133,7 @@ fun PlaceDetailsScreen(
                     PlaceAction.Doctor -> onDoctorClick(effect.placeId, effect.placeName)
                     PlaceAction.Cinema -> onCinemaClick(effect.placeId, effect.placeName)
                     PlaceAction.Shop -> onShopClick(effect.placeId, effect.placeName)
+                    PlaceAction.Products -> onProductsClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
             }
@@ -635,6 +639,7 @@ private fun PlaceAction.labelRes(): Int = when (this) {
     PlaceAction.Cinema -> R.string.place_action_cinema
     PlaceAction.Order -> R.string.place_action_order
     PlaceAction.Shop -> R.string.place_action_shop
+    PlaceAction.Products -> R.string.place_action_products
     PlaceAction.Call -> R.string.place_action_call
     PlaceAction.Route -> R.string.place_action_route
 }
@@ -646,6 +651,7 @@ private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Cinema -> Icons.Outlined.Movie
     PlaceAction.Order -> Icons.Outlined.ShoppingBag
     PlaceAction.Shop -> Icons.Outlined.Storefront
+    PlaceAction.Products -> Icons.Outlined.LocalPharmacy
     PlaceAction.Call -> Icons.Outlined.Call
     PlaceAction.Route -> Icons.Outlined.Directions
 }

@@ -44,6 +44,7 @@ import uz.mahalla.feature.onboarding.ui.PinScreen
 import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
 import uz.mahalla.feature.orders.ui.OrdersScreen
+import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
 import uz.mahalla.feature.queue.ui.QueueScreen
@@ -459,6 +460,11 @@ fun MahallaNavHost(
                 onShopClick = { placeId, placeName ->
                     navController.navigate(FashionCatalogRoute(placeId, placeName))
                 },
+                // Витрина аптеки (issue #100): единственное действие, которое
+                // ничего не начинает — заказать товар бэкенду нечем.
+                onProductsClick = { placeId, placeName ->
+                    navController.navigate(PharmacyRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -513,6 +519,13 @@ fun MahallaNavHost(
                 },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Аптека» (issue #100): витрина товаров с наличием. Своей
+        // корзины у неё нет и не будет, пока `pharmacy-controller` не отдаст
+        // ручку заказа, — поэтому маршрут здесь один.
+        composable<PharmacyRoute> {
+            PharmacyScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Бронь» (эпик #11, issue #97): записываются с карточки

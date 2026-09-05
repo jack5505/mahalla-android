@@ -353,6 +353,7 @@
     <string name="place_action_doctor">Записаться к врачу</string>
     <string name="place_action_cinema">Купить билет</string>
     <string name="place_action_order">Заказать</string>
+    <string name="place_action_products">Товары</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
     <string name="action_collapse">Свернуть</string>
@@ -806,4 +807,15 @@
     <string name="my_tickets_cancel_title">Вернуть билет?</string>
     <string name="my_tickets_cancel_message">Место освободится. Условия возврата определяет кинотеатр.</string>
     <string name="my_tickets_cancel_keep">Оставить</string>
+    <!-- Вертикаль «Аптека» (issue #100): витрина товаров с наличием. -->
+    <string name="pharmacy_title">Аптека</string>
+    <string name="pharmacy_search_hint">Введите название лекарства</string>
+    <string name="pharmacy_stock_in">В наличии</string>
+    <string name="pharmacy_stock_out">Нет в наличии</string>
+    <string name="pharmacy_stock_unknown">Наличие неизвестно</string>
+    <string name="pharmacy_prescription_required">Отпускается по рецепту</string>
+    <string name="pharmacy_empty_title">Список пуст</string>
+    <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
+    <string name="pharmacy_not_found_title">Ничего не нашлось</string>
+    <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
 </resources>

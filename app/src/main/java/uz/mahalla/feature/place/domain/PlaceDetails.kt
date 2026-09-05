@@ -60,6 +60,13 @@ enum class PlaceAction {
      * корзиной на сервере — общего у них только слово «заказать».
      */
     Shop,
+
+    /**
+     * Витрина товаров аптеки (issue #100). Это единственное действие, которое
+     * ничего не начинает: заказать товар нечем, поэтому и называется оно
+     * «Товары», а не «Купить».
+     */
+    Products,
     Call,
     Route,
 }
@@ -84,6 +91,8 @@ data class PlaceCapabilities(
     val ordering: Boolean = false,
     /** Витрина магазина одежды — вертикаль «Одежда» (issue #108). */
     val shopping: Boolean = false,
+    /** Витрина товаров аптеки — вертикаль «Аптека» (issue #100). */
+    val products: Boolean = false,
 ) {
     companion object {
         /**
@@ -108,6 +117,12 @@ data class PlaceCapabilities(
          * issue #108): каталог известен только серверу, поэтому кнопка
          * показывается всегда, а «товаров пока нет» экран скажет словами.
          *
+         * У аптек (`PHARMACY`) это витрина товаров (issue #100) — действие,
+         * которое ничего не начинает: заказа у аптеки бэкенд не принимает, и
+         * кнопки «купить» здесь нет. Товаров в аптеке может и не оказаться —
+         * тогда экран скажет это словами; спрятать кнопку заранее нельзя,
+         * витрина известна только серверу.
+         *
          * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
          * её экраны есть, но включение кнопки в объём этих задач не входило.
          */
@@ -116,6 +131,7 @@ data class PlaceCapabilities(
             PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
             PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
             PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
+            PlaceCategory.Pharmacy -> PlaceCapabilities(products = true)
             else -> PlaceCapabilities()
         }
     }

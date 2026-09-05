@@ -210,6 +210,7 @@ class PlaceDetailsViewModel @Inject constructor(
             PlaceAction.Cinema,
             PlaceAction.Order,
             PlaceAction.Shop,
+            PlaceAction.Products,
             ->
                 emitEffect(
                     PlaceDetailsEffect.OpenVertical(action, placeId, details.place.name),

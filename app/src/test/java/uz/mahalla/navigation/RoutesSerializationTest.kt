@@ -151,6 +151,9 @@ class RoutesSerializationTest {
             // очереди, — склеенный serialName увёл бы с профиля мастера на
             // карточку заведения.
             serializer<FreelancerRoute>().descriptor.serialName,
+            // Аптека (issue #100): аргументы те же — витрина не должна
+            // склеиться ни с меню, ни с очередью.
+            serializer<PharmacyRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,
@@ -367,5 +370,19 @@ class RoutesSerializationTest {
             checkoutRoute,
             json.decodeFromString<FashionCheckoutRoute>(json.encodeToString(checkoutRoute)),
         )
+    }
+
+    @Test
+    fun `pharmacy route carries the place and its name`() {
+        // Имени аптеки в ответе `pharmacy/.../products` нет — оно едет
+        // маршрутом (issue #100).
+        val descriptor = serializer<PharmacyRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        val route = PharmacyRoute(placeId = "p-1")
+        assertEquals(route, json.decodeFromString<PharmacyRoute>(json.encodeToString(route)))
     }
 }

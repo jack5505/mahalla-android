@@ -446,6 +446,25 @@ data class MovieRoute(
 @Serializable
 data object MyTicketsRoute
 
+// --- Вертикаль «Аптека» (issue #100) ---
+
+/**
+ * Витрина товаров аптеки: название, цена, наличие.
+ *
+ * Покупки здесь нет и маршрута корзины не будет, пока `pharmacy-controller`
+ * не отдаст ручку заказа: сейчас `PHARMACY` значится только в `vertical` у
+ * `GET /orders`, то есть принять заказ аптеки бэкенду нечем.
+ *
+ * @param placeName название аптеки. Едет маршрутом по той же причине, что и у
+ * [QueueRoute], [BookingRoute] и [MenuRoute]: в ответе `pharmacy/.../products`
+ * его нет, а шапка без имени места читается как чужая.
+ */
+@Serializable
+data class PharmacyRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 
 @Serializable
