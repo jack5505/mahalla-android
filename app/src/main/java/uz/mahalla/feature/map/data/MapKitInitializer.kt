@@ -63,7 +63,13 @@ enum class MapEngineState {
  * повторного вызова не прощает.
  */
 class MapKitInitializer(
-    private val apiKey: String,
+    /**
+     * Ключ спрашивается на каждой попытке, а не берётся один раз в
+     * конструкторе (issue #129): его можно ввести прямо в приложении
+     * ([MapKitKeyStore]), и «Повторить» после ввода обязано поднять движок без
+     * перезапуска. Функция suspend, потому что ключ лежит в DataStore.
+     */
+    private val apiKey: suspend () -> String,
     private val locale: String,
     private val sdk: MapKitSdk,
     /**
@@ -74,9 +80,6 @@ class MapKitInitializer(
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
 ) {
 
-    /** Собрано ли приложение с ключом. Проверяется до всякой работы с SDK. */
-    val hasApiKey: Boolean get() = apiKey.isNotBlank()
-
     /**
      * `Mutex`, а не `@Synchronized`: метод suspend'ится (уходит на главный
      * поток), а блокировать чужой поток на время загрузки нативной библиотеки
@@ -85,8 +88,7 @@ class MapKitInitializer(
     private val mutex = Mutex()
 
     @Volatile
-    private var state: MapEngineState =
-        if (hasApiKey) MapEngineState.Failed else MapEngineState.MissingApiKey
+    private var state: MapEngineState = MapEngineState.MissingApiKey
 
     @Volatile
     private var initialized = false
@@ -94,22 +96,27 @@ class MapKitInitializer(
     /**
      * Поднимает SDK, если он ещё не поднят, и возвращает текущее состояние.
      * Провал не кэшируется: у пользователя мог просто не быть доступен диск или
-     * сеть, и кнопка «Повторить» должна давать второй шанс.
+     * сеть, и кнопка «Повторить» должна давать второй шанс. Отсутствие ключа —
+     * тем более: ключ могли ввести секунду назад (issue #129).
      */
     suspend fun ensureInitialized(): MapEngineState {
-        if (!hasApiKey) return MapEngineState.MissingApiKey
         if (initialized) return state
 
         return mutex.withLock {
             // Пока ждали замок, инициализировать мог соседний вызов.
             if (initialized) return@withLock state
-            withContext(mainDispatcher) { initializeOnMainThread() }
+            val key = apiKey().trim()
+            if (key.isEmpty()) {
+                state = MapEngineState.MissingApiKey
+                return@withLock state
+            }
+            withContext(mainDispatcher) { initializeOnMainThread(key) }
         }
     }
 
-    private fun initializeOnMainThread(): MapEngineState {
+    private fun initializeOnMainThread(key: String): MapEngineState {
         val result = runCatchingMapKit {
-            sdk.setApiKey(apiKey)
+            sdk.setApiKey(key)
             sdk.setLocale(locale)
             sdk.initialize()
         }.reportSwallowed("mapkit.initialize")

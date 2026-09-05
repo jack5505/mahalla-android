@@ -24,6 +24,7 @@ import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeUserLocationProvider
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.fakeMapKitInitializer
+import uz.mahalla.testutil.fakeMapKitKeyStore
 
 /**
  * Выбор точки на карте (issue #90).
@@ -218,6 +219,7 @@ class MapPickerViewModelTest {
             locationProvider = locationProvider,
             requestLocationProvider = GatedLocationProvider(requestLocationProvider, gate),
             mapInitializer = fakeMapKitInitializer(),
+        mapKeyStore = fakeMapKitKeyStore(),
         )
     }
 }

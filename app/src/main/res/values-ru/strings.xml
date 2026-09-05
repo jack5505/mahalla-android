@@ -238,6 +238,14 @@
     <string name="map_missing_key_description">Приложение собрано без ключа карты — показать её нечем. Места рядом ниже списком.</string>
     <string name="map_engine_failed_description">Не удалось загрузить карту. Проверьте интернет и попробуйте снова.</string>
 
+    <!-- Ключ MapKit, введённый в приложении (issue #129) -->
+    <string name="map_key_action_enter">Ввести ключ карты</string>
+    <string name="map_key_dialog_title">Ключ Yandex MapKit</string>
+    <string name="map_key_dialog_description">Возьмите ключ в кабинете Yandex MapKit и вставьте сюда. Ключ хранится только на этом устройстве.</string>
+    <string name="map_key_field_label">Ключ MapKit</string>
+    <string name="map_key_field_hint">Пустое поле возвращает ключ из сборки.</string>
+    <string name="map_key_save_failed">Ключ не сохранился: он работает только до перезапуска приложения.</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Нет подключения к интернету</string>
     <string name="error_timeout">Сервер не ответил</string>

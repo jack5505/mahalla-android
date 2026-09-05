@@ -22,6 +22,7 @@ import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakeUserLocationProvider
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.fakeMapKitInitializer
+import uz.mahalla.testutil.fakeMapKitKeyStore
 import uz.mahalla.testutil.place
 
 /**
@@ -359,6 +360,7 @@ class MapViewModelTest {
         repository = repository,
         locationProvider = locationProvider,
         mapInitializer = fakeMapKitInitializer(),
+        mapKeyStore = fakeMapKitKeyStore(),
     )
 
     private companion object {

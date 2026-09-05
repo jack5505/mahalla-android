@@ -36,6 +36,7 @@ class SettingsDataStore @Inject constructor(
                 deliveryAddress = preferences[PreferenceKeys.DeliveryAddress],
                 backendBaseUrl = preferences[PreferenceKeys.BackendBaseUrl],
                 backendCertificatePin = preferences[PreferenceKeys.BackendCertificatePin],
+                mapKitApiKey = preferences[PreferenceKeys.MapKitApiKey],
             )
         }
         // Файл настроек может быть недоступен (нет места, права, IO-ошибка).
@@ -94,5 +95,21 @@ class SettingsDataStore @Inject constructor(
     /** Отпечаток уже нормализован (`CertificateFingerprint.of`) — issue #32. */
     suspend fun setBackendCertificatePin(fingerprint: String) {
         dataStore.edit { it[PreferenceKeys.BackendCertificatePin] = fingerprint }
+    }
+
+    /**
+     * Ключ Yandex MapKit, введённый пользователем (issue #129). Пустая строка —
+     * это «своего ключа нет», а не ключ из пробелов: ключ удаляется, и карта
+     * возвращается к ключу сборки.
+     */
+    suspend fun setMapKitApiKey(apiKey: String) {
+        val cleaned = apiKey.trim()
+        dataStore.edit { preferences ->
+            if (cleaned.isEmpty()) {
+                preferences.remove(PreferenceKeys.MapKitApiKey)
+            } else {
+                preferences[PreferenceKeys.MapKitApiKey] = cleaned
+            }
+        }
     }
 }

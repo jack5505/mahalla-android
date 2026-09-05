@@ -10,6 +10,7 @@ import uz.mahalla.feature.map.canvas.MapCameraFit
 import uz.mahalla.feature.map.canvas.MapCameraPosition
 import uz.mahalla.feature.map.canvas.MapCoordinates
 import uz.mahalla.feature.map.data.MapKitInitializer
+import uz.mahalla.feature.map.data.MapKitKeyStore
 import uz.mahalla.feature.map.data.UserLocationProvider
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.LocationNotice
@@ -38,6 +39,8 @@ class MapPickerViewModel @Inject constructor(
     private val requestLocationProvider: RequestLocationProvider,
     /** Передаётся экрану как есть — сама ViewModel SDK не трогает. */
     val mapInitializer: MapKitInitializer,
+    /** Ключ карты: без него точку выбирать не на чем (issue #129). */
+    val mapKeyStore: MapKitKeyStore,
 ) : MviViewModel<MapPickerState, MapPickerEvent, MapPickerEffect>(MapPickerState()) {
 
     init {
