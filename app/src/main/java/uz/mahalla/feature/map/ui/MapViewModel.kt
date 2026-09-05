@@ -34,6 +34,13 @@ class MapViewModel @Inject constructor(
     val mapInitializer: MapKitInitializer,
 ) : MviViewModel<MapState, MapEvent, MapEffect>(MapState()) {
 
+    /**
+     * Координаты за время жизни экрана уже искали. Поле, а не часть состояния:
+     * это память о сделанном, а не то, что рисуется. Нужно затем, чтобы возврат
+     * на экран (`ON_RESUME` приходит на каждом) не запускал поиск заново.
+     */
+    private var locateRequested = false
+
     init {
         load()
     }
@@ -54,9 +61,7 @@ class MapViewModel @Inject constructor(
 
             MapEvent.MyLocationClicked -> onMyLocationClicked()
 
-            is MapEvent.LocationPermissionChecked -> updateState {
-                copy(showUserLocation = event.granted)
-            }
+            is MapEvent.LocationPermissionChecked -> onPermissionChecked(event.granted)
 
             is MapEvent.LocationPermissionResult -> onPermissionResult(event.granted)
 
@@ -132,6 +137,20 @@ class MapViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Разрешение, выданное раньше (онбординг 3.6 или настройки устройства).
+     *
+     * Координаты спрашиваются сразу, не дожидаясь тапа: человек, разрешивший
+     * геолокацию, ждёт увидеть на карте себя, а не центр Ташкента — тем более
+     * когда каталог ничего не нашёл и подгонять камеру не подо что (issue #126).
+     * Молча: об этой попытке он не просил, и плашка «не удалось определить»
+     * поверх карты была бы ответом на незаданный вопрос.
+     */
+    private fun onPermissionChecked(granted: Boolean) {
+        updateState { copy(showUserLocation = granted) }
+        if (granted && !locateRequested) locate(silent = true)
+    }
+
     private fun onPermissionResult(granted: Boolean) {
         updateState {
             copy(
@@ -143,21 +162,35 @@ class MapViewModel @Inject constructor(
     }
 
     /**
-     * Координаты спрашиваются у MapKit: свой клиент геолокации в проект не
-     * тянем (см. [UserLocationProvider]). Отсутствие координат — норма, но
+     * Координаты спрашивает [UserLocationProvider]: сперва MapKit, потом
+     * системный `LocationManager` (issue #126). Отсутствие координат — норма, но
      * молча оставлять карту на месте нельзя: тап без последствий выглядит как
      * поломка кнопки.
+     *
+     * [silent] — попытка, которую пользователь не запрашивал (разрешение уже
+     * было выдано при открытии экрана): она не показывает отказ и не отбирает
+     * камеру у найденных мест — маркеры человек уже видит, уходить с них он не
+     * просил.
      */
-    private fun locate() {
+    private fun locate(silent: Boolean = false) {
         if (currentState.isLocating) return
+        locateRequested = true
         updateState { copy(isLocating = true) }
         viewModelScope.launch {
             val point = locationProvider.currentLocation()
             updateState {
                 copy(
                     isLocating = false,
-                    camera = if (point == null) camera else MapCameraFit.focusOn(point, camera),
-                    locationNotice = if (point == null) LocationNotice.Unavailable else null,
+                    camera = when {
+                        point == null -> camera
+                        silent && markers.isNotEmpty() -> camera
+                        else -> MapCameraFit.focusOn(point, camera)
+                    },
+                    locationNotice = when {
+                        point != null -> null
+                        silent -> locationNotice
+                        else -> LocationNotice.Unavailable
+                    },
                 )
             }
         }

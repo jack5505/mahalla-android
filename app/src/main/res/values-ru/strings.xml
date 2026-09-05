@@ -235,7 +235,7 @@
 
     <!-- Карта (эпик 4.2) -->
     <string name="map_unavailable_title">Карта не открылась</string>
-    <string name="map_missing_key_description">Приложение собрано без ключа карты. Списком пользоваться можно.</string>
+    <string name="map_missing_key_description">Приложение собрано без ключа карты — показать её нечем. Места рядом ниже списком.</string>
     <string name="map_engine_failed_description">Не удалось загрузить карту. Проверьте интернет и попробуйте снова.</string>
 
     <!-- Ошибки сетевого слоя -->
@@ -313,6 +313,7 @@
     <string name="map_empty_places">Здесь пока нет мест</string>
     <string name="map_location_denied">Разрешение на геолокацию не выдано. Чтобы видеть себя на карте, включите его в настройках.</string>
     <string name="map_location_unavailable">Не удалось определить местоположение. Проверьте, включена ли геолокация.</string>
+    <string name="map_fallback_places_title">Места рядом</string>
 
     <!-- Выбор точки на карте (issue #90) -->
     <string name="map_picker_title">Выберите точку на карте</string>

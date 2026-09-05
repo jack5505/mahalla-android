@@ -241,7 +241,7 @@
 
     <!-- Карта (эпик 4.2) -->
     <string name="map_unavailable_title">Xarita ochilmadi</string>
-    <string name="map_missing_key_description">Ilova xarita kalitisiz yig\'ilgan. Ro\'yxatni ishlatishingiz mumkin.</string>
+    <string name="map_missing_key_description">Ilova xarita kalitisiz yig\'ilgan — xaritani ko\'rsatib bo\'lmaydi. Yaqin atrofdagi joylar quyida ro\'yxat bilan.</string>
     <string name="map_engine_failed_description">Xaritani yuklab bo\'lmadi. Internetni tekshiring va qaytadan urinib ko\'ring.</string>
 
     <!-- Ошибки сетевого слоя -->
@@ -319,6 +319,7 @@
     <string name="map_empty_places">Bu hududda joy topilmadi</string>
     <string name="map_location_denied">Joylashuv ruxsati berilmadi. Xaritada o\'zingizni ko\'rish uchun sozlamalardan ruxsat bering.</string>
     <string name="map_location_unavailable">Joylashuvni aniqlab bo\'lmadi. Geolokatsiya yoqilganini tekshiring.</string>
+    <string name="map_fallback_places_title">Yaqin atrofdagi joylar</string>
 
     <!-- Xaritada nuqta tanlash (issue #90) -->
     <string name="map_picker_title">Xaritada nuqtani tanlang</string>

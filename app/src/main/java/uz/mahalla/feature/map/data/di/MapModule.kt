@@ -7,6 +7,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import uz.mahalla.BuildConfig
+import uz.mahalla.data.location.LocationSource
+import uz.mahalla.feature.map.data.DeviceUserLocationProvider
 import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.feature.map.data.MapKitLocationProvider
 import uz.mahalla.feature.map.data.MapKitSdk
@@ -39,8 +41,18 @@ object MapModule {
         sdk = sdk,
     )
 
+    /**
+     * Два источника координат (issue #126): MapKit, пока он поднят, и системный
+     * `LocationManager` запасным. Без ключа карты MapKit не отвечает вовсе, и
+     * «моё местоположение» отказывало при выданном разрешении.
+     */
     @Provides
     @Singleton
-    fun provideUserLocationProvider(initializer: MapKitInitializer): UserLocationProvider =
-        MapKitLocationProvider(initializer)
+    fun provideUserLocationProvider(
+        initializer: MapKitInitializer,
+        locationSource: LocationSource,
+    ): UserLocationProvider = DeviceUserLocationProvider(
+        mapKit = MapKitLocationProvider(initializer),
+        system = locationSource,
+    )
 }
