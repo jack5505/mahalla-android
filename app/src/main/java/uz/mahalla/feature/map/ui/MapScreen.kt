@@ -45,6 +45,7 @@ import uz.mahalla.feature.map.canvas.MapUnavailable
 import uz.mahalla.feature.map.canvas.rememberMapEngine
 import uz.mahalla.feature.map.data.MapEngineState
 import uz.mahalla.feature.map.data.MapKitInitializer
+import uz.mahalla.feature.map.data.MapKitKeyStore
 import uz.mahalla.ui.theme.Spacing
 
 /**
@@ -96,6 +97,7 @@ fun MapScreen(
 
     MapContent(
         initializer = viewModel.mapInitializer,
+        keyStore = viewModel.mapKeyStore,
         state = state,
         onEvent = viewModel::onEvent,
         onBack = onBack,
@@ -110,6 +112,8 @@ fun MapContent(
     onEvent: (MapEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Ключ карты можно ввести прямо здесь (issue #129); `null` — превью. */
+    keyStore: MapKitKeyStore? = null,
 ) {
     val engine = rememberMapEngine(initializer)
 
@@ -125,6 +129,7 @@ fun MapContent(
                 state = state,
                 onEvent = onEvent,
                 modifier = Modifier.fillMaxSize(),
+                keyStore = keyStore,
             )
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -187,6 +192,7 @@ private fun MapFallback(
     state: MapState,
     onEvent: (MapEvent) -> Unit,
     modifier: Modifier = Modifier,
+    keyStore: MapKitKeyStore? = null,
 ) {
     val places = state.places
     LazyColumn(
@@ -195,7 +201,11 @@ private fun MapFallback(
         verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
         item {
-            MapUnavailable(engine = engine, modifier = Modifier.fillMaxWidth())
+            MapUnavailable(
+                engine = engine,
+                modifier = Modifier.fillMaxWidth(),
+                keyStore = keyStore,
+            )
         }
 
         val notice = state.locationNotice

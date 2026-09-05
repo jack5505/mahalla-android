@@ -244,6 +244,14 @@
     <string name="map_missing_key_description">Ilova xarita kalitisiz yig\'ilgan — xaritani ko\'rsatib bo\'lmaydi. Yaqin atrofdagi joylar quyida ro\'yxat bilan.</string>
     <string name="map_engine_failed_description">Xaritani yuklab bo\'lmadi. Internetni tekshiring va qaytadan urinib ko\'ring.</string>
 
+    <!-- Ключ MapKit, введённый в приложении (issue #129) -->
+    <string name="map_key_action_enter">Xarita kalitini kiritish</string>
+    <string name="map_key_dialog_title">Yandex MapKit kaliti</string>
+    <string name="map_key_dialog_description">Kalitni Yandex MapKit kabinetidan oling va shu yerga qo\'ying. Kalit faqat shu qurilmada saqlanadi.</string>
+    <string name="map_key_field_label">MapKit kaliti</string>
+    <string name="map_key_field_hint">Bo\'sh qoldirsangiz, ilova yig\'ilishdagi kalitga qaytadi.</string>
+    <string name="map_key_save_failed">Kalitni saqlab bo\'lmadi: u faqat ilova qayta ishga tushgunicha ishlaydi.</string>
+
     <!-- Ошибки сетевого слоя -->
     <string name="error_no_connection">Internet aloqasi yo\'q</string>
     <string name="error_timeout">Server javob bermadi</string>

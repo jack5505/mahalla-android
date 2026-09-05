@@ -5,7 +5,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.coroutines.CoroutineContext
@@ -39,7 +38,7 @@ class MapKitInitializerTest {
 
     private fun initializer(
         sdk: FakeSdk,
-        apiKey: String = "key-123",
+        apiKey: suspend () -> String = { "key-123" },
         locale: String = "ru_RU",
     ) = MapKitInitializer(
         apiKey = apiKey,
@@ -73,11 +72,40 @@ class MapKitInitializerTest {
     @Test
     fun `blank key never touches the sdk`() = runTest {
         val sdk = FakeSdk()
-        val initializer = initializer(sdk, apiKey = "   ")
+        val initializer = initializer(sdk, apiKey = { "   " })
 
-        assertFalse(initializer.hasApiKey)
         assertEquals(MapEngineState.MissingApiKey, initializer.ensureInitialized())
         assertTrue(sdk.calls.isEmpty())
+    }
+
+    /**
+     * Ключ вводят прямо в приложении (issue #129), и «Повторить» после ввода
+     * обязано поднять движок без перезапуска: отсутствие ключа не кэшируется
+     * так же, как не кэшируется провал инициализации.
+     */
+    @Test
+    fun `key entered after a failed attempt is picked up`() = runTest {
+        val sdk = FakeSdk()
+        var key = ""
+        val initializer = initializer(sdk, apiKey = { key })
+
+        assertEquals(MapEngineState.MissingApiKey, initializer.ensureInitialized())
+
+        key = "key-from-user"
+        assertEquals(MapEngineState.Ready, initializer.ensureInitialized())
+        assertEquals(listOf("apiKey=key-from-user", "locale=ru_RU", "initialize"), sdk.calls)
+    }
+
+    /** Ключ спрашивается один раз: после успеха SDK второй раз не поднимают. */
+    @Test
+    fun `key is asked only until the engine is up`() = runTest {
+        val sdk = FakeSdk()
+        var asked = 0
+        val initializer = initializer(sdk, apiKey = { asked++; "key-123" })
+
+        repeat(3) { initializer.ensureInitialized() }
+
+        assertEquals(1, asked)
     }
 
     @Test
@@ -134,7 +162,7 @@ class MapKitInitializerTest {
         }
 
         val state = MapKitInitializer(
-            apiKey = "key-123",
+            apiKey = { "key-123" },
             locale = "ru_RU",
             sdk = sdk,
             mainDispatcher = mainDispatcher,

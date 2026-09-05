@@ -37,6 +37,16 @@ internal object PreferenceKeys {
     /** Отпечаток сертификата сервера, подтверждённый пользователем (issue #32). */
     val BackendCertificatePin = stringPreferencesKey("settings_backend_certificate_pin")
 
+    /**
+     * Ключ Yandex MapKit, введённый пользователем (issue #129).
+     *
+     * Обычно ключ приезжает из сборки (`BuildConfig.MAPKIT_API_KEY`), но сборка
+     * без секрета оставляет карту мёртвой до следующего релиза — а чинить это
+     * приходится тому, у кого ключ на руках. Читается только там, где сборка
+     * разрешает менять и адрес бэкенда (`BuildConfig.BACKEND_URL_OVERRIDE`).
+     */
+    val MapKitApiKey = stringPreferencesKey("settings_mapkit_api_key")
+
     /** Идентификатор установки для сессий устройства на бэкенде (issue #42). */
     val DeviceId = stringPreferencesKey("device_id")
 

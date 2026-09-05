@@ -30,7 +30,7 @@ class MapKitLocationProviderTest {
         val sdk = NeverCalledSdk()
         val provider = MapKitLocationProvider(
             initializer = MapKitInitializer(
-                apiKey = "",
+                apiKey = { "" },
                 locale = "ru_RU",
                 sdk = sdk,
                 mainDispatcher = UnconfinedTestDispatcher(),
@@ -51,7 +51,7 @@ class MapKitLocationProviderTest {
         }
         val provider = MapKitLocationProvider(
             initializer = MapKitInitializer(
-                apiKey = "key",
+                apiKey = { "key" },
                 locale = "ru_RU",
                 sdk = failing,
                 mainDispatcher = UnconfinedTestDispatcher(),

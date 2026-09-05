@@ -38,6 +38,7 @@ import uz.mahalla.feature.map.canvas.MapCanvas
 import uz.mahalla.feature.map.canvas.MapUnavailable
 import uz.mahalla.feature.map.canvas.rememberMapEngine
 import uz.mahalla.feature.map.data.MapKitInitializer
+import uz.mahalla.feature.map.data.MapKitKeyStore
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.LOCATION_PERMISSIONS
 import uz.mahalla.feature.map.ui.LocationNotice
@@ -94,6 +95,7 @@ fun MapPickerScreen(
 
     MapPickerContent(
         initializer = viewModel.mapInitializer,
+        keyStore = viewModel.mapKeyStore,
         state = state,
         onEvent = viewModel::onEvent,
         onBack = onBack,
@@ -108,6 +110,8 @@ fun MapPickerContent(
     onEvent: (MapPickerEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Ключ карты можно ввести прямо здесь (issue #129); `null` — превью. */
+    keyStore: MapKitKeyStore? = null,
 ) {
     val engine = rememberMapEngine(initializer)
 
@@ -123,6 +127,7 @@ fun MapPickerContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(Spacing.gutter),
+                keyStore = keyStore,
             )
             return@Column
         }

@@ -54,4 +54,9 @@ data class AppSettings(
      * только по системным CA.
      */
     val backendCertificatePin: String? = null,
+    /**
+     * Ключ Yandex MapKit, введённый пользователем (issue #129); `null` — не
+     * вводили, карта работает по ключу из сборки.
+     */
+    val mapKitApiKey: String? = null,
 )

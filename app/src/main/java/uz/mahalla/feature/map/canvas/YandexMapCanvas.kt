@@ -227,33 +227,6 @@ fun MapCanvas(
     }
 }
 
-/**
- * Почему карты нет и что с этим делать.
- *
- * Текст разный: «сборка без ключа» чинится только пересборкой (сколько ни жми
- * «Повторить»), а провал инициализации — вполне временный. Кнопка «Повторить»
- * стоит в обоих случаях: движок мог не подняться и по причине, о которой SDK не
- * сказал, и второй шанс дешевле, чем перезапуск приложения.
- */
-@Composable
-fun MapUnavailable(
-    engine: MapEngine,
-    modifier: Modifier = Modifier,
-) {
-    ErrorState(
-        onRetry = engine.retry,
-        modifier = modifier,
-        title = stringResource(R.string.map_unavailable_title),
-        description = stringResource(
-            if (engine.state == MapEngineState.MissingApiKey) {
-                R.string.map_missing_key_description
-            } else {
-                R.string.map_engine_failed_description
-            },
-        ),
-    )
-}
-
 /** Готовые картинки маркеров: рисовать их на каждый кадр — заметный расход. */
 private class MarkerIconCache(
     private val markerSizePx: Int,

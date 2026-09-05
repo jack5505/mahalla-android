@@ -13,6 +13,7 @@ import uz.mahalla.feature.map.canvas.MapCameraFit
 import uz.mahalla.feature.map.canvas.MapCoordinates
 import uz.mahalla.feature.map.canvas.MapMarkerUi
 import uz.mahalla.feature.map.data.MapKitInitializer
+import uz.mahalla.feature.map.data.MapKitKeyStore
 import uz.mahalla.feature.map.data.UserLocationProvider
 import javax.inject.Inject
 
@@ -32,6 +33,12 @@ class MapViewModel @Inject constructor(
     private val locationProvider: UserLocationProvider,
     /** Передаётся экрану как есть — сама ViewModel SDK не трогает. */
     val mapInitializer: MapKitInitializer,
+    /**
+     * Тем же путём и по той же причине, что [mapInitializer]: ключ вводится в
+     * шторке поверх объяснения «карты нет» (issue #129), а состояния у этого
+     * ввода ровно столько, сколько живёт шторка.
+     */
+    val mapKeyStore: MapKitKeyStore,
 ) : MviViewModel<MapState, MapEvent, MapEffect>(MapState()) {
 
     /**
