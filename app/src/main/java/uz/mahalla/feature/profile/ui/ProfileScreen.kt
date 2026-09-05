@@ -86,6 +86,8 @@ import java.time.Instant
  * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
  * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
  * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
+ * @param onOpenMyTickets открыть «мои билеты» (issue #106). Тоже всем и по
+ * той же причине: купить билет может кто угодно, а таба у кино нет.
  */
 @Composable
 fun ProfileScreen(
@@ -94,6 +96,7 @@ fun ProfileScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyTickets: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -124,6 +127,7 @@ fun ProfileScreen(
         onOpenMyPlaces = onOpenMyPlaces,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
+        onOpenMyTickets = onOpenMyTickets,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -139,6 +143,7 @@ fun ProfileContentScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyTickets: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -188,6 +193,14 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_doctor_appointments_title),
                 subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
                 onClick = onOpenMyDoctorAppointments,
+            )
+
+            // «Мои билеты» (issue #106): своего таба у кино нет, а следить
+            // за билетом и вернуть его больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.my_tickets_title),
+                subtitle = stringResource(R.string.my_tickets_profile_subtitle),
+                onClick = onOpenMyTickets,
             )
 
             Text(
@@ -537,6 +550,7 @@ private fun ProfilePreview() {
             onOpenMyPlaces = {},
             onOpenMyAppointments = {},
             onOpenMyDoctorAppointments = {},
+            onOpenMyTickets = {},
         )
     }
 }

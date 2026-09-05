@@ -67,4 +67,20 @@
         <item quantity="one">Matn juda uzun: %1$d belgidan oshmasin.</item>
         <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
+
+    <!-- Кино (issue #106): длительность фильма, остаток мест, лимит поля места. -->
+    <plurals name="cinema_movie_duration">
+        <item quantity="one">%1$d daqiqa</item>
+        <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+
+    <plurals name="cinema_seats_left">
+        <item quantity="one">%1$d joy qoldi</item>
+        <item quantity="other">%1$d joy qoldi</item>
+    </plurals>
+
+    <plurals name="cinema_buy_seat_too_long">
+        <item quantity="one">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
+        <item quantity="other">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
+    </plurals>
 </resources>

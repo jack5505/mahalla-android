@@ -1,6 +1,7 @@
 package uz.mahalla.core.format
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeParseException
@@ -27,5 +28,22 @@ fun parseServerInstant(value: String?): Instant? {
         } catch (invalidLocal: DateTimeParseException) {
             null
         }
+    }
+}
+
+/**
+ * День без времени из ответа бэкенда (`yyyy-MM-dd`): дата записи
+ * (`apptDate`, issue #97), день сеанса и дата выхода фильма (issue #106).
+ *
+ * Разбор такой же мягкий: битая дата — `null`, а не исключение. Запись без
+ * дня показывается как есть, теряться из списка ей незачем.
+ */
+fun parseServerLocalDate(value: String?): LocalDate? {
+    val raw = value?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+    return try {
+        LocalDate.parse(raw)
+    } catch (invalid: DateTimeParseException) {
+        null
     }
 }
