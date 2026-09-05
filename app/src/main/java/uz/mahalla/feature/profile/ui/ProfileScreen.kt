@@ -89,6 +89,9 @@ import java.time.Instant
  * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
  * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
  * таба у вертикали нет.
+ * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
+ * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
+ * пробный период и отмена нужны обоим.
  */
 @Composable
 fun ProfileScreen(
@@ -98,6 +101,7 @@ fun ProfileScreen(
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -129,6 +133,7 @@ fun ProfileScreen(
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
+        onOpenSubscription = onOpenSubscription,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -145,6 +150,7 @@ fun ProfileContentScreen(
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -202,6 +208,15 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.fashion_orders_title),
                 subtitle = stringResource(R.string.fashion_orders_profile_subtitle),
                 onClick = onOpenMyFashionOrders,
+            )
+
+            // Подписка (issue #103): тарифы, пробный период, отмена и
+            // автопродление. Строка — всем: набор тарифов зависит от роли, но
+            // сама подписка есть у обеих.
+            MahallaListItem(
+                title = stringResource(R.string.subscription_profile_entry),
+                subtitle = stringResource(R.string.subscription_profile_subtitle),
+                onClick = onOpenSubscription,
             )
 
             Text(
@@ -552,6 +567,7 @@ private fun ProfilePreview() {
             onOpenMyAppointments = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyFashionOrders = {},
+            onOpenSubscription = {},
         )
     }
 }
