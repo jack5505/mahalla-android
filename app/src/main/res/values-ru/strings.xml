@@ -269,6 +269,16 @@
     <string name="discovery_section_nearby">Рядом</string>
     <string name="discovery_section_recommended">Рекомендуем</string>
     <string name="discovery_open_map">Открыть карту</string>
+
+    <!-- Акции (issue #104): блок на главной и на карточке места -->
+    <string name="promotions_title">Акции</string>
+    <string name="promo_discount_percent">Скидка %1$d%%</string>
+    <string name="promo_discount_amount">Скидка %1$s</string>
+    <string name="promo_free_delivery">Бесплатная доставка</string>
+    <string name="promo_min_order">На заказ от %1$s</string>
+    <string name="promo_code">Промокод: %1$s</string>
+    <string name="promo_until">До %1$s</string>
+
     <string name="distance_meters">%1$s м</string>
     <string name="distance_kilometers">%1$s км</string>
     <string name="state_offline_cache">Показаны сохранённые данные</string>

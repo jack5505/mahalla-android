@@ -275,6 +275,16 @@
     <string name="discovery_section_nearby">Yaqin atrofda</string>
     <string name="discovery_section_recommended">Tavsiya etamiz</string>
     <string name="discovery_open_map">Xaritada ochish</string>
+
+    <!-- Акции (issue #104): блок на главной и на карточке места -->
+    <string name="promotions_title">Aksiyalar</string>
+    <string name="promo_discount_percent">%1$d%% chegirma</string>
+    <string name="promo_discount_amount">%1$s chegirma</string>
+    <string name="promo_free_delivery">Bepul yetkazib berish</string>
+    <string name="promo_min_order">%1$s dan buyurtmaga</string>
+    <string name="promo_code">Promo-kod: %1$s</string>
+    <string name="promo_until">%1$s gacha</string>
+
     <string name="distance_meters">%1$s m</string>
     <string name="distance_kilometers">%1$s km</string>
     <string name="state_offline_cache">Saqlangan ma\'lumot ko\'rsatilmoqda</string>
