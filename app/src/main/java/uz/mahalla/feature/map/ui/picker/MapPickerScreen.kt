@@ -35,6 +35,8 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.feature.map.canvas.MapCanvas
+import uz.mahalla.feature.map.canvas.MapUnavailable
+import uz.mahalla.feature.map.canvas.rememberMapEngine
 import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.LOCATION_PERMISSIONS
@@ -107,12 +109,27 @@ fun MapPickerContent(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val engine = rememberMapEngine(initializer)
+
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.map_picker_title), onBack = onBack)
 
+        // Без карты выбирать точку нечем: метка, масштаб и кнопка «выбрать эту
+        // точку» поверх объяснения предлагали бы подтвердить координаты,
+        // которых человек не видел (issue #126).
+        if (!engine.isUsable) {
+            MapUnavailable(
+                engine = engine,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(Spacing.gutter),
+            )
+            return@Column
+        }
+
         Box(modifier = Modifier.fillMaxSize()) {
             MapCanvas(
-                initializer = initializer,
+                engine = engine,
                 // Маркеров нет: единственная точка — та, что под меткой в
                 // центре, и рисовать её вторым объектом на карте значило бы
                 // показать две точки там, где выбирается одна.

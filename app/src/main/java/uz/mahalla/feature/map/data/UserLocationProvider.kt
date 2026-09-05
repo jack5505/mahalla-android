@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import uz.mahalla.data.location.LocationSource
 import uz.mahalla.feature.map.canvas.MapCoordinates
 import java.lang.ref.WeakReference
 import kotlin.coroutines.resume
@@ -111,4 +112,32 @@ class MapKitLocationProvider(
          */
         const val DEFAULT_TIMEOUT_MILLIS = 5_000L
     }
+}
+
+/**
+ * Координаты с запасным источником (issue #126).
+ *
+ * [MapKitLocationProvider] умеет отвечать только когда движок карты поднят: без
+ * ключа `MAPKIT_API_KEY` он выходит на первой же строке, и «моё местоположение»
+ * отвечало «Joylashuvni aniqlab bo'lmadi» человеку, который разрешение выдал.
+ * То же самое случается и с ключом — когда MapKit не успевает за свои пять
+ * секунд.
+ *
+ * Поэтому источника два: сперва MapKit (свежая позиция, слой «я на карте»
+ * рисует её же), потом системный [LocationSource] — последняя известная позиция
+ * от `LocationManager` Android. Она может быть несвежей, но грубая правда лучше
+ * отказа: экран карты показывает район, а не подъезд.
+ *
+ * Порядок именно такой, а не наоборот: `getLastKnownLocation` отвечает
+ * мгновенно, и став первым, он навсегда закрыл бы дорогу свежим координатам.
+ */
+class DeviceUserLocationProvider(
+    private val mapKit: UserLocationProvider,
+    private val system: LocationSource,
+) : UserLocationProvider {
+
+    override suspend fun currentLocation(): MapCoordinates? =
+        mapKit.currentLocation() ?: system.lastKnown()?.let { known ->
+            MapCoordinates(latitude = known.latitude, longitude = known.longitude)
+        }
 }

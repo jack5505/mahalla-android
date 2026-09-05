@@ -5,10 +5,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +40,10 @@ import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.discovery.ui.toCardUi
 import uz.mahalla.feature.map.canvas.MapCanvas
+import uz.mahalla.feature.map.canvas.MapEngine
+import uz.mahalla.feature.map.canvas.MapUnavailable
+import uz.mahalla.feature.map.canvas.rememberMapEngine
+import uz.mahalla.feature.map.data.MapEngineState
 import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.ui.theme.Spacing
 
@@ -104,47 +111,144 @@ fun MapContent(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val engine = rememberMapEngine(initializer)
+
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.map_title), onBack = onBack)
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            MapCanvas(
-                initializer = initializer,
-                markers = state.markers,
-                camera = state.camera,
-                modifier = Modifier.fillMaxSize(),
-                showUserLocation = state.showUserLocation,
-                onMarkerClick = { placeId -> onEvent(MapEvent.MarkerClicked(placeId)) },
-                onCameraChanged = { camera -> onEvent(MapEvent.CameraMoved(camera)) },
-            )
-
-            MapBanner(
+        if (!engine.isUsable) {
+            // Движок не поднялся — экран не должен становиться тупиком: то, что
+            // нашлось рядом, показывается списком. Кнопок масштаба здесь нет:
+            // масштабировать нечего (issue #126).
+            MapFallback(
+                engine = engine,
                 state = state,
                 onEvent = onEvent,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(Spacing.gutter),
+                modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                MapCanvas(
+                    engine = engine,
+                    markers = state.markers,
+                    camera = state.camera,
+                    modifier = Modifier.fillMaxSize(),
+                    showUserLocation = state.showUserLocation,
+                    onMarkerClick = { placeId -> onEvent(MapEvent.MarkerClicked(placeId)) },
+                    onCameraChanged = { camera -> onEvent(MapEvent.CameraMoved(camera)) },
+                )
 
-            MapControls(
-                isLocating = state.isLocating,
-                onZoomIn = { onEvent(MapEvent.ZoomInClicked) },
-                onZoomOut = { onEvent(MapEvent.ZoomOutClicked) },
-                onMyLocation = { onEvent(MapEvent.MyLocationClicked) },
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(Spacing.gutter),
-            )
-
-            val selected = state.selectedPlace
-            if (selected != null) {
-                SelectedPlaceCard(
-                    place = selected,
+                MapBanner(
+                    state = state,
                     onEvent = onEvent,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.TopCenter)
                         .padding(Spacing.gutter),
                 )
+
+                MapControls(
+                    isLocating = state.isLocating,
+                    onZoomIn = { onEvent(MapEvent.ZoomInClicked) },
+                    onZoomOut = { onEvent(MapEvent.ZoomOutClicked) },
+                    onMyLocation = { onEvent(MapEvent.MyLocationClicked) },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(Spacing.gutter),
+                )
+
+                val selected = state.selectedPlace
+                if (selected != null) {
+                    SelectedPlaceCard(
+                        place = selected,
+                        onEvent = onEvent,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(Spacing.gutter),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Экран карты без карты (issue #126).
+ *
+ * До этой правки на месте карты оставалось одно объяснение с кнопкой
+ * «Повторить», и уйти с экрана было некуда: список мест, который обещал текст
+ * ошибки, убрали вместе с подключением полотна (issue #65). Здесь он
+ * возвращается — но не как имитация карты, а как то, чем он и является:
+ * найденные рядом места списком. Пустая выдача и отказ бэкенда показываются
+ * теми же словами, что и на карте.
+ */
+@Composable
+private fun MapFallback(
+    engine: MapEngine,
+    state: MapState,
+    onEvent: (MapEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val places = state.places
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(Spacing.gutter),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        item {
+            MapUnavailable(engine = engine, modifier = Modifier.fillMaxWidth())
+        }
+
+        val notice = state.locationNotice
+        if (notice != null) {
+            item {
+                MapBannerSurface {
+                    MapBannerRow(
+                        text = locationNoticeText(notice),
+                        actionLabel = stringResource(R.string.action_close),
+                        onAction = { onEvent(MapEvent.NoticeDismissed) },
+                    )
+                }
+            }
+        }
+
+        when (places) {
+            is ScreenState.Loading -> item {
+                MapBannerSurface { MapBannerRow(text = stringResource(R.string.state_loading)) }
+            }
+
+            is ScreenState.Empty -> item {
+                MapBannerSurface {
+                    MapBannerRow(
+                        text = stringResource(R.string.map_empty_places),
+                        actionLabel = stringResource(R.string.action_retry),
+                        onAction = { onEvent(MapEvent.Retry) },
+                    )
+                }
+            }
+
+            is ScreenState.Error -> item {
+                MapBannerSurface {
+                    MapBannerRow(
+                        text = places.failure.userMessage(),
+                        actionLabel = stringResource(R.string.action_retry),
+                        onAction = { onEvent(MapEvent.Retry) },
+                    )
+                }
+            }
+
+            is ScreenState.Content -> {
+                item {
+                    Text(
+                        text = stringResource(R.string.map_fallback_places_title),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                items(places.data, key = { it.id }) { place ->
+                    PlaceCard(
+                        place = place.toCardUi(),
+                        onClick = { onEvent(MapEvent.PlaceClicked(place.id)) },
+                    )
+                }
             }
         }
     }
@@ -251,6 +355,19 @@ private fun MapOverlayPreview() {
             )
             SelectedPlaceCard(place = PREVIEW_PLACE, onEvent = {})
         }
+    }
+}
+
+/** Экран без движка карты: объяснение и список найденного (issue #126). */
+@ThemeLanguagePreviews
+@Composable
+private fun MapFallbackPreview() {
+    PreviewSurface {
+        MapFallback(
+            engine = MapEngine(state = MapEngineState.MissingApiKey, retry = {}),
+            state = MapState(places = ScreenState.Content(listOf(PREVIEW_PLACE))),
+            onEvent = {},
+        )
     }
 }
 
