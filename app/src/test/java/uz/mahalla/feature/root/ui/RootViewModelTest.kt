@@ -28,11 +28,14 @@ import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.domain.AppUpdate
 import uz.mahalla.feature.update.domain.UpdateDecision
 import uz.mahalla.testutil.FakeAppVersionRepository
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakePinStorage
+import uz.mahalla.testutil.FakeSessionStore
 import java.io.File
 
 /**
@@ -240,6 +243,13 @@ class RootViewModelTest {
         BackendUrlStore(settings, BUILD_URL, overrideEnabled),
         BackendCertificatePin(settings, overrideEnabled),
         AppUpdateGate(versionRepository),
+        // Замок (issue #102) корню только виден: решение о старте графа от
+        // него не зависит.
+        AppLockManager(
+            sessionStore = FakeSessionStore(),
+            pinStorage = FakePinStorage(),
+            clock = java.time.Clock.systemUTC(),
+        ),
     )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =

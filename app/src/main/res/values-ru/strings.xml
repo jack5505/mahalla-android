@@ -624,6 +624,40 @@
     <string name="my_doctor_appointments_empty_description">Записаться можно с карточки больницы — кнопкой «Записаться к врачу».</string>
     <string name="my_doctor_appointments_unnamed">Врач не указан</string>
 
+    <!-- Замок приложения и настройки безопасности (issue #102) -->
+    <string name="app_lock_title">Вход в приложение</string>
+    <string name="app_lock_subtitle">Введите PIN-код, чтобы продолжить.</string>
+    <string name="app_lock_biometric">Войти по отпечатку</string>
+    <string name="app_lock_prompt_title">Открыть приложение</string>
+    <string name="app_lock_prompt_subtitle">Подтвердите вход в Mahalla</string>
+    <string name="app_lock_prompt_negative">Ввести PIN-код</string>
+
+    <string name="security_title">Безопасность</string>
+    <string name="security_profile_subtitle">PIN-код, биометрия и замок приложения</string>
+    <string name="security_pin_section">PIN-код</string>
+    <string name="security_change_pin">Сменить PIN-код</string>
+    <string name="security_pin_set">PIN-код установлен</string>
+    <string name="security_pin_not_set">PIN-код не установлен</string>
+    <string name="security_biometric">Вход по отпечатку</string>
+    <string name="security_biometric_description">Открывать замок приложения отпечатком вместо PIN-кода</string>
+    <string name="security_biometric_prompt_title">Подтвердите изменение</string>
+    <string name="security_biometric_prompt_subtitle">Включение входа по отпечатку</string>
+    <string name="security_confirm_pin_title">Введите PIN-код</string>
+    <string name="security_confirm_pin_enable">Чтобы включить вход по отпечатку, нужен PIN-код.</string>
+    <string name="security_confirm_pin_disable">Чтобы выключить вход по отпечатку, нужен PIN-код.</string>
+    <string name="security_lock_on">Замок включён</string>
+    <string name="security_lock_off">Замок выключен</string>
+    <string name="security_lock_on_description">После долгого пребывания в фоне приложение спросит PIN-код или отпечаток.</string>
+    <string name="security_lock_off_description">Чтобы замок работал, войдите в аккаунт и установите PIN-код.</string>
+
+    <string name="change_pin_current_title">Введите текущий PIN-код</string>
+    <string name="change_pin_new_title">Придумайте новый PIN-код</string>
+    <string name="change_pin_confirm_title">Повторите новый PIN-код</string>
+    <string name="change_pin_subtitle">PIN-код состоит из шести цифр.</string>
+    <string name="change_pin_error_same">Новый PIN-код должен отличаться от текущего</string>
+    <string name="change_pin_restart">Начать заново</string>
+    <string name="change_pin_done_title">PIN-код изменён</string>
+    <string name="change_pin_done_message">Теперь вход в приложение — по новому коду. Старый больше не работает.</string>
     <!-- Вертикаль «Мастера» (issue #107) -->
     <string name="freelancers_title">Мастера</string>
     <string name="freelancers_home_subtitle">Сантехник, электрик, мастер — вызвать и заказать услугу</string>

@@ -23,6 +23,12 @@ class FakePinStorage(initialPin: String? = null) : PinStorage {
      */
     var failure: Exception? = null
 
+    /**
+     * Отказ только записи. Нужен там, где проверяется уборка после неудачного
+     * [save]: общий [failure] уронил бы и её саму.
+     */
+    var saveFailure: Exception? = null
+
     override suspend fun isConfigured(): Boolean {
         failure?.let { throw it }
         return storedPin != null
@@ -35,6 +41,7 @@ class FakePinStorage(initialPin: String? = null) : PinStorage {
 
     override suspend fun save(pin: String) {
         failure?.let { throw it }
+        saveFailure?.let { throw it }
         storedPin = pin
         saveCount++
     }

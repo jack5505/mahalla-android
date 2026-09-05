@@ -196,6 +196,10 @@ class RoutesSerializationTest {
             serializer<NotificationsRoute>().descriptor.serialName,
             // «Мои заведения» (issue #94): вне обоих графов, как уведомления.
             serializer<MyPlacesRoute>().descriptor.serialName,
+            // Безопасность (issue #102). Экрана блокировки среди маршрутов
+            // нет намеренно: он рисуется оверлеем поверх всей навигации.
+            serializer<SecurityRoute>().descriptor.serialName,
+            serializer<ChangePinRoute>().descriptor.serialName,
             // Подписка (issue #103): тоже вне графов, открывается из профиля.
             serializer<SubscriptionRoute>().descriptor.serialName,
         )

@@ -4,6 +4,7 @@ import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
 import uz.mahalla.core.crash.CrashReporter
 import uz.mahalla.core.crash.CrashReporting
+import uz.mahalla.feature.security.data.AppLockObserver
 import javax.inject.Inject
 
 /**
@@ -21,6 +22,14 @@ class MahallaApplication : Application() {
     @Inject
     lateinit var crashReporter: CrashReporter
 
+    /**
+     * Второе исключение — замок приложения (issue #102). Подписаться на
+     * жизненный цикл процесса надо до первого ухода в фон, а «первый уход»
+     * может случиться раньше, чем откроется любой экран.
+     */
+    @Inject
+    lateinit var appLockObserver: AppLockObserver
+
     override fun onCreate() {
         // Hilt внедряет поля Application именно здесь, поэтому раньше
         // super.onCreate() до crashReporter не добраться.
@@ -29,5 +38,6 @@ class MahallaApplication : Application() {
         // Проглоченные ошибки сообщаются из функций верхнего уровня, которым
         // нечего внедрять, — см. CrashReporting.
         CrashReporting.install(crashReporter)
+        appLockObserver.install()
     }
 }

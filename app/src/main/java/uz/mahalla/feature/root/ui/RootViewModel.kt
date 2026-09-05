@@ -18,6 +18,7 @@ import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
+import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.domain.UpdateDecision
 
@@ -60,7 +61,17 @@ class RootViewModel @Inject constructor(
     private val backendUrlStore: BackendUrlStore,
     private val backendCertificatePin: BackendCertificatePin,
     private val appUpdateGate: AppUpdateGate,
+    appLockManager: AppLockManager,
 ) : ViewModel() {
+
+    /**
+     * Показывать ли экран блокировки поверх всего (issue #102).
+     *
+     * Отдельным потоком, а не полем [RootUiState]: замок защёлкивается и
+     * снимается независимо от настроек, а состояние корня фиксируется один
+     * раз за процесс — стартовый пункт графа от блокировки меняться не должен.
+     */
+    val locked: StateFlow<Boolean> = appLockManager.locked
 
     /**
      * Стартовый пункт графа решается один раз за жизнь процесса.

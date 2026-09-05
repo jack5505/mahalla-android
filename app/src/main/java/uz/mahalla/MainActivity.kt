@@ -20,6 +20,7 @@ import uz.mahalla.core.locale.LocaleContextWrapper
 import uz.mahalla.core.locale.LocaleEntryPoint
 import uz.mahalla.feature.root.ui.RootUiState
 import uz.mahalla.feature.root.ui.RootViewModel
+import uz.mahalla.feature.security.ui.lock.AppLockScreen
 import uz.mahalla.navigation.BackendUrlRoute
 import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
@@ -63,6 +64,8 @@ class MainActivity : FragmentActivity() {
             // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
             // сбрасывал бы back stack (см. RootViewModel).
             val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
+            val locked by viewModel.locked.collectAsStateWithLifecycle()
+
             MahallaTheme(darkTheme = ready.settings.themeMode.isDark(isSystemInDarkTheme())) {
                 MahallaApp(
                     // Адрес бэкенда не задан (issue #26) — до него приложение
@@ -88,6 +91,22 @@ class MainActivity : FragmentActivity() {
                         WelcomeRoute
                     },
                 )
+
+                // Замок приложения (issue #102) — оверлеем **поверх**
+                // навигации, а не маршрутом: он обязан накрывать любой экран,
+                // включая онбординг, обновление и ввод адреса бэкенда, и при
+                // этом не трогать back stack.
+                if (locked) {
+                    AppLockScreen(
+                        // «Забыли PIN» на экране блокировки уже выполнил выход
+                        // и сбросил флаг онбординга. Просто спрятать оверлей
+                        // мало: под ним остался экран, куда человека застал
+                        // фон, а сессии для него больше нет. Пересоздание
+                        // Activity заставляет `RootViewModel` решить старт
+                        // заново — тем же способом, что и смена языка.
+                        onAuthRestartRequired = ::recreate,
+                    )
+                }
             }
         }
     }

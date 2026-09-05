@@ -630,6 +630,40 @@
     <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
     <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
 
+    <!-- Замок приложения и настройки безопасности (issue #102) -->
+    <string name="app_lock_title">Ilovaga kirish</string>
+    <string name="app_lock_subtitle">Davom etish uchun PIN-kodni kiriting.</string>
+    <string name="app_lock_biometric">Barmoq izi bilan kirish</string>
+    <string name="app_lock_prompt_title">Ilovani ochish</string>
+    <string name="app_lock_prompt_subtitle">Mahalla ilovasiga kirishni tasdiqlang</string>
+    <string name="app_lock_prompt_negative">PIN-kod bilan</string>
+
+    <string name="security_title">Xavfsizlik</string>
+    <string name="security_profile_subtitle">PIN-kod, biometrika va ilova qulfi</string>
+    <string name="security_pin_section">PIN-kod</string>
+    <string name="security_change_pin">PIN-kodni o\'zgartirish</string>
+    <string name="security_pin_set">PIN-kod o\'rnatilgan</string>
+    <string name="security_pin_not_set">PIN-kod o\'rnatilmagan</string>
+    <string name="security_biometric">Barmoq izi bilan kirish</string>
+    <string name="security_biometric_description">Ilova qulfini PIN o\'rniga barmoq izi bilan ochish</string>
+    <string name="security_biometric_prompt_title">O\'zgarishni tasdiqlang</string>
+    <string name="security_biometric_prompt_subtitle">Barmoq izi bilan kirishni yoqish</string>
+    <string name="security_confirm_pin_title">PIN-kodni kiriting</string>
+    <string name="security_confirm_pin_enable">Barmoq izi bilan kirishni yoqish uchun PIN-kod kerak.</string>
+    <string name="security_confirm_pin_disable">Barmoq izi bilan kirishni o\'chirish uchun PIN-kod kerak.</string>
+    <string name="security_lock_on">Qulf yoqilgan</string>
+    <string name="security_lock_off">Qulf o\'chirilgan</string>
+    <string name="security_lock_on_description">Ilova fonda uzoq turgach, qaytishda PIN yoki barmoq izi so\'raladi.</string>
+    <string name="security_lock_off_description">Qulf ishlashi uchun hisobga kiring va PIN-kod o\'rnating.</string>
+
+    <string name="change_pin_current_title">Joriy PIN-kodni kiriting</string>
+    <string name="change_pin_new_title">Yangi PIN-kodni o\'ylab toping</string>
+    <string name="change_pin_confirm_title">Yangi PIN-kodni takrorlang</string>
+    <string name="change_pin_subtitle">PIN-kod olti raqamdan iborat.</string>
+    <string name="change_pin_error_same">Yangi PIN-kod joriysidan farq qilishi kerak</string>
+    <string name="change_pin_restart">Boshidan boshlash</string>
+    <string name="change_pin_done_title">PIN-kod o\'zgartirildi</string>
+    <string name="change_pin_done_message">Endi ilovaga yangi PIN-kod bilan kirasiz. Eski kod ishlamaydi.</string>
     <!-- Вертикаль «Мастера» (issue #107) -->
     <string name="freelancers_title">Ustalar</string>
     <string name="freelancers_home_subtitle">Santexnik, elektrik, usta — chaqirib xizmat buyurtma qiling</string>

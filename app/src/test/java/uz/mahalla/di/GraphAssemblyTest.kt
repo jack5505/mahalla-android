@@ -58,6 +58,10 @@ import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
 import uz.mahalla.feature.promotions.data.di.PromotionsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.security.data.DefaultSecurityRepository
+import uz.mahalla.feature.security.data.di.SecurityDataModule
+import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.DataStoreRoleRepository
 import uz.mahalla.feature.queue.data.DataStoreWalkInTicketStore
@@ -474,6 +478,41 @@ class GraphAssemblyTest {
                     dataStore = sharedDataStore(context),
                     clock = AppModule.provideClock(),
                 ),
+                clock = AppModule.provideClock(),
+            ),
+        )
+    }
+
+    /**
+     * Аккаунтный PIN и app-lock (issue #102). Все ручки `pin-code`, а также
+     * `auth/session/check` и `auth/pin-resume`, требуют Bearer — значит оба
+     * API собираются на **основном** Retrofit, а не на «голом»
+     * `@RefreshClient`, где живёт остальная авторизация.
+     */
+    @Test
+    fun `security assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val pinApi = SecurityDataModule.providePinApi(retrofit)
+        val sessionApi = SecurityDataModule.provideSessionApi(retrofit)
+        val dataStore = sharedDataStore(context)
+        val settings = SettingsDataStore(dataStore)
+
+        assertNotNull(pinApi)
+        assertNotNull(sessionApi)
+        assertNotNull(
+            DefaultSecurityRepository(
+                pinApi = pinApi,
+                sessionApi = sessionApi,
+                sessionStore = DataStoreSessionStore(dataStore),
+                onboardingRepository = DataStoreOnboardingRepository(settings),
+                pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
+                deviceInfoProvider = FakeDeviceInfoProvider(),
+                locationProvider = FakeRequestLocationProvider(),
                 clock = AppModule.provideClock(),
             ),
         )

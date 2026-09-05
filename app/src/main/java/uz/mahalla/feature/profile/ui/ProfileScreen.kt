@@ -82,6 +82,9 @@ import java.time.Instant
  * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
  * всем: записаться может кто угодно, а следить за записью больше негде —
  * своего таба у брони нет.
+ * @param onOpenSecurity открыть настройки безопасности (issue #102): смена PIN
+ * и вход по биометрии. Строка видна всем: замок приложения защищает и заказы,
+ * и кошелёк, а не только бизнес-часть.
  * @param onOpenMyDoctorAppointments открыть «мои записи к врачу» (issue #99).
  * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
  * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
@@ -104,6 +107,7 @@ fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenSecurity: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -138,6 +142,7 @@ fun ProfileScreen(
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
+        onOpenSecurity = onOpenSecurity,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
@@ -157,6 +162,7 @@ fun ProfileContentScreen(
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenSecurity: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -212,6 +218,14 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_doctor_appointments_title),
                 subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
                 onClick = onOpenMyDoctorAppointments,
+            )
+
+            // Безопасность (issue #102): до неё PIN нельзя было сменить
+            // вовсе, а переключатель биометрии жил только локально.
+            MahallaListItem(
+                title = stringResource(R.string.security_title),
+                subtitle = stringResource(R.string.security_profile_subtitle),
+                onClick = onOpenSecurity,
             )
 
             // «Мои билеты» (issue #106): своего таба у кино нет, а следить
@@ -592,6 +606,7 @@ private fun ProfilePreview() {
             onEvent = {},
             onOpenRole = {},
             onOpenMyPlaces = {},
+            onOpenSecurity = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
             onOpenMyDoctorAppointments = {},

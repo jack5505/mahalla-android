@@ -68,6 +68,12 @@
         <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
 
+    <!-- Безопасность (issue #102): остаток серверной блокировки PIN. -->
+    <plurals name="security_locked">
+        <item quantity="one">PIN-kod vaqtincha bloklangan. %1$d soniya qoldi.</item>
+        <item quantity="other">PIN-kod vaqtincha bloklangan. %1$d soniya qoldi.</item>
+    </plurals>
+
     <!-- Мастера (issue #107). Опыт и длительность услуги — числа переменные,
          лимит текста постоянный, но форма слова зависит от него всё равно. -->
     <plurals name="freelancer_experience">
