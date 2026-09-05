@@ -61,6 +61,21 @@ class RoutesSerializationTest {
             json.decodeFromString<ProviderFormRoute>(json.encodeToString(providerForm)),
         )
 
+        // Мастера (issue #107): имя едет маршрутом — шапка рисуется раньше,
+        // чем приезжает профиль. Оно необязательно: из уведомления или
+        // ссылки экран откроется и без него.
+        val freelancer = FreelancerRoute(freelancerId = "f-1", freelancerName = "Aziz Karimov")
+        assertEquals(
+            freelancer,
+            json.decodeFromString<FreelancerRoute>(json.encodeToString(freelancer)),
+        )
+        assertEquals(
+            FreelancerRoute(freelancerId = "f-1"),
+            json.decodeFromString<FreelancerRoute>(
+                json.encodeToString(FreelancerRoute(freelancerId = "f-1")),
+            ),
+        )
+
         // Выбор точки на карте (issue #90): аргумент необязателен — карта
         // открывается и без ранее выбранной точки.
         val picker = MapPickerRoute(point = "41.311081,69.240562")
@@ -128,6 +143,10 @@ class RoutesSerializationTest {
             // склеенный serialName увёл бы с записи к врачу на запись к
             // мастеру.
             serializer<DoctorBookingRoute>().descriptor.serialName,
+            // Мастера (issue #107): аргументов столько же, сколько у брони и
+            // очереди, — склеенный serialName увёл бы с профиля мастера на
+            // карточку заведения.
+            serializer<FreelancerRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,

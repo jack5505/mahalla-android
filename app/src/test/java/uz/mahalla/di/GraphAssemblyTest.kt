@@ -47,6 +47,8 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.freelancer.data.DefaultFreelancerRepository
+import uz.mahalla.feature.freelancer.data.di.FreelancerDataModule
 import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.di.HospitalDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
@@ -365,6 +367,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultHospitalRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Мастера (issue #107): каталог, профиль и услуги анонимны, но заказ и
+     * «мои заказы» требуют Bearer — значит API собирается на **основном**
+     * Retrofit, как бронь и больницы.
+     */
+    @Test
+    fun `freelancer assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = FreelancerDataModule.provideFreelancerApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
     }
 
     /**

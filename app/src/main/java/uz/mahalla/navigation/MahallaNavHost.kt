@@ -19,6 +19,9 @@ import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
+import uz.mahalla.feature.freelancer.ui.catalog.FreelancersScreen
+import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerOrdersScreen
+import uz.mahalla.feature.freelancer.ui.profile.FreelancerProfileScreen
 import uz.mahalla.feature.hospital.ui.DoctorBookingScreen
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.MapScreen
@@ -217,6 +220,9 @@ fun MahallaNavHost(
                     },
                     onMapClick = { navController.navigate(MapRoute) },
                     onNotificationsClick = { navController.navigate(NotificationsRoute) },
+                    // Каталог мастеров (issue #107): отдельная ветка, мастер
+                    // не заведение.
+                    onFreelancersClick = { navController.navigate(FreelancersRoute) },
                 )
             }
             composable<OrdersRoute> { OrdersScreen() }
@@ -247,6 +253,11 @@ fun MahallaNavHost(
                         navController.navigate(
                             MyAppointmentsRoute(AppointmentVertical.Doctor.name),
                         )
+                    },
+                    // «Мои заказы у мастеров» (issue #107): заказать услугу у
+                    // фрилансера может любой, своего таба у этого нет.
+                    onOpenMyFreelancerOrders = {
+                        navController.navigate(MyFreelancerOrdersRoute)
                     },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
@@ -456,6 +467,36 @@ fun MahallaNavHost(
 
         composable<MyAppointmentsRoute> {
             MyAppointmentsScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с
+        // услугами → заказ. Мастер не заведение, поэтому это отдельная ветка,
+        // а не карточка места.
+        composable<FreelancersRoute> {
+            FreelancersScreen(
+                onFreelancerClick = { freelancerId, name ->
+                    navController.navigate(FreelancerRoute(freelancerId, name))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FreelancerRoute> {
+            FreelancerProfileScreen(
+                // Профиль из стека уходит: возвращаться в собранную форму
+                // после того, как заказ создан, некуда. Каталог при этом
+                // остаётся — «назад» из заказов приведёт к списку мастеров.
+                onOpenMyOrders = {
+                    navController.navigate(MyFreelancerOrdersRoute) {
+                        popUpTo<FreelancerRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MyFreelancerOrdersRoute> {
+            MyFreelancerOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки

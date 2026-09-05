@@ -618,4 +618,45 @@
     <string name="my_doctor_appointments_profile_subtitle">Shifokorga yozilishlaringiz va ularning holati</string>
     <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
     <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
+
+    <!-- Вертикаль «Мастера» (issue #107) -->
+    <string name="freelancers_title">Ustalar</string>
+    <string name="freelancers_home_subtitle">Santexnik, elektrik, usta — chaqirib xizmat buyurtma qiling</string>
+    <string name="freelancers_search_hint">Mutaxassislik: santexnik, elektrik…</string>
+    <string name="freelancers_empty_title">Usta topilmadi</string>
+    <string name="freelancers_empty_description">Hozircha bironta usta ro\'yxatdan o\'tmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="freelancers_empty_filtered">Bu mutaxassislik bo\'yicha usta yo\'q. So\'rovni o\'zgartirib ko\'ring.</string>
+    <string name="freelancer_unnamed">Ismi ko\'rsatilmagan usta</string>
+    <string name="freelancer_rate">%1$s / soat</string>
+    <string name="freelancer_available">Buyurtma qabul qiladi</string>
+    <string name="freelancer_unavailable">Hozir band</string>
+    <string name="freelancer_unavailable_note">Usta hozir buyurtma qabul qilmayapti. Keyinroq urinib ko\'ring yoki qo\'ng\'iroq qiling.</string>
+    <string name="freelancer_call">Qo\'ng\'iroq qilish: %1$s</string>
+    <string name="freelancer_services_title">Xizmatlari</string>
+    <string name="freelancer_services_empty_title">Xizmatlar ro\'yxati bo\'sh</string>
+    <string name="freelancer_services_empty_description">Usta hali xizmatlarini kiritmagan. Shartlarni telefon orqali kelishing.</string>
+    <string name="freelancer_service_unnamed">Xizmat nomi ko\'rsatilmagan</string>
+    <string name="freelancer_when_title">Qachon kelsin</string>
+    <string name="freelancer_time_asap">Imkon qadar tezroq</string>
+    <string name="freelancer_times_note">Bu — taklif qilingan vaqt. Usta buyurtmani qabul qilganidan keyin aniq bo\'ladi.</string>
+    <string name="freelancer_times_empty">Bugungi kun tugadi. Boshqa kunni tanlang yoki «Imkon qadar tezroq»ni qoldiring.</string>
+    <string name="freelancer_order_details_title">Manzil va izoh</string>
+    <string name="freelancer_address_label">Manzil (majburiy emas)</string>
+    <string name="freelancer_address_placeholder">Masalan: Chilonzor 7, 12-uy, 4-xonadon</string>
+    <string name="freelancer_comment_label">Izoh (majburiy emas)</string>
+    <string name="freelancer_comment_placeholder">Masalan: kran oqyapti, ehtiyot qism kerak</string>
+    <string name="freelancer_comment_counter">%1$d / %2$d</string>
+    <string name="freelancer_order_submit">Xizmatni buyurtma qilish</string>
+    <string name="freelancer_order_done_title">Buyurtma yuborildi</string>
+    <string name="freelancer_order_done_description">Usta buyurtmani qabul qiladi yoki rad etadi. Holatni «Ustalardagi buyurtmalarim» bo\'limida ko\'rasiz.</string>
+    <string name="freelancer_order_open_my">Buyurtmalarim</string>
+    <string name="freelancer_order_status_pending">Javob kutilmoqda</string>
+    <string name="freelancer_order_status_accepted">Qabul qilindi</string>
+    <string name="freelancer_order_status_rejected">Rad etildi</string>
+    <string name="freelancer_order_status_completed">Bajarildi</string>
+
+    <string name="my_freelancer_orders_title">Ustalardagi buyurtmalarim</string>
+    <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
+    <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
+    <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
 </resources>

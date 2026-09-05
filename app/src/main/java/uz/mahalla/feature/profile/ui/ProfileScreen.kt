@@ -86,6 +86,10 @@ import java.time.Instant
  * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
  * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
  * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
+ * @param onOpenMyFreelancerOrders открыть «мои заказы у мастеров»
+ * (issue #107). Тоже отдельная строка и по той же причине: заказы у
+ * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
+ * являются.
  */
 @Composable
 fun ProfileScreen(
@@ -94,6 +98,7 @@ fun ProfileScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -124,6 +129,7 @@ fun ProfileScreen(
         onOpenMyPlaces = onOpenMyPlaces,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
+        onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -139,6 +145,7 @@ fun ProfileContentScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -188,6 +195,14 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_doctor_appointments_title),
                 subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
                 onClick = onOpenMyDoctorAppointments,
+            )
+
+            // «Мои заказы у мастеров» (issue #107) — тоже всем: заказать
+            // услугу у фрилансера может любой, своего таба у этого нет.
+            MahallaListItem(
+                title = stringResource(R.string.my_freelancer_orders_title),
+                subtitle = stringResource(R.string.my_freelancer_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerOrders,
             )
 
             Text(
@@ -536,6 +551,7 @@ private fun ProfilePreview() {
             onOpenRole = {},
             onOpenMyPlaces = {},
             onOpenMyAppointments = {},
+            onOpenMyFreelancerOrders = {},
             onOpenMyDoctorAppointments = {},
         )
     }
