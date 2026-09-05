@@ -14,6 +14,8 @@ import uz.mahalla.feature.discovery.data.CatalogRepository
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.navigation.PlaceRoute
 import java.time.Clock
 import java.time.LocalDateTime
@@ -28,6 +30,7 @@ import javax.inject.Inject
 @HiltViewModel
 class PlaceDetailsViewModel @Inject constructor(
     private val repository: CatalogRepository,
+    private val promotions: PromotionsRepository,
     private val profileStore: UserProfileStore,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
@@ -37,6 +40,7 @@ class PlaceDetailsViewModel @Inject constructor(
 
     init {
         load()
+        loadPromotions()
         viewModelScope.launch {
             // Свой отзыв узнаётся по id аккаунта, и профиль лежит локально —
             // отдельного `GET /users/me` у бэкенда нет (issue #61).
@@ -47,7 +51,11 @@ class PlaceDetailsViewModel @Inject constructor(
 
     override fun onEvent(event: PlaceDetailsEvent) {
         when (event) {
-            PlaceDetailsEvent.Retry -> load()
+            PlaceDetailsEvent.Retry -> {
+                load()
+                loadPromotions()
+            }
+
             PlaceDetailsEvent.HoursToggled -> updateState { copy(hoursExpanded = !hoursExpanded) }
             PlaceDetailsEvent.AllReviewsRequested -> updateState { copy(allReviewsShown = true) }
             PlaceDetailsEvent.BackClicked -> emitEffect(PlaceDetailsEffect.NavigateBack)
@@ -98,6 +106,26 @@ class PlaceDetailsViewModel @Inject constructor(
                 }
                 is ApiResult.Success -> updateState { withSchedule(result.data) }
             }
+        }
+    }
+
+    /**
+     * Акции заведения (issue #104) — отдельная ручка, и загружается она
+     * параллельно карточке: последовательный запрос удвоил бы время до первого
+     * экрана.
+     *
+     * Отказ прячет секцию, а не роняет карточку: ради акции сюда не приходили,
+     * а экран ошибки поверх приехавшего заведения хуже отсутствующего блока.
+     * Истёкшая акция не показывается — обещание скидки, которой уже нет, хуже
+     * пустоты.
+     */
+    private fun loadPromotions() {
+        viewModelScope.launch {
+            val items = when (val result = promotions.placePromotions(placeId)) {
+                is ApiResult.Failure -> emptyList()
+                is ApiResult.Success -> PromotionFeed.live(result.data, clock.instant())
+            }
+            updateState { copy(promotions = items) }
         }
     }
 
@@ -179,7 +207,9 @@ class PlaceDetailsViewModel @Inject constructor(
             PlaceAction.Queue,
             PlaceAction.Booking,
             PlaceAction.Doctor,
+            PlaceAction.Cinema,
             PlaceAction.Order,
+            PlaceAction.Shop,
             ->
                 emitEffect(
                     PlaceDetailsEffect.OpenVertical(action, placeId, details.place.name),

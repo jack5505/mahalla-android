@@ -46,7 +46,20 @@ enum class PlaceAction {
      * ветвить по категории уже в навигации.
      */
     Doctor,
+
+    /**
+     * Билет в кино (issue #106). Тоже отдельно: у кинотеатра сначала афиша, а
+     * «забронировать» ведёт к услугам мастера, которых у него нет.
+     */
+    Cinema,
     Order,
+
+    /**
+     * Витрина магазина одежды (issue #108). Отдельно от [Order]: у «Еды» это
+     * меню заведения с корзиной в Room, а здесь каталог товаров с вариантами и
+     * корзиной на сервере — общего у них только слово «заказать».
+     */
+    Shop,
     Call,
     Route,
 }
@@ -66,7 +79,11 @@ data class PlaceCapabilities(
     val booking: Boolean = false,
     /** Запись к врачу — вертикаль больниц (issue #99). */
     val doctors: Boolean = false,
+    /** Билет в кино — вертикаль кинотеатров (issue #106). */
+    val cinema: Boolean = false,
     val ordering: Boolean = false,
+    /** Витрина магазина одежды — вертикаль «Одежда» (issue #108). */
+    val shopping: Boolean = false,
 ) {
     companion object {
         /**
@@ -83,12 +100,22 @@ data class PlaceCapabilities(
          * issue #99): список врачей известен только серверу, поэтому кнопка
          * показывается всегда, а «врачей пока нет» экран скажет словами.
          *
+         * У кинотеатров (`CINEMA`) это билет (`cinema-controller`, issue
+         * #106): афиша и расписание тоже известны только серверу — «афиша
+         * пуста» экран скажет словами.
+         *
+         * У магазинов одежды (`FASHION`) это витрина (`fashion-controller`,
+         * issue #108): каталог известен только серверу, поэтому кнопка
+         * показывается всегда, а «товаров пока нет» экран скажет словами.
+         *
          * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
          * её экраны есть, но включение кнопки в объём этих задач не входило.
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
             PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
+            PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
+            PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
             else -> PlaceCapabilities()
         }
     }

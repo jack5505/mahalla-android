@@ -61,6 +61,21 @@ class RoutesSerializationTest {
             json.decodeFromString<ProviderFormRoute>(json.encodeToString(providerForm)),
         )
 
+        // Мастера (issue #107): имя едет маршрутом — шапка рисуется раньше,
+        // чем приезжает профиль. Оно необязательно: из уведомления или
+        // ссылки экран откроется и без него.
+        val freelancer = FreelancerRoute(freelancerId = "f-1", freelancerName = "Aziz Karimov")
+        assertEquals(
+            freelancer,
+            json.decodeFromString<FreelancerRoute>(json.encodeToString(freelancer)),
+        )
+        assertEquals(
+            FreelancerRoute(freelancerId = "f-1"),
+            json.decodeFromString<FreelancerRoute>(
+                json.encodeToString(FreelancerRoute(freelancerId = "f-1")),
+            ),
+        )
+
         // Выбор точки на карте (issue #90): аргумент необязателен — карта
         // открывается и без ранее выбранной точки.
         val picker = MapPickerRoute(point = "41.311081,69.240562")
@@ -128,6 +143,14 @@ class RoutesSerializationTest {
             // склеенный serialName увёл бы с записи к врачу на запись к
             // мастеру.
             serializer<DoctorBookingRoute>().descriptor.serialName,
+            // Кино (issue #106): у афиши те же два аргумента, что у очереди и
+            // брони, а у карточки фильма к ним добавляется третий.
+            serializer<CinemaRoute>().descriptor.serialName,
+            serializer<MovieRoute>().descriptor.serialName,
+            // Мастера (issue #107): аргументов столько же, сколько у брони и
+            // очереди, — склеенный serialName увёл бы с профиля мастера на
+            // карточку заведения.
+            serializer<FreelancerRoute>().descriptor.serialName,
             // Анкеты (issue #84): одинаковый serialName склеил бы выбор роли
             // с обеими формами — аргумент у них один и тот же.
             serializer<RoleRoute>().descriptor.serialName,
@@ -177,6 +200,8 @@ class RoutesSerializationTest {
             // нет намеренно: он рисуется оверлеем поверх всей навигации.
             serializer<SecurityRoute>().descriptor.serialName,
             serializer<ChangePinRoute>().descriptor.serialName,
+            // Подписка (issue #103): тоже вне графов, открывается из профиля.
+            serializer<SubscriptionRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
@@ -271,6 +296,27 @@ class RoutesSerializationTest {
         )
     }
 
+    @Test
+    fun `cinema routes carry the place and the movie`() {
+        // Имени кинотеатра нет ни в афише, ни в расписании — оно едет
+        // маршрутом (issue #106). `placeId` нужен и карточке фильма:
+        // расписание бэкенд отдаёт только заведением целиком.
+        val cinema = serializer<CinemaRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until cinema.elementsCount).map(cinema::getElementName),
+        )
+
+        val movie = serializer<MovieRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "movieId", "placeName"),
+            (0 until movie.elementsCount).map(movie::getElementName),
+        )
+
+        val route = MovieRoute(placeId = "p-1", movieId = "m-1")
+        assertEquals(route, json.decodeFromString<MovieRoute>(json.encodeToString(route)))
+    }
+
     /**
      * Экран «мои записи» один на обе вертикали (issue #99), и различает их
      * единственный аргумент. Имя аргумента ViewModel читает из
@@ -291,6 +337,39 @@ class RoutesSerializationTest {
         assertEquals(
             route,
             json.decodeFromString<MyAppointmentsRoute>(json.encodeToString(route)),
+        )
+    }
+
+    /**
+     * Вертикаль «Одежда» (issue #108). Имена аргументов ViewModel'и читают из
+     * `SavedStateHandle` по константам [FashionArgs]: `toRoute()` разбирает
+     * маршрут настоящим `Bundle`, которого в JVM-тестах нет, — разойдись имена,
+     * и витрина открылась бы пустой только в рантайме.
+     */
+    @Test
+    fun `fashion routes carry the arguments their view models read`() {
+        val catalog = serializer<FashionCatalogRoute>().descriptor
+        assertEquals(2, catalog.elementsCount)
+        assertEquals(FashionArgs.PLACE_ID, catalog.getElementName(0))
+        assertEquals(FashionArgs.PLACE_NAME, catalog.getElementName(1))
+
+        val product = serializer<FashionProductRoute>().descriptor
+        assertEquals(1, product.elementsCount)
+        assertEquals(FashionArgs.PRODUCT_ID, product.getElementName(0))
+
+        // Оформление идёт по одному магазину: серверная корзина общая, а
+        // `PlaceOrderRequest` принимает ровно один `placeId`.
+        val checkout = serializer<FashionCheckoutRoute>().descriptor
+        assertEquals(1, checkout.elementsCount)
+        assertEquals(FashionArgs.STORE_ID, checkout.getElementName(0))
+
+        val route = FashionCatalogRoute(placeId = "s-1", placeName = "Zara")
+        assertEquals(route, json.decodeFromString<FashionCatalogRoute>(json.encodeToString(route)))
+
+        val checkoutRoute = FashionCheckoutRoute(storeId = "s-1")
+        assertEquals(
+            checkoutRoute,
+            json.decodeFromString<FashionCheckoutRoute>(json.encodeToString(checkoutRoute)),
         )
     }
 }

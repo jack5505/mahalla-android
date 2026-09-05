@@ -13,12 +13,23 @@ import androidx.navigation.toRoute
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
+import uz.mahalla.feature.cinema.ui.movie.MovieScreen
+import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
+import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
+import uz.mahalla.feature.fashion.ui.cart.FashionCartScreen
+import uz.mahalla.feature.fashion.ui.catalog.FashionCatalogScreen
+import uz.mahalla.feature.fashion.ui.checkout.FashionCheckoutScreen
+import uz.mahalla.feature.fashion.ui.orders.FashionOrdersScreen
+import uz.mahalla.feature.fashion.ui.product.FashionProductScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
 import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
+import uz.mahalla.feature.freelancer.ui.catalog.FreelancersScreen
+import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerOrdersScreen
+import uz.mahalla.feature.freelancer.ui.profile.FreelancerProfileScreen
 import uz.mahalla.feature.hospital.ui.DoctorBookingScreen
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.MapScreen
@@ -42,6 +53,7 @@ import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
 import uz.mahalla.feature.security.ui.SecurityScreen
 import uz.mahalla.feature.security.ui.pin.ChangePinScreen
+import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
@@ -219,6 +231,9 @@ fun MahallaNavHost(
                     },
                     onMapClick = { navController.navigate(MapRoute) },
                     onNotificationsClick = { navController.navigate(NotificationsRoute) },
+                    // Каталог мастеров (issue #107): отдельная ветка, мастер
+                    // не заведение.
+                    onFreelancersClick = { navController.navigate(FreelancersRoute) },
                 )
             }
             composable<OrdersRoute> { OrdersScreen() }
@@ -245,13 +260,25 @@ fun MahallaNavHost(
                     onOpenSecurity = { navController.navigate(SecurityRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
+                    // «Мои билеты» (issue #106): своего таба у кино нет.
+                    onOpenMyTickets = { navController.navigate(MyTicketsRoute) },
                     // «Мои записи к врачу» (issue #99): тот же экран, другой
                     // список — у больниц своя ручка `hospitals/appointments/my`.
+                    // «Мои заказы одежды» (issue #108): своего таба у
+                    // вертикали нет, а следить за заказом надо.
+                    onOpenMyFashionOrders = { navController.navigate(FashionOrdersRoute) },
                     onOpenMyDoctorAppointments = {
                         navController.navigate(
                             MyAppointmentsRoute(AppointmentVertical.Doctor.name),
                         )
                     },
+                    // «Мои заказы у мастеров» (issue #107): заказать услугу у
+                    // фрилансера может любой, своего таба у этого нет.
+                    onOpenMyFreelancerOrders = {
+                        navController.navigate(MyFreelancerOrdersRoute)
+                    },
+                    // Подписка (issue #103): тарифы, пробный период и отмена.
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -364,6 +391,12 @@ fun MahallaNavHost(
             )
         }
 
+        // Подписка (issue #103) — вне обоих графов, как «мои заведения»:
+        // открывается строкой из профиля, возврат ведёт туда же.
+        composable<SubscriptionRoute> {
+            SubscriptionScreen(onBack = { navController.navigateUp() })
+        }
+
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,
         // а возврат ведёт обратно на главную.
         composable<SearchRoute> {
@@ -433,8 +466,52 @@ fun MahallaNavHost(
                 onDoctorClick = { placeId, placeName ->
                     navController.navigate(DoctorBookingRoute(placeId, placeName))
                 },
+                // Кино (issue #106): с карточки кинотеатра — в его афишу,
+                // оттуда в фильм, сеансы и покупку.
+                onCinemaClick = { placeId, placeName ->
+                    navController.navigate(CinemaRoute(placeId, placeName))
+                },
+                // Одежда (issue #108): витрина магазина с корзиной на сервере.
+                onShopClick = { placeId, placeName ->
+                    navController.navigate(FashionCatalogRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Кино» (эпик #13, issue #106): афиша кинотеатра → фильм →
+        // сеансы → покупка; за билетами следят в «моих билетах».
+        composable<CinemaRoute> { entry ->
+            val route = entry.toRoute<CinemaRoute>()
+            CinemaScreen(
+                onOpenMovie = { movieId ->
+                    navController.navigate(
+                        MovieRoute(
+                            placeId = route.placeId,
+                            movieId = movieId,
+                            placeName = route.placeName,
+                        ),
+                    )
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MovieRoute> {
+            MovieScreen(
+                // Экран покупки из стека уходит: возвращаться к сеансу, билет
+                // на который уже куплен, некуда.
+                onOpenMyTickets = {
+                    navController.navigate(MyTicketsRoute) {
+                        popUpTo<MovieRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MyTicketsRoute> {
+            MyTicketsScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Больницы» (эпик #11, issue #99): к врачу записываются с
@@ -472,6 +549,36 @@ fun MahallaNavHost(
 
         composable<MyAppointmentsRoute> {
             MyAppointmentsScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с
+        // услугами → заказ. Мастер не заведение, поэтому это отдельная ветка,
+        // а не карточка места.
+        composable<FreelancersRoute> {
+            FreelancersScreen(
+                onFreelancerClick = { freelancerId, name ->
+                    navController.navigate(FreelancerRoute(freelancerId, name))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FreelancerRoute> {
+            FreelancerProfileScreen(
+                // Профиль из стека уходит: возвращаться в собранную форму
+                // после того, как заказ создан, некуда. Каталог при этом
+                // остаётся — «назад» из заказов приведёт к списку мастеров.
+                onOpenMyOrders = {
+                    navController.navigate(MyFreelancerOrdersRoute) {
+                        popUpTo<FreelancerRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MyFreelancerOrdersRoute> {
+            MyFreelancerOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки
@@ -522,6 +629,52 @@ fun MahallaNavHost(
                 onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Одежда» (issue #108): витрина магазина → товар →
+        // корзина (она на сервере и общая) → оформление по одному магазину →
+        // «мои заказы».
+        composable<FashionCatalogRoute> {
+            FashionCatalogScreen(
+                onProductClick = { productId ->
+                    navController.navigate(FashionProductRoute(productId))
+                },
+                onCartClick = { navController.navigate(FashionCartRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionProductRoute> {
+            FashionProductScreen(
+                onCartClick = { navController.navigate(FashionCartRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionCartRoute> {
+            FashionCartScreen(
+                onCheckout = { storeId -> navController.navigate(FashionCheckoutRoute(storeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionCheckoutRoute> {
+            FashionCheckoutScreen(
+                // Корзина и оформление из стека уходят: возвращаться к
+                // заказу, который уже создан, некуда, а корзина по этому
+                // магазину пуста.
+                onOpenOrders = {
+                    navController.navigate(FashionOrdersRoute) {
+                        popUpTo<FashionCartRoute> { inclusive = true }
+                    }
+                },
+                onOpenWallet = { navController.navigate(WalletRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionOrdersRoute> {
+            FashionOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         composable<OrderStatusRoute> {
