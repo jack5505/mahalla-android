@@ -14,6 +14,11 @@ import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
+import uz.mahalla.feature.fashion.ui.cart.FashionCartScreen
+import uz.mahalla.feature.fashion.ui.catalog.FashionCatalogScreen
+import uz.mahalla.feature.fashion.ui.checkout.FashionCheckoutScreen
+import uz.mahalla.feature.fashion.ui.orders.FashionOrdersScreen
+import uz.mahalla.feature.fashion.ui.product.FashionProductScreen
 import uz.mahalla.feature.discovery.ui.search.SearchScreen
 import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
@@ -243,6 +248,9 @@ fun MahallaNavHost(
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
                     // «Мои записи к врачу» (issue #99): тот же экран, другой
                     // список — у больниц своя ручка `hospitals/appointments/my`.
+                    // «Мои заказы одежды» (issue #108): своего таба у
+                    // вертикали нет, а следить за заказом надо.
+                    onOpenMyFashionOrders = { navController.navigate(FashionOrdersRoute) },
                     onOpenMyDoctorAppointments = {
                         navController.navigate(
                             MyAppointmentsRoute(AppointmentVertical.Doctor.name),
@@ -417,6 +425,10 @@ fun MahallaNavHost(
                 onDoctorClick = { placeId, placeName ->
                     navController.navigate(DoctorBookingRoute(placeId, placeName))
                 },
+                // Одежда (issue #108): витрина магазина с корзиной на сервере.
+                onShopClick = { placeId, placeName ->
+                    navController.navigate(FashionCatalogRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -506,6 +518,52 @@ fun MahallaNavHost(
                 onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Одежда» (issue #108): витрина магазина → товар →
+        // корзина (она на сервере и общая) → оформление по одному магазину →
+        // «мои заказы».
+        composable<FashionCatalogRoute> {
+            FashionCatalogScreen(
+                onProductClick = { productId ->
+                    navController.navigate(FashionProductRoute(productId))
+                },
+                onCartClick = { navController.navigate(FashionCartRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionProductRoute> {
+            FashionProductScreen(
+                onCartClick = { navController.navigate(FashionCartRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionCartRoute> {
+            FashionCartScreen(
+                onCheckout = { storeId -> navController.navigate(FashionCheckoutRoute(storeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionCheckoutRoute> {
+            FashionCheckoutScreen(
+                // Корзина и оформление из стека уходят: возвращаться к
+                // заказу, который уже создан, некуда, а корзина по этому
+                // магазину пуста.
+                onOpenOrders = {
+                    navController.navigate(FashionOrdersRoute) {
+                        popUpTo<FashionCartRoute> { inclusive = true }
+                    }
+                },
+                onOpenWallet = { navController.navigate(WalletRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FashionOrdersRoute> {
+            FashionOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         composable<OrderStatusRoute> {
