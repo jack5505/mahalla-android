@@ -40,6 +40,7 @@ import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
+import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
 
@@ -248,6 +249,8 @@ fun MahallaNavHost(
                             MyAppointmentsRoute(AppointmentVertical.Doctor.name),
                         )
                     },
+                    // Подписка (issue #103): тарифы, пробный период и отмена.
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -346,6 +349,12 @@ fun MahallaNavHost(
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Подписка (issue #103) — вне обоих графов, как «мои заведения»:
+        // открывается строкой из профиля, возврат ведёт туда же.
+        composable<SubscriptionRoute> {
+            SubscriptionScreen(onBack = { navController.navigateUp() })
         }
 
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,
