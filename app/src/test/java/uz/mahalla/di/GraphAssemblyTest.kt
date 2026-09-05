@@ -61,6 +61,8 @@ import uz.mahalla.feature.queue.data.DefaultWalkInRepository
 import uz.mahalla.feature.queue.data.di.QueueDataModule
 import uz.mahalla.feature.role.data.DefaultProviderRepository
 import uz.mahalla.feature.role.data.di.RoleDataModule
+import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
+import uz.mahalla.feature.subscription.data.di.SubscriptionDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.data.DefaultAppVersionRepository
@@ -292,6 +294,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * Подписки (issue #103) — на **основном** Retrofit: Bearer требуют все
+     * ручки контроллера, включая список тарифов (проверено curl'ом по стенду:
+     * `401` без токена).
+     */
+    @Test
+    fun `subscriptions assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultSubscriptionRepository(api))
     }
 
     /**

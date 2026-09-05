@@ -207,6 +207,17 @@ data class ProviderFormRoute(val onboarding: Boolean = false)
 @Serializable
 data object MyPlacesRoute
 
+/**
+ * Подписка (issue #103, эпик #13): тарифы и то, что оформлено сейчас. Вне
+ * обоих графов, как «мои заведения»: открывается строкой из профиля, возврат
+ * ведёт туда же.
+ *
+ * Аргументов нет: и набор тарифов, и текущая подписка приезжают с сервера — их
+ * незачем передавать маршрутом, а пережив смерть процесса, они бы устарели.
+ */
+@Serializable
+data object SubscriptionRoute
+
 // --- Детали ---
 
 @Serializable
@@ -332,6 +343,67 @@ data class DoctorBookingRoute(
     val placeId: String,
     val placeName: String = "",
 )
+
+// --- Вертикаль «Одежда» (issue #108): каталог → товар → корзина → заказ ---
+
+/**
+ * Витрина магазина: категории и товары.
+ *
+ * @param placeName название магазина. Едет маршрутом по той же причине, что и
+ * у [MenuRoute]: в `CatalogResponse` его нет, а витрина без имени магазина
+ * читается как чужая.
+ */
+@Serializable
+data class FashionCatalogRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Карточка товара: цвет, размер, «в корзину».
+ *
+ * Знает только `productId` — всё остальное, включая `storeId`, приезжает в
+ * ответе `fashion/products/{id}`.
+ */
+@Serializable
+data class FashionProductRoute(val productId: String)
+
+/**
+ * Корзина. Аргументов нет: она живёт **на сервере** и одна на все магазины
+ * (issue #108) — открывается одинаково с любого экрана вертикали.
+ */
+@Serializable
+data object FashionCartRoute
+
+/**
+ * Оформление заказа по одному магазину.
+ *
+ * `storeId` обязателен: `PlaceOrderRequest` принимает ровно один `placeId`, а
+ * серверная корзина общая — заказ собирается из строк только этого магазина.
+ */
+@Serializable
+data class FashionCheckoutRoute(val storeId: String)
+
+/**
+ * «Мои заказы одежды». Вне обоих графов, как «мои записи»: открывается строкой
+ * из профиля и с экрана подтверждения заказа.
+ */
+@Serializable
+data object FashionOrdersRoute
+
+/**
+ * Имена аргументов маршрутов вертикали «Одежда» — ViewModel'и читают их из
+ * `SavedStateHandle` напрямую, как [OtpArgs]: `toRoute()` разбирает маршрут
+ * через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
+ * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
+ * проверяет `RoutesSerializationTest`.
+ */
+object FashionArgs {
+    const val PLACE_ID = "placeId"
+    const val PLACE_NAME = "placeName"
+    const val PRODUCT_ID = "productId"
+    const val STORE_ID = "storeId"
+}
 
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 

@@ -91,4 +91,56 @@
         <item quantity="many">Текст слишком длинный: не больше %1$d символов.</item>
         <item quantity="other">Текст слишком длинный: не больше %1$d символа.</item>
     </plurals>
+
+    <!-- Сколько единиц в корзине одежды (issue #108): бейдж на кнопке. -->
+    <plurals name="fashion_cart_action_count">
+        <item quantity="one">Корзина: %1$d товар</item>
+        <item quantity="few">Корзина: %1$d товара</item>
+        <item quantity="many">Корзина: %1$d товаров</item>
+        <item quantity="other">Корзина: %1$d товара</item>
+    </plurals>
+
+    <!-- Подписки (issue #103): остаток срока и длина пробного периода. -->
+    <plurals name="subscription_days_left">
+        <item quantity="one">Остался %1$d день</item>
+        <item quantity="few">Осталось %1$d дня</item>
+        <item quantity="many">Осталось %1$d дней</item>
+        <item quantity="other">Осталось %1$d дня</item>
+    </plurals>
+
+    <plurals name="subscription_trial_days">
+        <item quantity="one">Попробовать %1$d день бесплатно</item>
+        <item quantity="few">Попробовать %1$d дня бесплатно</item>
+        <item quantity="many">Попробовать %1$d дней бесплатно</item>
+        <item quantity="other">Попробовать %1$d дня бесплатно</item>
+    </plurals>
+
+    <!-- Подписки (issue #103): числовые лимиты тарифа. -->
+    <plurals name="subscription_limit_places">
+        <item quantity="one">До %1$d заведения</item>
+        <item quantity="few">До %1$d заведений</item>
+        <item quantity="many">До %1$d заведений</item>
+        <item quantity="other">До %1$d заведения</item>
+    </plurals>
+
+    <plurals name="subscription_limit_listings">
+        <item quantity="one">До %1$d объявления</item>
+        <item quantity="few">До %1$d объявлений</item>
+        <item quantity="many">До %1$d объявлений</item>
+        <item quantity="other">До %1$d объявления</item>
+    </plurals>
+
+    <plurals name="subscription_limit_photos">
+        <item quantity="one">До %1$d фото на объявление</item>
+        <item quantity="few">До %1$d фото на объявление</item>
+        <item quantity="many">До %1$d фото на объявление</item>
+        <item quantity="other">До %1$d фото на объявление</item>
+    </plurals>
+
+    <plurals name="subscription_limit_promotions">
+        <item quantity="one">%1$d бесплатное продвижение в месяц</item>
+        <item quantity="few">%1$d бесплатных продвижения в месяц</item>
+        <item quantity="many">%1$d бесплатных продвижений в месяц</item>
+        <item quantity="other">%1$d бесплатного продвижения в месяц</item>
+    </plurals>
 </resources>

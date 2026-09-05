@@ -653,4 +653,107 @@
     <string name="my_freelancer_orders_profile_subtitle">Заказы услуг у мастеров и их состояние</string>
     <string name="my_freelancer_orders_empty_title">Заказов нет</string>
     <string name="my_freelancer_orders_empty_description">Заказать услугу можно с карточки мастера.</string>
+    <!-- Вертикаль «Одежда» (issue #108) -->
+    <string name="category_fashion">Одежда</string>
+    <string name="place_action_shop">Магазин</string>
+
+    <string name="fashion_catalog_title">Магазин</string>
+    <string name="fashion_category_all">Все</string>
+    <string name="fashion_catalog_empty_title">Здесь пока нет товаров</string>
+    <string name="fashion_catalog_empty_description">Магазин ещё не наполнил витрину. Загляните позже.</string>
+
+    <string name="fashion_product_title">Товар</string>
+    <string name="fashion_product_unnamed">Товар без названия</string>
+    <string name="fashion_product_unavailable">Товар не найден</string>
+    <string name="fashion_product_no_variants">Магазин не завёл размеры этого товара — заказать его нельзя.</string>
+    <string name="fashion_product_added">Добавлено в корзину</string>
+    <string name="fashion_badge_new">Новинка</string>
+    <string name="fashion_badge_bestseller">Хит</string>
+    <string name="fashion_colors">Цвет</string>
+    <string name="fashion_sizes">Размер</string>
+    <string name="fashion_size_unnamed">Без размера</string>
+    <string name="fashion_material">Состав</string>
+    <string name="fashion_care">Уход</string>
+    <string name="fashion_size_guide">Размерная сетка</string>
+    <string name="fashion_add_to_cart">В корзину</string>
+    <string name="fashion_variant_out_of_stock">Выбранного размера нет в наличии. Выберите другой размер или цвет.</string>
+    <string name="fashion_open_cart">Открыть корзину</string>
+
+    <string name="fashion_cart_title">Корзина</string>
+    <string name="fashion_cart_empty_title">Корзина пуста</string>
+    <string name="fashion_cart_empty_description">Выберите товар на витрине магазина — он появится здесь.</string>
+    <string name="fashion_cart_store">Заказ магазина</string>
+    <string name="fashion_cart_total">Итого</string>
+    <string name="fashion_cart_remove_title">Убрать товар?</string>
+    <string name="fashion_cart_remove_message">Строка исчезнет из корзины. Добавить её снова можно с витрины.</string>
+    <string name="fashion_cart_remove_keep">Оставить</string>
+    <string name="fashion_checkout">Оформить заказ</string>
+
+    <string name="fashion_checkout_title">Оформление заказа</string>
+    <string name="fashion_checkout_items">Состав заказа</string>
+    <string name="fashion_checkout_empty">Корзина по этому магазину пуста.</string>
+    <string name="fashion_checkout_delivery_note">Стоимость доставки магазин посчитает после оформления заказа.</string>
+    <string name="fashion_checkout_submit">Подтвердить заказ</string>
+    <string name="fashion_order_created">Заказ принят</string>
+    <string name="fashion_open_orders">Мои заказы</string>
+
+    <string name="fashion_orders_title">Мои заказы одежды</string>
+    <string name="fashion_orders_profile_subtitle">Заказы одежды и их состояние</string>
+    <string name="fashion_orders_empty_title">Заказов нет</string>
+    <string name="fashion_orders_empty_description">Выберите товар на витрине магазина — заказ появится здесь.</string>
+    <string name="fashion_order_unnamed">Заказ</string>
+    <string name="fashion_order_line">%1$s × %2$d</string>
+    <string name="fashion_order_cancel">Отменить заказ</string>
+    <string name="fashion_order_cancel_title">Отменить заказ?</string>
+    <string name="fashion_order_cancel_message">Магазин перестанет собирать заказ. Отменить это действие нельзя.</string>
+    <string name="fashion_order_cancel_keep">Оставить</string>
+
+    <!-- Подписки (эпик #13, issue #103) -->
+    <string name="plan_name_language">ru</string>
+    <string name="subscription_title">Подписка</string>
+    <string name="subscription_profile_entry">Подписка</string>
+    <string name="subscription_profile_subtitle">Тарифы, пробный период и автопродление</string>
+    <string name="subscription_current_title">Ваша подписка</string>
+    <string name="subscription_none_title">Активной подписки нет</string>
+    <string name="subscription_none_description">Выберите тариф ниже. Бесплатные возможности работают и без подписки.</string>
+    <string name="subscription_plan_unnamed">Тариф без названия</string>
+    <string name="subscription_status_active">Активна</string>
+    <string name="subscription_status_expired">Истекла</string>
+    <string name="subscription_status_cancelled">Отменена</string>
+    <string name="subscription_status_unknown">Состояние неизвестно</string>
+    <string name="subscription_trial_badge">Пробный период</string>
+    <string name="subscription_period_label">Период оплаты</string>
+    <string name="subscription_price_paid">Списано</string>
+    <string name="subscription_expires">Действует до</string>
+    <string name="subscription_grace">Оплаченный срок вышел, но доступ пока сохранён.</string>
+    <string name="subscription_auto_renew">Автопродление</string>
+    <string name="subscription_auto_renew_description">По окончании срока подписка продлится сама, и деньги спишутся.</string>
+    <string name="subscription_cancel">Отменить подписку</string>
+    <string name="subscription_cancel_keep">Оставить</string>
+    <string name="subscription_cancel_title">Отменить подписку?</string>
+    <string name="subscription_cancel_message">Возможности сохранятся до конца оплаченного срока, дальше деньги списываться не будут.</string>
+    <string name="subscription_plans_title">Тарифы</string>
+    <string name="subscription_plans_empty_title">Тарифов нет</string>
+    <string name="subscription_plans_empty_description">Пока не предложено ни одного тарифа. Загляните позже.</string>
+    <string name="subscription_period_monthly">Месяц</string>
+    <string name="subscription_period_yearly">Год</string>
+    <string name="subscription_price_monthly">%1$s / мес</string>
+    <string name="subscription_price_yearly">%1$s / год</string>
+    <string name="subscription_free">Бесплатно</string>
+    <string name="subscription_popular">Популярный</string>
+    <string name="subscription_current_plan">Ваш тариф</string>
+    <string name="subscription_savings">Выгода %1$d%%</string>
+    <string name="subscription_subscribe">Оформить подписку</string>
+    <string name="subscription_change_period">Сменить период оплаты</string>
+    <string name="subscription_notice_subscribed">Подписка оформлена.</string>
+    <string name="subscription_notice_trial">Пробный период начался.</string>
+    <string name="subscription_notice_cancelled">Подписка отменена.</string>
+    <string name="subscription_feature_no_ads">Без рекламы</string>
+    <string name="subscription_feature_verified_badge">Значок проверенного</string>
+    <string name="subscription_feature_featured_listing">Показ выше в выдаче</string>
+    <string name="subscription_feature_priority_support">Приоритетная поддержка</string>
+    <string name="subscription_feature_multi_staff">Несколько сотрудников</string>
+    <string name="subscription_feature_custom_branding">Свой брендинг</string>
+    <string name="subscription_feature_api_access">Доступ по API</string>
+    <string name="subscription_analytics">Аналитика: %1$s</string>
 </resources>
