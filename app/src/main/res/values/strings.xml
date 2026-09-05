@@ -619,6 +619,61 @@
     <string name="my_doctor_appointments_empty_description">Shifoxona kartochkasidan «Shifokorga yozilish» tugmasi orqali yozilishingiz mumkin.</string>
     <string name="my_doctor_appointments_unnamed">Shifokor ko\'rsatilmagan</string>
 
+    <!-- Вертикаль «Одежда» (issue #108) -->
+    <string name="category_fashion">Kiyim</string>
+    <string name="place_action_shop">Do\'kon</string>
+
+    <string name="fashion_catalog_title">Do\'kon</string>
+    <string name="fashion_category_all">Hammasi</string>
+    <string name="fashion_catalog_empty_title">Bu yerda hozircha tovar yo\'q</string>
+    <string name="fashion_catalog_empty_description">Do\'kon vitrinani hali to\'ldirmagan. Keyinroq kirib ko\'ring.</string>
+
+    <string name="fashion_product_title">Tovar</string>
+    <string name="fashion_product_unnamed">Nomi ko\'rsatilmagan tovar</string>
+    <string name="fashion_product_unavailable">Tovar topilmadi</string>
+    <string name="fashion_product_no_variants">Do\'kon bu tovarning o\'lchamlarini kiritmagan — buyurtma berib bo\'lmaydi.</string>
+    <string name="fashion_product_added">Savatga qo\'shildi</string>
+    <string name="fashion_badge_new">Yangi</string>
+    <string name="fashion_badge_bestseller">Ko\'p sotilgan</string>
+    <string name="fashion_colors">Rang</string>
+    <string name="fashion_sizes">O\'lcham</string>
+    <string name="fashion_size_unnamed">O\'lchamsiz</string>
+    <string name="fashion_material">Tarkibi</string>
+    <string name="fashion_care">Parvarish</string>
+    <string name="fashion_size_guide">O\'lchamlar jadvali</string>
+    <string name="fashion_add_to_cart">Savatga qo\'shish</string>
+    <string name="fashion_variant_out_of_stock">Tanlangan o\'lcham qolmagan. Boshqa o\'lcham yoki rangni tanlang.</string>
+    <string name="fashion_open_cart">Savatni ochish</string>
+
+    <string name="fashion_cart_title">Savat</string>
+    <string name="fashion_cart_empty_title">Savat bo\'sh</string>
+    <string name="fashion_cart_empty_description">Do\'kon vitrinasidan tovar tanlang — u shu yerda paydo bo\'ladi.</string>
+    <string name="fashion_cart_store">Do\'kon buyurtmasi</string>
+    <string name="fashion_cart_total">Jami</string>
+    <string name="fashion_cart_remove_title">Tovarni olib tashlaymizmi?</string>
+    <string name="fashion_cart_remove_message">Qator savatdan o\'chiriladi. Uni vitrinadan qayta qo\'shsa bo\'ladi.</string>
+    <string name="fashion_cart_remove_keep">Qoldirish</string>
+    <string name="fashion_checkout">Buyurtma berish</string>
+
+    <string name="fashion_checkout_title">Buyurtmani rasmiylashtirish</string>
+    <string name="fashion_checkout_items">Buyurtma tarkibi</string>
+    <string name="fashion_checkout_empty">Bu do\'kon bo\'yicha savat bo\'sh.</string>
+    <string name="fashion_checkout_delivery_note">Yetkazib berish narxini do\'kon buyurtma rasmiylashtirilgach hisoblaydi.</string>
+    <string name="fashion_checkout_submit">Buyurtmani tasdiqlash</string>
+    <string name="fashion_order_created">Buyurtma qabul qilindi</string>
+    <string name="fashion_open_orders">Buyurtmalarim</string>
+
+    <string name="fashion_orders_title">Kiyim buyurtmalarim</string>
+    <string name="fashion_orders_profile_subtitle">Kiyim buyurtmalari va ularning holati</string>
+    <string name="fashion_orders_empty_title">Buyurtmalar yo\'q</string>
+    <string name="fashion_orders_empty_description">Do\'kon vitrinasidan tovar tanlang — buyurtmangiz shu yerda ko\'rinadi.</string>
+    <string name="fashion_order_unnamed">Buyurtma</string>
+    <string name="fashion_order_line">%1$s × %2$d</string>
+    <string name="fashion_order_cancel">Buyurtmani bekor qilish</string>
+    <string name="fashion_order_cancel_title">Buyurtma bekor qilinsinmi?</string>
+    <string name="fashion_order_cancel_message">Do\'kon buyurtmani yig\'ishni to\'xtatadi. Bu amalni qaytarib bo\'lmaydi.</string>
+    <string name="fashion_order_cancel_keep">Qoldirish</string>
+
     <!-- Подписки (эпик #13, issue #103) -->
     <!-- Язык приложения для полей, которые бэкенд отдаёт на двух языках
          (`name`/`nameUz` у тарифа): значение читает экран подписки. -->

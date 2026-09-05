@@ -86,6 +86,9 @@ import java.time.Instant
  * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
  * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
  * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
+ * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
+ * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
+ * таба у вертикали нет.
  * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
  * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
  * пробный период и отмена нужны обоим.
@@ -97,6 +100,7 @@ fun ProfileScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
@@ -128,6 +132,7 @@ fun ProfileScreen(
         onOpenMyPlaces = onOpenMyPlaces,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
+        onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
         onChangeServer = onChangeServer,
@@ -144,6 +149,7 @@ fun ProfileContentScreen(
     onOpenMyPlaces: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
@@ -194,6 +200,14 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_doctor_appointments_title),
                 subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
                 onClick = onOpenMyDoctorAppointments,
+            )
+
+            // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
+            // и посмотреть его больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.fashion_orders_title),
+                subtitle = stringResource(R.string.fashion_orders_profile_subtitle),
+                onClick = onOpenMyFashionOrders,
             )
 
             // Подписка (issue #103): тарифы, пробный период, отмена и
@@ -552,6 +566,7 @@ private fun ProfilePreview() {
             onOpenMyPlaces = {},
             onOpenMyAppointments = {},
             onOpenMyDoctorAppointments = {},
+            onOpenMyFashionOrders = {},
             onOpenSubscription = {},
         )
     }

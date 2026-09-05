@@ -291,4 +291,37 @@ class RoutesSerializationTest {
             json.decodeFromString<MyAppointmentsRoute>(json.encodeToString(route)),
         )
     }
+
+    /**
+     * Вертикаль «Одежда» (issue #108). Имена аргументов ViewModel'и читают из
+     * `SavedStateHandle` по константам [FashionArgs]: `toRoute()` разбирает
+     * маршрут настоящим `Bundle`, которого в JVM-тестах нет, — разойдись имена,
+     * и витрина открылась бы пустой только в рантайме.
+     */
+    @Test
+    fun `fashion routes carry the arguments their view models read`() {
+        val catalog = serializer<FashionCatalogRoute>().descriptor
+        assertEquals(2, catalog.elementsCount)
+        assertEquals(FashionArgs.PLACE_ID, catalog.getElementName(0))
+        assertEquals(FashionArgs.PLACE_NAME, catalog.getElementName(1))
+
+        val product = serializer<FashionProductRoute>().descriptor
+        assertEquals(1, product.elementsCount)
+        assertEquals(FashionArgs.PRODUCT_ID, product.getElementName(0))
+
+        // Оформление идёт по одному магазину: серверная корзина общая, а
+        // `PlaceOrderRequest` принимает ровно один `placeId`.
+        val checkout = serializer<FashionCheckoutRoute>().descriptor
+        assertEquals(1, checkout.elementsCount)
+        assertEquals(FashionArgs.STORE_ID, checkout.getElementName(0))
+
+        val route = FashionCatalogRoute(placeId = "s-1", placeName = "Zara")
+        assertEquals(route, json.decodeFromString<FashionCatalogRoute>(json.encodeToString(route)))
+
+        val checkoutRoute = FashionCheckoutRoute(storeId = "s-1")
+        assertEquals(
+            checkoutRoute,
+            json.decodeFromString<FashionCheckoutRoute>(json.encodeToString(checkoutRoute)),
+        )
+    }
 }

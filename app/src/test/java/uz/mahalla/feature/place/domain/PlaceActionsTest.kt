@@ -115,6 +115,13 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Hospital),
         )
 
+        // Одежда добавилась в issue #108: витрина магазина с корзиной на
+        // сервере — своя вертикаль, а не «Заказать» из «Еды».
+        assertEquals(
+            PlaceCapabilities(shopping = true),
+            PlaceCapabilities.of(PlaceCategory.Fashion),
+        )
+
         listOf(
             PlaceCategory.Food,
             PlaceCategory.Pharmacy,
@@ -159,5 +166,19 @@ class PlaceActionsTest {
         // очередь и бронь у неё выключены, вести им некуда (issue #99).
         assertEquals(PlaceAction.Doctor, PlaceActions.primary(actions))
         assertEquals(listOf(PlaceAction.Doctor, PlaceAction.Call), actions)
+    }
+
+    @Test
+    fun `a clothing store card leads to its catalog`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Fashion),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Витрина — единственное, что магазин одежды умеет в приложении:
+        // очередь, бронь и «Заказать» у него выключены (issue #108).
+        assertEquals(PlaceAction.Shop, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Shop, PlaceAction.Call), actions)
     }
 }

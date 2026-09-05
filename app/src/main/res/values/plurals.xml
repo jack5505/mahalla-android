@@ -68,6 +68,12 @@
         <item quantity="other">Matn juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
 
+    <!-- Сколько единиц в корзине одежды (issue #108): бейдж на кнопке. -->
+    <plurals name="fashion_cart_action_count">
+        <item quantity="one">Savat: %1$d ta tovar</item>
+        <item quantity="other">Savat: %1$d ta tovar</item>
+    </plurals>
+
     <!-- Подписки (issue #103): остаток срока и длина пробного периода. -->
     <plurals name="subscription_days_left">
         <item quantity="one">%1$d kun qoldi</item>
