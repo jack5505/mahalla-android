@@ -207,6 +207,17 @@ data class ProviderFormRoute(val onboarding: Boolean = false)
 @Serializable
 data object MyPlacesRoute
 
+/**
+ * Подписка (issue #103, эпик #13): тарифы и то, что оформлено сейчас. Вне
+ * обоих графов, как «мои заведения»: открывается строкой из профиля, возврат
+ * ведёт туда же.
+ *
+ * Аргументов нет: и набор тарифов, и текущая подписка приезжают с сервера — их
+ * незачем передавать маршрутом, а пережив смерть процесса, они бы устарели.
+ */
+@Serializable
+data object SubscriptionRoute
+
 // --- Детали ---
 
 @Serializable
@@ -277,6 +288,43 @@ object MyAppointmentsArgs {
     const val VERTICAL = "vertical"
 }
 
+// --- Вертикаль «Мастера» (issue #107) ---
+
+/**
+ * Каталог мастеров-фрилансеров. Вне обоих графов, как поиск и карта:
+ * открывается строкой с главной, а возврат ведёт обратно туда же.
+ *
+ * Мастер — **не заведение**: у него свой каталог (`freelancers`), свои услуги
+ * и свои заказы, отдельно от `places`, — поэтому и маршрут свой, а не
+ * [SearchRoute] с категорией.
+ */
+@Serializable
+data object FreelancersRoute
+
+/**
+ * Профиль мастера и заказ услуги.
+ *
+ * @param freelancerName имя из каталога. Едет маршрутом по той же причине, что
+ * и название заведения в [BookingRoute]: шапка рисуется раньше, чем приезжает
+ * профиль, а пустой заголовок читается как чужой экран. Как только профиль
+ * загрузится, имя берётся из ответа сервера — оно точнее.
+ */
+@Serializable
+data class FreelancerRoute(
+    val freelancerId: String,
+    val freelancerName: String = "",
+)
+
+/**
+ * «Мои заказы у мастеров». Вне обоих графов, как центр уведомлений:
+ * открывается строкой из профиля и с экрана подтверждения заказа.
+ *
+ * Аргументов нет: список грузится с сервера целиком, а конкретный заказ никуда
+ * не ведёт — своего экрана у него нет, отменять его клиенту нечем.
+ */
+@Serializable
+data object MyFreelancerOrdersRoute
+
 // --- Вертикаль «Больницы» (эпик #11, issue #99) ---
 
 /**
@@ -295,6 +343,108 @@ data class DoctorBookingRoute(
     val placeId: String,
     val placeName: String = "",
 )
+
+// --- Вертикаль «Одежда» (issue #108): каталог → товар → корзина → заказ ---
+
+/**
+ * Витрина магазина: категории и товары.
+ *
+ * @param placeName название магазина. Едет маршрутом по той же причине, что и
+ * у [MenuRoute]: в `CatalogResponse` его нет, а витрина без имени магазина
+ * читается как чужая.
+ */
+@Serializable
+data class FashionCatalogRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Карточка товара: цвет, размер, «в корзину».
+ *
+ * Знает только `productId` — всё остальное, включая `storeId`, приезжает в
+ * ответе `fashion/products/{id}`.
+ */
+@Serializable
+data class FashionProductRoute(val productId: String)
+
+/**
+ * Корзина. Аргументов нет: она живёт **на сервере** и одна на все магазины
+ * (issue #108) — открывается одинаково с любого экрана вертикали.
+ */
+@Serializable
+data object FashionCartRoute
+
+/**
+ * Оформление заказа по одному магазину.
+ *
+ * `storeId` обязателен: `PlaceOrderRequest` принимает ровно один `placeId`, а
+ * серверная корзина общая — заказ собирается из строк только этого магазина.
+ */
+@Serializable
+data class FashionCheckoutRoute(val storeId: String)
+
+/**
+ * «Мои заказы одежды». Вне обоих графов, как «мои записи»: открывается строкой
+ * из профиля и с экрана подтверждения заказа.
+ */
+@Serializable
+data object FashionOrdersRoute
+
+/**
+ * Имена аргументов маршрутов вертикали «Одежда» — ViewModel'и читают их из
+ * `SavedStateHandle` напрямую, как [OtpArgs]: `toRoute()` разбирает маршрут
+ * через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
+ * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
+ * проверяет `RoutesSerializationTest`.
+ */
+object FashionArgs {
+    const val PLACE_ID = "placeId"
+    const val PLACE_NAME = "placeName"
+    const val PRODUCT_ID = "productId"
+    const val STORE_ID = "storeId"
+}
+
+// --- Вертикаль «Кино» (эпик #13, issue #106) ---
+
+/**
+ * Афиша кинотеатра: что здесь идёт.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что
+ * и у [QueueRoute] и [BookingRoute]: ни в ответе `cinema/movies`, ни в
+ * расписании его нет, а афиша без имени кинотеатра читается как чужая.
+ */
+@Serializable
+data class CinemaRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Фильм: описание, сеансы этого кинотеатра на выбранный день и покупка
+ * билета.
+ *
+ * [placeId] нужен и здесь: расписание бэкенд отдаёт только заведением
+ * целиком (`cinema/places/{placeId}/schedule`), а не фильмом.
+ */
+@Serializable
+data class MovieRoute(
+    val placeId: String,
+    val movieId: String,
+    val placeName: String = "",
+)
+
+/**
+ * «Мои билеты» (issue #106). Вне обоих графов, как «мои записи»: открывается
+ * строкой из профиля и с экрана купленного билета, а возврат ведёт туда,
+ * откуда пришли.
+ *
+ * Аргументов нет: список грузится с сервера страницами, а конкретный билет
+ * никуда не ведёт — своего экрана у него нет (`GET cinema/tickets/{id}`
+ * отдаёт ровно то же, что и строка списка).
+ */
+@Serializable
+data object MyTicketsRoute
 
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 

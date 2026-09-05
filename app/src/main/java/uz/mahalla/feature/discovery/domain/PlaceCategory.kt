@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.LocalHospital
 import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material.icons.outlined.Movie
@@ -22,11 +23,11 @@ import uz.mahalla.R
  * которые могут приехать в ответе или лежать в кэше от прежних версий
  * приложения; разбор регистронезависимый.
  *
- * [Other] — не «седьмая категория», а место для значений, которых ещё нет в
- * приложении (`BAKERY`, `SHOP`, `MUSEUM`, `PARK`, `MOSQUE`, `FASHION`): сервер
- * может отдать новую категорию раньше релиза. Такое место показывается в
- * списке, но ни один фильтр по категории его не выбирает — поэтому [Other] и
- * не попадает в [selectable].
+ * [Other] — не «восьмая категория», а место для значений, которых ещё нет в
+ * приложении (`BAKERY`, `SHOP`, `MUSEUM`, `PARK`, `MOSQUE`): сервер может
+ * отдать новую категорию раньше релиза. Такое место показывается в списке, но
+ * ни один фильтр по категории его не выбирает — поэтому [Other] и не попадает
+ * в [selectable].
  */
 enum class PlaceCategory(
     val apiValue: String,
@@ -50,6 +51,19 @@ enum class PlaceCategory(
         Icons.Outlined.Build,
         // Фрилансер из каталога бэкенда — тот же «мастер» из ТЗ.
         setOf("barber", "master", "freelancer"),
+    ),
+
+    /**
+     * Магазины одежды (issue #108). До неё `FASHION` попадал в [Other], то
+     * есть вертикаль с пятнадцатью эндпоинтами была невидима из каталога.
+     * `CLOTHING` — второе написание той же категории: так она называется в
+     * поле `vertical` заказа.
+     */
+    Fashion(
+        "FASHION",
+        R.string.category_fashion,
+        Icons.Outlined.Checkroom,
+        setOf("fashion", "clothing"),
     ),
     Other("", R.string.category_other, Icons.Outlined.Category),
     ;
