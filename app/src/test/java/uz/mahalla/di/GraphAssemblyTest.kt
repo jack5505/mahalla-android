@@ -49,6 +49,8 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.freelancer.data.DefaultFreelancerRepository
+import uz.mahalla.feature.freelancer.data.di.FreelancerDataModule
 import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.di.HospitalDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
@@ -61,6 +63,8 @@ import uz.mahalla.feature.queue.data.DefaultWalkInRepository
 import uz.mahalla.feature.queue.data.di.QueueDataModule
 import uz.mahalla.feature.role.data.DefaultProviderRepository
 import uz.mahalla.feature.role.data.di.RoleDataModule
+import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
+import uz.mahalla.feature.subscription.data.di.SubscriptionDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.data.DefaultAppVersionRepository
@@ -295,6 +299,25 @@ class GraphAssemblyTest {
     }
 
     /**
+     * Подписки (issue #103) — на **основном** Retrofit: Bearer требуют все
+     * ручки контроллера, включая список тарифов (проверено curl'ом по стенду:
+     * `401` без токена).
+     */
+    @Test
+    fun `subscriptions assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultSubscriptionRepository(api))
+    }
+
+    /**
      * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
      * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
      * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
@@ -386,6 +409,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultHospitalRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Мастера (issue #107): каталог, профиль и услуги анонимны, но заказ и
+     * «мои заказы» требуют Bearer — значит API собирается на **основном**
+     * Retrofit, как бронь и больницы.
+     */
+    @Test
+    fun `freelancer assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = FreelancerDataModule.provideFreelancerApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
     }
 
     /**

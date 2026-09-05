@@ -88,6 +88,16 @@ import java.time.Instant
  * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
  * @param onOpenMyTickets открыть «мои билеты» (issue #106). Тоже всем и по
  * той же причине: купить билет может кто угодно, а таба у кино нет.
+ * @param onOpenMyFreelancerOrders открыть «мои заказы у мастеров»
+ * (issue #107). Тоже отдельная строка и по той же причине: заказы у
+ * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
+ * являются.
+ * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
+ * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
+ * таба у вертикали нет.
+ * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
+ * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
+ * пробный период и отмена нужны обоим.
  */
 @Composable
 fun ProfileScreen(
@@ -97,6 +107,9 @@ fun ProfileScreen(
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -128,6 +141,9 @@ fun ProfileScreen(
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
+        onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
+        onOpenMyFashionOrders = onOpenMyFashionOrders,
+        onOpenSubscription = onOpenSubscription,
         modifier = modifier,
         onChangeServer = onChangeServer,
     )
@@ -144,6 +160,9 @@ fun ProfileContentScreen(
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
 ) {
@@ -201,6 +220,31 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_tickets_title),
                 subtitle = stringResource(R.string.my_tickets_profile_subtitle),
                 onClick = onOpenMyTickets,
+            )
+
+            // «Мои заказы у мастеров» (issue #107) — тоже всем: заказать
+            // услугу у фрилансера может любой, своего таба у этого нет.
+            MahallaListItem(
+                title = stringResource(R.string.my_freelancer_orders_title),
+                subtitle = stringResource(R.string.my_freelancer_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerOrders,
+            )
+
+            // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
+            // и посмотреть его больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.fashion_orders_title),
+                subtitle = stringResource(R.string.fashion_orders_profile_subtitle),
+                onClick = onOpenMyFashionOrders,
+            )
+
+            // Подписка (issue #103): тарифы, пробный период, отмена и
+            // автопродление. Строка — всем: набор тарифов зависит от роли, но
+            // сама подписка есть у обеих.
+            MahallaListItem(
+                title = stringResource(R.string.subscription_profile_entry),
+                subtitle = stringResource(R.string.subscription_profile_subtitle),
+                onClick = onOpenSubscription,
             )
 
             Text(
@@ -549,8 +593,11 @@ private fun ProfilePreview() {
             onOpenRole = {},
             onOpenMyPlaces = {},
             onOpenMyAppointments = {},
+            onOpenMyFreelancerOrders = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyTickets = {},
+            onOpenMyFashionOrders = {},
+            onOpenSubscription = {},
         )
     }
 }
