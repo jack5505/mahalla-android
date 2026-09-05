@@ -179,6 +179,7 @@ class PlaceDetailsViewModel @Inject constructor(
             PlaceAction.Queue,
             PlaceAction.Booking,
             PlaceAction.Doctor,
+            PlaceAction.Cinema,
             PlaceAction.Order,
             PlaceAction.Shop,
             ->

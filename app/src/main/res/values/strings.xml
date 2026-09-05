@@ -346,6 +346,7 @@
     <string name="place_action_queue">Navbatga yozilish</string>
     <string name="place_action_booking">Joy band qilish</string>
     <string name="place_action_doctor">Shifokorga yozilish</string>
+    <string name="place_action_cinema">Chipta olish</string>
     <string name="place_action_order">Buyurtma berish</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
     <string name="place_action_route">Yo\'nalish</string>
@@ -764,4 +765,42 @@
     <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
     <string name="subscription_feature_api_access">API orqali kirish</string>
     <string name="subscription_analytics">Tahlil: %1$s</string>
+
+    <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
+    <string name="cinema_title">Afisha</string>
+    <string name="cinema_empty_title">Afisha bo\'sh</string>
+    <string name="cinema_empty_description">Kinoteatr hali film kiritmagan. Keyinroq qarab ko\'ring.</string>
+    <string name="cinema_movie_unnamed">Nomi ko\'rsatilmagan film</string>
+    <string name="cinema_sessions_title">Seanslar</string>
+    <string name="cinema_sessions_empty_title">Bu kunga seans yo\'q</string>
+    <string name="cinema_sessions_empty_description">Boshqa kunni tanlang: afishada yaqin ikki hafta bor.</string>
+    <string name="cinema_session_time_unknown">Vaqti ko\'rsatilmagan</string>
+    <string name="cinema_buy_title">Chipta olish</string>
+    <string name="cinema_buy_session">%1$s, %2$s</string>
+    <string name="cinema_buy_seat_label">Joy (majburiy emas)</string>
+    <string name="cinema_buy_seat_placeholder">Masalan: C7</string>
+    <string name="cinema_buy_seat_note">Zal sxemasi yo\'q: bo\'sh joylarni kinoteatr biladi. Joyni yozmasangiz, uni kinoteatr o\'zi belgilaydi.</string>
+    <string name="cinema_buy_submit">Chiptani olish</string>
+    <string name="cinema_buy_payment_note">Chipta band qilinadi, to\'lovni kinoteatrda amalga oshirasiz.</string>
+    <string name="cinema_bought_title">Chipta olindi</string>
+    <string name="cinema_bought_description">Kodni kassada yoki nazoratchiga ko\'rsating. Chipta «Chiptalarim» bo\'limida saqlanadi.</string>
+    <string name="cinema_ticket_code">Kod: %1$s</string>
+    <string name="cinema_ticket_seat">Joy: %1$s</string>
+    <string name="cinema_ticket_seat_unknown">Joyni kinoteatr belgilaydi</string>
+    <string name="cinema_ticket_status_active">Amal qiladi</string>
+    <string name="cinema_ticket_status_used">Foydalanilgan</string>
+    <string name="cinema_ticket_status_cancelled">Bekor qilindi</string>
+    <string name="cinema_ticket_status_refunded">Qaytarildi</string>
+    <string name="cinema_ticket_status_unknown">Holati aniq emas</string>
+
+    <string name="my_tickets_title">Chiptalarim</string>
+    <string name="my_tickets_profile_subtitle">Kino chiptalari va ularning holati</string>
+    <string name="my_tickets_empty_title">Chiptangiz yo\'q</string>
+    <string name="my_tickets_empty_description">Kinoteatr kartochkasidagi «Chipta olish» tugmasi orqali chipta olishingiz mumkin.</string>
+    <string name="my_tickets_item_title">Kino chiptasi</string>
+    <string name="my_tickets_bought_at">Olingan: %1$s</string>
+    <string name="my_tickets_cancel">Chiptani qaytarish</string>
+    <string name="my_tickets_cancel_title">Chiptani qaytarasizmi?</string>
+    <string name="my_tickets_cancel_message">Joy bo\'shatiladi. Qaytarish shartlarini kinoteatr belgilaydi.</string>
+    <string name="my_tickets_cancel_keep">Qoldirish</string>
 </resources>

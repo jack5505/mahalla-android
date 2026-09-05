@@ -40,6 +40,8 @@ import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.booking.data.DefaultBookingRepository
 import uz.mahalla.feature.booking.data.di.BookingDataModule
+import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
+import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
@@ -369,6 +371,25 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultBookingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Кино (issue #106): афиша и расписание анонимны, но покупка, свои билеты
+     * и возврат требуют Bearer — значит API собирается на **основном**
+     * Retrofit, как и остальные вертикали.
+     */
+    @Test
+    fun `cinema assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = CinemaDataModule.provideCinemaApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultCinemaRepository(api = api))
     }
 
     /**

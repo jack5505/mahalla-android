@@ -13,6 +13,9 @@ import androidx.navigation.toRoute
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
+import uz.mahalla.feature.cinema.ui.movie.MovieScreen
+import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
+import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.fashion.ui.cart.FashionCartScreen
 import uz.mahalla.feature.fashion.ui.catalog.FashionCatalogScreen
@@ -253,6 +256,8 @@ fun MahallaNavHost(
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
+                    // «Мои билеты» (issue #106): своего таба у кино нет.
+                    onOpenMyTickets = { navController.navigate(MyTicketsRoute) },
                     // «Мои записи к врачу» (issue #99): тот же экран, другой
                     // список — у больниц своя ручка `hospitals/appointments/my`.
                     // «Мои заказы одежды» (issue #108): своего таба у
@@ -445,12 +450,52 @@ fun MahallaNavHost(
                 onDoctorClick = { placeId, placeName ->
                     navController.navigate(DoctorBookingRoute(placeId, placeName))
                 },
+                // Кино (issue #106): с карточки кинотеатра — в его афишу,
+                // оттуда в фильм, сеансы и покупку.
+                onCinemaClick = { placeId, placeName ->
+                    navController.navigate(CinemaRoute(placeId, placeName))
+                },
                 // Одежда (issue #108): витрина магазина с корзиной на сервере.
                 onShopClick = { placeId, placeName ->
                     navController.navigate(FashionCatalogRoute(placeId, placeName))
                 },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Кино» (эпик #13, issue #106): афиша кинотеатра → фильм →
+        // сеансы → покупка; за билетами следят в «моих билетах».
+        composable<CinemaRoute> { entry ->
+            val route = entry.toRoute<CinemaRoute>()
+            CinemaScreen(
+                onOpenMovie = { movieId ->
+                    navController.navigate(
+                        MovieRoute(
+                            placeId = route.placeId,
+                            movieId = movieId,
+                            placeName = route.placeName,
+                        ),
+                    )
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MovieRoute> {
+            MovieScreen(
+                // Экран покупки из стека уходит: возвращаться к сеансу, билет
+                // на который уже куплен, некуда.
+                onOpenMyTickets = {
+                    navController.navigate(MyTicketsRoute) {
+                        popUpTo<MovieRoute> { inclusive = true }
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<MyTicketsRoute> {
+            MyTicketsScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Больницы» (эпик #11, issue #99): к врачу записываются с

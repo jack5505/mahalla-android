@@ -143,6 +143,10 @@ class RoutesSerializationTest {
             // склеенный serialName увёл бы с записи к врачу на запись к
             // мастеру.
             serializer<DoctorBookingRoute>().descriptor.serialName,
+            // Кино (issue #106): у афиши те же два аргумента, что у очереди и
+            // брони, а у карточки фильма к ним добавляется третий.
+            serializer<CinemaRoute>().descriptor.serialName,
+            serializer<MovieRoute>().descriptor.serialName,
             // Мастера (issue #107): аргументов столько же, сколько у брони и
             // очереди, — склеенный serialName увёл бы с профиля мастера на
             // карточку заведения.
@@ -286,6 +290,27 @@ class RoutesSerializationTest {
             route,
             json.decodeFromString<DoctorBookingRoute>(json.encodeToString(route)),
         )
+    }
+
+    @Test
+    fun `cinema routes carry the place and the movie`() {
+        // Имени кинотеатра нет ни в афише, ни в расписании — оно едет
+        // маршрутом (issue #106). `placeId` нужен и карточке фильма:
+        // расписание бэкенд отдаёт только заведением целиком.
+        val cinema = serializer<CinemaRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until cinema.elementsCount).map(cinema::getElementName),
+        )
+
+        val movie = serializer<MovieRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "movieId", "placeName"),
+            (0 until movie.elementsCount).map(movie::getElementName),
+        )
+
+        val route = MovieRoute(placeId = "p-1", movieId = "m-1")
+        assertEquals(route, json.decodeFromString<MovieRoute>(json.encodeToString(route)))
     }
 
     /**

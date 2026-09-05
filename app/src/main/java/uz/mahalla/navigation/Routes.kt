@@ -405,6 +405,47 @@ object FashionArgs {
     const val STORE_ID = "storeId"
 }
 
+// --- Вертикаль «Кино» (эпик #13, issue #106) ---
+
+/**
+ * Афиша кинотеатра: что здесь идёт.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что
+ * и у [QueueRoute] и [BookingRoute]: ни в ответе `cinema/movies`, ни в
+ * расписании его нет, а афиша без имени кинотеатра читается как чужая.
+ */
+@Serializable
+data class CinemaRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Фильм: описание, сеансы этого кинотеатра на выбранный день и покупка
+ * билета.
+ *
+ * [placeId] нужен и здесь: расписание бэкенд отдаёт только заведением
+ * целиком (`cinema/places/{placeId}/schedule`), а не фильмом.
+ */
+@Serializable
+data class MovieRoute(
+    val placeId: String,
+    val movieId: String,
+    val placeName: String = "",
+)
+
+/**
+ * «Мои билеты» (issue #106). Вне обоих графов, как «мои записи»: открывается
+ * строкой из профиля и с экрана купленного билета, а возврат ведёт туда,
+ * откуда пришли.
+ *
+ * Аргументов нет: список грузится с сервера страницами, а конкретный билет
+ * никуда не ведёт — своего экрана у него нет (`GET cinema/tickets/{id}`
+ * отдаёт ровно то же, что и строка списка).
+ */
+@Serializable
+data object MyTicketsRoute
+
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---
 
 @Serializable

@@ -143,4 +143,26 @@
         <item quantity="many">%1$d бесплатных продвижений в месяц</item>
         <item quantity="other">%1$d бесплатного продвижения в месяц</item>
     </plurals>
+
+    <!-- Кино (issue #106): длительность фильма, остаток мест, лимит поля места. -->
+    <plurals name="cinema_movie_duration">
+        <item quantity="one">%1$d минута</item>
+        <item quantity="few">%1$d минуты</item>
+        <item quantity="many">%1$d минут</item>
+        <item quantity="other">%1$d минуты</item>
+    </plurals>
+
+    <plurals name="cinema_seats_left">
+        <item quantity="one">Осталось %1$d место</item>
+        <item quantity="few">Осталось %1$d места</item>
+        <item quantity="many">Осталось %1$d мест</item>
+        <item quantity="other">Осталось %1$d места</item>
+    </plurals>
+
+    <plurals name="cinema_buy_seat_too_long">
+        <item quantity="one">Слишком длинно: не больше %1$d символа.</item>
+        <item quantity="few">Слишком длинно: не больше %1$d символов.</item>
+        <item quantity="many">Слишком длинно: не больше %1$d символов.</item>
+        <item quantity="other">Слишком длинно: не больше %1$d символа.</item>
+    </plurals>
 </resources>

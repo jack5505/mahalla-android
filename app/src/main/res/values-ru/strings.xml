@@ -340,6 +340,7 @@
     <string name="place_action_queue">Встать в очередь</string>
     <string name="place_action_booking">Забронировать</string>
     <string name="place_action_doctor">Записаться к врачу</string>
+    <string name="place_action_cinema">Купить билет</string>
     <string name="place_action_order">Заказать</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
@@ -756,4 +757,42 @@
     <string name="subscription_feature_custom_branding">Свой брендинг</string>
     <string name="subscription_feature_api_access">Доступ по API</string>
     <string name="subscription_analytics">Аналитика: %1$s</string>
+
+    <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
+    <string name="cinema_title">Афиша</string>
+    <string name="cinema_empty_title">Афиша пуста</string>
+    <string name="cinema_empty_description">Кинотеатр ещё не завёл фильмов. Загляните позже.</string>
+    <string name="cinema_movie_unnamed">Название не указано</string>
+    <string name="cinema_sessions_title">Сеансы</string>
+    <string name="cinema_sessions_empty_title">На этот день сеансов нет</string>
+    <string name="cinema_sessions_empty_description">Выберите другой день: в афише ближайшие две недели.</string>
+    <string name="cinema_session_time_unknown">Время не указано</string>
+    <string name="cinema_buy_title">Покупка билета</string>
+    <string name="cinema_buy_session">%1$s, %2$s</string>
+    <string name="cinema_buy_seat_label">Место (необязательно)</string>
+    <string name="cinema_buy_seat_placeholder">Например: C7</string>
+    <string name="cinema_buy_seat_note">Схемы зала нет: свободные места знает кинотеатр. Не укажете место — его назначат сами.</string>
+    <string name="cinema_buy_submit">Взять билет</string>
+    <string name="cinema_buy_payment_note">Билет бронируется, оплата — в кинотеатре.</string>
+    <string name="cinema_bought_title">Билет ваш</string>
+    <string name="cinema_bought_description">Покажите код на кассе или контролёру. Билет останется в разделе «Мои билеты».</string>
+    <string name="cinema_ticket_code">Код: %1$s</string>
+    <string name="cinema_ticket_seat">Место: %1$s</string>
+    <string name="cinema_ticket_seat_unknown">Место назначит кинотеатр</string>
+    <string name="cinema_ticket_status_active">Действует</string>
+    <string name="cinema_ticket_status_used">Использован</string>
+    <string name="cinema_ticket_status_cancelled">Отменён</string>
+    <string name="cinema_ticket_status_refunded">Возвращён</string>
+    <string name="cinema_ticket_status_unknown">Статус неизвестен</string>
+
+    <string name="my_tickets_title">Мои билеты</string>
+    <string name="my_tickets_profile_subtitle">Билеты в кино и их статус</string>
+    <string name="my_tickets_empty_title">Билетов пока нет</string>
+    <string name="my_tickets_empty_description">Билет берётся с карточки кинотеатра кнопкой «Купить билет».</string>
+    <string name="my_tickets_item_title">Билет в кино</string>
+    <string name="my_tickets_bought_at">Куплен: %1$s</string>
+    <string name="my_tickets_cancel">Вернуть билет</string>
+    <string name="my_tickets_cancel_title">Вернуть билет?</string>
+    <string name="my_tickets_cancel_message">Место освободится. Условия возврата определяет кинотеатр.</string>
+    <string name="my_tickets_cancel_keep">Оставить</string>
 </resources>
