@@ -131,6 +131,11 @@ jobs:
           # прочитать логи прогона. Права — из permissions этого job'а.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # Stop-хук: не даёт закончить ход на красной сборке.
+          # Хуки из .claude/settings.json в свежем чекауте не гарантированы
+          # (правило доверия к папке), поэтому подключаем документированным
+          # входом действия.
+          settings: .github/claude-ci-settings.json
           # OAuth-токен подписки Pro/Max вместо API-ключа.
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
