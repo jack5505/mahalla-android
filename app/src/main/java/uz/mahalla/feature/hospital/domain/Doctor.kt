@@ -3,6 +3,7 @@ package uz.mahalla.feature.hospital.domain
 import androidx.compose.runtime.Immutable
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.feature.booking.domain.BookingSlots
+import uz.mahalla.feature.booking.domain.WorkingHours
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -54,19 +55,21 @@ data class Doctor(
  * `Asia/Tashkent`): на телефоне с часами в другой зоне «сегодня» и «уже
  * прошло» считались бы неверно.
  *
- * Календарь дней берётся у [BookingSlots]: день выбирают одинаково в обеих
- * вертикалях записи, и вторая копия правила разъехалась бы с первой.
+ * Календарь дней берётся у [BookingSlots], а сама сетка — у [WorkingHours]:
+ * день и часы выбирают одинаково всюду, где занятость исполнителя неизвестна
+ * (у мастеров-фрилансеров, issue #107, ручки занятости тоже нет), и вторая
+ * копия правила разъехалась бы с первой.
  */
 object DoctorSchedule {
 
     /** Первый приём. */
-    val OPENS_AT: LocalTime = LocalTime.of(8, 0)
+    val OPENS_AT: LocalTime = WorkingHours.DEFAULT_OPENS_AT
 
     /** Последний приём, на который записывают. */
-    val LAST_START: LocalTime = LocalTime.of(19, 30)
+    val LAST_START: LocalTime = WorkingHours.DEFAULT_LAST_START
 
     /** Шаг сетки. Полчаса — обычная длина приёма и привычный шаг в регистратуре. */
-    const val STEP_MINUTES = 30L
+    const val STEP_MINUTES = WorkingHours.DEFAULT_STEP_MINUTES
 
     /** Дни, среди которых выбирают дату записи. */
     fun dates(
@@ -86,22 +89,14 @@ object DoctorSchedule {
         date: LocalDate,
         now: Instant,
         zone: ZoneId = DateTimeFormatters.AppZone,
-    ): List<LocalTime> {
-        val today = BookingSlots.today(now, zone)
-        if (date.isBefore(today)) return emptyList()
-
-        val grid = generateSequence(OPENS_AT) { previous ->
-            val next = previous.plusMinutes(STEP_MINUTES)
-            // Сетка не переходит через полночь: `plusMinutes` заворачивается, и
-            // без этой проверки последовательность стала бы бесконечной.
-            next.takeIf { it > previous && it <= LAST_START }
-        }.toList()
-
-        if (date.isAfter(today)) return grid
-
-        val currentTime = now.atZone(zone).toLocalTime()
-        return grid.filter { !it.isBefore(currentTime) }
-    }
+    ): List<LocalTime> = WorkingHours.times(
+        date = date,
+        now = now,
+        zone = zone,
+        opensAt = OPENS_AT,
+        lastStart = LAST_START,
+        stepMinutes = STEP_MINUTES,
+    )
 }
 
 /**

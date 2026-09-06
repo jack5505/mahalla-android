@@ -180,6 +180,38 @@ jobs:
           BACKEND_PORT: ${{ vars.BACKEND_PORT || '8080' }}
           BACKEND_HEALTH_PATH: ${{ vars.BACKEND_HEALTH_PATH || '/actuator/health' }}
         with:
+          # Stop-хук: не даёт закончить ход на красной сборке.
+          #
+          # Настройки заданы ИНЛАЙНОМ, а не путём к файлу, и это принципиально.
+          # Действие сначала пробует JSON.parse входа и только при неудаче
+          # читает его как путь. Путь тут не работает: `actions/checkout`
+          # выкачивает ветку по умолчанию, а сам action затем переключается на
+          # ветку PR — файл из .github/ на старой ветке исчезает, и прогон
+          # падает с `ENOENT` ещё до старта Claude (прогоны 34017224699,
+          # 34017716238). Инлайновый JSON файловой системы не касается.
+          #
+          # Скрипт живёт в .claude/hooks/, потому что .claude входит в
+          # SENSITIVE_PATHS действия (src/github/operations/restore-config.ts)
+          # и восстанавливается из базовой ветки поверх ветки PR — значит есть
+          # и на ветках старше хука. .github/ туда не входит.
+          # Проверка -x в команде на случай, когда восстановления не было.
+          settings: |
+            {
+              "hooks": {
+                "Stop": [
+                  {
+                    "hooks": [
+                      {
+                        "type": "command",
+                        "command": "bash -c 'f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/verify-turn.sh\"; [ -x \"$f\" ] || exit 0; exec \"$f\"'",
+                        "timeout": 1800,
+                        "statusMessage": "Проверяю: тесты и сборка"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
           # OAuth-токен подписки Pro/Max вместо API-ключа.
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.

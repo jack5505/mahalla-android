@@ -1,13 +1,12 @@
 package uz.mahalla.feature.booking.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BarberService
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): услуга без `id` отбрасывается —
@@ -63,7 +62,7 @@ private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
     serviceId = serviceId?.takeIf { it.isNotBlank() },
     serviceName = serviceName?.takeIf { it.isNotBlank() },
     priceSum = price?.coerceAtLeast(0) ?: 0,
-    date = parseDate(apptDate),
+    date = parseServerLocalDate(apptDate),
     startTime = parseServerLocalTime(startTime),
     endTime = parseServerLocalTime(endTime),
     status = AppointmentStatus.fromApi(status),
@@ -84,15 +83,3 @@ internal fun AppointmentPageDto.toDomain(): AppointmentPage {
     )
 }
 
-/**
- * `yyyy-MM-dd`. Битая дата — `null`, а не исключение: запись без дня
- * показывается как есть, теряться из списка ей незачем.
- */
-private fun parseDate(value: String?): LocalDate? {
-    val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-    return try {
-        LocalDate.parse(text)
-    } catch (_: DateTimeParseException) {
-        null
-    }
-}

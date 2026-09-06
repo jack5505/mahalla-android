@@ -8,6 +8,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -137,23 +138,38 @@ fun YandexMapCanvas(
 }
 
 /**
- * Карта вместе с состоянием движка: пока SDK не поднят, на месте карты —
- * объяснение, а не пустой серый прямоугольник.
+ * Состояние движка карты, поднятое над полотном (issue #126).
+ *
+ * Раньше оно жило внутри `MapCanvas`, и экран о нём не знал: когда движок не
+ * поднимался, поверх объяснения продолжали висеть кнопки масштаба, метка выбора
+ * точки и кнопка «выбрать эту точку» — управление картой, которой нет. Теперь
+ * состояние читает экран и решает сам, что рисовать.
+ *
+ * [state] `null` — инициализация ещё идёт (первый раз она грузит нативную
+ * библиотеку и заметна).
+ */
+@Stable
+class MapEngine(
+    val state: MapEngineState?,
+    /** Повторить инициализацию: провал не кэшируется, второй шанс имеет смысл. */
+    val retry: () -> Unit,
+) {
+    /**
+     * Есть ли на экране карта. Пока движок поднимается — считаем, что будет:
+     * убирать управление на полсекунды и возвращать обратно хуже, чем подождать.
+     */
+    val isUsable: Boolean get() = state == null || state == MapEngineState.Ready
+}
+
+/**
+ * Поднимает MapKit и следит за его состоянием.
  *
  * [initializer] приходит из DI через ViewModel экрана: композиция не должна
  * знать про Hilt. Поток инициализации выбирает сам `MapKitInitializer` —
  * MapKit требует главного, и уводить его в фон нельзя.
  */
 @Composable
-fun MapCanvas(
-    initializer: MapKitInitializer,
-    markers: List<MapMarkerUi>,
-    camera: MapCameraPosition,
-    modifier: Modifier = Modifier,
-    showUserLocation: Boolean = false,
-    onMarkerClick: (String) -> Unit = {},
-    onCameraChanged: (MapCameraPosition) -> Unit = {},
-) {
+fun rememberMapEngine(initializer: MapKitInitializer): MapEngine {
     var retryKey by remember { mutableIntStateOf(0) }
     // remember + LaunchedEffect, а не produceState: тот же смысл, но со
     // ссылочным типом за `by` lint (ProduceStateDoesNotAssignValue) присваивание
@@ -165,12 +181,27 @@ fun MapCanvas(
     LaunchedEffect(initializer, retryKey) {
         engineState = initializer.ensureInitialized()
     }
+    return MapEngine(state = engineState, retry = { retryKey++ })
+}
 
+/**
+ * Карта вместе с состоянием движка: пока SDK не поднят, на месте карты —
+ * объяснение, а не пустой серый прямоугольник.
+ */
+@Composable
+fun MapCanvas(
+    engine: MapEngine,
+    markers: List<MapMarkerUi>,
+    camera: MapCameraPosition,
+    modifier: Modifier = Modifier,
+    showUserLocation: Boolean = false,
+    onMarkerClick: (String) -> Unit = {},
+    onCameraChanged: (MapCameraPosition) -> Unit = {},
+) {
     Box(modifier = modifier) {
-        when (engineState) {
-            // null — инициализация ещё идёт. Первый раз она грузит нативную
-            // библиотеку и заметна, поэтому под картой — ровная заглушка
-            // цвета скелетона, а не белая дыра.
+        when (engine.state) {
+            // Инициализация ещё идёт: под картой — ровная заглушка цвета
+            // скелетона, а не белая дыра.
             null -> Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -186,25 +217,41 @@ fun MapCanvas(
                 onCameraChanged = onCameraChanged,
             )
 
-            MapEngineState.MissingApiKey -> ErrorState(
-                onRetry = { retryKey++ },
+            MapEngineState.MissingApiKey, MapEngineState.Failed -> MapUnavailable(
+                engine = engine,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(Spacing.gutter),
-                title = stringResource(R.string.map_unavailable_title),
-                description = stringResource(R.string.map_missing_key_description),
-            )
-
-            MapEngineState.Failed -> ErrorState(
-                onRetry = { retryKey++ },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(Spacing.gutter),
-                title = stringResource(R.string.map_unavailable_title),
-                description = stringResource(R.string.map_engine_failed_description),
             )
         }
     }
+}
+
+/**
+ * Почему карты нет и что с этим делать.
+ *
+ * Текст разный: «сборка без ключа» чинится только пересборкой (сколько ни жми
+ * «Повторить»), а провал инициализации — вполне временный. Кнопка «Повторить»
+ * стоит в обоих случаях: движок мог не подняться и по причине, о которой SDK не
+ * сказал, и второй шанс дешевле, чем перезапуск приложения.
+ */
+@Composable
+fun MapUnavailable(
+    engine: MapEngine,
+    modifier: Modifier = Modifier,
+) {
+    ErrorState(
+        onRetry = engine.retry,
+        modifier = modifier,
+        title = stringResource(R.string.map_unavailable_title),
+        description = stringResource(
+            if (engine.state == MapEngineState.MissingApiKey) {
+                R.string.map_missing_key_description
+            } else {
+                R.string.map_engine_failed_description
+            },
+        ),
+    )
 }
 
 /** Готовые картинки маркеров: рисовать их на каждый кадр — заметный расход. */
