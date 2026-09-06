@@ -146,6 +146,29 @@
 | GET | `hospitals/appointments/my` |
 | POST | `appointments/{id}/cancel` |
 
+## MediaApi ✅
+
+`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась).
+
+| Метод | Путь |
+|---|---|
+| POST | `media/upload` |
+
+`multipart/form-data`, часть называется **`file`**; `entityType` и `entityId` —
+необязательные query-параметры. Ответ — `MediaFile` (`id`, `url`,
+`thumbnailUrl`, `type`, `fileSize`, `originalName`, `entityId`, `entityType`,
+`ownerId`, `isPublic`); ответ без `url` клиент считает отказом.
+
+**Режет nginx, а не бэкенд.** `client_max_body_size` = **1 МиБ** (значение по
+умолчанию): 1000 КБ тела доходят до приложения (`401`), 1024 КБ дают
+`413 Request Entity Too Large` **HTML-страницей от прокси**, то есть без
+конверта `{success, error}` — показать причину человеку нечем. Поэтому размер
+проверяется на клиенте до отправки (`MediaUploadLimits`), а картинка
+сжимается.
+
+`GET media/entity/{entityId}` и `DELETE media/{id}` у бэкенда есть, но клиентом
+**не объявлены**: показывать и редактировать загруженное пока нечем.
+
 ## NotificationsApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.

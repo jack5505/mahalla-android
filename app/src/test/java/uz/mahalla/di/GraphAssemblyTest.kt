@@ -53,6 +53,9 @@ import uz.mahalla.feature.freelancer.data.DefaultFreelancerRepository
 import uz.mahalla.feature.freelancer.data.di.FreelancerDataModule
 import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.di.HospitalDataModule
+import uz.mahalla.feature.media.data.AndroidImageCompressor
+import uz.mahalla.feature.media.data.DefaultMediaRepository
+import uz.mahalla.feature.media.data.di.MediaDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
@@ -498,6 +501,25 @@ class GraphAssemblyTest {
                 clock = AppModule.provideClock(),
             ),
         )
+    }
+
+    /**
+     * Загрузка файлов (issue #101). API — на основном Retrofit: `media/upload`
+     * требует Bearer. Сжатие в графе настоящее: подменить его на JVM нечем, а
+     * проверяется здесь именно сборка, а не декодирование.
+     */
+    @Test
+    fun `media upload assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = MediaDataModule.provideMediaApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultMediaRepository(api = api, compressor = AndroidImageCompressor(context)))
     }
 
     /**

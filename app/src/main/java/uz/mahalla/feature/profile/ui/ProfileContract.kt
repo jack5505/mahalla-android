@@ -25,6 +25,7 @@ import uz.mahalla.feature.profile.domain.DeviceSession
  * @param confirmLogout показан диалог подтверждения выхода.
  * @param confirmRevoke устройство, которое собираются отозвать.
  * @param loggingOut выход уже идёт: повторные нажатия не плодят запросов.
+ * @param avatarUpload загрузка фото профиля (issue #101).
  */
 data class ProfileState(
     val settings: AppSettings = AppSettings(),
@@ -36,7 +37,22 @@ data class ProfileState(
     val confirmLogout: Boolean = false,
     val confirmRevoke: DeviceSession? = null,
     val loggingOut: Boolean = false,
+    val avatarUpload: AvatarUpload = AvatarUpload(),
 ) : UiState
+
+/**
+ * Состояние загрузки фото профиля (issue #101).
+ *
+ * @param percent доля отправленного, 0..100. Показывается полоской: на
+ * медленной связи неподвижная крутилка неотличима от зависшего экрана.
+ * @param failure отказ — и сетевой (текстом сервера, issue #34), и клиентский
+ * (файл не читается, не картинка, не влезает даже сжатым).
+ */
+data class AvatarUpload(
+    val inProgress: Boolean = false,
+    val percent: Int = 0,
+    val failure: ApiFailure? = null,
+)
 
 sealed interface ProfileEvent : UiEvent {
     data class LanguageSelected(val language: AppLanguage) : ProfileEvent
@@ -57,6 +73,15 @@ sealed interface ProfileEvent : UiEvent {
     data object SessionRevokeDismissed : ProfileEvent
 
     data class SessionTrustToggled(val session: DeviceSession, val trusted: Boolean) : ProfileEvent
+
+    /**
+     * Выбрано фото профиля (issue #101). Адрес приходит строкой: `Uri` — тип
+     * Android, а ViewModel проверяется на чистом JVM.
+     */
+    data class AvatarPicked(val source: String) : ProfileEvent
+
+    /** Отмена загрузки: файл дописан не будет, сервер его не получит. */
+    data object AvatarUploadCancelled : ProfileEvent
 }
 
 sealed interface ProfileEffect : UiEffect {
