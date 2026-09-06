@@ -184,7 +184,15 @@ jobs:
           # Хуки из .claude/settings.json в свежем чекауте не гарантированы
           # (правило доверия к папке), поэтому подключаем документированным
           # входом действия.
-          settings: .github/claude-ci-settings.json
+          #
+          # hashFiles обязателен. Определение workflow берётся из ветки по
+          # умолчанию, а checkout — из ветки PR: на ветках, созданных до
+          # появления этого файла, действие падало с
+          # `ENOENT ... claude-ci-settings.json` ещё до старта Claude.
+          # Пустая строка = вход не задан (проверено по исходникам действия:
+          # `if (settingsInput && settingsInput.trim())`), то есть на старых
+          # ветках просто нет хука — как было до его появления.
+          settings: ${{ hashFiles('.github/claude-ci-settings.json') != '' && '.github/claude-ci-settings.json' || '' }}
           # OAuth-токен подписки Pro/Max вместо API-ключа.
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
