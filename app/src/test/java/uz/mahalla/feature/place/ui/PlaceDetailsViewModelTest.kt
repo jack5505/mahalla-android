@@ -29,9 +29,11 @@ import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.testutil.FakeCatalogRepository
+import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
+import uz.mahalla.testutil.promotion
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
@@ -61,6 +63,8 @@ class PlaceDetailsViewModelTest {
 
     // Вошедший пользователь: по его id отличается свой отзыв от чужого.
     private val profileStore = FakeUserProfileStore(UserProfile(id = USER_ID))
+
+    private val promotions = FakePromotionsRepository()
 
     @Test
     fun `card is loaded for the id from the route`() = runTest {
@@ -427,8 +431,61 @@ class PlaceDetailsViewModelTest {
         assertTrue(viewModel.state.value.details is ScreenState.Content)
     }
 
+    // --- Акции заведения (issue #104) ---
+
+    @Test
+    fun `place promotions are loaded for the id from the route`() = runTest {
+        repository.details = ApiResult.Success(details())
+        promotions.place = ApiResult.Success(
+            listOf(promotion("promo-1", placeId = PLACE_ID)),
+        )
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf(PLACE_ID), promotions.requestedPlaces)
+        assertEquals(listOf("promo-1"), state.promotions.map { it.id })
+    }
+
+    @Test
+    fun `a promotions failure hides the section instead of breaking the card`() = runTest {
+        repository.details = ApiResult.Success(details())
+        promotions.place = ApiResult.Failure(ApiError.NoConnection)
+
+        val state = viewModel().state.value
+
+        assertTrue("карточка приехала — экран ошибки был бы хуже пустого блока", state.details is ScreenState.Content)
+        assertTrue(state.promotions.isEmpty())
+    }
+
+    @Test
+    fun `a finished promotion is not shown on the card`() = runTest {
+        repository.details = ApiResult.Success(details())
+        // Понедельник 12:00 по Ташкенту — момент, которым живёт этот тест.
+        val now = mondayAt("12:00").instant()
+        promotions.place = ApiResult.Success(
+            listOf(
+                promotion("gone", placeId = PLACE_ID, endsAt = now.minusSeconds(1)),
+                promotion("live", placeId = PLACE_ID, endsAt = now.plusSeconds(3600)),
+            ),
+        )
+
+        assertEquals(listOf("live"), viewModel().state.value.promotions.map { it.id })
+    }
+
+    @Test
+    fun `retry reloads the promotions too`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val viewModel = viewModel()
+        promotions.place = ApiResult.Success(listOf(promotion("fresh", placeId = PLACE_ID)))
+
+        viewModel.onEvent(PlaceDetailsEvent.Retry)
+
+        assertEquals(listOf("fresh"), viewModel.state.value.promotions.map { it.id })
+    }
+
     private fun viewModel(clock: Clock = mondayAt("12:00")) = PlaceDetailsViewModel(
         repository = repository,
+        promotions = promotions,
         profileStore = profileStore,
         clock = clock,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),

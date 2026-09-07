@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,8 +55,11 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.media.ui.mediaMessage
+import uz.mahalla.feature.media.ui.rememberPhotoPicker
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
 import uz.mahalla.feature.role.domain.UserRole
@@ -75,11 +79,40 @@ import java.time.Instant
  * @param onOpenRole открыть «кто вы» и анкеты (issue #84): роль меняется —
  * вчерашний покупатель открывает кафе, — а в онбординге анкету можно было
  * пропустить.
+ * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
+ * только продавцу: до неё судьбу отправленной заявки в приложении было не
+ * видно вовсе.
+ * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
+ * всем: записаться может кто угодно, а следить за записью больше негде —
+ * своего таба у брони нет.
+ * @param onOpenMyDoctorAppointments открыть «мои записи к врачу» (issue #99).
+ * Отдельная строка, а не раздел внутри «моих записей»: списки приезжают из
+ * разных ручек бэкенда (`appointments/my` и `hospitals/appointments/my`), и
+ * склеивать их на клиенте значило бы гонять два запроса ради одного экрана.
+ * @param onOpenMyTickets открыть «мои билеты» (issue #106). Тоже всем и по
+ * той же причине: купить билет может кто угодно, а таба у кино нет.
+ * @param onOpenMyFreelancerOrders открыть «мои заказы у мастеров»
+ * (issue #107). Тоже отдельная строка и по той же причине: заказы у
+ * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
+ * являются.
+ * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
+ * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
+ * таба у вертикали нет.
+ * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
+ * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
+ * пробный период и отмена нужны обоим.
  */
 @Composable
 fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
+    onOpenMyPlaces: () -> Unit,
+    onOpenMyAppointments: () -> Unit,
+    onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyTickets: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
@@ -103,12 +136,27 @@ fun ProfileScreen(
         viewModel.onEvent(ProfileEvent.ScreenResumed)
     }
 
+    // Photo picker живёт здесь, а не в ProfileContentScreen: в превью реестра
+    // результатов активити нет, и `rememberLauncherForActivityResult` там
+    // упал бы (issue #101).
+    val pickAvatar = rememberPhotoPicker { source ->
+        viewModel.onEvent(ProfileEvent.AvatarPicked(source))
+    }
+
     ProfileContentScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
+        onOpenMyPlaces = onOpenMyPlaces,
+        onOpenMyAppointments = onOpenMyAppointments,
+        onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
+        onOpenMyTickets = onOpenMyTickets,
+        onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
+        onOpenMyFashionOrders = onOpenMyFashionOrders,
+        onOpenSubscription = onOpenSubscription,
         modifier = modifier,
         onChangeServer = onChangeServer,
+        onPickAvatar = pickAvatar,
     )
 }
 
@@ -119,8 +167,16 @@ fun ProfileContentScreen(
     state: ProfileState,
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
+    onOpenMyPlaces: () -> Unit,
+    onOpenMyAppointments: () -> Unit,
+    onOpenMyDoctorAppointments: () -> Unit,
+    onOpenMyTickets: () -> Unit,
+    onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyFashionOrders: () -> Unit,
+    onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
+    onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.profile_title))
@@ -134,15 +190,80 @@ fun ProfileContentScreen(
         ) {
             ProfileHeader(profile = state.profile)
 
+            AvatarUploadSection(
+                upload = state.avatarUpload,
+                hasPhoto = !state.profile.avatarUrl.isNullOrBlank(),
+                onPick = onPickAvatar,
+                onCancel = { onEvent(ProfileEvent.AvatarUploadCancelled) },
+            )
+
             // Анкеты покупателя и продавца (issue #84). Подпись — текущая
             // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
             // человек в приложении числится сейчас.
+            val role = UserRole.fromStoredValue(state.settings.roleId)
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(
-                    UserRole.fromStoredValue(state.settings.roleId).labelRes(),
-                ),
+                subtitle = stringResource(role.labelRes()),
                 onClick = onOpenRole,
+            )
+
+            // «Мои заведения» (issue #94) — только продавцу: покупателю
+            // показывать список, который всегда пуст, незачем. Роль он меняет
+            // строкой выше, и тогда строка появится.
+            if (role == UserRole.Provider) {
+                MahallaListItem(
+                    title = stringResource(R.string.my_places_title),
+                    subtitle = stringResource(R.string.my_places_profile_subtitle),
+                    onClick = onOpenMyPlaces,
+                )
+            }
+
+            // «Мои записи» (issue #97) — всем: записаться на время может
+            // любой, а следить за записью больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.my_appointments_title),
+                subtitle = stringResource(R.string.my_appointments_profile_subtitle),
+                onClick = onOpenMyAppointments,
+            )
+
+            // «Мои записи к врачу» (issue #99): тот же экран, другой список.
+            MahallaListItem(
+                title = stringResource(R.string.my_doctor_appointments_title),
+                subtitle = stringResource(R.string.my_doctor_appointments_profile_subtitle),
+                onClick = onOpenMyDoctorAppointments,
+            )
+
+            // «Мои билеты» (issue #106): своего таба у кино нет, а следить
+            // за билетом и вернуть его больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.my_tickets_title),
+                subtitle = stringResource(R.string.my_tickets_profile_subtitle),
+                onClick = onOpenMyTickets,
+            )
+
+            // «Мои заказы у мастеров» (issue #107) — тоже всем: заказать
+            // услугу у фрилансера может любой, своего таба у этого нет.
+            MahallaListItem(
+                title = stringResource(R.string.my_freelancer_orders_title),
+                subtitle = stringResource(R.string.my_freelancer_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerOrders,
+            )
+
+            // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
+            // и посмотреть его больше негде.
+            MahallaListItem(
+                title = stringResource(R.string.fashion_orders_title),
+                subtitle = stringResource(R.string.fashion_orders_profile_subtitle),
+                onClick = onOpenMyFashionOrders,
+            )
+
+            // Подписка (issue #103): тарифы, пробный период, отмена и
+            // автопродление. Строка — всем: набор тарифов зависит от роли, но
+            // сама подписка есть у обеих.
+            MahallaListItem(
+                title = stringResource(R.string.subscription_profile_entry),
+                subtitle = stringResource(R.string.subscription_profile_subtitle),
+                onClick = onOpenSubscription,
             )
 
             Text(
@@ -283,6 +404,81 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = LocalMahallaColors.current.fgMuted,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Фото профиля (issue #101): выбрать снимок, отправить, отменить.
+ *
+ * Самого фото здесь не видно, и это не забывчивость: показывать картинку по
+ * адресу пока нечем — загрузчик изображений это задача #60. Поэтому строка
+ * честно говорит, есть загруженное фото или нет, а появится Coil — в шапке
+ * встанет уже сохранённый `avatarUrl`.
+ *
+ * Прогресс — полоска с процентами, а не крутилка: на медленной связи она
+ * единственное, что отличает работу от зависшего экрана. Кнопка «Отменить»
+ * появляется на её месте — отменить длинную загрузку человек должен мочь, не
+ * закрывая приложение.
+ */
+@Composable
+private fun AvatarUploadSection(
+    upload: AvatarUpload,
+    hasPhoto: Boolean,
+    onPick: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MahallaCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
+            Text(
+                text = stringResource(R.string.profile_avatar_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(
+                    if (hasPhoto) R.string.profile_avatar_present else R.string.profile_avatar_absent,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+
+            if (upload.inProgress) {
+                LinearProgressIndicator(
+                    progress = { upload.percent / PERCENT_SCALE },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(R.string.profile_avatar_uploading, upload.percent),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
+                MahallaButton(
+                    text = stringResource(R.string.action_cancel),
+                    onClick = onCancel,
+                    variant = MahallaButtonVariant.Ghost,
+                )
+            } else {
+                MahallaButton(
+                    text = stringResource(
+                        if (hasPhoto) R.string.profile_avatar_replace else R.string.profile_avatar_pick,
+                    ),
+                    onClick = onPick,
+                    variant = MahallaButtonVariant.Secondary,
+                )
+            }
+
+            upload.failure?.let { failure ->
+                Text(
+                    text = failure.mediaMessage(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                // Клиентский отказ (файл не читается, не влезает) сервер не
+                // видел — подробностей ответа у него нет.
+                failure.server?.let { server -> MahallaErrorDetails(server = server) }
             }
         }
     }
@@ -454,6 +650,9 @@ private fun ThemeMode.labelRes(): Int = when (this) {
 }
 
 private val AVATAR_SIZE = 56.dp
+
+/** Проценты загрузки → доля для полоски прогресса. */
+private const val PERCENT_SCALE = 100f
 private const val DEVICE_SKELETONS = 2
 
 @ThemeLanguagePreviews
@@ -462,6 +661,8 @@ private fun ProfilePreview() {
     PreviewSurface(modifier = Modifier.fillMaxSize()) {
         ProfileContentScreen(
             state = ProfileState(
+                // Продавец: иначе строки «Мои заведения» в превью не видно.
+                settings = AppSettings(roleId = UserRole.Provider.storedValue),
                 profile = UserProfile(
                     phone = "+998 90 123 45 67",
                     fullName = "Jahongir Sabirov",
@@ -487,6 +688,13 @@ private fun ProfilePreview() {
             ),
             onEvent = {},
             onOpenRole = {},
+            onOpenMyPlaces = {},
+            onOpenMyAppointments = {},
+            onOpenMyFreelancerOrders = {},
+            onOpenMyDoctorAppointments = {},
+            onOpenMyTickets = {},
+            onOpenMyFashionOrders = {},
+            onOpenSubscription = {},
         )
     }
 }

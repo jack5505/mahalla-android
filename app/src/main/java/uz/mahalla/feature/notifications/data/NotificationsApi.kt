@@ -5,21 +5,23 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.GET
 import retrofit2.http.PUT
+import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 
 /**
  * Центр уведомлений (контроллер `notification`, issue #81).
  *
- * Контракт снят со стенда (`/v3/api-docs` + curl): все три ручки требуют
+ * Контракт снят со стенда (`/v3/api-docs` + curl): все четыре ручки требуют
  * Bearer — без токена приходит `401 UNAUTHORIZED`, — поэтому API создаётся на
  * **основном** Retrofit, а не на «голом» `@RefreshClient`. Гео-заголовки тоже
  * обязательны (без них `403 GEO_PERMISSION_REQUIRED`), но их ставит
  * `GeoHeaderInterceptor` на обоих клиентах (issue #53).
  *
- * Отметки **отдельного** уведомления прочитанным у бэкенда нет: в контроллере
- * ровно эти три операции. Поэтому «прочитано» в приложении меняется только
- * целиком, кнопкой «прочитать всё».
+ * В issue #81 здесь было записано, что отметки **отдельного** уведомления у
+ * бэкенда нет, — это неверно (сверка по полной схеме, issue #95): в
+ * `notification-controller` четыре операции, и `PUT notifications/{id}/read`
+ * среди них.
  */
 interface NotificationsApi {
 
@@ -36,6 +38,13 @@ interface NotificationsApi {
     /** Ответ — конверт без полезной нагрузки: `data` пуст и при успехе. */
     @PUT("notifications/read-all")
     suspend fun markAllRead(): ApiResponse<JsonElement>
+
+    /**
+     * Одно уведомление (`ApiResponseVoid`, issue #95). Тела в запросе нет —
+     * как у `read-all`: что делать с уведомлением, сказано путём.
+     */
+    @PUT("notifications/{id}/read")
+    suspend fun markRead(@Path("id") id: String): ApiResponse<JsonElement>
 }
 
 /** `PageResponseNotification` — пагинация у уведомлений настоящая. */

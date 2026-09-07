@@ -1,13 +1,20 @@
 package uz.mahalla.feature.wallet.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
+import uz.mahalla.feature.wallet.domain.PaymentLink
+import uz.mahalla.feature.wallet.domain.TopUpDraft
+import uz.mahalla.feature.wallet.domain.TopUpOrder
+import uz.mahalla.feature.wallet.domain.TopUpProvider
+import uz.mahalla.feature.wallet.domain.TopUpValidator
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
+import uz.mahalla.feature.wallet.domain.WalletTopUp
 import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
@@ -31,9 +38,29 @@ interface WalletRepository {
 
     suspend fun transactions(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<WalletTransactionPage>
 
+    /**
+     * Заводит пополнение и возвращает форму оплаты (issue #93).
+     *
+     * @param amountSum сумма в сумах — ровно та, что человек видел на экране.
+     * @param scale делитель из выдачи баланса ([Wallet.amountScale]): в
+     * единицы бэкенда сумма переводится здесь, на границе данных, а не на
+     * экране.
+     */
+    suspend fun topUp(
+        amountSum: Long,
+        provider: TopUpProvider,
+        scale: Long,
+    ): ApiResult<TopUpOrder>
+
     companion object {
         /** Столько же по умолчанию берёт и сам бэкенд. */
         const val PAGE_SIZE = 20
+
+        /** Код отказа, когда черновик не прошёл проверку ещё на клиенте. */
+        const val INVALID_TOP_UP_CODE = "TOP_UP_INVALID"
+
+        /** Код отказа, когда сервер не дал ссылки на форму оплаты. */
+        const val NO_PAYMENT_URL_CODE = "TOP_UP_NO_PAYMENT_URL"
     }
 }
 
@@ -48,6 +75,46 @@ class DefaultWalletRepository @Inject constructor(
     override suspend fun transactions(page: Int, size: Int): ApiResult<WalletTransactionPage> =
         apiCall { api.transactions(page = page.coerceAtLeast(0), size = size).payload() }
             .map(TransactionPageDto::toDomain)
+
+    /**
+     * Сумма ниже серверного минимума в сеть не уходит: 400 сказал бы то же
+     * самое, но платой были бы запрос и молчание экрана на время его
+     * выполнения (то же правило, что у отзыва в issue #76 и заявки продавца в
+     * issue #84).
+     *
+     * Ответ без годной ссылки — отказ, а не успех: платить человеку негде, и
+     * показать «платёж заведён» без формы значило бы соврать. Отдельный код
+     * отказа вместо `ApiError.Serialization` — потому что ответ разобрался, в
+     * нём просто нет того, ради чего запрос делался.
+     */
+    override suspend fun topUp(
+        amountSum: Long,
+        provider: TopUpProvider,
+        scale: Long,
+    ): ApiResult<TopUpOrder> {
+        val draft = TopUpDraft(amountText = amountSum.toString(), provider = provider)
+        if (TopUpValidator.validate(draft, scale).isNotEmpty()) {
+            return ApiResult.Failure(ApiError.Business(WalletRepository.INVALID_TOP_UP_CODE))
+        }
+        val result = apiCall {
+            api.topUp(
+                TopUpRequest(
+                    amount = WalletTopUp.toMinor(amountSum, scale),
+                    provider = provider.apiValue,
+                ),
+            ).payload()
+        }
+        return when (result) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> {
+                val url = PaymentLink.sanitize(result.data.paymentUrl)
+                    ?: return ApiResult.Failure(
+                        ApiError.Business(WalletRepository.NO_PAYMENT_URL_CODE),
+                    )
+                ApiResult.Success(TopUpOrder(paymentUrl = url))
+            }
+        }
+    }
 }
 
 /**
@@ -71,6 +138,7 @@ internal fun WalletDto.toDomain(): Wallet {
             ?: (balanceSum - heldSum).coerceAtLeast(0),
         currency = currency?.takeIf { it.isNotBlank() },
         status = WalletStatus.fromServer(status),
+        amountScale = scale,
     )
 }
 
