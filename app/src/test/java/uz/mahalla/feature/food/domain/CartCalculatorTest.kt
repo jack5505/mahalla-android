@@ -87,25 +87,12 @@ class CartCalculatorTest {
     }
 
     @Test
-    fun `percent discount is rounded down to whole sums`() {
-        // Округление вверх дало бы клиенту лишнюю суму за счёт заведения и
-        // разошлось бы с расчётом бэкенда.
-        val cart = cart(
-            lines = listOf(cartLine("osh", unitPriceSum = 33_333, quantity = 1)),
-            promo = PromoCode("TEN", PromoKind.Percent, value = 10),
-        )
+    fun `discount from the server never exceeds the price of the items`() {
+        // Скидку называет сервер, и «−50 000» на заказ в 30 000 не должна
+        // превращаться в долг заведения перед клиентом.
+        val lines = listOf(cartLine("osh", unitPriceSum = 30_000))
 
-        assertEquals(3_333L, CartCalculator.totals(cart).discountSum)
-    }
-
-    @Test
-    fun `discount never exceeds the price of the items`() {
-        val cart = cart(
-            lines = listOf(cartLine("osh", unitPriceSum = 30_000)),
-            promo = PromoCode("BIG", PromoKind.Fixed, value = 50_000),
-        )
-
-        val totals = CartCalculator.totals(cart)
+        val totals = CartCalculator.totals(lines, discountSum = 50_000)
 
         assertEquals(30_000L, totals.discountSum)
         assertEquals(0L, totals.totalSum)
@@ -113,25 +100,20 @@ class CartCalculatorTest {
 
     @Test
     fun `delivery is added on top and is not discounted`() {
-        val cart = cart(
-            lines = listOf(cartLine("osh", unitPriceSum = 100_000)),
-            promo = PromoCode("HALF", PromoKind.Percent, value = 50),
-        )
+        val lines = listOf(cartLine("osh", unitPriceSum = 100_000))
 
-        val totals = CartCalculator.totals(cart, deliverySum = 15_000)
+        val totals = CartCalculator.totals(lines, discountSum = 50_000, deliverySum = 15_000)
 
         assertEquals(50_000L, totals.discountSum)
         assertEquals(65_000L, totals.totalSum)
     }
 
     @Test
-    fun `a promo below its minimum order gives no discount`() {
-        val cart = cart(
-            lines = listOf(cartLine("osh", unitPriceSum = 30_000)),
-            promo = PromoCode("BIG", PromoKind.Fixed, value = 10_000, minOrderSum = 100_000),
-        )
+    fun `a cart without a server discount has none`() {
+        val totals = CartCalculator.totals(listOf(cartLine("osh", unitPriceSum = 30_000)))
 
-        assertEquals(0L, CartCalculator.totals(cart).discountSum)
+        assertEquals(0L, totals.discountSum)
+        assertEquals(30_000L, totals.totalSum)
     }
 
     @Test
@@ -165,10 +147,9 @@ class CartCalculatorTest {
         assertEquals(5, cart.itemCount)
     }
 
-    private fun cart(lines: List<CartLine>, promo: PromoCode? = null) = Cart(
+    private fun cart(lines: List<CartLine>) = Cart(
         placeId = "place-1",
         placeName = "Osh markazi",
         lines = lines,
-        promo = promo,
     )
 }

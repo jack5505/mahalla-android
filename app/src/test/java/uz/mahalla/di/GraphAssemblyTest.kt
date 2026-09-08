@@ -38,6 +38,10 @@ import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
+import uz.mahalla.feature.booking.data.DefaultBookingRepository
+import uz.mahalla.feature.booking.data.di.BookingDataModule
+import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
+import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
@@ -45,10 +49,35 @@ import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
 import uz.mahalla.feature.food.data.di.FoodDataModule
+import uz.mahalla.feature.freelancer.data.DefaultFreelancerRepository
+import uz.mahalla.feature.freelancer.data.di.FreelancerDataModule
+import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
+import uz.mahalla.feature.hospital.data.di.HospitalDataModule
+import uz.mahalla.feature.media.data.AndroidImageCompressor
+import uz.mahalla.feature.media.data.DefaultMediaRepository
+import uz.mahalla.feature.media.data.di.MediaDataModule
+import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
+import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
+import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
+import uz.mahalla.feature.promotions.data.di.PromotionsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository
+import uz.mahalla.feature.pharmacy.data.di.PharmacyDataModule
+import uz.mahalla.feature.role.data.DataStoreRoleRepository
+import uz.mahalla.feature.queue.data.DataStoreWalkInTicketStore
+import uz.mahalla.feature.queue.data.DefaultWalkInRepository
+import uz.mahalla.feature.queue.data.di.QueueDataModule
+import uz.mahalla.feature.role.data.DefaultProviderRepository
+import uz.mahalla.feature.role.data.di.RoleDataModule
 import uz.mahalla.feature.social.data.DefaultSocialRepository
 import uz.mahalla.feature.social.data.di.SocialDataModule
+import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
+import uz.mahalla.feature.subscription.data.di.SubscriptionDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
+import uz.mahalla.feature.update.data.AppUpdateGate
+import uz.mahalla.feature.update.data.DefaultAppVersionRepository
+import uz.mahalla.feature.update.data.di.UpdateDataModule
 import uz.mahalla.feature.wallet.data.di.WalletDataModule
 
 /**
@@ -190,6 +219,7 @@ class GraphAssemblyTest {
                     api = api,
                     orderDao = DatabaseModule.provideOrderDao(database),
                     cartRepository = cartRepository,
+                    clock = AppModule.provideClock(),
                 ),
             )
         } finally {
@@ -267,6 +297,262 @@ class GraphAssemblyTest {
 
         assertNotNull(repository)
         assertFalse(refreshClient.authenticator is TokenAuthenticator)
+    }
+
+    /**
+     * Проверка версии (issue #80) собирается на **основном** Retrofit: `check`
+     * анонимен, а `skip` требует Bearer, который ставит только он. Api создаётся
+     * на голом `OkHttpClient` по той же причине, что и в food-графе: у
+     * `provideRefreshClient` параметры прибавляются с каждым сетевым issue, и
+     * этот тест ломался бы на каждом.
+     */
+    @Test
+    fun `version check assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = UpdateDataModule.provideAppVersionApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(AppUpdateGate(DefaultAppVersionRepository(api)))
+    }
+
+    /**
+     * Центр уведомлений (issue #81) — тоже на **основном** Retrofit: все три
+     * ручки требуют Bearer, а «голый» `@RefreshClient` его не ставит.
+     */
+    @Test
+    fun `notifications assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = NotificationsDataModule.provideNotificationsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultNotificationsRepository(api))
+    }
+
+    /**
+     * Акции (issue #104) — тоже на **основном** Retrofit: обе читающие ручки
+     * анонимны, но им нужны гео-заголовки, а разводить их по двум клиентам
+     * ради отсутствующего `Authorization` незачем.
+     */
+    @Test
+    fun `promotions assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = PromotionsDataModule.providePromotionsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultPromotionsRepository(api))
+    }
+
+    /**
+     * Подписки (issue #103) — на **основном** Retrofit: Bearer требуют все
+     * ручки контроллера, включая список тарифов (проверено curl'ом по стенду:
+     * `401` без токена).
+     */
+    @Test
+    fun `subscriptions assemble on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultSubscriptionRepository(api))
+    }
+
+    /**
+     * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
+     * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
+     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     */
+    @Test
+    fun `role forms assemble on the main retrofit and the data store`() {
+        val dataStore = sharedDataStore(context)
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = RoleDataModule.provideProviderApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(
+            DefaultProviderRepository(
+                api = api,
+                locationSource = AndroidLocationSource(context),
+                // «Мои заведения» (issue #94): переключатель доступности
+                // отправляет координаты устройства той же лестницей, что и
+                // запросы авторизации.
+                requestLocation = locationProvider(context),
+                phoneValidator = PhoneNumberValidator(),
+            ),
+        )
+        assertNotNull(
+            DataStoreRoleRepository(
+                settings = SettingsDataStore(dataStore),
+                profileStore = DataStoreUserProfileStore(dataStore),
+            ),
+        )
+    }
+
+    /**
+     * Бронь (issue #97): запись, «мои записи» и отмена требуют Bearer, значит
+     * API собирается на **основном** Retrofit. Услуги и слоты анонимны, но
+     * лишний заголовок им не мешает — отдельного клиента ради них заводить
+     * незачем.
+     */
+    @Test
+    fun `booking assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = BookingDataModule.provideBookingApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultBookingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Кино (issue #106): афиша и расписание анонимны, но покупка, свои билеты
+     * и возврат требуют Bearer — значит API собирается на **основном**
+     * Retrofit, как и остальные вертикали.
+     */
+    @Test
+    fun `cinema assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = CinemaDataModule.provideCinemaApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultCinemaRepository(api = api))
+    }
+
+    /**
+     * Больницы (issue #99): врачи анонимны, но запись, свои записи и отмена
+     * требуют Bearer — значит API собирается на **основном** Retrofit, как и
+     * бронь.
+     */
+    @Test
+    fun `hospital assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = HospitalDataModule.provideHospitalApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultHospitalRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Мастера (issue #107): каталог, профиль и услуги анонимны, но заказ и
+     * «мои заказы» требуют Bearer — значит API собирается на **основном**
+     * Retrofit, как бронь и больницы.
+     */
+    @Test
+    fun `freelancer assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = FreelancerDataModule.provideFreelancerApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * Аптека (issue #100): витрина анонимна (`200` без токена, проверено на
+     * стенде), но и лишний `Authorization` ей не мешает — отдельного клиента
+     * ради неё заводить незачем, API собирается на **основном** Retrofit.
+     */
+    @Test
+    fun `pharmacy assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = PharmacyDataModule.providePharmacyApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultPharmacyRepository(api = api))
+    }
+
+    /**
+     * Очередь (issue #96): `walkin/send` и `walkin/{id}/cancel` требуют Bearer
+     * — значит API собирается на **основном** Retrofit. Взятый талон живёт в
+     * DataStore, потому что прочитать его у бэкенда нечем.
+     */
+    @Test
+    fun `queue assembles on the main retrofit and the data store`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = QueueDataModule.provideWalkInApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(
+            DefaultWalkInRepository(
+                api = api,
+                store = DataStoreWalkInTicketStore(
+                    dataStore = sharedDataStore(context),
+                    clock = AppModule.provideClock(),
+                ),
+                clock = AppModule.provideClock(),
+            ),
+        )
+    }
+
+    /**
+     * Загрузка файлов (issue #101). API — на основном Retrofit: `media/upload`
+     * требует Bearer. Сжатие в графе настоящее: подменить его на JVM нечем, а
+     * проверяется здесь именно сборка, а не декодирование.
+     */
+    @Test
+    fun `media upload assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = MediaDataModule.provideMediaApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultMediaRepository(api = api, compressor = AndroidImageCompressor(context)))
     }
 
     /**

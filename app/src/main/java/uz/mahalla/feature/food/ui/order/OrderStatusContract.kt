@@ -1,5 +1,6 @@
 package uz.mahalla.feature.food.ui.order
 
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
@@ -11,15 +12,17 @@ import uz.mahalla.feature.food.domain.OrderStatusFlow
 /**
  * Статус заказа (эпик 5.4).
  *
- * Этапы считаются доменом от способа получения: у самовывоза нет доставки, у
- * доставки нет «готово к выдаче».
+ * Этапы считаются доменом от способа получения: у самовывоза нет доставки.
  */
 data class OrderStatusState(
     val order: ScreenState<Order> = ScreenState.Loading,
     val isCancelling: Boolean = false,
     val cancelConfirmVisible: Boolean = false,
-    /** Отмена не прошла — сообщение живёт до следующего действия. */
-    val cancelFailed: Boolean = false,
+    /**
+     * Отмена не прошла — текст сервера живёт до следующего действия (issue
+     * #34): «заказ уже готовят» объясняет отказ, а «не удалось» — нет.
+     */
+    val cancelFailure: ApiFailure? = null,
     val isRepeating: Boolean = false,
     /** Корзину собрать не удалось — заказ остался, но идти в корзину незачем. */
     val repeatFailed: Boolean = false,

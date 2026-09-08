@@ -2,6 +2,8 @@ package uz.mahalla.testutil
 
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.wallet.data.WalletRepository
+import uz.mahalla.feature.wallet.domain.TopUpOrder
+import uz.mahalla.feature.wallet.domain.TopUpProvider
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
 
@@ -33,5 +35,22 @@ class FakeWalletRepository(
     override suspend fun transactions(page: Int, size: Int): ApiResult<WalletTransactionPage> {
         requestedPages += page
         return pages[page] ?: defaultPage
+    }
+
+    /** Что вернуть на попытку пополнения (issue #93). */
+    var topUp: ApiResult<TopUpOrder> = ApiResult.Success(
+        TopUpOrder(paymentUrl = "https://checkout.paycom.uz/abc"),
+    )
+
+    /** Запросы пополнения: сумма уходит в сумах, перевод в единицы — внутри. */
+    val topUpRequests = mutableListOf<Triple<Long, TopUpProvider, Long>>()
+
+    override suspend fun topUp(
+        amountSum: Long,
+        provider: TopUpProvider,
+        scale: Long,
+    ): ApiResult<TopUpOrder> {
+        topUpRequests += Triple(amountSum, provider, scale)
+        return topUp
     }
 }

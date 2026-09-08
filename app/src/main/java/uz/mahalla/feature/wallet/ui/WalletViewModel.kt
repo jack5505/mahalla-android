@@ -11,16 +11,22 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toScreenState
 import uz.mahalla.feature.wallet.data.WalletRepository
+import uz.mahalla.feature.wallet.domain.TopUpDraft
+import uz.mahalla.feature.wallet.domain.TopUpValidator
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
 import javax.inject.Inject
 
 /**
- * Кошелёк: баланс и история операций (issue #62, задача 8.1 эпика #12).
+ * Кошелёк: баланс, история операций и пополнение (issue #62 и #93, задачи 8.1
+ * и 8.2 эпика #12).
  *
  * До этого экран показывал зашитое число, одинаковое для всех. Никакого
  * локального «последнего известного баланса» здесь нет: экран либо показывает
- * ответ сервера, либо честно говорит, что не смог его получить.
+ * ответ сервера, либо честно говорит, что не смог его получить. По той же
+ * причине пополнение не прибавляет сумму к балансу на клиенте: деньги
+ * зачисляет колбэк провайдера, и единственный, кто знает, дошли они или нет, —
+ * сервер. После возврата из формы оплаты баланс перечитывается.
  */
 @HiltViewModel
 class WalletViewModel @Inject constructor(
@@ -53,7 +59,98 @@ class WalletViewModel @Inject constructor(
             WalletEvent.TransactionsRetry -> loadTransactions()
 
             WalletEvent.LoadMore -> loadMore()
+
+            // Делитель единиц бэкенда берётся из уже приехавшего баланса и
+            // фиксируется на всё время шторки: перечит по `ON_RESUME` не
+            // должен менять минимум под набранной суммой.
+            WalletEvent.TopUpClicked -> currentState.loadedWallet?.let { wallet ->
+                updateState {
+                    copy(
+                        topUp = TopUpState(scale = wallet.amountScale),
+                        paymentOpenFailed = false,
+                    )
+                }
+            }
+
+            WalletEvent.TopUpDismissed -> updateState { copy(topUp = null) }
+
+            is WalletEvent.TopUpAmountChanged -> updateTopUp {
+                // Прошлый отказ сервера снимается на первой же правке: он был
+                // про другую сумму.
+                revalidated(draft.copy(amountText = event.value))
+            }
+
+            is WalletEvent.TopUpProviderSelected -> updateTopUp {
+                revalidated(draft.copy(provider = event.provider))
+            }
+
+            WalletEvent.TopUpSubmitted -> submitTopUp()
+
+            // До формы оплаты дело не дошло: плашка «платёж отправлен» была бы
+            // неправдой, а тап без последствий читается как сломанная кнопка.
+            WalletEvent.PaymentOpenFailed -> updateState {
+                copy(paymentStarted = null, paymentOpenFailed = true)
+            }
+
+            WalletEvent.PaymentNoticeDismissed -> updateState {
+                copy(paymentStarted = null, paymentOpenFailed = false)
+            }
         }
+    }
+
+    /**
+     * Заведение платежа. Проверка черновика идёт и здесь, и в репозитории: тут
+     * — чтобы показать, чего не хватает, там — чтобы в сеть не ушла заведомо
+     * отвергаемая сумма.
+     */
+    private fun submitTopUp() {
+        val topUp = currentState.topUp ?: return
+        if (topUp.isSubmitting) return
+        val provider = topUp.draft.provider
+        val amountSum = topUp.draft.amountSum
+        val errors = TopUpValidator.validate(topUp.draft, topUp.scale)
+        if (errors.isNotEmpty() || provider == null || amountSum == null) {
+            updateTopUp { copy(showErrors = true, errors = errors) }
+            return
+        }
+
+        updateTopUp { copy(isSubmitting = true, failure = null) }
+        updateState { copy(paymentOpenFailed = false) }
+        viewModelScope.launch {
+            when (val result = repository.topUp(amountSum, provider, topUp.scale)) {
+                is ApiResult.Failure -> updateTopUp {
+                    copy(isSubmitting = false, failure = result.failure)
+                }
+
+                is ApiResult.Success -> {
+                    // Шторка закрывается, а не остаётся под браузером: платить
+                    // человек уходит в форму провайдера, и возвращаться ему
+                    // надо на баланс. Сумма запоминается — по возврате экран
+                    // скажет, за какой платёж он ждёт денег.
+                    updateState {
+                        copy(
+                            topUp = null,
+                            paymentStarted = PaymentStarted(
+                                amountSum = amountSum,
+                                provider = provider,
+                            ),
+                        )
+                    }
+                    emitEffect(WalletEffect.OpenPaymentForm(result.data.paymentUrl))
+                }
+            }
+        }
+    }
+
+    /** Правка черновика: ошибки пересчитываются, прошлый отказ сервера снимается. */
+    private fun TopUpState.revalidated(next: TopUpDraft): TopUpState = copy(
+        draft = next,
+        errors = TopUpValidator.validate(next, scale),
+        failure = null,
+    )
+
+    private inline fun updateTopUp(crossinline transform: TopUpState.() -> TopUpState) {
+        updateState { copy(topUp = topUp?.transform()) }
     }
 
     /**

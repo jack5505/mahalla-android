@@ -23,7 +23,6 @@ import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
-import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.ui.theme.Spacing
 
 /**
@@ -108,17 +107,6 @@ private fun GeoContent(
             }
         }
     }
-}
-
-private fun City.labelRes(): Int = when (this) {
-    City.TASHKENT -> R.string.city_tashkent
-    City.SAMARKAND -> R.string.city_samarkand
-    City.BUKHARA -> R.string.city_bukhara
-    City.ANDIJAN -> R.string.city_andijan
-    City.NAMANGAN -> R.string.city_namangan
-    City.FERGANA -> R.string.city_fergana
-    City.NUKUS -> R.string.city_nukus
-    City.QARSHI -> R.string.city_qarshi
 }
 
 @ThemeLanguagePreviews

@@ -19,9 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
@@ -32,23 +29,20 @@ import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaQuantityStepper
-import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.feature.food.domain.CartLine
-import uz.mahalla.feature.food.domain.PromoFailure
-import uz.mahalla.feature.food.domain.PromoState
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
 
 /**
- * Корзина (эпик 5.2): количество, модификаторы строкой, промокод и итог
- * моноширинными цифрами.
+ * Корзина (эпик 5.2): количество, модификаторы строкой и итог моноширинными
+ * цифрами.
  */
 @Composable
 fun CartScreen(
     onCheckout: (String) -> Unit,
-    onAddMore: (String) -> Unit,
+    onAddMore: (placeId: String, placeName: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: CartViewModel = hiltViewModel(),
@@ -59,7 +53,7 @@ fun CartScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is CartEffect.OpenCheckout -> onCheckout(effect.placeId)
-                is CartEffect.OpenMenu -> onAddMore(effect.placeId)
+                is CartEffect.OpenMenu -> onAddMore(effect.placeId, effect.placeName)
                 CartEffect.NavigateBack -> onBack()
             }
         }
@@ -118,9 +112,6 @@ fun CartContent(
                     variant = MahallaButtonVariant.Ghost,
                 )
             }
-            item(key = "promo") {
-                PromoBlock(state = state, onEvent = onEvent)
-            }
         }
 
         CheckoutBar(state = state, onEvent = onEvent)
@@ -167,59 +158,6 @@ private fun CartLineCard(
     }
 }
 
-/** Промокод: поле, кнопка и результат проверки текстом, а не только цветом. */
-@Composable
-private fun PromoBlock(
-    state: CartState,
-    onEvent: (CartEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val applied = state.promo as? PromoState.Applied
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
-        if (applied != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.cart_promo_applied, applied.promo.code),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LocalMahallaColors.current.success,
-                )
-                MahallaButton(
-                    text = stringResource(R.string.action_delete),
-                    onClick = { onEvent(CartEvent.PromoRemoved) },
-                    variant = MahallaButtonVariant.Ghost,
-                    fillWidth = false,
-                )
-            }
-            return@Column
-        }
-
-        MahallaTextField(
-            value = state.promoInput,
-            onValueChange = { onEvent(CartEvent.PromoInputChanged(it)) },
-            label = stringResource(R.string.cart_promo_label),
-            placeholder = stringResource(R.string.cart_promo_placeholder),
-            errorText = (state.promo as? PromoState.Rejected)?.reason?.text(),
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Characters,
-                imeAction = ImeAction.Done,
-            ),
-        )
-        MahallaButton(
-            text = stringResource(R.string.cart_promo_apply),
-            onClick = { onEvent(CartEvent.PromoApplied) },
-            variant = MahallaButtonVariant.Secondary,
-            state = ButtonState(
-                enabled = state.canApplyPromo,
-                loading = state.promo is PromoState.Checking,
-            ),
-        )
-    }
-}
-
 /** Нижняя панель: итог и переход к оформлению. */
 @Composable
 private fun CheckoutBar(
@@ -240,17 +178,10 @@ private fun CheckoutBar(
                 .padding(horizontal = Spacing.gutter, vertical = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {
-            TotalRow(
-                label = stringResource(R.string.cart_subtotal),
-                value = MoneyFormatter.withCurrency(state.totals.subtotalSum, currency),
-            )
-            if (state.totals.hasDiscount) {
-                TotalRow(
-                    label = stringResource(R.string.cart_discount),
-                    value = "−" + MoneyFormatter.withCurrency(state.totals.discountSum, currency),
-                    highlighted = true,
-                )
-            }
+            // Одна строка, а не «позиции + скидка + итог»: до оформления
+            // корзина знает только сумму позиций — ни скидки, ни доставки
+            // бэкенд не сообщает, и три одинаковых числа подряд читались бы
+            // как ошибка расчёта.
             TotalRow(
                 label = stringResource(R.string.cart_total),
                 value = MoneyFormatter.withCurrency(state.totals.totalSum, currency),
@@ -303,17 +234,4 @@ private fun TotalRow(
             },
         )
     }
-}
-
-/** Тексты отказа промокода. Домен знает причину, ресурсы — формулировку. */
-@Composable
-private fun PromoFailure.text(): String = when (this) {
-    PromoFailure.NotFound -> stringResource(R.string.cart_promo_error_not_found)
-    PromoFailure.Expired -> stringResource(R.string.cart_promo_error_expired)
-    is PromoFailure.MinOrder -> stringResource(
-        R.string.cart_promo_error_min_order,
-        MoneyFormatter.withCurrency(minOrderSum, stringResource(R.string.currency_uzs)),
-    )
-
-    PromoFailure.Network -> stringResource(R.string.cart_promo_error_network)
 }

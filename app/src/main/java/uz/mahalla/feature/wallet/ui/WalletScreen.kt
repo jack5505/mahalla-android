@@ -1,5 +1,9 @@
 package uz.mahalla.feature.wallet.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,15 +73,42 @@ fun WalletScreen(
     viewModel: WalletViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Баланс мог измениться, пока приложение было в фоне: заказ оплачен,
-    // пополнение дошло. Показывать вчерашние деньги нельзя.
+    // пополнение дошло. Показывать вчерашние деньги нельзя — и это же
+    // перечитывает баланс после возврата из формы оплаты (issue #93).
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.onEvent(WalletEvent.ScreenResumed)
     }
 
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is WalletEffect.OpenPaymentForm ->
+                    if (!context.openPaymentForm(effect.url)) {
+                        viewModel.onEvent(WalletEvent.PaymentOpenFailed)
+                    }
+            }
+        }
+    }
+
     WalletContentScreen(state = state, onEvent = viewModel::onEvent, modifier = modifier)
 }
+
+/**
+ * Форма оплаты открывается тем, что есть на устройстве: своего Custom Tab в
+ * проекте нет (`androidx.browser` не подключён), а веб-форма провайдера — это
+ * обычная https-страница. Ссылка уже проверена
+ * [uz.mahalla.feature.wallet.domain.PaymentLink].
+ *
+ * Тап без последствий читается как сломанная кнопка, поэтому отсутствие
+ * браузера возвращается наверх и объясняется словами — как открытие магазина в
+ * issue #80.
+ */
+private fun Context.openPaymentForm(url: String): Boolean = runCatching {
+    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}.onFailure { if (it !is ActivityNotFoundException) throw it }.isSuccess
 
 /** Разделено ради превью: сюда не попадает ни Hilt, ни навигация. */
 @Composable
@@ -97,7 +129,23 @@ fun WalletContentScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
                 item(key = "balance") {
-                    BalanceBlock(state = state.wallet, onEvent = onEvent)
+                    BalanceBlock(
+                        state = state.wallet,
+                        canTopUp = state.canTopUp,
+                        onEvent = onEvent,
+                    )
+                }
+                // Платёж ушёл в форму провайдера и человек вернулся: пока
+                // колбэк не дошёл, баланс тот же — и молчание здесь читается
+                // как потерянные деньги.
+                if (state.paymentStarted != null || state.paymentOpenFailed) {
+                    item(key = "payment-notice") {
+                        PaymentNotice(
+                            started = state.paymentStarted,
+                            openFailed = state.paymentOpenFailed,
+                            onDismiss = { onEvent(WalletEvent.PaymentNoticeDismissed) },
+                        )
+                    }
                 }
                 item(key = "history-header") {
                     SectionHeader(title = stringResource(R.string.wallet_history_title))
@@ -105,6 +153,10 @@ fun WalletContentScreen(
                 historyItems(state = state, onEvent = onEvent)
             }
         }
+    }
+
+    state.topUp?.let { topUp ->
+        TopUpSheet(state = topUp, onEvent = onEvent)
     }
 }
 
@@ -158,6 +210,7 @@ private fun LazyListScope.historyItems(
 @Composable
 private fun BalanceBlock(
     state: ScreenState<Wallet>,
+    canTopUp: Boolean,
     onEvent: (WalletEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -172,12 +225,22 @@ private fun BalanceBlock(
             InlineFailure(failure = state.failure, onRetry = { onEvent(WalletEvent.Retry) })
         }
 
-        is ScreenState.Content -> BalanceCard(wallet = state.data, modifier = modifier)
+        is ScreenState.Content -> BalanceCard(
+            wallet = state.data,
+            canTopUp = canTopUp,
+            onTopUp = { onEvent(WalletEvent.TopUpClicked) },
+            modifier = modifier,
+        )
     }
 }
 
 @Composable
-private fun BalanceCard(wallet: Wallet, modifier: Modifier = Modifier) {
+private fun BalanceCard(
+    wallet: Wallet,
+    canTopUp: Boolean,
+    onTopUp: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val currency = stringResource(R.string.currency_uzs)
     MahallaCard(modifier = modifier) {
         Text(
@@ -214,6 +277,16 @@ private fun BalanceCard(wallet: Wallet, modifier: Modifier = Modifier) {
                 MahallaBadge(
                     text = stringResource(R.string.wallet_status_blocked),
                     tone = MahallaTone.Error,
+                )
+            }
+        }
+        // Заблокированному кошельку платёж всё равно откажут — предлагать
+        // заплатить и получить отказ незачем.
+        if (canTopUp) {
+            Box(modifier = Modifier.padding(top = Spacing.gap)) {
+                MahallaButton(
+                    text = stringResource(R.string.wallet_top_up),
+                    onClick = onTopUp,
                 )
             }
         }

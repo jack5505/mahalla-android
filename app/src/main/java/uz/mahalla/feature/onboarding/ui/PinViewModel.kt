@@ -14,6 +14,7 @@ import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinStep
+import uz.mahalla.feature.auth.domain.isForeignAccount
 
 /**
  * PIN-код (3.4): установка с повтором либо ввод уже сохранённого.
@@ -157,19 +158,36 @@ class PinViewModel @Inject constructor(
 
             is ApiResult.Failure -> {
                 firstEntry = null
-                updateState {
-                    copy(
-                        // Установка начинается заново: подтверждать нечего,
-                        // код бэкенд не принял.
-                        stage = if (serverStep == ServerPinStep.Setup) {
-                            PinStage.Create
-                        } else {
-                            stage
-                        },
-                        busy = false,
-                        pin = pin(),
-                        apiFailure = result.failure,
-                    )
+                // Сервер отдал чужой аккаунт (issue #86). Повторять PIN
+                // бессмысленно — ответ будет тот же, — а текста сервера тут
+                // нет вовсе: отказ выставил сам клиент. Объясняем своими
+                // словами и уводим на вход с начала.
+                if (result.failure.isForeignAccount()) {
+                    updateState {
+                        copy(
+                            stage = PinStage.Create,
+                            busy = false,
+                            pin = pin(),
+                            serverStep = null,
+                            error = PinError.FOREIGN_ACCOUNT,
+                        )
+                    }
+                    emitEffect(PinEffect.AuthRestartRequired)
+                } else {
+                    updateState {
+                        copy(
+                            // Установка начинается заново: подтверждать нечего,
+                            // код бэкенд не принял.
+                            stage = if (serverStep == ServerPinStep.Setup) {
+                                PinStage.Create
+                            } else {
+                                stage
+                            },
+                            busy = false,
+                            pin = pin(),
+                            apiFailure = result.failure,
+                        )
+                    }
                 }
                 false
             }

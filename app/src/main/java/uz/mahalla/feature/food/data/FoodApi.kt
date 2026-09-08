@@ -2,143 +2,145 @@ package uz.mahalla.feature.food.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import uz.mahalla.data.network.ApiResponse
 
 /**
- * Вертикаль «Еда» (эпик 5): меню, промокод, заказы.
+ * Вертикаль «Еда» (эпик 5): меню, заказы.
  *
- * Контракт бэкенда по этим ручкам ещё не сверен с `MAHALLA-IMPLEMENTATION.md`
- * (в этом прогоне design-репозиторий недоступен) — имена полей подобраны по
- * образцу каталога эпика 4. Все необязательные поля имеют дефолт: отсутствие
- * поля не должно ронять экран.
+ * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы) — прежние пути
+ * (`places/{id}/menu`, `orders`) были подобраны по образцу каталога и у
+ * бэкенда не существуют вовсе, то есть вертикаль не работала ни на одном
+ * экране.
+ *
+ * Ответы приходят в общем конверте `{success, data, error}` (issue #42),
+ * поэтому каждый вызов заканчивается `payload()`/`ensureSuccess()`.
+ *
+ * Читать заказ идём в **общий** `orders/{orderId}` (order-controller), а не в
+ * `food/orders/{orderId}`: у первого ответ описан схемой `OrderView` со всеми
+ * суммами, а у второго имя схемы `OrderResponse` в `/v3/api-docs` перекрыто
+ * коллизией springdoc (под ним лежит заказ фрилансера), то есть имена полей
+ * оттуда взять нельзя.
  */
 interface FoodApi {
 
-    @GET("places/{id}/menu")
-    suspend fun menu(@Path("id") placeId: String): MenuDto
+    /**
+     * Меню заведения. `data` — список «меню» заведения, и каждое из них
+     * работает как категория: у него есть название и позиции.
+     */
+    @GET("food/places/{placeId}/menu")
+    suspend fun menu(@Path("placeId") placeId: String): ApiResponse<List<MenuSectionDto>>
+
+    @POST("food/orders")
+    suspend fun createOrder(@Body request: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
+
+    @GET("orders/{orderId}")
+    suspend fun order(@Path("orderId") orderId: String): ApiResponse<OrderViewDto>
 
     /**
-     * Проверка промокода. Сумма позиций уходит на сервер: скидка зависит от
-     * неё, и решать «подходит ли код» обязан тот, кто потом выставит счёт.
+     * Отмена. Тело ответа не разбирается (та же коллизия схемы) — состояние
+     * заказа перечитывается [order]'ом: догадываться о полях там, где ошибка
+     * превратит удачную отмену в «не удалось», незачем.
      */
-    @POST("places/{id}/promo")
-    suspend fun promo(
-        @Path("id") placeId: String,
-        @Body request: PromoRequestDto,
-    ): PromoDto
-
-    @POST("orders")
-    suspend fun createOrder(@Body request: CreateOrderDto): OrderDto
-
-    @GET("orders/{id}")
-    suspend fun order(@Path("id") orderId: String): OrderDto
-
-    @POST("orders/{id}/cancel")
-    suspend fun cancelOrder(@Path("id") orderId: String): OrderDto
+    @POST("food/orders/{orderId}/cancel")
+    suspend fun cancelOrder(@Path("orderId") orderId: String): ApiResponse<JsonElement>
 }
 
+/** `MenuResponse` бэкенда: категория меню вместе с позициями. */
 @Serializable
-data class MenuDto(
-    @SerialName("placeName") val placeName: String = "",
-    @SerialName("categories") val categories: List<MenuCategoryDto> = emptyList(),
-    /** Стоимость доставки заведения — показывается в корзине до checkout'а. */
-    @SerialName("deliveryFee") val deliveryFee: Long = 0,
-    @SerialName("minOrder") val minOrder: Long = 0,
-)
-
-@Serializable
-data class MenuCategoryDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
+data class MenuSectionDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("name") val name: String? = null,
+    @SerialName("description") val description: String? = null,
     @SerialName("items") val items: List<MenuItemDto> = emptyList(),
 )
 
+/**
+ * `ItemResponse` бэкенда.
+ *
+ * Флаг стоп-листа принимается под двумя именами: Jackson сериализует
+ * `boolean isAvailable` то как `isAvailable`, то как `available`, и ошибка
+ * здесь увела бы в стоп-лист всё меню (то же правило, что у `isRead` в
+ * уведомлениях, issue #81).
+ *
+ * Модификаторов (`optionGroups`) в контракте нет — см. `FoodMappers`.
+ */
 @Serializable
 data class MenuItemDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
+    @SerialName("id") val id: String? = null,
+    @SerialName("name") val name: String? = null,
     @SerialName("description") val description: String? = null,
-    @SerialName("price") val price: Long = 0,
-    @SerialName("photoUrl") val photoUrl: String? = null,
-    /** Стоп-лист: позиция остаётся в меню, но неактивна. */
-    @SerialName("available") val available: Boolean = true,
-    @SerialName("optionGroups") val optionGroups: List<OptionGroupDto> = emptyList(),
+    @SerialName("price") val price: Long? = null,
+    @SerialName("prepMinutes") val prepMinutes: Int? = null,
+    @SerialName("isAvailable") val isAvailable: Boolean? = null,
+    @SerialName("available") val available: Boolean? = null,
+    @SerialName("isHalal") val isHalal: Boolean? = null,
 )
 
+/**
+ * `PlaceOrderRequest` бэкенда. Больше в заказ положить нечего: ни промокода,
+ * ни комментария, ни времени, ни модификаторов позиции контракт не принимает.
+ */
 @Serializable
-data class OptionGroupDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("minChoices") val minChoices: Int = 0,
-    @SerialName("maxChoices") val maxChoices: Int = 1,
-    @SerialName("options") val options: List<MenuOptionDto> = emptyList(),
-)
-
-@Serializable
-data class MenuOptionDto(
-    @SerialName("id") val id: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("priceDelta") val priceDelta: Long = 0,
-    @SerialName("available") val available: Boolean = true,
-)
-
-@Serializable
-data class PromoRequestDto(
-    @SerialName("code") val code: String,
-    @SerialName("subtotal") val subtotal: Long,
-)
-
-@Serializable
-data class PromoDto(
-    @SerialName("code") val code: String,
-    /** `percent` или `fixed`; незнакомое значение считаем фиксированной суммой. */
-    @SerialName("kind") val kind: String = "fixed",
-    @SerialName("value") val value: Long = 0,
-    @SerialName("minOrder") val minOrder: Long = 0,
-    @SerialName("maxDiscount") val maxDiscount: Long? = null,
-)
-
-@Serializable
-data class CreateOrderDto(
+data class PlaceOrderRequestDto(
     @SerialName("placeId") val placeId: String,
-    @SerialName("items") val items: List<OrderItemDto> = emptyList(),
-    @SerialName("method") val method: String,
-    @SerialName("payment") val payment: String,
-    @SerialName("address") val address: String? = null,
-    @SerialName("comment") val comment: String? = null,
-    /** ISO-8601 без зоны; `null` — «как можно скорее». */
-    @SerialName("scheduledAt") val scheduledAt: String? = null,
-    @SerialName("promoCode") val promoCode: String? = null,
+    @SerialName("items") val items: List<OrderItemRequestDto> = emptyList(),
+    /** `DELIVERY` / `PICKUP` / `DINE_IN`. */
+    @SerialName("fulfillment") val fulfillment: String,
+    /** `WALLET` / `CASH`. */
+    @SerialName("paymentMethod") val paymentMethod: String,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
 )
 
+/** Цену и состав считает сервер: клиент присылает только позицию и количество. */
 @Serializable
-data class OrderItemDto(
+data class OrderItemRequestDto(
     @SerialName("itemId") val itemId: String,
-    @SerialName("name") val name: String = "",
-    @SerialName("price") val price: Long = 0,
-    @SerialName("quantity") val quantity: Int = 1,
-    @SerialName("optionIds") val optionIds: List<String> = emptyList(),
-    @SerialName("optionsLabel") val optionsLabel: String = "",
+    @SerialName("quantity") val quantity: Int,
 )
 
+/**
+ * Ответ на создание заказа. Разбирается только идентификатор — по нему экран
+ * статуса читает заказ целиком. `orderId` принимается вторым именем на случай,
+ * если у food-контроллера поле названо не как во всех остальных ответах.
+ */
 @Serializable
-data class OrderDto(
-    @SerialName("id") val id: String,
-    @SerialName("placeId") val placeId: String = "",
-    @SerialName("placeName") val placeName: String = "",
-    @SerialName("status") val status: String = "",
-    @SerialName("method") val method: String = "",
-    @SerialName("payment") val payment: String = "",
-    @SerialName("subtotal") val subtotal: Long = 0,
-    @SerialName("discount") val discount: Long = 0,
-    @SerialName("delivery") val delivery: Long = 0,
-    @SerialName("items") val items: List<OrderItemDto> = emptyList(),
-    /** Секунды эпохи: часовой пояс клиента на историю заказов влиять не должен. */
-    @SerialName("createdAt") val createdAt: Long = 0,
-    @SerialName("address") val address: String? = null,
-    @SerialName("comment") val comment: String? = null,
-    @SerialName("etaMinutes") val etaMinutes: Int? = null,
+data class CreatedOrderDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("orderId") val orderId: String? = null,
+)
+
+/** `OrderView` бэкенда: единый вид заказа для всех вертикалей. */
+@Serializable
+data class OrderViewDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("orderNumber") val orderNumber: String? = null,
+    @SerialName("placeId") val placeId: String? = null,
+    @SerialName("vertical") val vertical: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("fulfillment") val fulfillment: String? = null,
+    @SerialName("paymentMethod") val paymentMethod: String? = null,
+    @SerialName("itemsAmount") val itemsAmount: Long? = null,
+    @SerialName("deliveryAmount") val deliveryAmount: Long? = null,
+    @SerialName("discountAmount") val discountAmount: Long? = null,
+    @SerialName("totalAmount") val totalAmount: Long? = null,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
+    /** ISO-8601; Jackson отдаёт и без зоны — разбирает `parseServerInstant`. */
+    @SerialName("createdAt") val createdAt: String? = null,
+    @SerialName("items") val items: List<OrderItemViewDto> = emptyList(),
+)
+
+/** `ItemView` бэкенда: строка заказа. */
+@Serializable
+data class OrderItemViewDto(
+    @SerialName("itemType") val itemType: String? = null,
+    @SerialName("itemId") val itemId: String? = null,
+    @SerialName("itemName") val itemName: String? = null,
+    @SerialName("quantity") val quantity: Int? = null,
+    @SerialName("unitPrice") val unitPrice: Long? = null,
+    @SerialName("totalPrice") val totalPrice: Long? = null,
 )

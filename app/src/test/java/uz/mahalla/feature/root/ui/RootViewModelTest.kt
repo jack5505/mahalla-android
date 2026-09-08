@@ -22,11 +22,16 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.update.data.AppUpdateGate
+import uz.mahalla.feature.update.domain.AppUpdate
+import uz.mahalla.feature.update.domain.UpdateDecision
+import uz.mahalla.testutil.FakeAppVersionRepository
 import uz.mahalla.testutil.FakeAuthRepository
 import java.io.File
 
@@ -174,16 +179,67 @@ class RootViewModelTest {
         assertTrue("стартовый пункт зафиксирован на первой эмиссии", latest.startWithOnboarding)
     }
 
+    @Test
+    fun `a required update stands before the app`() = runTest {
+        // Контракт бэкенда ломался четырежды за месяц, и старая сборка
+        // переставала работать молча (issue #80).
+        val settings = SettingsDataStore(newDataStore())
+        settings.setBackendBaseUrl(BUILD_URL)
+
+        val ready = viewModel(
+            settings = settings,
+            versionRepository = FakeAppVersionRepository(
+                ApiResult.Success(UpdateDecision.Required(AppUpdate(versionName = "1.4.0"))),
+            ),
+        ).awaitReady()
+
+        assertTrue(ready.showUpdate)
+    }
+
+    @Test
+    fun `a silent backend does not lock the app on the update screen`() = runTest {
+        // Иначе упавший бэкенд превращается в кирпич на всех устройствах.
+        val settings = SettingsDataStore(newDataStore())
+        settings.setBackendBaseUrl(BUILD_URL)
+
+        val ready = viewModel(
+            settings = settings,
+            versionRepository = FakeAppVersionRepository.failing(),
+        ).awaitReady()
+
+        assertFalse(ready.showUpdate)
+    }
+
+    @Test
+    fun `the version is not checked before the backend address is known`() = runTest {
+        // Запрос ушёл бы на адрес из сборки — не туда, куда пользователь как
+        // раз собирается направить приложение (issue #26).
+        val versionRepository = FakeAppVersionRepository(
+            ApiResult.Success(UpdateDecision.Required(AppUpdate())),
+        )
+
+        val ready = viewModel(
+            settings = SettingsDataStore(newDataStore()),
+            versionRepository = versionRepository,
+        ).awaitReady()
+
+        assertTrue(ready.needsBackendUrl)
+        assertFalse(ready.showUpdate)
+        assertEquals(0, versionRepository.checkCount)
+    }
+
     private fun viewModel(
         settings: SettingsDataStore,
         authRepository: FakeAuthRepository = FakeAuthRepository(),
         overrideEnabled: Boolean = true,
+        versionRepository: FakeAppVersionRepository = FakeAppVersionRepository(),
     ) = RootViewModel(
         settings,
         DataStoreOnboardingRepository(settings),
         authRepository,
         BackendUrlStore(settings, BUILD_URL, overrideEnabled),
         BackendCertificatePin(settings, overrideEnabled),
+        AppUpdateGate(versionRepository),
     )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =

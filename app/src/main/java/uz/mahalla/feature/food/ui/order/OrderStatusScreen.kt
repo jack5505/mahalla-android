@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -45,6 +44,7 @@ import uz.mahalla.feature.food.domain.CartLine
 import uz.mahalla.feature.food.domain.Order
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.OrderStatusFlow
+import uz.mahalla.feature.onboarding.ui.OnboardingApiError
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -122,14 +122,8 @@ fun OrderStatusContent(
 
                 item(key = "totals") { TotalsCard(order = order, currency = currency) }
 
-                if (state.cancelFailed) {
-                    item(key = "cancel-error") {
-                        Text(
-                            text = stringResource(R.string.order_cancel_failed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                state.cancelFailure?.let { failure ->
+                    item(key = "cancel-error") { OnboardingApiError(failure = failure) }
                 }
 
                 if (state.repeatFailed) {
@@ -187,29 +181,32 @@ private fun OrderHeader(order: Order, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = order.placeName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = DateTimeFormatters.dateTime(order.createdAt),
-                    style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                    color = LocalMahallaColors.current.fgMuted,
-                )
+                // Имя заведения приходит из кэша заказов; после смерти
+                // процесса его может не быть — пустая строка вместо заголовка
+                // выглядела бы обрезанным экраном.
+                if (order.placeName.isNotBlank()) {
+                    Text(
+                        text = order.placeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                order.createdAt?.let { createdAt ->
+                    Text(
+                        text = DateTimeFormatters.dateTime(createdAt),
+                        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+                order.number?.let { number ->
+                    Text(
+                        text = stringResource(R.string.order_number, number),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
             }
             MahallaBadge(text = stringResource(order.status.labelRes()), tone = order.status.tone())
-        }
-        if (order.etaMinutes != null && !OrderStatusFlow.isFinal(order.status)) {
-            Text(
-                text = pluralStringResource(
-                    R.plurals.order_eta,
-                    order.etaMinutes,
-                    order.etaMinutes,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalMahallaColors.current.fgMuted,
-            )
         }
     }
 }
@@ -360,12 +357,16 @@ private fun OrderStatus.labelRes(): Int = when (this) {
     OrderStatus.ReadyForPickup -> R.string.order_status_ready
     OrderStatus.Completed -> R.string.order_status_completed
     OrderStatus.Cancelled -> R.string.order_status_cancelled
+    OrderStatus.Refunded -> R.string.order_status_refunded
     OrderStatus.Unknown -> R.string.order_status_unknown
 }
 
 private fun OrderStatus.tone(): MahallaTone = when (this) {
     OrderStatus.Completed -> MahallaTone.Success
     OrderStatus.Cancelled -> MahallaTone.Error
+    // Возврат — не ошибка человека: деньги вернулись, и это скорее
+    // предупреждение, чем красная плашка.
+    OrderStatus.Refunded -> MahallaTone.Warning
     OrderStatus.Unknown -> MahallaTone.Neutral
     else -> MahallaTone.Info
 }

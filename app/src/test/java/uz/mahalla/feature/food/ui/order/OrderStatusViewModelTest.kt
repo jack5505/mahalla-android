@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -17,7 +18,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
@@ -156,19 +159,23 @@ class OrderStatusViewModelTest {
         }
 
     @Test
-    fun `cancelling is confirmed first and then applied`() =
+    fun `cancelling is confirmed first and the new status is read from the server`() =
         runTest(mainDispatcherRule.dispatcher) {
+            // Ответ отмены приложение не разбирает (схема перекрыта коллизией
+            // springdoc) — статус приезжает перезапросом заказа.
             val viewModel = viewModel()
             runCurrent()
 
             viewModel.onEvent(OrderStatusEvent.CancelClicked)
             assertTrue(viewModel.state.value.cancelConfirmVisible)
 
+            repository.loaded = ApiResult.Success(order(status = OrderStatus.Cancelled))
             viewModel.onEvent(OrderStatusEvent.CancelConfirmed)
             runCurrent()
 
             assertEquals(OrderStatus.Cancelled, viewModel.state.value.data?.status)
             assertFalse(viewModel.state.value.isCancelling)
+            assertNull(viewModel.state.value.cancelFailure)
         }
 
     @Test
@@ -182,18 +189,27 @@ class OrderStatusViewModelTest {
     }
 
     @Test
-    fun `a failed cancel says so and keeps the order`() = runTest(mainDispatcherRule.dispatcher) {
-        repository.cancelled = ApiResult.Failure(ApiError.Http(409, null))
-        val viewModel = viewModel()
-        runCurrent()
+    fun `a failed cancel shows the message of the server and keeps the order`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.cancelled = ApiResult.Failure(
+                ApiFailure(
+                    error = ApiError.Http(409, null),
+                    server = ServerError(httpCode = 409, message = "Buyurtma tayyorlanmoqda"),
+                ),
+            )
+            val viewModel = viewModel()
+            runCurrent()
 
-        viewModel.onEvent(OrderStatusEvent.CancelConfirmed)
-        runCurrent()
+            viewModel.onEvent(OrderStatusEvent.CancelConfirmed)
+            runCurrent()
 
-        assertTrue(viewModel.state.value.cancelFailed)
-        assertEquals(OrderStatus.Created, viewModel.state.value.data?.status)
-        viewModel.stopPolling()
-    }
+            assertEquals(
+                "Buyurtma tayyorlanmoqda",
+                viewModel.state.value.cancelFailure?.server?.message,
+            )
+            assertEquals(OrderStatus.Created, viewModel.state.value.data?.status)
+            viewModel.stopPolling()
+        }
 
     @Test
     fun `repeating refills the cart and opens it`() = runTest(mainDispatcherRule.dispatcher) {

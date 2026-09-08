@@ -23,6 +23,7 @@ import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
 import uz.mahalla.feature.auth.domain.OtpFailure
+import uz.mahalla.feature.auth.domain.PhoneIdentity
 import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.navigation.OtpArgs
 import uz.mahalla.testutil.FakeAuthRepository
@@ -145,6 +146,26 @@ class OtpViewModelTest {
         assertTrue(state.code.isError)
         assertFalse("ввод не блокируется — код можно набрать снова", state.inputBlocked)
         assertNull("«код неверный» уже написано под полем — второй раз незачем", state.apiFailure)
+    }
+
+    @Test
+    fun `a foreign account blocks the input instead of blaming the code`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Ответ пришёл про другого владельца устройства (issue #86): код был
+        // верный, и предлагать набрать его снова — врать.
+        authRepository.verifyResult = ApiResult.Failure(
+            ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(OtpEvent.CodeChanged("000000"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals(OtpFailure.ForeignAccount, state.failure)
+        assertTrue(state.inputBlocked)
+        assertFalse(state.canSubmit)
     }
 
     @Test

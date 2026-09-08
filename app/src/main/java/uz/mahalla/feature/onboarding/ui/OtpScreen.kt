@@ -175,6 +175,7 @@ private fun OtpFailure.messageOrNull(): String? = when (this) {
     OtpFailure.InvalidCode -> stringResource(R.string.onboarding_otp_error_invalid)
     OtpFailure.Expired -> stringResource(R.string.onboarding_otp_error_expired)
     OtpFailure.TooManyAttempts -> stringResource(R.string.onboarding_otp_error_attempts)
+    OtpFailure.ForeignAccount -> stringResource(R.string.onboarding_error_foreign_account)
     OtpFailure.Network -> null
 }
 

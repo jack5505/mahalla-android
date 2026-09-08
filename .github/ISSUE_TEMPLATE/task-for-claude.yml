@@ -1,0 +1,73 @@
+name: Задача для @claude
+description: Постановка задачи агенту в GitHub Actions
+title: "feat(область): "
+labels: ["claude"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Агент выполняет задачу за один прогон, без возможности переспросить.
+        Что не написано здесь — он додумает. Поля ниже стоят пяти минут.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Что нужно
+      description: Одним абзацем — что должно появиться и зачем. Не как делать, а что получить.
+      placeholder: |
+        Экран «Мои талоны»: список активных талонов живой очереди с номером,
+        местом и позицией. Талон можно отменить.
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: Критерий готовности
+      description: По чему проверять, что работа сделана. Проверяемо, а не «работает хорошо».
+      placeholder: |
+        - список показывает талоны из GET /walkin/my
+        - отмена шлёт POST /walkin/{id}/cancel и убирает талон из списка
+        - пустое состояние отличается от ошибки сети
+        - тесты на ViewModel и репозиторий зелёные
+    validations:
+      required: true
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Где смотреть
+      description: Файлы, похожие места в коде, эндпоинты, экраны в макете. Экономит агенту полконтекста.
+      placeholder: |
+        Образец — feature/pharmacy. Эндпоинты: walkin/my, walkin/{id}/cancel
+        (docs/API-CONTRACT.md, статус ⚠️ — сверить). Макет: SCREENS.md, экран 21.
+    validations:
+      required: false
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Что НЕ делать
+      description: Границы. Без них агент чинит соседнее и раздувает диff.
+      placeholder: |
+        Не трогать общий кит core/ui. Пуши по талонам — отдельная задача.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: reminders
+    attributes:
+      label: Напоминания агенту
+      options:
+        - label: Контракт брать из docs/API-CONTRACT.md, при расхождении писать в отчёт, а не угадывать
+          required: false
+        - label: Прогнать ./gradlew testDebugUnitTest assembleDebug до пуша
+          required: false
+        - label: Перед PR прогнать ревью диффа субагентом
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        После создания issue напишите в нём комментарий `@claude выполни задачу`
+        (workflow реагирует только на упоминания от владельца репозитория).

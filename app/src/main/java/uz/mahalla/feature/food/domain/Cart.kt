@@ -8,14 +8,7 @@ package uz.mahalla.feature.food.domain
 data class Cart(
     val placeId: String,
     val placeName: String,
-    /**
-     * Стоимость доставки заведения. Едет вместе с черновиком, а не запрашивается
-     * на checkout'е отдельно: цену человек видел ещё в меню, и после
-     * перезапуска приложения она обязана остаться той же.
-     */
-    val deliverySum: Long = 0,
     val lines: List<CartLine> = emptyList(),
-    val promo: PromoCode? = null,
 ) {
     val isEmpty: Boolean get() = lines.isEmpty()
 
@@ -49,7 +42,13 @@ data class CartLine(
     val totalSum: Long get() = unitPriceSum * quantity
 }
 
-/** Итог корзины. Все суммы — целые сумы, отрицательных среди них нет. */
+/**
+ * Итог корзины. Все суммы — целые сумы, отрицательных среди них нет.
+ *
+ * Скидка и доставка приезжают из ответа о заказе (`OrderView`): до оформления
+ * бэкенд не сообщает ни стоимости доставки заведения, ни способа приложить к
+ * заказу промокод, поэтому в корзине они нули, а не выдуманные числа.
+ */
 data class CartTotals(
     val subtotalSum: Long = 0,
     val discountSum: Long = 0,
@@ -109,15 +108,21 @@ object CartCalculator {
 
     /**
      * Итог. Скидка считается от суммы позиций (доставка не скидывается — это
-     * деньги курьера) и никогда не превышает её: промокод «−50 000» на заказ в
-     * 30 000 не должен превращаться в долг заведения перед клиентом.
+     * деньги курьера) и никогда не превышает её: скидка «−50 000» на заказ в
+     * 30 000 не должна превращаться в долг заведения перед клиентом.
+     *
+     * И скидка, и доставка приходят параметрами, а не из корзины: считать их
+     * на клиенте нечем — их называет сервер в ответе о заказе.
      */
-    fun totals(cart: Cart, deliverySum: Long = 0): CartTotals {
-        val subtotal = subtotal(cart.lines)
-        val discount = cart.promo?.discountFor(subtotal) ?: 0
+    fun totals(
+        lines: List<CartLine>,
+        discountSum: Long = 0,
+        deliverySum: Long = 0,
+    ): CartTotals {
+        val subtotal = subtotal(lines)
         return CartTotals(
             subtotalSum = subtotal,
-            discountSum = discount.coerceIn(0, subtotal),
+            discountSum = discountSum.coerceIn(0, subtotal),
             deliverySum = deliverySum.coerceAtLeast(0),
         )
     }

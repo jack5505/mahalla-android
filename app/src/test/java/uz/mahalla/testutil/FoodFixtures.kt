@@ -3,7 +3,6 @@ package uz.mahalla.testutil
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
-import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.data.CartRepository
 import uz.mahalla.feature.food.data.MenuRepository
@@ -22,7 +21,6 @@ import uz.mahalla.feature.food.domain.OptionGroup
 import uz.mahalla.feature.food.domain.Order
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
-import uz.mahalla.feature.food.domain.PromoCode
 import java.time.Instant
 
 /** Позиция меню с разумными значениями — тесты задают только важное. */
@@ -67,12 +65,9 @@ fun menuOption(
 fun menu(
     placeId: String = "place-1",
     items: List<MenuItem> = listOf(menuItem("osh")),
-    deliverySum: Long = 0,
 ): Menu = Menu(
     placeId = placeId,
-    placeName = "Osh markazi",
     categories = listOf(MenuCategory(id = "main", name = "Asosiy", items = items)),
-    deliverySum = deliverySum,
 )
 
 fun cartLine(
@@ -107,24 +102,12 @@ fun order(
     createdAt = Instant.parse("2026-08-26T10:00:00Z"),
 )
 
-/** Меню и промокод под тесты ViewModel — без MockWebServer. */
+/** Меню под тесты ViewModel — без MockWebServer. */
 class FakeMenuRepository : MenuRepository {
 
     var menuResult: ApiResult<Menu> = ApiResult.Success(menu())
-    var promoResult: ApiResult<PromoCode> = ApiResult.Failure(ApiError.NotFound)
-
-    val promoRequests: MutableList<Triple<String, String, Long>> = mutableListOf()
 
     override suspend fun menu(placeId: String): ApiResult<Menu> = menuResult
-
-    override suspend fun promo(
-        placeId: String,
-        code: String,
-        subtotalSum: Long,
-    ): ApiResult<PromoCode> {
-        promoRequests += Triple(placeId, code, subtotalSum)
-        return promoResult
-    }
 }
 
 /**
@@ -152,17 +135,11 @@ class FakeCartRepository : CartRepository {
 
     override suspend fun snapshot(placeId: String): Cart = current(placeId)
 
-    override suspend fun add(
-        placeId: String,
-        placeName: String,
-        deliverySum: Long,
-        line: CartLine,
-    ) {
+    override suspend fun add(placeId: String, placeName: String, line: CartLine) {
         val cart = current(placeId)
         seed(
             cart.copy(
                 placeName = placeName.ifBlank { cart.placeName },
-                deliverySum = deliverySum,
                 lines = CartCalculator.add(cart.lines, line),
             ),
         )
@@ -171,20 +148,10 @@ class FakeCartRepository : CartRepository {
     /** Room недоступен: замена черновика падает, прежний остаётся на месте. */
     var replaceFails: Boolean = false
 
-    override suspend fun replace(
-        placeId: String,
-        placeName: String,
-        deliverySum: Long,
-        lines: List<CartLine>,
-    ) {
+    override suspend fun replace(placeId: String, placeName: String, lines: List<CartLine>) {
         if (replaceFails) error("cart draft is not writable")
         carts.value = mapOf(
-            placeId to Cart(
-                placeId = placeId,
-                placeName = placeName,
-                lines = lines,
-                deliverySum = deliverySum,
-            ),
+            placeId to Cart(placeId = placeId, placeName = placeName, lines = lines),
         )
     }
 
@@ -200,24 +167,20 @@ class FakeCartRepository : CartRepository {
 
     override suspend fun clear(placeId: String) {
         clearedPlaceIds += placeId
-        seed(current(placeId).copy(lines = emptyList(), promo = null))
+        seed(current(placeId).copy(lines = emptyList()))
     }
 
     override suspend fun clearAll() {
         clearedPlaceIds += carts.value.keys
         carts.value = emptyMap()
     }
-
-    override fun applyPromo(promo: PromoCode?) {
-        carts.value = carts.value.mapValues { (_, cart) -> cart.copy(promo = promo) }
-    }
 }
 
 class FakeOrderRepository : OrderRepository {
 
-    var created: ApiResult<Order> = ApiResult.Success(order())
+    var created: ApiResult<String> = ApiResult.Success("o-1")
     var loaded: ApiResult<Order> = ApiResult.Success(order())
-    var cancelled: ApiResult<Order> = ApiResult.Success(order(status = OrderStatus.Cancelled))
+    var cancelled: ApiResult<Unit> = ApiResult.Success(Unit)
 
     /** Очередь ответов опроса; пусто — отдаётся [loaded]. */
     val pollResponses: ArrayDeque<ApiResult<Order>> = ArrayDeque()
@@ -231,7 +194,7 @@ class FakeOrderRepository : OrderRepository {
     var loadCount: Int = 0
         private set
 
-    override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<Order> {
+    override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<String> {
         createdWith = cart to form
         return created
     }
@@ -241,7 +204,7 @@ class FakeOrderRepository : OrderRepository {
         return pollResponses.removeFirstOrNull() ?: loaded
     }
 
-    override suspend fun cancel(orderId: String): ApiResult<Order> = cancelled
+    override suspend fun cancel(orderId: String): ApiResult<Unit> = cancelled
 
     /** `null` — база недоступна: проверяем, что экран остаётся на месте. */
     var repeatFails: Boolean = false

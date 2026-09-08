@@ -12,8 +12,10 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.feature.wallet.domain.TopUpProvider
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
+import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import java.time.Instant
@@ -192,6 +194,175 @@ class WalletRepositoryTest {
             ApiError.Unauthorized,
             (repository().wallet() as ApiResult.Failure).error,
         )
+    }
+
+    // --- Пополнение (issue #93) ---
+
+    /**
+     * Тело запроса — то, ради чего этот тест существует: `amount` уходит в
+     * единицах бэкенда, а не в сумах, а провайдер — значением его же
+     * перечисления.
+     */
+    @Test
+    fun `top up sends the amount in the units of the backend`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"paymentUrl":"https://checkout.paycom.uz/abc","transactionId":"p-1",
+                   "amount":25000000,"provider":"PAYME","expiresAt":"2026-09-04T10:00:00Z"}""",
+            ),
+        )
+
+        val order = (
+            repository().topUp(
+                amountSum = 250_000,
+                provider = TopUpProvider.Payme,
+                scale = WalletAmounts.TIYIN_IN_SOM,
+            ) as ApiResult.Success
+            ).data
+
+        val request = server.takeRequest()
+        assertEquals("/wallet/top-up", request.path)
+        assertEquals("POST", request.method)
+        assertEquals(
+            """{"amount":25000000,"provider":"PAYME"}""",
+            request.body.readUtf8(),
+        )
+        assertEquals("https://checkout.paycom.uz/abc", order.paymentUrl)
+    }
+
+    /** Тот же ввод при другом делителе уходит другим числом. */
+    @Test
+    fun `top up in a wallet counted in sums sends the sum as is`() = runTest {
+        server.enqueue(envelope("""{"paymentUrl":"https://my.click.uz/pay?id=7"}"""))
+
+        repository().topUp(amountSum = 250_000, provider = TopUpProvider.Click, scale = 1L)
+
+        assertEquals(
+            """{"amount":250000,"provider":"CLICK"}""",
+            server.takeRequest().body.readUtf8(),
+        )
+    }
+
+    /**
+     * Сумма ниже серверного минимума в сеть не уходит: 400 сказал бы то же
+     * самое, но платой были бы запрос и молчание экрана.
+     */
+    @Test
+    fun `amount below the minimum does not reach the network`() = runTest {
+        val failure = repository().topUp(
+            amountSum = 999,
+            provider = TopUpProvider.Payme,
+            scale = WalletAmounts.TIYIN_IN_SOM,
+        ) as ApiResult.Failure
+
+        assertEquals(
+            ApiError.Business(WalletRepository.INVALID_TOP_UP_CODE),
+            failure.error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    /**
+     * Ответ без годной ссылки — отказ: платить негде, и «платёж заведён» без
+     * формы было бы неправдой. `http` и чужие схемы отсекаются здесь же —
+     * ссылку присылает сервер, а его адрес в debug вводит пользователь.
+     */
+    @Test
+    fun `response without a usable payment form is a failure`() = runTest {
+        server.enqueue(envelope("""{"transactionId":"p-2","amount":25000000}"""))
+        server.enqueue(envelope("""{"paymentUrl":"http://checkout.paycom.uz/abc"}"""))
+        server.enqueue(envelope("""{"paymentUrl":"mahalla://place/1"}"""))
+        val repository = repository()
+
+        repeat(3) {
+            val failure = repository.topUp(
+                amountSum = 250_000,
+                provider = TopUpProvider.Payme,
+                scale = WalletAmounts.TIYIN_IN_SOM,
+            ) as ApiResult.Failure
+            assertEquals(
+                ApiError.Business(WalletRepository.NO_PAYMENT_URL_CODE),
+                failure.error,
+            )
+        }
+    }
+
+    /** Провайдер отказал — текст сервера обязан доехать до шторки (issue #34). */
+    @Test
+    fun `provider failure is reported with the message of the server`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(502)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"PROVIDER_UNAVAILABLE",
+                       "message":"Payme javob bermadi"}}""",
+                ),
+        )
+
+        val failure = (
+            repository().topUp(
+                amountSum = 250_000,
+                provider = TopUpProvider.Payme,
+                scale = WalletAmounts.TIYIN_IN_SOM,
+            ) as ApiResult.Failure
+            ).failure
+
+        assertEquals("Payme javob bermadi", failure.serverMessage)
+        assertEquals("PROVIDER_UNAVAILABLE", failure.server?.code)
+    }
+
+    @Test
+    fun `top up answered with success false is a failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"WALLET_BLOCKED",
+                       "message":"Hamyon bloklangan"}}""",
+                ),
+        )
+
+        val failure = (
+            repository().topUp(
+                amountSum = 250_000,
+                provider = TopUpProvider.Uzum,
+                scale = WalletAmounts.TIYIN_IN_SOM,
+            ) as ApiResult.Failure
+            ).failure
+
+        assertEquals(ApiError.Business("WALLET_BLOCKED"), failure.error)
+        assertEquals("Hamyon bloklangan", failure.serverMessage)
+    }
+
+    @Test
+    fun `top up without a session is reported as unauthorized`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        assertEquals(
+            ApiError.Unauthorized,
+            (
+                repository().topUp(
+                    amountSum = 250_000,
+                    provider = TopUpProvider.Payme,
+                    scale = WalletAmounts.TIYIN_IN_SOM,
+                ) as ApiResult.Failure
+                ).error,
+        )
+    }
+
+    /**
+     * Делитель приезжает в домене вместе с балансом: пополнение обязано
+     * считать сумму тем же делителем, которым посчитан показанный баланс.
+     */
+    @Test
+    fun `scale of the response reaches the domain`() = runTest {
+        server.enqueue(envelope("""{"balance":128450000,"balanceSom":1284500.0}"""))
+
+        val wallet = (repository().wallet() as ApiResult.Success).data
+
+        assertEquals(WalletAmounts.TIYIN_IN_SOM, wallet.amountScale)
     }
 
     private fun repository() = DefaultWalletRepository(

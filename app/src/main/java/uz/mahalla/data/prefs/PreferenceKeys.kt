@@ -18,6 +18,19 @@ internal object PreferenceKeys {
     /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
     val CityId = stringPreferencesKey("settings_city_id")
 
+    /**
+     * Роль из анкеты (issue #84): покупатель или продавец. Хранится строкой
+     * (`UserRole.storedValue`), как и город: переименование константы в коде
+     * не должно стирать выбор пользователя.
+     */
+    val UserRole = stringPreferencesKey("settings_user_role")
+
+    /**
+     * Адрес доставки из анкеты покупателя (issue #84). Подставляется в
+     * оформление заказа — иначе его набирают заново при каждом заказе.
+     */
+    val DeliveryAddress = stringPreferencesKey("settings_delivery_address")
+
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 
@@ -56,4 +69,14 @@ internal object PreferenceKeys {
 
     /** История поиска (эпик 4.3) — одна строка, порядок значим. */
     val SearchHistory = stringPreferencesKey("discovery_search_history")
+
+    /**
+     * Взятые талоны очереди (issue #96) — JSON-массив в одной строке.
+     *
+     * Хранятся локально не для кэша, а потому что **прочитать талон у бэкенда
+     * нечем**: ручки `walkin/my` / `walkin/{id}` нет, состояние приезжает
+     * только в ответе на запись. Без этого ключа свёрнутое приложение теряло
+     * бы и номер в очереди, и возможность отменить запись.
+     */
+    val WalkInTickets = stringPreferencesKey("queue_walkin_tickets")
 }

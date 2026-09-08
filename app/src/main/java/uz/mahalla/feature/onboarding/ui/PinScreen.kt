@@ -88,6 +88,7 @@ private fun PinState.errorText(): String? = when (error) {
     PinError.WRONG_PIN -> stringResource(R.string.onboarding_pin_error_wrong, attemptsLeft)
     PinError.TOO_MANY_ATTEMPTS -> stringResource(R.string.onboarding_pin_error_attempts)
     PinError.STORAGE -> stringResource(R.string.onboarding_pin_error_storage)
+    PinError.FOREIGN_ACCOUNT -> stringResource(R.string.onboarding_error_foreign_account)
     null -> null
 }
 

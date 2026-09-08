@@ -16,6 +16,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
+import uz.mahalla.feature.auth.domain.PhoneIdentity
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
@@ -380,6 +381,34 @@ class PinViewModelTest {
         assertNull("непринятый сервером код локальным не становится", storage.storedPin)
         // Счётчик попыток ведёт сервер: свой стёр бы сессию раньше времени.
         assertEquals(PinState.MAX_ATTEMPTS, state.attemptsLeft)
+    }
+
+    @Test
+    fun `a foreign account restarts the login instead of letting the user in`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // `pin-login` вернул прежнего владельца устройства (issue #86):
+        // репозиторий токены не сохранил, экрану остаётся объяснить и увести
+        // на вход заново.
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Enter)
+        authRepository.completeServerPinResult = ApiResult.Failure(
+            ApiError.Business(PhoneIdentity.FOREIGN_ACCOUNT_CODE),
+        )
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("654321"))
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.AuthRestartRequired, effect)
+        val state = viewModel.state.value
+        assertEquals(PinError.FOREIGN_ACCOUNT, state.error)
+        // Своё объяснение, а не текст сервера: отказ выставил сам клиент.
+        assertNull(state.apiFailure)
+        assertNull("чужой код локальным PIN'ом не становится", storage.storedPin)
+        // Повторять PIN нечем: испытание выброшено вместе с ответом.
+        assertNull(state.serverStep)
     }
 
     @Test

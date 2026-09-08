@@ -25,6 +25,7 @@ import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
 import uz.mahalla.navigation.OnboardingGraph
 import uz.mahalla.navigation.PinRoute
+import uz.mahalla.navigation.UpdateRoute
 import uz.mahalla.navigation.WelcomeRoute
 import uz.mahalla.ui.theme.MahallaTheme
 
@@ -65,13 +66,18 @@ class MainActivity : FragmentActivity() {
             MahallaTheme(darkTheme = ready.settings.themeMode.isDark(isSystemInDarkTheme())) {
                 MahallaApp(
                     // Адрес бэкенда не задан (issue #26) — до него приложение
-                    // всё равно никуда не сходит, поэтому он первый.
-                    startDestination = if (ready.needsBackendUrl) {
-                        BackendUrlRoute
-                    } else {
-                        appStart
+                    // всё равно никуда не сходит, поэтому он первый: без него
+                    // и версию спросить не у кого.
+                    startDestination = when {
+                        ready.needsBackendUrl -> BackendUrlRoute
+                        // Бэкенд просит обновиться (issue #80): обязательное
+                        // обновление дальше не пускает, мягкое предложение
+                        // уходит по «Позже» на тот же appStart.
+                        ready.showUpdate -> UpdateRoute
+                        else -> appStart
                     },
                     afterBackendUrl = appStart,
+                    afterUpdate = appStart,
                     backendUrlOverrideEnabled = ready.backendUrlOverrideEnabled,
                     onOnboardingFinished = viewModel::onOnboardingFinished,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
