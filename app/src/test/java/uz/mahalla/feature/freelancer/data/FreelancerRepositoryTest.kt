@@ -206,9 +206,11 @@ class FreelancerRepositoryTest {
     fun `services drop the inactive ones`() = runTest {
         server.enqueue(
             envelope(
-                """[{"id":"s-1","title":"Kran","priceAmount":150000,"durationMinutes":60,
-                   "isActive":true},{"id":"s-2","title":"Eski","active":false},
-                   {"title":"Idsiz"},{"id":"s-3","title":"Bayroqsiz"}]""",
+                // ServiceResponse — та же схема, что у barber-services, где
+                // имена сверены пробой: name/price, не title/priceAmount.
+                """[{"id":"s-1","name":"Kran","price":150000,"durationMinutes":60,
+                   "isActive":true},{"id":"s-2","name":"Eski","active":false},
+                   {"name":"Idsiz"},{"id":"s-3","name":"Bayroqsiz"}]""",
             ),
         )
 
