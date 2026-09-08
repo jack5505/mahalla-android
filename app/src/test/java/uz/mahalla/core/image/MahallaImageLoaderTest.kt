@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.Authenticator
 import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -84,6 +85,33 @@ class MahallaImageLoaderTest {
         BackendImageUrlInterceptor(store()).intercept(chain)
 
         assertSame("лишняя пересборка запроса рвала бы кэш по ключу", chain.request, chain.proceeded)
+    }
+
+    /**
+     * Белый список схем [ImageUrl] держится именно здесь: `file://` и
+     * `content://` Coil грузит штатными фетчерами, поэтому «пропустить как
+     * есть» означало бы показать кусок локального хранилища по ссылке от
+     * подменённого бэкенда.
+     */
+    @Test
+    fun `local schemes never reach the fetchers`() = runTest {
+        val rejected = listOf(
+            "file:///data/data/uz.mahalla/databases/mahalla.db",
+            "content://com.android.contacts/contacts/1",
+            "android.resource://uz.mahalla/drawable/ic_launcher",
+        )
+
+        rejected.forEach { url ->
+            val chain = RecordingChain(request(url))
+
+            val result = BackendImageUrlInterceptor(store()).intercept(chain)
+
+            assertNull("$url не должен уйти в загрузку", chain.proceeded)
+            assertTrue("$url обязан кончиться ошибкой", result is ErrorResult)
+            assertTrue(
+                (result as ErrorResult).throwable is UnsupportedImageUrl,
+            )
+        }
     }
 
     @Test

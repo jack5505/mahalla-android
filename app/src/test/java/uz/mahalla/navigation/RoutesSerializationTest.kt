@@ -294,15 +294,22 @@ class RoutesSerializationTest {
     @Test
     fun `booking route carries the place and its name`() {
         // Имени заведения нет ни в ответе `barber-services`, ни в
-        // `AppointmentResponse` — оно едет маршрутом (issue #97).
+        // `AppointmentResponse` — оно едет маршрутом (issue #97). Тем же
+        // маршрутом едет и перенос: услуга и id переносимой записи (эпик #11).
         val descriptor = serializer<BookingRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "serviceId", "rescheduleId"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 
         val route = BookingRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<BookingRoute>(json.encodeToString(route)))
+
+        val reschedule = BookingRoute(placeId = "p-1", serviceId = "s-1", rescheduleId = "a-1")
+        assertEquals(
+            reschedule,
+            json.decodeFromString<BookingRoute>(json.encodeToString(reschedule)),
+        )
     }
 
     @Test

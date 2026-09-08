@@ -94,8 +94,14 @@ fun BookingContent(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(
-            title = state.placeName.takeIf { it.isNotBlank() }
-                ?: stringResource(R.string.booking_title),
+            // При переносе шапка называет действие, а не заведение: имени места
+            // в «моих записях» нет (`AppointmentResponse` его не содержит), и
+            // человеку важнее видеть, что он не записывается заново.
+            title = when {
+                state.isReschedule -> stringResource(R.string.booking_reschedule_title)
+                state.placeName.isNotBlank() -> state.placeName
+                else -> stringResource(R.string.booking_title)
+            },
             onBack = onBack,
         )
         Column(
@@ -111,12 +117,20 @@ fun BookingContent(
             // читается как «ничего не произошло» (issue #49).
             val booked = state.booked
             if (booked != null) {
-                BookedBlock(appointment = booked, onEvent = onEvent)
+                BookedBlock(appointment = booked, state = state, onEvent = onEvent)
                 return@Column
             }
 
-            SectionHeader(title = stringResource(R.string.booking_service_title))
-            ServicesBlock(state = state, onEvent = onEvent)
+            // При переносе услугу не выбирают — она у переносимой записи своя.
+            // Показывается она всё равно: подтверждать перенос вслепую,
+            // не видя, что переносишь, человек не должен.
+            if (state.isReschedule) {
+                SectionHeader(title = stringResource(R.string.booking_reschedule_service_title))
+                RescheduledServiceBlock(state = state)
+            } else {
+                SectionHeader(title = stringResource(R.string.booking_service_title))
+                ServicesBlock(state = state, onEvent = onEvent)
+            }
 
             if (state.selectedServiceId != null) {
                 SectionHeader(title = stringResource(R.string.booking_date_title))
@@ -172,6 +186,48 @@ private fun ServicesBlock(
                 )
             }
         }
+    }
+}
+
+/**
+ * Услуга при переносе — не выбор, а напоминание: меняется только время.
+ *
+ * Отказ каталога услуг здесь не показывается и повтора не предлагает: перенос
+ * от него не зависит — id услуги приехал маршрутом, и слоты по нему сервер
+ * отдаёт всё равно. Плашка «повторить» посреди чужого шага только сбивала бы.
+ */
+@Composable
+private fun RescheduledServiceBlock(
+    state: BookingState,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
+        val service = state.selectedService
+        when {
+            service != null -> MahallaCard {
+                Text(
+                    text = service.title.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.booking_service_unnamed),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                service.note()?.let { note ->
+                    Text(
+                        text = note,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+            }
+
+            state.services is ScreenState.Loading -> CardSkeleton()
+        }
+
+        Text(
+            text = stringResource(R.string.booking_reschedule_hint),
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalMahallaColors.current.fgMuted,
+        )
     }
 }
 
@@ -296,14 +352,19 @@ private fun SummaryBlock(
         val service = state.selectedService
         val date = state.selectedDate
         val time = state.selectedTime
-        if (service != null && date != null && time != null) {
+        // Итог рисуется по дню и слоту, а не по найденной услуге: при переносе
+        // её может не оказаться в каталоге, а выбор от этого не перестаёт быть
+        // собранным (см. `BookingState.canBook`).
+        if (date != null && time != null) {
             MahallaCard {
-                Text(
-                    text = service.title.takeIf { it.isNotBlank() }
-                        ?: stringResource(R.string.booking_service_unnamed),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                service?.let {
+                    Text(
+                        text = it.title.takeIf { title -> title.isNotBlank() }
+                            ?: stringResource(R.string.booking_service_unnamed),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
                 Text(
                     text = stringResource(
                         R.string.booking_summary_when,
@@ -313,7 +374,7 @@ private fun SummaryBlock(
                     style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                service.note()?.let { note ->
+                service?.note()?.let { note ->
                     Text(
                         text = note,
                         style = MaterialTheme.typography.bodyMedium,
@@ -330,7 +391,13 @@ private fun SummaryBlock(
         }
 
         MahallaButton(
-            text = stringResource(R.string.booking_submit),
+            text = stringResource(
+                if (state.isReschedule) {
+                    R.string.booking_reschedule_submit
+                } else {
+                    R.string.booking_submit
+                },
+            ),
             onClick = { onEvent(BookingEvent.BookClicked) },
             state = ButtonState(enabled = state.canBook, loading = state.isBooking),
         )
@@ -341,13 +408,20 @@ private fun SummaryBlock(
 @Composable
 private fun BookedBlock(
     appointment: Appointment,
+    state: BookingState,
     onEvent: (BookingEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
         MahallaCard {
             Text(
-                text = stringResource(R.string.booking_done_title),
+                text = stringResource(
+                    if (state.isReschedule) {
+                        R.string.booking_reschedule_done_title
+                    } else {
+                        R.string.booking_done_title
+                    },
+                ),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -372,9 +446,31 @@ private fun BookedBlock(
                 )
             }
             Text(
-                text = stringResource(R.string.booking_done_description),
+                text = stringResource(
+                    when {
+                        !state.isReschedule -> R.string.booking_done_description
+                        // «Прежняя запись отменена» рядом с красным «отменить
+                        // не удалось» — это два противоречащих утверждения в
+                        // одной карточке; про старую запись тогда говорит
+                        // только предупреждение ниже.
+                        state.previousCancelled ->
+                            R.string.booking_reschedule_done_description
+
+                        else -> R.string.booking_reschedule_done_description_kept
+                    },
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+
+        // Новое время получено, а старую запись снять не удалось: у человека
+        // осталось две, и молчать об этом нельзя — заведение ждёт его дважды.
+        if (state.isReschedule && !state.previousCancelled) {
+            Text(
+                text = stringResource(R.string.booking_reschedule_old_kept),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
             )
         }
 
@@ -443,6 +539,51 @@ private fun BookingScreenPreview() {
                     listOf(LocalTime.of(10, 0), LocalTime.of(10, 40), LocalTime.of(11, 20)),
                 ),
                 selectedTime = LocalTime.of(10, 40),
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun BookingReschedulePreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        BookingContent(
+            state = BookingState(
+                isReschedule = true,
+                services = ScreenState.Content(
+                    listOf(BarberService(id = "s-1", title = "Soch olish", priceSum = 60_000)),
+                ),
+                selectedServiceId = "s-1",
+                dates = listOf(LocalDate.of(2026, 9, 4), LocalDate.of(2026, 9, 5)),
+                selectedDate = LocalDate.of(2026, 9, 5),
+                slots = ScreenState.Content(listOf(LocalTime.of(10, 0), LocalTime.of(11, 20))),
+                selectedTime = LocalTime.of(11, 20),
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+/** Самый неприятный исход переноса: новая запись есть, старая не снялась. */
+@ThemeLanguagePreviews
+@Composable
+private fun BookingRescheduleKeptOldPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        BookingContent(
+            state = BookingState(
+                isReschedule = true,
+                previousCancelled = false,
+                booked = Appointment(
+                    id = "a-2",
+                    serviceName = "Soch olish",
+                    date = LocalDate.of(2026, 9, 5),
+                    startTime = LocalTime.of(11, 20),
+                    status = AppointmentStatus.Pending,
+                ),
             ),
             onEvent = {},
             onBack = {},

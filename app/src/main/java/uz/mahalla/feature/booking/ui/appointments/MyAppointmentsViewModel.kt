@@ -21,11 +21,26 @@ import uz.mahalla.navigation.MyAppointmentsArgs
 import java.time.Clock
 import javax.inject.Inject
 
-/** У экрана нет переходов наружу: «назад» ведёт туда, откуда его открыли. */
-sealed interface MyAppointmentsEffect : UiEffect
+sealed interface MyAppointmentsEffect : UiEffect {
+
+    /**
+     * Перенос: экран уходит выбирать новое время на экран записи — там уже
+     * есть и календарь, и слоты, и правило «прошедший слот не предлагать».
+     *
+     * Ids едут наружу, а не только `appointmentId`: заведение и услугу
+     * запрашивает `POST appointments`, а взять их больше негде — своего экрана
+     * у одной записи нет, и `GET appointments/{id}` приложение не использует.
+     */
+    data class OpenReschedule(
+        val appointmentId: String,
+        val placeId: String,
+        val serviceId: String,
+    ) : MyAppointmentsEffect
+}
 
 /**
- * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением.
+ * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением,
+ * перенос активной записи на другое время (эпик #11).
  *
  * Экран один на обе вертикали записи — к мастеру и к врачу (issue #99):
  * модель записи и ручка отмены у них общие, различаются только список
@@ -96,7 +111,27 @@ class MyAppointmentsViewModel @Inject constructor(
 
             MyAppointmentsEvent.CancelDismissed -> updateState { copy(confirmCancel = null) }
             MyAppointmentsEvent.CancelConfirmed -> cancel()
+
+            is MyAppointmentsEvent.RescheduleRequested -> reschedule(event.appointmentId)
         }
+    }
+
+    /**
+     * Переход к выбору нового времени. Проверки повторяются здесь, а не только
+     * в вёрстке: событие может прийти по устаревшему нажатию — список
+     * перечитывается на каждом возврате на экран, и заведение могло успеть
+     * закрыть запись.
+     */
+    private fun reschedule(appointmentId: String) {
+        if (!currentState.canReschedule || currentState.pendingCancelId != null) return
+        val appointment = appointmentOrNull(appointmentId)?.takeIf { it.canReschedule } ?: return
+        emitEffect(
+            MyAppointmentsEffect.OpenReschedule(
+                appointmentId = appointment.id,
+                placeId = appointment.placeId.orEmpty(),
+                serviceId = appointment.serviceId.orEmpty(),
+            ),
+        )
     }
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {

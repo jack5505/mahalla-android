@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -263,7 +264,11 @@ private fun DetailsList(
  */
 @Composable
 private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
-    if (photos.isEmpty()) return
+    // Ключ элемента LazyRow — сама ссылка, а дубликат ключа роняет список.
+    // Бэкенд повторов и пустых строк не обещает, поэтому чистим здесь: то же
+    // решение, что у SearchHistory.decode (PR #23).
+    val shown = remember(photos) { photos.filter(String::isNotBlank).distinct() }
+    if (shown.isEmpty()) return
     val description = stringResource(R.string.image_gallery_of, placeName)
     LazyRow(
         modifier = modifier
@@ -271,7 +276,7 @@ private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier 
             .semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        items(items = photos, key = { it }) { photo ->
+        items(items = shown, key = { it }) { photo ->
             MahallaAsyncImage(
                 url = photo,
                 contentDescription = null,

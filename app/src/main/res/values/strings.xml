@@ -587,6 +587,14 @@
     <string name="booking_submit">Yozilish</string>
     <string name="booking_done_title">Siz yozildingiz</string>
     <string name="booking_done_description">Muassasa yozuvni tasdiqlaydi. Holatni «Mening yozuvlarim» bo\'limida ko\'rasiz.</string>
+    <string name="booking_reschedule_title">Yozuvni ko\'chirish</string>
+    <string name="booking_reschedule_service_title">Xizmat</string>
+    <string name="booking_reschedule_hint">Xizmat o\'zgarmaydi — faqat yangi kun va vaqtni tanlang.</string>
+    <string name="booking_reschedule_submit">Yangi vaqtga ko\'chirish</string>
+    <string name="booking_reschedule_done_title">Yozuv ko\'chirildi</string>
+    <string name="booking_reschedule_done_description">Muassasa yangi vaqtni tasdiqlaydi. Eski yozuv bekor qilindi.</string>
+    <string name="booking_reschedule_done_description_kept">Muassasa yangi vaqtni tasdiqlaydi.</string>
+    <string name="booking_reschedule_old_kept">Yangi vaqt band qilindi, lekin eski yozuvni bekor qilishning imkoni bo\'lmadi. Uni «Mening yozuvlarim» bo\'limida o\'zingiz bekor qiling.</string>
     <string name="weekday_short_mon">dush</string>
     <string name="weekday_short_tue">sesh</string>
     <string name="weekday_short_wed">chor</string>
@@ -607,6 +615,7 @@
     <string name="my_appointments_cancel_keep">Qoldirish</string>
     <string name="my_appointments_cancel_title">Yozuvni bekor qilasizmi?</string>
     <string name="my_appointments_cancel_message">Vaqt boshqa mijozga o\'tadi, qayta yozilish kerak bo\'ladi.</string>
+    <string name="my_appointments_reschedule">Vaqtni ko\'chirish</string>
     <string name="appointment_status_pending">Tasdiqlash kutilmoqda</string>
     <string name="appointment_status_confirmed">Tasdiqlandi</string>
     <string name="appointment_status_cancelled">Bekor qilindi</string>

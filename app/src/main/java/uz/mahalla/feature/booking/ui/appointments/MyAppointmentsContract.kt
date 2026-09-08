@@ -39,7 +39,19 @@ data class MyAppointmentsState(
     val pendingCancelId: String? = null,
     val cancelFailure: ApiFailure? = null,
     val loadMoreFailure: ApiFailure? = null,
-) : UiState
+) : UiState {
+
+    /**
+     * Есть ли на этом экране перенос вообще.
+     *
+     * Только у записи к мастеру: перенос собирается из `POST appointments` и
+     * отмены (своей ручки у бэкенда нет), а для записи к врачу вторая половина
+     * другая — `POST hospitals/appointments` требует `doctorId` и жалобу, и
+     * подставить туда `serviceId` значило бы записать человека не к тому.
+     * Врачебный перенос — это своя задача с врачами и их расписанием.
+     */
+    val canReschedule: Boolean get() = vertical == AppointmentVertical.Barber
+}
 
 sealed interface MyAppointmentsEvent : UiEvent {
     /**
@@ -57,4 +69,11 @@ sealed interface MyAppointmentsEvent : UiEvent {
     data class CancelRequested(val appointmentId: String) : MyAppointmentsEvent
     data object CancelDismissed : MyAppointmentsEvent
     data object CancelConfirmed : MyAppointmentsEvent
+
+    /**
+     * «Перенести». Подтверждения здесь нет намеренно: перенос ничего не рушит
+     * до последнего шага — человек уходит выбирать новое время и в любой момент
+     * возвращается назад, оставив запись как была.
+     */
+    data class RescheduleRequested(val appointmentId: String) : MyAppointmentsEvent
 }
