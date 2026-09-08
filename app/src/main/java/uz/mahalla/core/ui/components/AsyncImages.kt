@@ -82,6 +82,21 @@ fun MahallaAsyncImage(
             },
         contentAlignment = Alignment.Center,
     ) {
+        // Painter должен быть в отрисовке всегда, а не только по `Success`
+        // (issue #137). Coil 2.x, если размер не задан явно, берёт его из
+        // DrawScope: `size { drawSize.mapNotNull { it.toSizeOrNull() }.first() }`,
+        // а `drawSize` заполняется в `AsyncImagePainter.onDraw()`. Рисовать
+        // картинку только в успешном состоянии — замкнутый круг: запрос ждёт
+        // размера, размер ждёт отрисовки, отрисовка ждёт запроса. Состояние
+        // навсегда остаётся Loading, и вместо фото у пользователя скелетон.
+        Image(
+            painter = painter,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = contentScale,
+        )
+        // Поверх картинки — то, что нужно показать вместо неё. В Success
+        // ничего: слой снизу и есть фото.
         when (painter.state) {
             is AsyncImagePainter.State.Loading -> SkeletonBox(
                 modifier = Modifier.fillMaxSize(),
@@ -89,12 +104,7 @@ fun MahallaAsyncImage(
                 shape = shape,
             )
 
-            is AsyncImagePainter.State.Success -> Image(
-                painter = painter,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale,
-            )
+            is AsyncImagePainter.State.Success -> Unit
 
             // Empty (ссылки нет) и Error (не загрузилось) для пользователя —
             // одно и то же: смотреть не на что.
