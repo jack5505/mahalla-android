@@ -7,6 +7,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
+import uz.mahalla.feature.subscription.data.PaymentsApi
 import uz.mahalla.feature.subscription.data.SubscriptionRepository
 import uz.mahalla.feature.subscription.data.SubscriptionsApi
 import javax.inject.Singleton
@@ -23,6 +24,16 @@ object SubscriptionDataModule {
     @Singleton
     fun provideSubscriptionsApi(retrofit: Retrofit): SubscriptionsApi =
         retrofit.create(SubscriptionsApi::class.java)
+
+    /**
+     * История платежей — тоже под Bearer, поэтому клиент тот же. Ручка живёт в
+     * контроллере платежей, но нужна только экрану подписки (задача 9.3), и
+     * отдельного модуля ради неё нет.
+     */
+    @Provides
+    @Singleton
+    fun providePaymentsApi(retrofit: Retrofit): PaymentsApi =
+        retrofit.create(PaymentsApi::class.java)
 }
 
 @Module

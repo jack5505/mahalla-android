@@ -2,9 +2,12 @@ package uz.mahalla.feature.subscription.data
 
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.feature.subscription.domain.BillingPeriod
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionCharge
 import uz.mahalla.feature.subscription.domain.SubscriptionAmounts
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
@@ -91,6 +94,53 @@ internal fun SubscriptionDto.toDomain(): Subscription {
         isActive = isActive ?: active ?: (SubscriptionStatus.fromServer(status) == SubscriptionStatus.Active),
         inGracePeriod = inGracePeriod ?: false,
     )
+}
+
+/**
+ * Списание за подписку. Платёж **не про подписку** отбрасывается здесь же: у
+ * ручки нет фильтра по назначению, и в истории подписки пополнению кошелька
+ * взяться неоткуда. Платёж без `id` отбрасывается по той же причине, что и
+ * операция кошелька: в `LazyColumn` он дубликат ключа, а отличить его от
+ * соседнего всё равно нечем.
+ *
+ * **Единица суммы выведена быть не может** — в отличие от кошелька (issue #62)
+ * и цен тарифа, у `amount` нет дробного близнеца `amountSom`. Читается как
+ * тийины: так названы денежные поля в остальной схеме бэкенда (`mrrTiyin`,
+ * `walletRevenueTiyin`), и тот же делитель приложение уже использует, когда
+ * отправляет сумму пополнения. Если бэкенд хранит платежи в сумах, суммы в
+ * истории окажутся в сто раз меньше — это первое, что надо проверить живым
+ * ответом (риск записан в отчёт задачи).
+ */
+internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
+    val chargeId = id?.takeIf { it.isNotBlank() } ?: return null
+    if (!SubscriptionCharge.isSubscriptionPurpose(purpose)) return null
+    return SubscriptionCharge(
+        id = chargeId,
+        // Отрицательное списание — ошибка сервера: «−49 000» в истории платежей
+        // не значит ничего.
+        amountSum = WalletAmounts.toSom(amount, WalletAmounts.TIYIN_IN_SOM).coerceAtLeast(0),
+        status = ChargeStatus.fromServer(status),
+        provider = ChargeProvider.fromServer(provider),
+        purpose = purpose?.takeIf { it.isNotBlank() },
+        errorMessage = errorMessage?.takeIf { it.isNotBlank() },
+        createdAt = parseServerInstant(createdAt),
+    )
+}
+
+/**
+ * Есть ли у сервера ещё страницы платежей. Считается как у кошелька: по
+ * `last`, а без него — по `page`/`totalPages`. Полного молчания о страницах
+ * достаточно, чтобы остановиться: лучше не показать хвост истории, чем
+ * зациклить догрузку одной и той же страницы.
+ *
+ * @param requestedPage номер запрошенной страницы: сервер, не вернувший
+ * `page`, отдаёт дефолтный `0`, и «следующей» навсегда осталась бы первая
+ * (issue #53).
+ */
+internal fun PaymentTransactionPageDto.hasMore(requestedPage: Int): Boolean = when {
+    last != null -> !last
+    totalPages != null -> requestedPage + 1 < totalPages
+    else -> false
 }
 
 private const val MAX_PERCENT = 100

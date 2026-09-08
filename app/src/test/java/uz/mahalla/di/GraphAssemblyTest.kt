@@ -340,9 +340,13 @@ class GraphAssemblyTest {
         )
 
         val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+        // История списаний (задача 9.3) живёт в контроллере платежей, но под
+        // тем же Bearer — значит и на том же клиенте.
+        val paymentsApi = SubscriptionDataModule.providePaymentsApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultSubscriptionRepository(api))
+        assertNotNull(paymentsApi)
+        assertNotNull(DefaultSubscriptionRepository(api, paymentsApi))
     }
 
     /**

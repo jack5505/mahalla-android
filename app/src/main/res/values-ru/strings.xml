@@ -795,6 +795,19 @@
     <string name="subscription_feature_custom_branding">Свой брендинг</string>
     <string name="subscription_feature_api_access">Доступ по API</string>
     <string name="subscription_analytics">Аналитика: %1$s</string>
+    <string name="subscription_status_expiring">Истекает</string>
+    <string name="subscription_next_charge">Следующее списание</string>
+    <string name="subscription_renew">Продлить подписку</string>
+    <string name="subscription_renew_until">После продления будет работать примерно до %1$s.</string>
+    <string name="subscription_notice_renewed">Подписка продлена.</string>
+    <string name="subscription_charges_title">История списаний</string>
+    <string name="subscription_charges_empty">За подписку пока не списывали.</string>
+    <string name="subscription_charges_more">Показать ещё</string>
+    <string name="subscription_charge_no_date">Дата не указана</string>
+    <string name="subscription_charge_pending">Выполняется</string>
+    <string name="subscription_charge_failed">Не прошло</string>
+    <string name="subscription_charge_cancelled">Отменено</string>
+    <string name="subscription_charge_refunded">Возвращено</string>
 
     <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
     <string name="cinema_title">Афиша</string>

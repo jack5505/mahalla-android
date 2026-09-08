@@ -73,8 +73,8 @@
 | `pharmacy` | `GET pharmacy/places/{id}/products` | ✗ | вертикаль «аптеки» (`requiresPrescription`, `stockQuantity`) |
 | `fashion` | `GET fashion/categories`, `stores/{id}/catalog`, `products/{id}`, корзина (`cart`, `cart/add`, `PUT`, `DELETE`), `POST fashion/orders` | ✗ | целая вторая вертикаль-магазин с серверной корзиной |
 | `freelancer` | `GET freelancers`, `GET/POST freelancers/me`, `PUT me/toggle-availability` | ✗ | каталог мастеров + «стать исполнителем» |
-| `subscription` | `GET subscriptions/plans`, `current`, `POST subscribe`, `trial`, `cancel`, `PUT auto-renew` | ✗ | подписки (в ТЗ есть); `PlanResponse` уже с `nameUz`, `trialDays`, `isPopular` |
-| `payment` | `GET payments/subscription`, `payments/transactions`, callbacks Click/Payme | ✗ | реальная оплата |
+| `subscription` | `GET subscriptions/plans`, `current`, `POST subscribe`, `trial`, `cancel`, `PUT auto-renew` | **есть** (issue #103 + эпик 9: продление, состояния, история списаний) | — |
+| `payment` | `GET payments/subscription`, `payments/transactions`, callbacks Click/Payme | частично (`payments/transactions` — история списаний подписки, эпик 9.3) | реальная оплата |
 | `pin-code` | `GET pin/status`, `POST pin/set`, `verify`, `reset`, `PUT change`, `PUT biometric`, `DELETE pin` | ✗ (используется только `auth/setup-pin`, `auth/pin-login`) | смена PIN из профиля, app-lock |
 | `bank-auth` | `GET auth/sessions`, `POST auth/sessions/revoke`, `sessions/{id}/trust`, `auth/session/check`, `auth/pin-resume` | частично | «мои устройства», отзыв сессии, замок при возврате |
 | `app-version` | `POST app/version/check`, `POST app/version/skip` | ✗ | экран обязательного обновления (`updateRequired`, `remainingSkips`, `storeUrl`) |
