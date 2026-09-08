@@ -83,6 +83,9 @@ import java.time.Instant
  * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
  * только продавцу: до неё судьбу отправленной заявки в приложении было не
  * видно вовсе.
+ * @param onOpenGamingBookings открыть «мои брони» игровых зон (issue #98).
+ * Строка видна всем: бронь берут с карточки клуба, и другого пути к своим
+ * броням, кроме как найти тот же клуб заново, у человека нет.
  * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
  * всем: записаться может кто угодно, а следить за записью больше негде —
  * своего таба у брони нет.
@@ -108,6 +111,7 @@ fun ProfileScreen(
     onLoggedOut: () -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -149,6 +153,7 @@ fun ProfileScreen(
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
+        onOpenGamingBookings = onOpenGamingBookings,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
@@ -169,6 +174,7 @@ fun ProfileContentScreen(
     onEvent: (ProfileEvent) -> Unit,
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -218,6 +224,15 @@ fun ProfileContentScreen(
                     onClick = onOpenMyPlaces,
                 )
             }
+
+            // «Мои брони» игровых зон (issue #98). Без этой строки бронь можно
+            // было бы найти, только вернувшись на карточку того же клуба, —
+            // а после закрытия приложения его ещё надо вспомнить.
+            MahallaListItem(
+                title = stringResource(R.string.gaming_my_bookings),
+                subtitle = stringResource(R.string.gaming_bookings_profile_subtitle),
+                onClick = onOpenGamingBookings,
+            )
 
             // «Мои записи» (issue #97) — всем: записаться на время может
             // любой, а следить за записью больше негде.
@@ -704,6 +719,7 @@ private fun ProfilePreview() {
             onEvent = {},
             onOpenRole = {},
             onOpenMyPlaces = {},
+            onOpenGamingBookings = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
             onOpenMyDoctorAppointments = {},

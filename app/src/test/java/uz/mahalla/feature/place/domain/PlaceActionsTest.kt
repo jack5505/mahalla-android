@@ -104,7 +104,7 @@ class PlaceActionsTest {
     }
 
     @Test
-    fun `queue is offered to barbers and nothing is offered to the rest`() {
+    fun `each category gets the vertical it has a screen for, the rest get nothing`() {
         // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
         // следует из категории, и до issue #96 ни одна из них не включалась.
         // Бронь добавилась в issue #97: у мастера это второй способ попасть к
@@ -112,6 +112,14 @@ class PlaceActionsTest {
         assertEquals(
             PlaceCapabilities(queue = true, booking = true),
             PlaceCapabilities.of(PlaceCategory.Master),
+        )
+
+        // Игровые клубы добавились в issue #98: зона клуба — свой
+        // контроллер (`gaming-controller`) и свой экран, а не запись на
+        // время к мастеру.
+        assertEquals(
+            PlaceCapabilities(gaming = true),
+            PlaceCapabilities.of(PlaceCategory.Playground),
         )
 
         // Больницы добавились в issue #99: у них своя запись — к врачу
@@ -145,15 +153,29 @@ class PlaceActionsTest {
 
         listOf(
             PlaceCategory.Food,
-            PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
             // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
             // бэкенд отдаёт у мастеров (`barber-services`) и у больниц
-            // (`hospitals`), товары — только у аптек, а «Заказать» — вне
-            // объёма этих задач.
+            // (`hospitals`), зоны — у игровых клубов, товары — только у
+            // аптек, а «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
+    }
+
+    @Test
+    fun `a gaming club card shows the zone as the primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Playground),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Именно `Gaming`, а не `Booking`: последнее ведёт к услугам мастера,
+        // которых у клуба нет (issue #97 против issue #98).
+        assertEquals(listOf(PlaceAction.Gaming, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Gaming, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Booking !in actions)
     }
 
     @Test

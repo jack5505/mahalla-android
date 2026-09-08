@@ -206,6 +206,7 @@ class PlaceDetailsViewModel @Inject constructor(
 
             PlaceAction.Queue,
             PlaceAction.Booking,
+            PlaceAction.Gaming,
             PlaceAction.Doctor,
             PlaceAction.Cinema,
             PlaceAction.Order,

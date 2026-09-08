@@ -7,14 +7,18 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.dataOrNull
+import uz.mahalla.core.result.map
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.booking.data.BookingRepository
+import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.BookingSlots
 import uz.mahalla.navigation.BookingRoute
 import java.time.Clock
 import java.time.LocalDate
+import java.time.LocalTime
 import javax.inject.Inject
 
 /**
@@ -24,6 +28,10 @@ import javax.inject.Inject
  * каждую пару «услуга + день» уходит свой запрос. Здесь же он и отменяется —
  * человек листает дни быстрее, чем отвечает сеть, и ответ на позавчерашний
  * день, приехавший последним, показал бы чужие слоты.
+ *
+ * Тот же экран **переносит** запись, если маршрут назвал `rescheduleId`
+ * (эпик #11): услуга тогда приезжает готовой, выбирают только день и слот, а
+ * подтверждение уходит в `reschedule` вместо `book`.
  */
 @HiltViewModel
 class BookingViewModel @Inject constructor(
@@ -35,8 +43,12 @@ class BookingViewModel @Inject constructor(
     private val route: BookingRoute = savedStateHandle.toRoute()
     private var slotsJob: Job? = null
 
+    /** Переносимая запись; пусто — обычная запись с нуля. */
+    private val rescheduleId: String = route.rescheduleId.trim()
+
     init {
         val dates = BookingSlots.dates(clock.instant())
+        val preselected = route.serviceId.takeIf { it.isNotBlank() }
         updateState {
             copy(
                 placeName = route.placeName,
@@ -44,9 +56,14 @@ class BookingViewModel @Inject constructor(
                 // День выбран сразу: календарь без выбранного дня не отвечает
                 // на вопрос, чьи слоты показаны ниже.
                 selectedDate = dates.firstOrNull(),
+                selectedServiceId = preselected,
+                isReschedule = rescheduleId.isNotEmpty(),
             )
         }
         loadServices()
+        // Услуга уже известна — слоты можно спрашивать не дожидаясь каталога:
+        // запросу слотов нужен только её id, а не её цена и название.
+        if (preselected != null) loadSlots()
     }
 
     override fun onEvent(event: BookingEvent) {
@@ -70,9 +87,12 @@ class BookingViewModel @Inject constructor(
             val result = repository.services(route.placeId)
             updateState { copy(services = result.toListScreenState()) }
             // Единственная услуга выбирается сама: заставлять нажимать на
-            // список из одной строки незачем.
+            // список из одной строки незачем. Уже выбранную при этом не
+            // трогаем — при переносе она приехала маршрутом, и подменить её
+            // единственной услугой каталога значило бы перенести человека на
+            // другую услугу.
             val single = (result as? ApiResult.Success)?.data?.singleOrNull()
-            if (single != null) selectService(single.id)
+            if (single != null && currentState.selectedServiceId == null) selectService(single.id)
         }
     }
 
@@ -128,38 +148,71 @@ class BookingViewModel @Inject constructor(
      */
     private fun book() {
         val state = currentState
-        val service = state.selectedService ?: return
+        val serviceId = state.selectedServiceId ?: return
         val date = state.selectedDate ?: return
         val time = state.selectedTime ?: return
         if (!state.canBook) return
 
         updateState { copy(isBooking = true, bookFailure = null) }
         viewModelScope.launch {
-            val result = repository.book(
-                placeId = route.placeId,
-                serviceId = service.id,
-                date = date,
-                time = time,
-            )
-            when (result) {
-                is ApiResult.Failure -> updateState {
-                    copy(isBooking = false, bookFailure = result.failure)
-                }
+            if (rescheduleId.isEmpty()) {
+                val result = repository.book(
+                    placeId = route.placeId,
+                    serviceId = serviceId,
+                    date = date,
+                    time = time,
+                )
+                applyBooked(result, date = date, time = time, previousCancelled = true)
+            } else {
+                // Перенос — новая запись плюс отмена старой; порядок и его
+                // цену объясняет BookingRepository.reschedule.
+                val result = repository.reschedule(
+                    appointmentId = rescheduleId,
+                    placeId = route.placeId,
+                    serviceId = serviceId,
+                    date = date,
+                    time = time,
+                )
+                applyBooked(
+                    result = result.map { it.appointment },
+                    date = date,
+                    time = time,
+                    previousCancelled = result.dataOrNull()?.previousCancelled ?: true,
+                )
+            }
+        }
+    }
 
-                is ApiResult.Success -> updateState {
-                    copy(
-                        isBooking = false,
-                        booked = result.data.copy(
-                            // Название услуги сервер может и не вернуть, а
-                            // подтверждение без него не отвечает на вопрос,
-                            // на что записались.
-                            serviceName = result.data.serviceName
-                                ?: service.title.takeIf { it.isNotBlank() },
-                            date = result.data.date ?: date,
-                            startTime = result.data.startTime ?: time,
-                        ),
-                    )
-                }
+    /**
+     * Общий разбор исхода записи и переноса: с точки зрения экрана они
+     * различаются одной строкой подтверждения, а не поведением.
+     *
+     * Название услуги, день и время подставляются из выбора, если сервер их не
+     * назвал: подтверждение без них не отвечает на вопрос, на что и когда
+     * записались.
+     */
+    private fun applyBooked(
+        result: ApiResult<Appointment>,
+        date: LocalDate,
+        time: LocalTime,
+        previousCancelled: Boolean,
+    ) {
+        when (result) {
+            is ApiResult.Failure -> updateState {
+                copy(isBooking = false, bookFailure = result.failure)
+            }
+
+            is ApiResult.Success -> updateState {
+                copy(
+                    isBooking = false,
+                    previousCancelled = previousCancelled,
+                    booked = result.data.copy(
+                        serviceName = result.data.serviceName
+                            ?: selectedService?.title?.takeIf { it.isNotBlank() },
+                        date = result.data.date ?: date,
+                        startTime = result.data.startTime ?: time,
+                    ),
+                )
             }
         }
     }

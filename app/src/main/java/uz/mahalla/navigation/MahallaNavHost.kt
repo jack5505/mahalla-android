@@ -47,6 +47,8 @@ import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.gaming.ui.bookings.GamingBookingsScreen
+import uz.mahalla.feature.gaming.ui.zones.GamingZonesScreen
 import uz.mahalla.feature.queue.ui.QueueScreen
 import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
@@ -255,6 +257,8 @@ fun MahallaNavHost(
                     onOpenRole = { navController.navigate(RoleRoute()) },
                     // «Мои заведения» (issue #94): судьба заявки продавца.
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
+                    // «Мои брони» игровых зон (issue #98).
+                    onOpenGamingBookings = { navController.navigate(GamingBookingsRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
                     // «Мои билеты» (issue #106): своего таба у кино нет.
@@ -441,6 +445,12 @@ fun MahallaNavHost(
                 onQueueClick = { placeId, placeName ->
                     navController.navigate(QueueRoute(placeId, placeName))
                 },
+                // Игровые зоны (issue #98): у клубов это главное действие
+                // карточки. Отдельно от брони: там запись на время к мастеру,
+                // здесь зона клуба — другой контроллер и другой экран.
+                onGamingClick = { placeId, placeName ->
+                    navController.navigate(GamingRoute(placeId, placeName))
+                },
                 // Бронь (issue #97): запись на время — второе действие тех же
                 // мастеров, для тех, кому очередь «прямо сейчас» не подходит.
                 onBookingClick = { placeId, placeName ->
@@ -531,13 +541,23 @@ fun MahallaNavHost(
         // Вертикаль «Бронь» (эпик #11, issue #97): записываются с карточки
         // места, а следят за записью в «моих записях» — туда же ведёт и
         // подтверждение.
-        composable<BookingRoute> {
+        composable<BookingRoute> { entry ->
+            val isReschedule = entry.toRoute<BookingRoute>().rescheduleId.isNotBlank()
             BookingScreen(
                 // Экран записи из стека уходит: возвращаться в собранную форму
                 // после того, как запись создана, некуда.
                 onOpenMyAppointments = {
                     navController.navigate(MyAppointmentsRoute()) {
-                        popUpTo<BookingRoute> { inclusive = true }
+                        // Перенос начинается в «моих записях», и второй их
+                        // экран поверх первого дал бы «назад», ведущий на
+                        // устаревшую копию того же списка. Обычная запись
+                        // приходит с карточки места — там снимать нечего, и
+                        // popUpTo просто не находит цели.
+                        if (isReschedule) {
+                            popUpTo<MyAppointmentsRoute> { inclusive = true }
+                        } else {
+                            popUpTo<BookingRoute> { inclusive = true }
+                        }
                     }
                 },
                 onBack = { navController.navigateUp() },
@@ -545,7 +565,26 @@ fun MahallaNavHost(
         }
 
         composable<MyAppointmentsRoute> {
-            MyAppointmentsScreen(onBack = { navController.navigateUp() })
+            MyAppointmentsScreen(
+                // Новое время выбирают на экране записи: календарь и слоты уже
+                // там. Услуга едет маршрутом — менять её при переносе нельзя.
+                onReschedule = { appointmentId, placeId, serviceId ->
+                    navController.navigate(
+                        BookingRoute(
+                            placeId = placeId,
+                            serviceId = serviceId,
+                            rescheduleId = appointmentId,
+                        ),
+                    ) {
+                        // Двойное нажатие иначе кладёт в стек два экрана
+                        // переноса одной записи, и «назад» после успеха ведёт
+                        // на второй — перенос уже отменённой записи, то есть
+                        // прямой путь к лишней третьей.
+                        launchSingleTop = true
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
         }
 
         // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с
@@ -586,6 +625,20 @@ fun MahallaNavHost(
                 onOpenNotifications = { navController.navigate(NotificationsRoute) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Игровые зоны» (эпик #11, issue #98): зоны берут с
+        // карточки места, а свои брони живут отдельным экраном — их открывают
+        // и отсюда, и из профиля.
+        composable<GamingRoute> {
+            GamingZonesScreen(
+                onMyBookings = { navController.navigate(GamingBookingsRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<GamingBookingsRoute> {
+            GamingBookingsScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус заказа.

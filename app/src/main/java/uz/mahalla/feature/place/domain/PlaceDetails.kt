@@ -41,6 +41,13 @@ enum class PlaceAction {
     Booking,
 
     /**
+     * Игровая зона клуба (issue #98). Отдельно от [Booking]: там запись на
+     * время к мастеру (`barber-services` + `appointments`), здесь зона клуба
+     * с почасовой ценой (`gaming-controller`) — другой список и другой экран.
+     */
+    Gaming,
+
+    /**
      * Запись к врачу (issue #99). Отдельно от [Booking]: у больниц другой
      * список (врачи, а не услуги) и другой экран — общее действие пришлось бы
      * ветвить по категории уже в навигации.
@@ -84,6 +91,8 @@ enum class PlaceAction {
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
+    /** Игровая зона — вертикаль «Игровые зоны» (issue #98). */
+    val gaming: Boolean = false,
     /** Запись к врачу — вертикаль больниц (issue #99). */
     val doctors: Boolean = false,
     /** Билет в кино — вертикаль кинотеатров (issue #106). */
@@ -104,6 +113,11 @@ data class PlaceCapabilities(
          * `appointments`, issue #97). Услуг у заведения может и не быть — тогда
          * экран записи скажет это словами; спрятать кнопку заранее нельзя,
          * список услуг известен только серверу.
+         *
+         * У игровых клубов (`GAMING`) это зона (`gaming-controller`, issue
+         * #98): свой контроллер, своя почасовая цена и свой экран. Зон в
+         * клубе может и не оказаться — тогда экран скажет это словами;
+         * спрятать кнопку заранее нельзя, список зон известен только серверу.
          *
          * У больниц (`HOSPITAL`) это запись к врачу (`hospital-controller`,
          * issue #99): список врачей известен только серверу, поэтому кнопка
@@ -128,6 +142,7 @@ data class PlaceCapabilities(
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
+            PlaceCategory.Playground -> PlaceCapabilities(gaming = true)
             PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
             PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
             PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
