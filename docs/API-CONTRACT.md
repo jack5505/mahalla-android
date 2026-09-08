@@ -42,6 +42,35 @@
 
 ---
 
+## ActivityApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/activity/data/ActivityApi.kt` — пути
+существуют (проверено анонимным curl'ом по стенду: все пять отвечают `401`, а
+не `404`), **тела ответов не сверены**: под токеном в CI сходить нечем.
+
+Своих схем у него почти нет: четыре из пяти ответов разбираются DTO соседних
+вертикалей (`OrderPageDto` у одежды, `AppointmentPageDto` у записи,
+`CinemaTicketPageDto` у кино) — у бэкенда это одна модель на путь. Новое
+здесь только `GamingBooking`.
+
+| Метод | Путь | Схема ответа |
+|---|---|---|
+| GET | `orders` | `PageResponseOrderView` |
+| GET | `gaming/bookings/my` | `PageResponseGamingBooking` |
+| GET | `appointments/my` | `PageResponseAppointmentResponse` |
+| GET | `hospitals/appointments/my` | та же `AppointmentResponse` |
+| GET | `cinema/tickets/my` | `PageResponseCinemaTicket` |
+
+Все пять требуют Bearer и принимают `page` + `size`. `vertical` и `status` у
+`orders` не передаются намеренно: фильтр «активные / история» — набор
+статусов, а `status` принимает ровно один.
+
+**Названия заведения нет ни в одном из пяти ответов**, только `placeId`,
+поэтому в списке стоит «Заказ еды», а не имя точки. Нужен `placeName` в
+`OrderView`, `GamingBooking`, `AppointmentResponse` и `CinemaTicket` — это же
+закрыло бы имя заведения на экране статуса заказа (issue #9). Заведено на
+бэкенд: issue #150.
+
 ## AuthApi ✅
 
 `app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram).
