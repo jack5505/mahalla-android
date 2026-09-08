@@ -35,6 +35,7 @@ import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.onboarding.ui.OnboardingApiError
+import uz.mahalla.feature.wallet.ui.pay.PaymentConfirmSheet
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -143,6 +144,20 @@ fun CheckoutContent(
 
         SubmitBar(state = state, currency = currency, onEvent = onEvent)
     }
+
+    // Подтверждение оплаты кошельком (8.3): шторка поверх формы, чтобы итог и
+    // состав остались видны за ней.
+    state.payment?.let { payment ->
+        PaymentConfirmSheet(
+            state = payment,
+            onPinChanged = { onEvent(CheckoutEvent.PaymentPinChanged(it)) },
+            onBiometricConfirmed = { onEvent(CheckoutEvent.PaymentBiometricConfirmed) },
+            onBiometricRejected = { onEvent(CheckoutEvent.PaymentBiometricRejected) },
+            onRetry = { onEvent(CheckoutEvent.PaymentRetried) },
+            onTopUp = { onEvent(CheckoutEvent.TopUpClicked) },
+            onDismiss = { onEvent(CheckoutEvent.PaymentDismissed) },
+        )
+    }
 }
 
 @Composable
@@ -250,7 +265,7 @@ private fun SubmitBar(
             MahallaButton(
                 text = stringResource(R.string.checkout_submit),
                 onClick = { onEvent(CheckoutEvent.SubmitClicked) },
-                state = ButtonState(enabled = !state.isEmpty, loading = state.isSubmitting),
+                state = ButtonState(enabled = !state.isEmpty, loading = state.isBusy),
             )
         }
     }

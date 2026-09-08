@@ -166,6 +166,14 @@
         <item quantity="other">Слишком длинно: не больше %1$d символа.</item>
     </plurals>
 
+    <!-- Подтверждение оплаты (8.3, issue #12): сколько попыток PIN осталось. -->
+    <plurals name="payment_confirm_pin_wrong">
+        <item quantity="one">Неверный PIN. Осталась %1$d попытка.</item>
+        <item quantity="few">Неверный PIN. Осталось %1$d попытки.</item>
+        <item quantity="many">Неверный PIN. Осталось %1$d попыток.</item>
+        <item quantity="other">Неверный PIN. Осталось %1$d попытки.</item>
+    </plurals>
+
     <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
     <plurals name="pharmacy_stock_left">
         <item quantity="one">Осталась %1$d упаковка</item>

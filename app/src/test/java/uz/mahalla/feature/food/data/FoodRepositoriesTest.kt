@@ -24,6 +24,7 @@ import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.MenuItem
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.wallet.domain.IdempotencyKey
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.cartLine
 import java.time.Clock
@@ -150,10 +151,15 @@ class FoodRepositoriesTest {
                 address = "  Amir Temur 1  ",
                 payment = PaymentMethod.Wallet,
             ),
+            idempotencyKey = "idem-1",
         )
 
         val request = server.takeRequest()
         assertEquals("/food/orders", request.path)
+        // Ключ повторной отправки (8.3): серверную поддержку бэкенд не
+        // подтверждал, но уходить он обязан — иначе повтор после оборванного
+        // соединения останется только клиентской надеждой.
+        assertEquals("idem-1", request.getHeader(IdempotencyKey.HEADER))
         val body = request.body.readUtf8()
         assertTrue(body, body.contains("\"placeId\":\"place-1\""))
         assertTrue(body, body.contains("\"itemId\":\"osh\""))
@@ -178,6 +184,7 @@ class FoodRepositoriesTest {
         orderRepository().create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         val body = server.takeRequest().body.readUtf8()
@@ -193,6 +200,7 @@ class FoodRepositoriesTest {
         orderRepository().create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup, address = "Amir Temur 1"),
+            idempotencyKey = "idem-1",
         )
 
         val body = server.takeRequest().body.readUtf8()
@@ -210,6 +218,7 @@ class FoodRepositoriesTest {
         val result = orderRepository(cart).create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
@@ -224,6 +233,7 @@ class FoodRepositoriesTest {
         val result = orderRepository(cart).create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         assertTrue(result is ApiResult.Failure)
