@@ -14,7 +14,12 @@ class PlaceActionsTest {
     @Test
     fun `actions follow the layout order`() {
         val actions = PlaceActions.resolve(
-            capabilities = PlaceCapabilities(queue = true, booking = true, ordering = true),
+            capabilities = PlaceCapabilities(
+                queue = true,
+                booking = true,
+                ordering = true,
+                products = true,
+            ),
             contacts = PlaceContacts(phone = "+998901234567"),
             place = place("p", point = GeoPoint(41.31, 69.28)),
         )
@@ -24,6 +29,7 @@ class PlaceActionsTest {
                 PlaceAction.Queue,
                 PlaceAction.Booking,
                 PlaceAction.Order,
+                PlaceAction.Products,
                 PlaceAction.Call,
                 PlaceAction.Route,
             ),
@@ -98,43 +104,94 @@ class PlaceActionsTest {
     }
 
     @Test
-    fun `queue is offered to barbers, booking to gaming clubs, nothing to the rest`() {
+    fun `each category gets the vertical it has a screen for, the rest get nothing`() {
         // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
         // следует из категории, и до issue #96 ни одна из них не включалась.
+        // Бронь добавилась в issue #97: у мастера это второй способ попасть к
+        // нему — не «прямо сейчас», а на выбранное время.
         assertEquals(
-            PlaceCapabilities(queue = true),
+            PlaceCapabilities(queue = true, booking = true),
             PlaceCapabilities.of(PlaceCategory.Master),
         )
 
-        // Игровые зоны (issue #98): у них свой контроллер и свои экраны.
+        // Игровые клубы добавились в issue #98: зона клуба — свой
+        // контроллер (`gaming-controller`) и свой экран, а не запись на
+        // время к мастеру.
         assertEquals(
-            PlaceCapabilities(booking = true),
+            PlaceCapabilities(gaming = true),
             PlaceCapabilities.of(PlaceCategory.Playground),
+        )
+
+        // Больницы добавились в issue #99: у них своя запись — к врачу
+        // (`hospital-controller`), а не на услугу заведения.
+        assertEquals(
+            PlaceCapabilities(doctors = true),
+            PlaceCapabilities.of(PlaceCategory.Hospital),
+        )
+
+        // Кино добавилось в issue #106: афиша, сеансы и билет
+        // (`cinema-controller`).
+        assertEquals(
+            PlaceCapabilities(cinema = true),
+            PlaceCapabilities.of(PlaceCategory.Cinema),
+        )
+
+        // Одежда добавилась в issue #108: витрина магазина с корзиной на
+        // сервере — своя вертикаль, а не «Заказать» из «Еды».
+        assertEquals(
+            PlaceCapabilities(shopping = true),
+            PlaceCapabilities.of(PlaceCategory.Fashion),
+        )
+
+        // Витрина аптеки (issue #100) — действие, которое ничего не начинает:
+        // товары бэкенд отдаёт, а заказать их нечем, и `ordering` тут остаётся
+        // выключенным намеренно.
+        assertEquals(
+            PlaceCapabilities(products = true),
+            PlaceCapabilities.of(PlaceCategory.Pharmacy),
         )
 
         listOf(
             PlaceCategory.Food,
-            PlaceCategory.Pharmacy,
-            PlaceCategory.Hospital,
-            PlaceCategory.Cinema,
             PlaceCategory.Other,
         ).forEach {
-            // Кнопка, ведущая в никуда, хуже отсутствующей: брони у врачей и
-            // мастеров ведёт другой контроллер, экранов под него нет, а
-            // «Заказать» — вне объёма issue #96 и #98.
+            // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
+            // бэкенд отдаёт у мастеров (`barber-services`) и у больниц
+            // (`hospitals`), зоны — у игровых клубов, товары — только у
+            // аптек, а «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
     }
 
     @Test
-    fun `a gaming club card shows booking as the primary action`() {
+    fun `a gaming club card shows the zone as the primary action`() {
         val actions = PlaceActions.resolve(
             capabilities = PlaceCapabilities.of(PlaceCategory.Playground),
             contacts = PlaceContacts(phone = "+998901234567"),
             place = place("p"),
         )
 
-        assertEquals(PlaceAction.Booking, PlaceActions.primary(actions))
+        // Именно `Gaming`, а не `Booking`: последнее ведёт к услугам мастера,
+        // которых у клуба нет (issue #97 против issue #98).
+        assertEquals(listOf(PlaceAction.Gaming, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Gaming, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Booking !in actions)
+    }
+
+    @Test
+    fun `a pharmacy card offers the showcase and never a purchase`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Pharmacy),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // «Купить» здесь быть не должно: своей ручки заказа
+        // `pharmacy-controller` не отдаёт, и корзину аптеки бэкенду нечем
+        // принять (issue #100).
+        assertEquals(listOf(PlaceAction.Products, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Products, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Order !in actions)
     }
 
     @Test
@@ -145,6 +202,55 @@ class PlaceActionsTest {
             place = place("p"),
         )
 
+        // Очередь остаётся главной: «прийти сейчас» — то, за чем в
+        // парикмахерскую заходят чаще, а запись на время стоит рядом второй
+        // кнопкой (issue #97).
         assertEquals(PlaceAction.Queue, PlaceActions.primary(actions))
+        assertEquals(
+            listOf(PlaceAction.Queue, PlaceAction.Booking, PlaceAction.Call),
+            actions,
+        )
+    }
+
+    @Test
+    fun `a hospital card shows the doctor as its primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Hospital),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Запись к врачу — единственное, что больница умеет в приложении:
+        // очередь и бронь у неё выключены, вести им некуда (issue #99).
+        assertEquals(PlaceAction.Doctor, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Doctor, PlaceAction.Call), actions)
+    }
+
+    @Test
+    fun `a cinema card shows the ticket as its primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Cinema),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Билет — единственное, что кинотеатр умеет в приложении: очередь,
+        // бронь и заказ у него выключены, вести им некуда (issue #106).
+        assertEquals(PlaceAction.Cinema, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Cinema, PlaceAction.Call), actions)
+    }
+
+    @Test
+    fun `a clothing store card leads to its catalog`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Fashion),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Витрина — единственное, что магазин одежды умеет в приложении:
+        // очередь, бронь и «Заказать» у него выключены (issue #108).
+        assertEquals(PlaceAction.Shop, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Shop, PlaceAction.Call), actions)
     }
 }
