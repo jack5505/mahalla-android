@@ -137,6 +137,9 @@ class RoutesSerializationTest {
             // Очередь (issue #96): аргументы те же, что у меню, — склеенный
             // serialName увёл бы человека не на тот экран.
             serializer<QueueRoute>().descriptor.serialName,
+            // Игровые зоны (issue #98): аргументы те же, что у очереди.
+            serializer<GamingRoute>().descriptor.serialName,
+            serializer<GamingBookingsRoute>().descriptor.serialName,
             // Бронь (issue #97): аргументы те же, что у очереди и меню.
             serializer<BookingRoute>().descriptor.serialName,
             // Больницы (issue #99): и аргументы те же, и экран соседний —
@@ -265,7 +268,31 @@ class RoutesSerializationTest {
     }
 
     @Test
-    fun `booking route carries the place, its name and the record being moved`() {
+    fun `gaming route carries the place and its name`() {
+        // Имя заведения едет маршрутом: ответ `gaming/…/zones` его не
+        // содержит (issue #98).
+        val gaming = serializer<GamingRoute>().descriptor
+        assertEquals(
+            listOf("placeId", "placeName"),
+            (0 until gaming.elementsCount).map(gaming::getElementName),
+        )
+
+        val gamingRoute = GamingRoute(placeId = "p-1")
+        assertEquals(
+            gamingRoute,
+            json.decodeFromString<GamingRoute>(json.encodeToString(gamingRoute)),
+        )
+    }
+
+    @Test
+    fun `my gaming bookings route has no arguments`() {
+        // `gaming/bookings/my` отдаёт брони всех заведений сразу — фильтровать
+        // маршрутом нечего.
+        assertEquals(0, serializer<GamingBookingsRoute>().descriptor.elementsCount)
+    }
+
+    @Test
+    fun `booking route carries the place and its name`() {
         // Имени заведения нет ни в ответе `barber-services`, ни в
         // `AppointmentResponse` — оно едет маршрутом (issue #97). Тем же
         // маршрутом едет и перенос: услуга и id переносимой записи (эпик #11).

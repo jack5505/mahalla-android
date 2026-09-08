@@ -187,6 +187,30 @@
 тем же `ServiceDto`, что и `barber-services` — значит переехал на выверенные
 `name`/`price`. Пробой именно этой ручки это пока не подтверждено.
 
+## GamingApi ⚠️ частично
+
+`app/src/main/java/uz/mahalla/feature/gaming/data/GamingApi.kt` — пути сверены
+curl'ами по стенду 2026-09-04 (issue #98), тела под токеном — нет: `401`
+приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
+
+| Метод | Путь | |
+|---|---|---|
+| GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, отдала `data: []` |
+| POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
+| GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
+
+**Тело `POST gaming/bookings` не подтверждено.** В схеме оно объявлено как
+`BookRequest`, а на это имя ссылаются три пути (коллизия springdoc), уцелел
+медицинский вариант. Поля названы по ответу того же эндпоинта — `{zoneId,
+startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh`, как только
+появится токен.
+
+Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
+них не значится, а в общем `orders` для `GAMING` только `GET`.
+
+`startTime` уходит зоне-менее в UTC (`2026-09-05T13:00:00`) — согласовано с
+`parseServerInstant`, который читает зоне-менее время сервера как UTC.
+
 ## HospitalApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.

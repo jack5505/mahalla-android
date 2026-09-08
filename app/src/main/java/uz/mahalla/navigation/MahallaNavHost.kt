@@ -47,6 +47,8 @@ import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
+import uz.mahalla.feature.gaming.ui.bookings.GamingBookingsScreen
+import uz.mahalla.feature.gaming.ui.zones.GamingZonesScreen
 import uz.mahalla.feature.queue.ui.QueueScreen
 import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
@@ -255,6 +257,8 @@ fun MahallaNavHost(
                     onOpenRole = { navController.navigate(RoleRoute()) },
                     // «Мои заведения» (issue #94): судьба заявки продавца.
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
+                    // «Мои брони» игровых зон (issue #98).
+                    onOpenGamingBookings = { navController.navigate(GamingBookingsRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
                     // «Мои билеты» (issue #106): своего таба у кино нет.
@@ -441,6 +445,12 @@ fun MahallaNavHost(
                 onQueueClick = { placeId, placeName ->
                     navController.navigate(QueueRoute(placeId, placeName))
                 },
+                // Игровые зоны (issue #98): у клубов это главное действие
+                // карточки. Отдельно от брони: там запись на время к мастеру,
+                // здесь зона клуба — другой контроллер и другой экран.
+                onGamingClick = { placeId, placeName ->
+                    navController.navigate(GamingRoute(placeId, placeName))
+                },
                 // Бронь (issue #97): запись на время — второе действие тех же
                 // мастеров, для тех, кому очередь «прямо сейчас» не подходит.
                 onBookingClick = { placeId, placeName ->
@@ -615,6 +625,20 @@ fun MahallaNavHost(
                 onOpenNotifications = { navController.navigate(NotificationsRoute) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Вертикаль «Игровые зоны» (эпик #11, issue #98): зоны берут с
+        // карточки места, а свои брони живут отдельным экраном — их открывают
+        // и отсюда, и из профиля.
+        composable<GamingRoute> {
+            GamingZonesScreen(
+                onMyBookings = { navController.navigate(GamingBookingsRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<GamingBookingsRoute> {
+            GamingBookingsScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус заказа.
