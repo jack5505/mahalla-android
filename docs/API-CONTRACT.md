@@ -57,17 +57,36 @@
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
 
-## BookingApi ⚠️
+## BookingApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/booking/data/BookingApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/booking/data/BookingApi.kt` — сверен пробой `contract/booking.sh` (2026-09-08), но только анонимная половина: всё под токеном требует `CONTRACT_REFRESH_TOKEN`, а его пока нет.
 
-| Метод | Путь |
-|---|---|
-| GET | `barber-services/places/{placeId}` |
-| GET | `barber-services/places/{placeId}/slots` |
-| POST | `appointments` |
-| GET | `appointments/my` |
-| POST | `appointments/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `barber-services/places/{placeId}` | ✅ |
+| GET | `barber-services/places/{placeId}/slots` | ✅ |
+| POST | `appointments` | ⚠️ не проверено — нужен токен |
+| GET | `appointments/my` | ⚠️ не проверено — нужен токен |
+| POST | `appointments/{id}/cancel` | ⚠️ не проверено — нужен токен |
+
+**`ServiceResponse` — имена были угаданы неверно.** Стенд отдаёт
+`{id, name, colorHex, price, durationMinutes}`, а клиент до 2026-09-08 ждал
+`title` и `priceAmount`: у каждой услуги на экране записи пропадали название
+и цена. Исправлено вместе с этой пробой; фикстура —
+`app/src/test/resources/contract/booking/services.json`.
+
+`description` и `freelancerId` стенд не шлёт вовсе — из DTO убраны.
+`isActive`/`active` в пробе не встретились ни разу, но пара оставлена: две
+активные услуги одного заведения — не доказательство, что флага не бывает.
+
+Слоты подтверждены как **массив строк** вида `"09:00"` — не объекты.
+
+**Открытый вопрос к бэкенду: в чём измеряется `price`.** Стенд отдаёт за
+стрижку `5000000`, за подравнивание бороды `3000000`. Как сумы это
+неправдоподобно; как тийины — 50 000 и 30 000 сум, то есть обычные цены.
+Клиент сейчас считает сумами и потому нарисует «5 000 000 so'm». Заметим:
+`WalletAmounts` из точно такого же отсутствия дробного поля `*Som` делает
+обратный вывод — тийины. Наугад делитель не меняем: нужен ответ бэкенда.
 
 ## CinemaApi ⚠️
 
@@ -144,6 +163,10 @@
 | GET | `freelancers/{id}/services` |
 | POST | `freelancers/{id}/orders` |
 | GET | `freelancers/orders/my` |
+
+`freelancers/{id}/services` отдаёт ту же схему `ServiceResponse` и разбирается
+тем же `ServiceDto`, что и `barber-services` — значит переехал на выверенные
+`name`/`price`. Пробой именно этой ручки это пока не подтверждено.
 
 ## HospitalApi ⚠️
 
@@ -273,11 +296,38 @@
 
 ## Как сверять
 
-1. Поднять бэкенд: в `claude-dev.yml` он уже на `http://localhost:8080`, если
-   задан `BACKEND_IMAGE`. Локально — образ из `MAHALLA-IMPLEMENTATION.md`
-   дизайн-репозитория.
-2. `curl` с заголовками `X-Geo-Lat` / `X-Geo-Lng` и `Authorization`.
-3. Расхождение — в issue и в этот файл, статус меняется на ✅ со ссылкой.
+Руками не надо — есть харнесс. Пилот пока на одной вертикали (`booking`),
+остальные добавляются по образцу.
+
+```bash
+CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/booking.sh
+```
+
+Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
+в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает
+`*ContractTest` в обычном `testDebugUnitTest` — сверяет **имена полей** с DTO,
+потому что разбор в проекте мягкий (`ignoreUnknownKeys`, всё nullable) и
+простое «разобралось» молча пропустит и новое поле сервера, и пропавшее.
+Фикстуры коммитятся: снятая один раз проба работает без стенда.
+
+В CI то же самое — workflow **Contract Check** (Actions → Run workflow):
+прогоняет пробы, затем отдаёт результат Claude, чтобы тот разобрал
+расхождения, поправил DTO, обновил статусы здесь и открыл PR.
+
+Что нужно от стенда:
+
+- он должен быть жив (на 2026-09-08 отдаёт `502` на всё, включая
+  `/actuator/health` и `/v3/api-docs`);
+- каталог должен быть наполнен — иначе не найти заведения с услугами
+  (обойти можно переменной `CONTRACT_BOOKING_PLACE_ID`);
+- **секрет `CONTRACT_REFRESH_TOKEN`** — без него всё, что под токеном,
+  пропускается, а это большая часть контракта. Идеально — тестовый номер
+  с фиксированным OTP в dev-профиле, тогда харнесс сможет логиниться сам.
+
+Альтернатива живому стенду — docker-образ: в `claude-dev.yml` бэкенд
+поднимается на `http://localhost:8080`, если задан `BACKEND_IMAGE`.
+
+Расхождение — в issue и в этот файл, статус меняется на ✅ со ссылкой.
 
 Источник истины по бэкенду — `MAHALLA-IMPLEMENTATION.md` и
 `PROJECT-STATUS-*.md` в `jack5505/mahalla` (в CI: `design-repo/`).

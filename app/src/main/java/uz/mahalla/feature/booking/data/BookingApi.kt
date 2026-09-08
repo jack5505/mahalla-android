@@ -110,22 +110,29 @@ data class BookAppointmentRequest(
  * `ServiceResponse`. Все поля необязательные: отсутствие любого из них — не
  * повод показать экран ошибки вместо списка услуг.
  *
+ * **Имена сверены с живым стендом** контрактной пробой (`contract/booking.sh`,
+ * фикстура `services.json`). До неё здесь стояли выведенные из схемы `title` и
+ * `priceAmount` — стенд шлёт `name` и `price`, поэтому у каждой услуги на
+ * экране пропадали и название, и цена.
+ *
+ * `colorHex` стенд шлёт, но в домен он не идёт: цвет услуги экрану не нужен.
+ * Объявлен, чтобы контрактный тест видел поле как известное, а не как утечку.
+ *
+ * `description` стенд не шлёт вовсе — на экране описания услуги не будет,
+ * пока бэкенд его не добавит.
+ *
  * `isActive` принимается и под именем `active`: Jackson сериализует
  * `boolean isActive` то так, то так, в зависимости от геттера, а ошибка здесь
  * спрятала бы все услуги заведения (то же правило, что у `isRead` в issue #81
- * и `isAvailable` в issue #94).
- *
- * `freelancerId` объявлен, но в домен не доезжает: услуга открывается с
- * карточки заведения, и мастера в приложении пока не выбирают (записи к
- * конкретному сотруднику в контракте нет).
+ * и `isAvailable` в issue #94). В пробе не встретилось ни одного, ни другого —
+ * поэтому отсутствие пары контрактный тест считает допустимым.
  */
 @Serializable
 data class ServiceDto(
     @SerialName("id") val id: String? = null,
-    @SerialName("freelancerId") val freelancerId: String? = null,
-    @SerialName("title") val title: String? = null,
-    @SerialName("description") val description: String? = null,
-    @SerialName("priceAmount") val priceAmount: Long? = null,
+    @SerialName("name") val name: String? = null,
+    @SerialName("colorHex") val colorHex: String? = null,
+    @SerialName("price") val price: Long? = null,
     @SerialName("durationMinutes") val durationMinutes: Int? = null,
     @SerialName("isActive") val isActive: Boolean? = null,
     @SerialName("active") val active: Boolean? = null,
