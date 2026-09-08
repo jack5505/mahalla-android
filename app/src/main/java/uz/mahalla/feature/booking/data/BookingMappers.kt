@@ -22,10 +22,10 @@ internal fun ServiceDto.toDomain(): BarberService? {
     val serviceId = id?.takeIf { it.isNotBlank() } ?: return null
     return BarberService(
         id = serviceId,
-        title = title?.takeIf { it.isNotBlank() }.orEmpty(),
-        description = description?.takeIf { it.isNotBlank() },
+        title = name?.takeIf { it.isNotBlank() }.orEmpty(),
+        // description бэкенд не отдаёт — остаётся пустым (см. ServiceDto).
         // Отрицательная цена — не скидка, а мусор.
-        priceSum = priceAmount?.coerceAtLeast(0) ?: 0,
+        priceSum = price?.coerceAtLeast(0) ?: 0,
         durationMinutes = durationMinutes?.takeIf { it > 0 },
         // Молчание сервера — «услуга оказывается»: спрятать её из-за
         // отсутствующего флага хуже, чем показать лишнюю.

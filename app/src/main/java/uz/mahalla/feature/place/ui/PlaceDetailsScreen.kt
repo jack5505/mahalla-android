@@ -256,15 +256,15 @@ private fun DetailsList(
  *
  * Одна фотография занимает не всю ширину намеренно — край следующей говорит,
  * что ленту можно листать. Подпись для TalkBack одна на весь блок: читать
- * «фото заведения» столько раз, сколько снимков, бессмысленно.
+ * «фотографии такого-то» столько раз, сколько снимков, бессмысленно.
  */
 @Composable
 private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
     // Ключ элемента LazyRow — сама ссылка, а дубликат ключа роняет список.
     // Бэкенд повторов и пустых строк не обещает, поэтому чистим здесь: то же
     // решение, что у SearchHistory.decode (PR #23).
-    val items = remember(photos) { photos.filter(String::isNotBlank).distinct() }
-    if (items.isEmpty()) return
+    val shown = remember(photos) { photos.filter(String::isNotBlank).distinct() }
+    if (shown.isEmpty()) return
     val description = stringResource(R.string.image_gallery_of, placeName)
     LazyRow(
         modifier = modifier
@@ -272,7 +272,7 @@ private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier 
             .semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        items(items = photos, key = { it }) { photo ->
+        items(items = shown, key = { it }) { photo ->
             MahallaAsyncImage(
                 url = photo,
                 contentDescription = null,
@@ -542,11 +542,16 @@ private fun ReviewCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val author = review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
-            // Имя автора стоит следующей строкой — аватар только рисуется.
+            val author = if (isMine) {
+                stringResource(R.string.place_review_mine)
+            } else {
+                review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
+            }
+            // Имя автора стоит той же строкой — аватар только рисуется,
+            // TalkBack не должен читать его дважды.
             MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
             Text(
-                text = if (isMine) stringResource(R.string.place_review_mine) else author,
+                text = author,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,

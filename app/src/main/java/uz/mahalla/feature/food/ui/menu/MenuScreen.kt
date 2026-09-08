@@ -179,12 +179,17 @@ private fun MenuItemRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.Top,
         ) {
-            // Фото блюда — декоративное: название читается строкой рядом.
-            MahallaThumbnail(
-                url = item.photoUrl,
-                contentDescription = null,
-                fallbackIcon = Icons.Outlined.RestaurantMenu,
-            )
+            // Фото блюда декоративное: название читается строкой рядом. Место
+            // под миниатюру занимается только когда ссылка есть — контракт
+            // бэкенда её пока не отдаёт (issue #9), и ряд одинаковых
+            // фоллбэк-иконок был бы шумом, а не вёрсткой.
+            if (item.photoUrl != null) {
+                MahallaThumbnail(
+                    url = item.photoUrl,
+                    contentDescription = null,
+                    fallbackIcon = Icons.Outlined.RestaurantMenu,
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.name,

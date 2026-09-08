@@ -453,10 +453,6 @@
     <string name="day_saturday">Shanba</string>
     <string name="day_sunday">Yakshanba</string>
 
-    <!-- Картинки (issue #60) — подписи для TalkBack -->
-    <string name="image_avatar_of">%1$s avatari</string>
-    <string name="image_gallery_of">%1$s suratlari</string>
-
     <!-- Анкеты покупателя и продавца (issue #84) -->
     <string name="role_title">Ilovadan kim sifatida foydalanasiz?</string>
     <string name="role_subtitle">Buni keyin profilda o\'zgartirishingiz mumkin.</string>
@@ -528,6 +524,11 @@
     <string name="action_continue">Davom etish</string>
     <string name="action_save">Saqlash</string>
     <string name="action_done">Tayyor</string>
+
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">%1$s avatari</string>
+    <string name="image_gallery_of">%1$s suratlari</string>
 
     <!-- Очередь (walk-in, issue #96) -->
     <string name="queue_title">Navbat</string>
