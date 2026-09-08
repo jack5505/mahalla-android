@@ -525,6 +525,11 @@
     <string name="action_save">Saqlash</string>
     <string name="action_done">Tayyor</string>
 
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">%1$s avatari</string>
+    <string name="image_gallery_of">%1$s suratlari</string>
+
     <!-- Очередь (walk-in, issue #96) -->
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>

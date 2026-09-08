@@ -519,6 +519,11 @@
     <string name="action_save">Сохранить</string>
     <string name="action_done">Готово</string>
 
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">Аватар: %1$s</string>
+    <string name="image_gallery_of">Фотографии: %1$s</string>
+
     <!-- Очередь (walk-in, issue #96) -->
     <string name="queue_title">Очередь</string>
     <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
@@ -829,4 +834,5 @@
     <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
     <string name="pharmacy_not_found_title">Ничего не нашлось</string>
     <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
+
 </resources>

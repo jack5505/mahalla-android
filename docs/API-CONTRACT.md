@@ -94,6 +94,11 @@
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
 
+**Аватар автора отзыва не сверен** (issue #60): схема `Response` в
+`/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
+разбирает поле под тремя именами — `userAvatarUrl`, `avatarUrl`, `userAvatar`.
+Молчание сервера — первая буква имени вместо фото, экран не ломается.
+
 ## FashionApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/fashion/data/FashionApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
@@ -122,6 +127,11 @@
 | POST | `food/orders` |
 | GET | `orders/{orderId}` |
 | POST | `food/orders/{orderId}/cancel` |
+
+**Картинки у позиции меню в схеме нет вовсе** (issue #60): у `ItemResponse` ни
+одного поля со ссылкой. `MenuItemDto` объявляет его на вырост под тремя
+именами — `imageUrl` (бэкенд уже использует это имя у `CartItemResponse`),
+`photoUrl`, `image`. Пока поле не приедет, строка меню рисуется без фото.
 
 ## FreelancerApi ⚠️
 

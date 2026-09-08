@@ -96,6 +96,9 @@ data class ReviewDto(
     @SerialName("rating") val rating: Int = 0,
     @JsonNames("comment") @SerialName("text") val text: String = "",
     @SerialName("createdAt") val createdAt: String? = null,
+    /** По той же причине — два вероятных имени поля с аватаром (issue #60). */
+    @JsonNames("avatarUrl", "userAvatar") @SerialName("userAvatarUrl")
+    val avatarUrl: String? = null,
 )
 
 /**

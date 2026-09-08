@@ -150,6 +150,8 @@ data class Review(
     val text: String,
     val createdAt: Instant?,
     val authorId: String? = null,
+    /** Аватар автора (issue #60); `null` — рисуется первая буква имени. */
+    val avatarUrl: String? = null,
 )
 
 /**

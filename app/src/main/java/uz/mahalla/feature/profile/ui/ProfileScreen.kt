@@ -40,6 +40,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.MahallaAsyncImage
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -356,9 +357,11 @@ fun ProfileContentScreen(
 }
 
 /**
- * Шапка: аватар, имя и номер. Картинки в приложении пока нет (загрузчик
- * изображений — отдельная задача), поэтому аватар — круг с инициалами;
- * `avatarUrl` уже хранится и подставится в него без изменений экрана.
+ * Шапка: аватар, имя и номер.
+ *
+ * Фото приезжает из `avatarUrl` (issue #60), а пока его нет — круг с
+ * инициалами. Инициалы, а не силуэт: имя они уже говорят, и на устройстве, где
+ * фото не загрузилось, шапка всё равно остаётся про конкретного человека.
  */
 @Composable
 private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
@@ -376,7 +379,19 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                if (initials.isEmpty()) {
+                // Пустая строка — не ссылка: бэкенд отдаёт `avatarUrl` как
+                // придётся, и на `""` шапка обязана остаться при инициалах, а
+                // не показать иконку «фото нет» (то же условие, что у кнопки
+                // удаления фото — `hasPhoto` выше).
+                if (!profile.avatarUrl.isNullOrBlank()) {
+                    // Имя стоит строкой рядом — фото для TalkBack пустое.
+                    MahallaAsyncImage(
+                        url = profile.avatarUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape,
+                    )
+                } else if (initials.isEmpty()) {
                     Icon(
                         imageVector = Icons.Outlined.Person,
                         // Иконка дублирует имя рядом — для TalkBack пустая.

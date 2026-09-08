@@ -82,6 +82,23 @@ class FoodRepositoriesTest {
     }
 
     @Test
+    fun `the dish photo is read under all three likely names`() = runTest {
+        // Картинки у `ItemResponse` в схеме стенда нет вовсе (issue #60): поле
+        // объявлено на вырост под тремя именами, и опечатка в любом из них
+        // оставила бы меню без фотографий молча — заметить это можно было бы
+        // только тогда, когда бэкенд наконец начнёт их отдавать.
+        server.enqueue(json(PHOTO_BODY))
+
+        val items = (menuRepository().menu("place-1") as ApiResult.Success)
+            .data.categories.single().items
+
+        assertEquals(
+            listOf("a.jpg", "b.jpg", "c.jpg", null),
+            items.map(MenuItem::photoUrl),
+        )
+    }
+
+    @Test
     fun `a broken item does not break the whole menu`() = runTest {
         // Позицию без id положить в корзину нечем, но остальное меню обязано
         // доехать.
@@ -393,6 +410,14 @@ class FoodRepositoriesTest {
               {"id":"a","name":"A","price":1000,"isAvailable":false},
               {"id":"b","name":"B","price":1000,"available":false},
               {"id":"c","name":"C","price":1000}
+            ]}]}
+        """
+        const val PHOTO_BODY = """
+            {"success":true,"data":[{"id":"m-1","name":"Asosiy","items":[
+              {"id":"a","name":"A","price":1000,"imageUrl":"a.jpg"},
+              {"id":"b","name":"B","price":1000,"photoUrl":"b.jpg"},
+              {"id":"c","name":"C","price":1000,"image":"c.jpg"},
+              {"id":"d","name":"D","price":1000,"imageUrl":"   "}
             ]}]}
         """
 
