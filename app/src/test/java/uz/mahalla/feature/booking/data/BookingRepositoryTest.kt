@@ -52,8 +52,10 @@ class BookingRepositoryTest {
     fun `services are requested by place and parsed out of the envelope`() = runTest {
         server.enqueue(
             envelope(
-                """[{"id":"s-1","title":"Soch olish","description":"Mashinka bilan",
-                   "priceAmount":60000,"durationMinutes":40,"isActive":true}]""",
+                // Имена полей — как на стенде: name и price, не title и
+                // priceAmount (фикстура contract/booking/services.json).
+                """[{"id":"s-1","name":"Soch olish","colorHex":null,
+                   "price":60000,"durationMinutes":40,"isActive":true}]""",
             ),
         )
 
@@ -63,9 +65,10 @@ class BookingRepositoryTest {
         val service = services.single()
         assertEquals("s-1", service.id)
         assertEquals("Soch olish", service.title)
-        assertEquals("Mashinka bilan", service.description)
         assertEquals(60_000L, service.priceSum)
         assertEquals(40, service.durationMinutes)
+        // Описания услуги бэкенд не отдаёт — экрану его взять неоткуда.
+        assertNull(service.description)
     }
 
     @Test
@@ -74,10 +77,10 @@ class BookingRepositoryTest {
         // а строка, которая ничего не делает, читается как сломанная.
         server.enqueue(
             envelope(
-                """[{"id":"s-1","title":"Soch olish"},
-                   {"id":"s-2","title":"Soqol","isActive":false},
-                   {"id":"s-3","title":"Massaj","active":false},
-                   {"title":"Nomsiz"}]""",
+                """[{"id":"s-1","name":"Soch olish"},
+                   {"id":"s-2","name":"Soqol","isActive":false},
+                   {"id":"s-3","name":"Massaj","active":false},
+                   {"name":"Nomsiz"}]""",
             ),
         )
 
