@@ -32,6 +32,10 @@ import java.time.ZoneOffset
  * валидации, а схема `BookRequest` перекрыта коллизией springdoc; тест
  * закрепляет то, что приложение отправляет **сейчас**, чтобы правка после
  * проверки под токеном была видна одной строкой.
+ *
+ * Перенос (эпик #11) своей ручки у бэкенда не имеет и собирается из двух —
+ * записи и отмены, — поэтому его тесты проверяют прежде всего **порядок** и то,
+ * что отказ на каждом шаге оставляет человека не хуже, чем он был.
  */
 class BookingRepositoryTest {
 
@@ -322,6 +326,112 @@ class BookingRepositoryTest {
     fun `an appointment without an id is not cancelled over the network`() = runTest {
         val result = repository().cancel(appointment(id = ""))
 
+        assertEquals(
+            ApiError.Business(BookingRepository.INVALID_REQUEST_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    /**
+     * Порядок переноса — половина его смысла: сначала новое время, потом отмена
+     * старого. Отмени сперва — и человек остался бы без записи вовсе, если слот
+     * к этому моменту ушёл.
+     */
+    @Test
+    fun `rescheduling books the new time first and cancels the old one after`() = runTest {
+        server.enqueue(envelope("""{"id":"a-2","status":"PENDING"}"""))
+        server.enqueue(envelope("""{"id":"a-1","status":"CANCELLED"}"""))
+
+        val result = repository().reschedule(
+            appointmentId = "a-1",
+            placeId = PLACE,
+            serviceId = SERVICE,
+            date = LocalDate.of(2026, 9, 5),
+            time = LocalTime.of(10, 30),
+        )
+
+        val booking = server.takeRequest()
+        assertEquals("/appointments", booking.path)
+        assertEquals(
+            """{"placeId":"$PLACE","serviceId":"$SERVICE",""" +
+                """"date":"2026-09-05","startTime":"10:30:00"}""",
+            booking.body.readUtf8(),
+        )
+        assertEquals("/appointments/a-1/cancel", server.takeRequest().path)
+
+        val rescheduled = (result as ApiResult.Success).data
+        assertEquals("a-2", rescheduled.appointment.id)
+        assertTrue(rescheduled.previousCancelled)
+    }
+
+    @Test
+    fun `a refused booking leaves the old appointment alone`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(409)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"SLOT_TAKEN",
+                       "message":"Bu vaqt band"}}""",
+                ),
+        )
+
+        val result = repository().reschedule(
+            appointmentId = "a-1",
+            placeId = PLACE,
+            serviceId = SERVICE,
+            date = LocalDate.of(2026, 9, 5),
+            time = LocalTime.of(10, 30),
+        )
+
+        // Второго запроса нет: отменять старую запись, не получив новую, значит
+        // отобрать у человека и то, что у него было.
+        assertEquals(1, server.requestCount)
+        assertEquals("SLOT_TAKEN", (result as ApiResult.Failure).failure.server?.code)
+        assertEquals("Bu vaqt band", result.failure.serverMessage)
+    }
+
+    @Test
+    fun `a refused cancellation of the old appointment does not undo the new one`() = runTest {
+        server.enqueue(envelope("""{"id":"a-2","status":"PENDING"}"""))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(409)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"APPOINTMENT_ALREADY_STARTED",
+                       "message":"Xizmat boshlangan"}}""",
+                ),
+        )
+
+        val result = repository().reschedule(
+            appointmentId = "a-1",
+            placeId = PLACE,
+            serviceId = SERVICE,
+            date = LocalDate.of(2026, 9, 5),
+            time = LocalTime.of(10, 30),
+        )
+
+        // Новое время уже за человеком — отказом перенос не считается, но про
+        // оставшуюся старую запись экран обязан сказать.
+        val rescheduled = (result as ApiResult.Success).data
+        assertEquals("a-2", rescheduled.appointment.id)
+        assertFalse(rescheduled.previousCancelled)
+    }
+
+    @Test
+    fun `rescheduling without an id never reaches the network`() = runTest {
+        val result = repository().reschedule(
+            appointmentId = " ",
+            placeId = PLACE,
+            serviceId = SERVICE,
+            date = LocalDate.of(2026, 9, 5),
+            time = LocalTime.of(10, 30),
+        )
+
+        // Отменять было бы нечего, и новая запись стала бы второй, а не
+        // перенесённой.
         assertEquals(
             ApiError.Business(BookingRepository.INVALID_REQUEST_CODE),
             (result as ApiResult.Failure).error,

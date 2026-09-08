@@ -580,6 +580,14 @@
     <string name="booking_submit">Записаться</string>
     <string name="booking_done_title">Вы записаны</string>
     <string name="booking_done_description">Заведение подтвердит запись. Состояние видно в «Моих записях».</string>
+    <string name="booking_reschedule_title">Перенос записи</string>
+    <string name="booking_reschedule_service_title">Услуга</string>
+    <string name="booking_reschedule_hint">Услуга остаётся та же — выберите новый день и время.</string>
+    <string name="booking_reschedule_submit">Перенести на новое время</string>
+    <string name="booking_reschedule_done_title">Запись перенесена</string>
+    <string name="booking_reschedule_done_description">Заведение подтвердит новое время. Прежняя запись отменена.</string>
+    <string name="booking_reschedule_done_description_kept">Заведение подтвердит новое время.</string>
+    <string name="booking_reschedule_old_kept">Новое время за вами, но прежнюю запись отменить не удалось. Отмените её сами в «Моих записях».</string>
     <string name="weekday_short_mon">пн</string>
     <string name="weekday_short_tue">вт</string>
     <string name="weekday_short_wed">ср</string>
@@ -600,6 +608,7 @@
     <string name="my_appointments_cancel_keep">Оставить</string>
     <string name="my_appointments_cancel_title">Отменить запись?</string>
     <string name="my_appointments_cancel_message">Время отдадут другому клиенту, записываться придётся заново.</string>
+    <string name="my_appointments_reschedule">Перенести время</string>
     <string name="appointment_status_pending">Ждёт подтверждения</string>
     <string name="appointment_status_confirmed">Подтверждена</string>
     <string name="appointment_status_cancelled">Отменена</string>
