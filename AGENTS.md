@@ -39,7 +39,7 @@ Flutter / React Native / KMP запрещены (`rules/tech-stack.md` в диз
 ## Команды
 
 ```bash
-./gradlew testDebugUnitTest     # юнит-тесты (163 класса)
+./gradlew testDebugUnitTest     # юнит-тесты (171 класс)
 ./gradlew assembleDebug         # сборка
 ./gradlew lintDebug             # lint, warningsAsErrors включён
 ```

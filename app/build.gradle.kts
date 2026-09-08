@@ -282,4 +282,13 @@ dependencies {
     testImplementation(libs.okhttp.tls)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+
+    // Compose-тесты под Robolectric (issue #137). Нужны там, где проверять
+    // надо саму композицию: MahallaAsyncImage не грузил картинки именно
+    // из-за того, как устроено дерево, — на уровне ViewModel такое не видно.
+    // ui-test-manifest даёт ComponentActivity для createComposeRule; в debug,
+    // потому что unit-тесты собираются из манифеста debug-варианта.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
