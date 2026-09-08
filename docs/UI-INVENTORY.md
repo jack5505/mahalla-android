@@ -19,7 +19,7 @@
 | Таб | Файл | Состояние |
 |---|---|---|
 | Главная | `feature/discovery/ui/home/DiscoveryHomeScreen.kt` | **рабочий**: поиск, плитка 6 категорий, «рядом», «рекомендуем», pull-to-refresh |
-| Заказы | `feature/orders/ui/OrdersScreen.kt` (16 строк) | **заглушка**: `ScreenSkeleton(title, subtitle)`, ни одного запроса |
+| Заказы | ~~`feature/orders/ui/OrdersScreen.kt` (16 строк)~~ → `feature/activity/ui/ActivityScreen.kt` | было **заглушкой** без единого запроса; сделано в issue #73 (A3): список из пяти источников, фильтр «активные/история», частичный отказ |
 | Кошелёк | `feature/wallet/ui/WalletScreen.kt` (32 строки) | **заглушка, показывающая выдуманное число**: `DEMO_BALANCE_SUM = 1_284_500` зашит в код |
 | Профиль | `feature/profile/ui/ProfileScreen.kt` | **полузаглушка**: язык, тема, адрес сервера, Chucker. Нет имени, номера, аватара, **и нет кнопки «Выйти»** |
 

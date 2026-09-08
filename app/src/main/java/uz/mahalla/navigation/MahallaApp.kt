@@ -83,8 +83,12 @@ private fun BottomNavItem.matches(destination: NavDestination?): Boolean =
 /**
  * Переключение таба: стек не растёт (`launchSingleTop`), состояние таба
  * сохраняется, а «назад» с любого таба ведёт на стартовый раздел.
+ *
+ * Не `private`: тем же способом уходит на главную кнопка пустого состояния в
+ * «моих активностях» (issue #73) — это переключение таба, а не переход вглубь,
+ * и `navigate(DiscoveryRoute)` там растил бы стек.
  */
-private fun NavHostController.navigateToTab(item: BottomNavItem) {
+internal fun NavHostController.navigateToTab(item: BottomNavItem) {
     navigate(item.route) {
         popUpTo(MainGraph) { saveState = true }
         launchSingleTop = true

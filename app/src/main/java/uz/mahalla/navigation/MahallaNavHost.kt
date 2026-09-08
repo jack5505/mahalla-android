@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
@@ -43,7 +44,6 @@ import uz.mahalla.feature.onboarding.ui.PhoneInputScreen
 import uz.mahalla.feature.onboarding.ui.PinScreen
 import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
-import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
@@ -235,7 +235,20 @@ fun MahallaNavHost(
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
                 )
             }
-            composable<OrdersRoute> { OrdersScreen() }
+            composable<OrdersRoute> {
+                // «Мои активности» (issue #73): один список из всех вертикалей.
+                ActivityScreen(
+                    // Из списка — на статус заказа, тот же экран, что после
+                    // оформления. Возврат «назад» ведёт обратно в список.
+                    onFoodOrderClick = { orderId ->
+                        navController.navigate(OrderStatusRoute(orderId))
+                    },
+                    // Пустое состояние ведёт на главную — это переключение
+                    // таба, а не переход вглубь: `navigateToTab` не растит
+                    // стек и сохраняет состояние табов.
+                    onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
+                )
+            }
             composable<WalletRoute> { WalletScreen() }
             composable<ProfileRoute> {
                 ProfileScreen(
