@@ -379,7 +379,11 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                if (profile.avatarUrl != null) {
+                // Пустая строка — не ссылка: бэкенд отдаёт `avatarUrl` как
+                // придётся, и на `""` шапка обязана остаться при инициалах, а
+                // не показать иконку «фото нет» (то же условие, что у кнопки
+                // удаления фото — `hasPhoto` выше).
+                if (!profile.avatarUrl.isNullOrBlank()) {
                     // Имя стоит строкой рядом — фото для TalkBack пустое.
                     MahallaAsyncImage(
                         url = profile.avatarUrl,
