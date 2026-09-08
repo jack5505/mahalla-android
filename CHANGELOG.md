@@ -5162,6 +5162,35 @@ merge-ref, поэтому workflow на `pull_request` не запускался
 старый длинный `AGENTS.md`, а #131 к тому времени унёс историю сюда. Поэтому
 `AGENTS.md` взят из `main` целиком — ровно как в задаче #101 выше.
 
+**Дополнено из PR #66.** Ту же задачу параллельно вела вторая ветка, и на ней
+авто-ревью нашло две вещи, которых в #109 нет:
+
+- **Белый список схем до этого был декорацией.** `ImageUrl.resolve` возвращал
+  `null` на `file://`/`content://`/`android.resource://`, но
+  `BackendImageUrlInterceptor` на `null` делал `chain.proceed` с **исходной**
+  строкой — а эти схемы Coil грузит штатными фетчерами (`components { add(…) }`
+  только дополняет дефолты, не заменяет их). Комментарий «Coil сам ошибётся»
+  был неверен ровно для тех схем, от которых список и заводился. Теперь
+  отвергнутая ссылка кончается `ErrorResult(UnsupportedImageUrl)` и в загрузку
+  не уходит вовсе; пользователь видит тот же фоллбэк, что и на неудачной
+  загрузке. Тест `local schemes never reach the fetchers` проверяет это **через
+  интерцептор**: дыра была между ним и `resolve`, и юнит-тест одного `resolve`
+  давал ложную уверенность.
+- **Галерея роняла карточку места на дублях.** `items(key = { it })` по сырым
+  `photos`: два одинаковых URL или две пустые строки → `IllegalArgumentException:
+  Key … was already used`. Бэкенд ни уникальности, ни непустоты не обещает,
+  поэтому `filter(String::isNotBlank).distinct()` в `remember` — то же решение,
+  что у `SearchHistory.decode` (PR #23). Та же грабля третий раз.
+
+Проверено после мержа: `testDebugUnitTest` — **1767 тестов в 172 классах, 0
+падений**; `lintDebug` — `No issues found`; `assembleDebug` и `assembleRelease` —
+BUILD SUCCESSFUL.
+
+Осталось: `MahallaImageLoader.imageClient()` чистит `interceptors()`, но не
+`networkInterceptors()`. Сейчас Chucker и логгер висят application-интерцепторами,
+клиент картинок чист, но network-интерцептор с секретами `imageClient()`
+переживёт — оформить issue.
+
 ## Открытые долги на 2026-09-06 (перенесено из AGENTS.md)
 
 Список из прежнего раздела «Что делать дальше». Сохранён здесь при разрезе
