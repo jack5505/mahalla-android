@@ -246,25 +246,85 @@ class MapViewModelTest {
 
         viewModel.onEvent(MapEvent.MyLocationClicked)
 
-        assertEquals(1, locationProvider.callCount)
+        // Разрешение уже выдано: диалог не показывается, тап сразу ищет
+        // координаты. Первый вызов сделала автоматическая попытка при открытии.
+        assertEquals(2, locationProvider.callCount)
         assertEquals(MapCoordinates(41.5, 69.5), viewModel.state.value.camera.target)
+    }
+
+    @Test
+    fun `a permission granted earlier locates the user without a tap`() = runTest {
+        // Человек разрешил геолокацию в онбординге и ждёт увидеть себя на
+        // карте, а каталог ничего не нашёл — подгонять камеру не подо что.
+        repository.respondWith(emptyList())
+        locationProvider.location = MapCoordinates(41.5, 69.5)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+
+        val state = viewModel.state.value
+        assertEquals(1, locationProvider.callCount)
+        assertTrue(state.showUserLocation)
+        assertEquals(MapCoordinates(41.5, 69.5), state.camera.target)
+    }
+
+    @Test
+    fun `the automatic search does not take the camera away from found places`() = runTest {
+        // Маркеры человек уже видит — уходить с них он не просил.
+        repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
+        locationProvider.location = MapCoordinates(41.5, 69.5)
+        val viewModel = viewModel()
+        val cameraBefore = viewModel.state.value.camera
+
+        viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+
+        assertEquals(cameraBefore, viewModel.state.value.camera)
+    }
+
+    @Test
+    fun `the automatic search stays silent when there are no coordinates`() = runTest {
+        // Об этой попытке никто не просил: плашка «не удалось определить» была
+        // бы ответом на незаданный вопрос.
+        repository.respondWith(emptyList())
+        locationProvider.location = null
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+
+        assertNull(viewModel.state.value.locationNotice)
+        assertFalse(viewModel.state.value.isLocating)
+    }
+
+    @Test
+    fun `returning to the screen does not restart the search`() = runTest {
+        // ON_RESUME приходит на каждом возврате — координаты по нему ищутся раз.
+        repository.respondWith(emptyList())
+        locationProvider.location = MapCoordinates(41.5, 69.5)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+        viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+
+        assertEquals(1, locationProvider.callCount)
     }
 
     @Test
     fun `a second tap does not start a second location request`() = runTest {
         repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
         val gate = CompletableDeferred<Unit>()
-        locationProvider.gate = gate
         locationProvider.location = MapCoordinates(41.5, 69.5)
         val viewModel = viewModel()
+        // Автоматическая попытка при открытии успевает целиком: гейт ставится
+        // после неё, иначе тест проверял бы не тап.
         viewModel.onEvent(MapEvent.LocationPermissionChecked(granted = true))
+        locationProvider.gate = gate
 
         viewModel.onEvent(MapEvent.MyLocationClicked)
         assertTrue(viewModel.state.value.isLocating)
         viewModel.onEvent(MapEvent.MyLocationClicked)
 
         gate.complete(Unit)
-        assertEquals(1, locationProvider.callCount)
+        assertEquals(2, locationProvider.callCount)
         assertFalse(viewModel.state.value.isLocating)
     }
 

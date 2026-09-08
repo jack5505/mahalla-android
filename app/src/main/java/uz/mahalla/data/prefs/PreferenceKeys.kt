@@ -69,4 +69,14 @@ internal object PreferenceKeys {
 
     /** История поиска (эпик 4.3) — одна строка, порядок значим. */
     val SearchHistory = stringPreferencesKey("discovery_search_history")
+
+    /**
+     * Взятые талоны очереди (issue #96) — JSON-массив в одной строке.
+     *
+     * Хранятся локально не для кэша, а потому что **прочитать талон у бэкенда
+     * нечем**: ручки `walkin/my` / `walkin/{id}` нет, состояние приезжает
+     * только в ответе на запись. Без этого ключа свёрнутое приложение теряло
+     * бы и номер в очереди, и возможность отменить запись.
+     */
+    val WalkInTickets = stringPreferencesKey("queue_walkin_tickets")
 }

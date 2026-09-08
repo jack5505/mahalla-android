@@ -28,8 +28,11 @@ interface NotificationsRepository {
 
     suspend fun unreadCount(): ApiResult<Int>
 
-    /** Отметить всё прочитанным: отдельного уведомления бэкенд не отмечает. */
+    /** Отметить прочитанным всё сразу — включая непрочитанное на других страницах. */
     suspend fun markAllRead(): ApiResult<Unit>
+
+    /** Отметить прочитанным одно уведомление (issue #95). */
+    suspend fun markRead(id: String): ApiResult<Unit>
 
     companion object {
         /** Столько же по умолчанию берёт и сам бэкенд. */
@@ -58,6 +61,14 @@ class DefaultNotificationsRepository @Inject constructor(
 
     override suspend fun markAllRead(): ApiResult<Unit> =
         apiCall { api.markAllRead().ensureSuccess() }
+
+    /**
+     * `ensureSuccess()`, а не `payload()`: `data` у этой ручки пуст и при
+     * успехе (`ApiResponseVoid`), и `payload()` превратил бы штатный ответ в
+     * ошибку разбора.
+     */
+    override suspend fun markRead(id: String): ApiResult<Unit> =
+        apiCall { api.markRead(id).ensureSuccess() }
 }
 
 /**

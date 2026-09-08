@@ -77,6 +77,22 @@ class NotificationTargetTest {
         }
     }
 
+    @Test
+    fun `unread is a reason to be clickable, read without a target is not`() {
+        // Тап по непрочитанному гасит его (issue #95), поэтому строка
+        // кликабельна даже там, где переходить некуда. А прочитанное без цели
+        // нажатия не принимает: оно читалось бы как сломанное.
+        val unread = notification(type = NotificationType.PromotionCreated, entityId = "e-1")
+        assertTrue(unread.isTappable)
+        assertFalse(unread.isActionable)
+
+        assertFalse(unread.copy(isRead = true).isTappable)
+
+        val readOrder = notification(type = NotificationType.OrderPlaced, entityId = "o-1")
+            .copy(isRead = true)
+        assertTrue(readOrder.isTappable)
+    }
+
     private fun notification(type: NotificationType, entityId: String?) = AppNotification(
         id = "n-1",
         title = "Buyurtma",

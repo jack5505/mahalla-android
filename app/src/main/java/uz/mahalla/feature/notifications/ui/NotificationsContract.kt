@@ -13,9 +13,10 @@ import uz.mahalla.feature.notifications.domain.AppNotification
  * @param unreadCount непрочитанные на **сервере**, а не в загруженных
  * страницах: кнопка «прочитать всё» должна быть видна и тогда, когда
  * непрочитанное лежит на второй странице.
- * @param actionFailure отказ «прочитать всё». Отдельно от [items]: список уже
- * на экране, и прятать его из-за неудавшейся кнопки незачем — причина
- * показывается строкой над ним текстом бэкенда (issue #34).
+ * @param actionFailure отказ отметки прочитанным — всего списка или одного
+ * уведомления (issue #95). Отдельно от [items]: список уже на экране, и
+ * прятать его из-за неудавшегося действия незачем — причина показывается
+ * строкой над ним текстом бэкенда (issue #34).
  * @param loadMoreFailure догрузка страницы не удалась — вместе с причиной,
  * чтобы кнопка «повторить» не осталась без объяснения.
  */
@@ -42,6 +43,14 @@ sealed interface NotificationsEvent : UiEvent {
     data object Retry : NotificationsEvent
     data object LoadMore : NotificationsEvent
     data object MarkAllRead : NotificationsEvent
+
+    /**
+     * Повтор неудавшейся отметки прочитанным. Какой именно — помнит ViewModel:
+     * экран показывает одну строку отказа и не должен знать, отказали ему в
+     * «прочитать всё» или в одном уведомлении.
+     */
+    data object RetryAction : NotificationsEvent
+
     data class NotificationClicked(val id: String) : NotificationsEvent
 }
 

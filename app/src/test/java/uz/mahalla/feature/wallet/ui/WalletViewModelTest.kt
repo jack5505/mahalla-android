@@ -1,6 +1,7 @@
 package uz.mahalla.feature.wallet.ui
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -13,7 +14,12 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.wallet.domain.TopUpError
+import uz.mahalla.feature.wallet.domain.TopUpOrder
+import uz.mahalla.feature.wallet.domain.TopUpProvider
 import uz.mahalla.feature.wallet.domain.Wallet
+import uz.mahalla.feature.wallet.domain.WalletAmounts
+import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
 import uz.mahalla.testutil.FakeWalletRepository
@@ -188,6 +194,191 @@ class WalletViewModelTest {
         assertTrue(state.wallet is ScreenState.Content)
         assertTrue(state.transactions is ScreenState.Content)
         assertEquals(2, repository.walletCount)
+    }
+
+    // --- Пополнение (issue #93) ---
+
+    /**
+     * Делитель единиц бэкенда берётся из уже приехавшего баланса: без него
+     * неизвестно ни сколько отправлять, ни какой минимум обещать.
+     */
+    @Test
+    fun `top up sheet takes the scale from the loaded balance`() = runTest {
+        val repository = FakeWalletRepository(
+            Wallet(balanceSum = 500_000, availableSum = 500_000, amountScale = 1L),
+        )
+        val viewModel = WalletViewModel(repository)
+
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+
+        val topUp = requireNotNull(viewModel.state.value.topUp)
+        assertEquals(1L, topUp.scale)
+        assertEquals(100_000L, topUp.minAmountSum)
+    }
+
+    /** Пока баланс не приехал, пополнять нечего: делителя нет. */
+    @Test
+    fun `top up is not offered without a balance`() = runTest {
+        val repository = FakeWalletRepository()
+        repository.wallet = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = WalletViewModel(repository)
+
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+
+        assertFalse(viewModel.state.value.canTopUp)
+        assertEquals(null, viewModel.state.value.topUp)
+    }
+
+    /** Заблокированному кошельку платёж всё равно откажут. */
+    @Test
+    fun `top up is not offered for a blocked wallet`() = runTest {
+        val repository = FakeWalletRepository(Wallet(status = WalletStatus.Blocked))
+
+        assertFalse(WalletViewModel(repository).state.value.canTopUp)
+    }
+
+    /**
+     * Пустое поле не подсвечивается сразу после открытия шторки: это ругань за
+     * то, что человек ещё не начал.
+     */
+    @Test
+    fun `reasons are shown only after the first attempt`() = runTest {
+        val repository = FakeWalletRepository()
+        val viewModel = WalletViewModel(repository)
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+
+        assertTrue(requireNotNull(viewModel.state.value.topUp).visibleErrors.isEmpty())
+
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+
+        val topUp = requireNotNull(viewModel.state.value.topUp)
+        assertEquals(
+            setOf(TopUpError.AmountRequired, TopUpError.ProviderRequired),
+            topUp.visibleErrors,
+        )
+        // Незаполненный черновик в репозиторий не уходит вовсе.
+        assertTrue(repository.topUpRequests.isEmpty())
+    }
+
+    @Test
+    fun `a filled draft opens the payment form of the provider`() = runTest {
+        val repository = FakeWalletRepository()
+        repository.topUp = ApiResult.Success(TopUpOrder("https://checkout.paycom.uz/abc"))
+        val viewModel = WalletViewModel(repository)
+
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("250 000"))
+        viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+
+        // Сумма уходит в сумах, вместе с делителем: перевод в единицы
+        // бэкенда — дело репозитория.
+        assertEquals(
+            listOf(Triple(250_000L, TopUpProvider.Payme, WalletAmounts.TIYIN_IN_SOM)),
+            repository.topUpRequests,
+        )
+        // Эффекты складываются в буферизованный канал, поэтому первый уже там.
+        assertEquals(
+            WalletEffect.OpenPaymentForm("https://checkout.paycom.uz/abc"),
+            viewModel.effects.first(),
+        )
+        val state = viewModel.state.value
+        // Шторка закрывается: возвращаться человеку надо на баланс.
+        assertEquals(null, state.topUp)
+        assertEquals(250_000L, state.paymentStarted?.amountSum)
+    }
+
+    /**
+     * Деньги зачисляет колбэк провайдера, поэтому баланс на клиенте не
+     * прибавляется — он перечитывается по возвращении на экран.
+     */
+    @Test
+    fun `balance is reread after the payment, not counted on the client`() = runTest {
+        val repository = FakeWalletRepository(Wallet(balanceSum = 0, availableSum = 0))
+        val viewModel = WalletViewModel(repository)
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
+        viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Click))
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+
+        assertEquals(0L, (viewModel.state.value.wallet as ScreenState.Content).data.availableSum)
+
+        repository.wallet = ApiResult.Success(Wallet(balanceSum = 250_000, availableSum = 250_000))
+        viewModel.onEvent(WalletEvent.ScreenResumed)
+
+        assertEquals(2, repository.walletCount)
+        assertEquals(
+            250_000L,
+            (viewModel.state.value.wallet as ScreenState.Content).data.availableSum,
+        )
+        // Плашка остаётся: деньги могли и не дойти, и об этом надо сказать.
+        assertEquals(250_000L, viewModel.state.value.paymentStarted?.amountSum)
+    }
+
+    /** Отказ остаётся в шторке рядом с набранной суммой (issue #34). */
+    @Test
+    fun `a refused payment keeps the sheet and the typed amount`() = runTest {
+        val repository = FakeWalletRepository()
+        repository.topUp = ApiResult.Failure(
+            ApiFailure(
+                ApiError.Business("PROVIDER_UNAVAILABLE"),
+                ServerError(httpCode = 502, message = "Payme javob bermadi"),
+            ),
+        )
+        val viewModel = WalletViewModel(repository)
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
+        viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Uzum))
+
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+
+        val topUp = requireNotNull(viewModel.state.value.topUp)
+        assertEquals("250000", topUp.draft.amountText)
+        assertEquals("Payme javob bermadi", topUp.failure?.serverMessage)
+        assertFalse(topUp.isSubmitting)
+        assertEquals(null, viewModel.state.value.paymentStarted)
+
+        // Правка суммы снимает прошлый отказ: он был про другую сумму.
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("300000"))
+        assertEquals(null, requireNotNull(viewModel.state.value.topUp).failure)
+    }
+
+    /** Тап без последствий читается как сломанная кнопка. */
+    @Test
+    fun `a device without a browser is told about it`() = runTest {
+        val repository = FakeWalletRepository()
+        val viewModel = WalletViewModel(repository)
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
+        viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+
+        viewModel.onEvent(WalletEvent.PaymentOpenFailed)
+
+        // Плашка «платёж отправлен» была бы неправдой: до формы оплаты дело не
+        // дошло. Сообщение живёт на экране — шторка к этому моменту закрыта.
+        val state = viewModel.state.value
+        assertEquals(null, state.paymentStarted)
+        assertTrue(state.paymentOpenFailed)
+
+        // Новая попытка начинается с чистого экрана.
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        assertFalse(viewModel.state.value.paymentOpenFailed)
+    }
+
+    @Test
+    fun `the notice about a started payment is dismissable`() = runTest {
+        val repository = FakeWalletRepository()
+        val viewModel = WalletViewModel(repository)
+        viewModel.onEvent(WalletEvent.TopUpClicked)
+        viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
+        viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
+        viewModel.onEvent(WalletEvent.TopUpSubmitted)
+        assertTrue(viewModel.state.value.paymentStarted != null)
+
+        viewModel.onEvent(WalletEvent.PaymentNoticeDismissed)
+
+        assertEquals(null, viewModel.state.value.paymentStarted)
     }
 
     private fun page(

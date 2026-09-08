@@ -5,10 +5,16 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.location.LocationSource
+import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.role.domain.MyPlace
+import uz.mahalla.feature.role.domain.MyPlacePage
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
+import uz.mahalla.feature.role.domain.PlaceStaffRole
 import uz.mahalla.feature.role.domain.ProviderForm
 import uz.mahalla.feature.role.domain.ProviderFormValidator
 import uz.mahalla.feature.role.domain.RegisteredPlace
@@ -29,9 +35,27 @@ interface ProviderRepository {
 
     suspend fun registerPlace(form: ProviderForm): ApiResult<RegisteredPlace>
 
+    /** «Мои заведения» со статусом модерации (issue #94). */
+    suspend fun myPlaces(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<MyPlacePage>
+
+    /**
+     * Переключить «открыто сейчас».
+     *
+     * @param current известное приложению состояние. Нужно потому, что ручка —
+     * именно переключатель: желаемого значения бэкенд не принимает, а своё
+     * новое сообщает в `data`. Молчание сервера о нём читается как «флаг
+     * перевернулся» — иначе экран показал бы прежнее состояние после
+     * успешного запроса.
+     * @return состояние флага после запроса.
+     */
+    suspend fun toggleAvailability(placeId: String, current: Boolean): ApiResult<Boolean>
+
     companion object {
         /** Код отказа, когда заявка не прошла проверку ещё на клиенте. */
         const val INVALID_FORM_CODE = "PROVIDER_FORM_INVALID"
+
+        /** Столько же по умолчанию берёт и сам бэкенд. */
+        const val PAGE_SIZE = 20
     }
 }
 
@@ -39,6 +63,7 @@ interface ProviderRepository {
 class DefaultProviderRepository @Inject constructor(
     private val api: ProviderApi,
     private val locationSource: LocationSource,
+    private val requestLocation: RequestLocationProvider,
     private val phoneValidator: PhoneNumberValidator,
 ) : ProviderRepository {
 
@@ -88,6 +113,78 @@ class DefaultProviderRepository @Inject constructor(
             ).payload()
         }.map { dto -> dto.toDomain(fallbackName = trimmed.name) }
     }
+
+    /**
+     * Кэша нет намеренно: статус модерации меняют на сервере, и «PENDING» из
+     * Room после одобрения заявки был бы прямой ложью — ровно тем, ради чего
+     * экран и делался.
+     */
+    override suspend fun myPlaces(page: Int, size: Int): ApiResult<MyPlacePage> =
+        apiCall { api.myPlaces(page = page.coerceAtLeast(0), size = size).payload() }
+            .map(MyPlacePageDto::toDomain)
+
+    override suspend fun toggleAvailability(
+        placeId: String,
+        current: Boolean,
+    ): ApiResult<Boolean> {
+        val location = requestLocation.current()
+        return apiCall {
+            val response = api.toggleAvailability(
+                placeId = placeId,
+                body = ToggleAvailabilityRequest(
+                    lat = location.latitude,
+                    lng = location.longitude,
+                ),
+            )
+            // `ensureSuccess`, а не `payload`: `data` тут `Boolean`, и `false`
+            // — законный ответ («заведение закрыли»), который `payload` от
+            // отсутствия значения не отличает.
+            response.ensureSuccess()
+            response.data ?: !current
+        }
+    }
+}
+
+/** См. [MyPlacePage.hasMore] — правило подсчёта живёт там. */
+internal fun MyPlacePageDto.toDomain(): MyPlacePage {
+    val pageIndex = page ?: 0
+    val pages = totalPages
+    return MyPlacePage(
+        items = content.mapNotNull(MyPlaceDto::toDomain),
+        hasMore = when {
+            last != null -> !last
+            pages != null -> pageIndex + 1 < pages
+            else -> false
+        },
+    )
+}
+
+/**
+ * Разбор мягкий, как в каталоге (issue #53): запись без `id` отбрасывается —
+ * открыть её карточку и переключить ей доступность всё равно нечем, а в
+ * `LazyColumn` она стала бы дубликатом ключа.
+ *
+ * Всё остальное заведение не прячет. Незнакомый статус показывается как есть
+ * ([PlaceModerationStatus.Unknown]), незнакомая категория становится
+ * `PlaceCategory.Other`, а заведение без имени получает подпись от экрана:
+ * пропасть из списка своих заведений оно не должно ни в одном из этих
+ * случаев.
+ */
+internal fun MyPlaceDto.toDomain(): MyPlace? {
+    val placeId = id?.takeIf { it.isNotBlank() } ?: return null
+    return MyPlace(
+        id = placeId,
+        name = name?.takeIf { it.isNotBlank() }.orEmpty(),
+        category = PlaceCategory.fromApi(category),
+        status = PlaceModerationStatus.fromApi(status),
+        address = address?.takeIf { it.isNotBlank() },
+        // Молчание сервера — «закрыто»: обещать открытое заведение, про
+        // которое ничего не известно, хуже.
+        isAvailable = isAvailable ?: available ?: false,
+        rating = ratingAvg?.coerceAtLeast(0.0) ?: 0.0,
+        ratingCount = ratingCount?.coerceAtLeast(0) ?: 0,
+        staffRole = PlaceStaffRole.fromApi(role),
+    )
 }
 
 /**

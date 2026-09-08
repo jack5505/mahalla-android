@@ -11,6 +11,7 @@ import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.feature.promotions.domain.Promotion
 import java.time.DayOfWeek
 
 /**
@@ -37,6 +38,11 @@ data class PlaceDetailsState(
     val deletingReview: Boolean = false,
     /** Отказ на удалении — показывается в блоке отзывов текстом сервера. */
     val reviewDeleteFailure: ApiFailure? = null,
+    /**
+     * Акции заведения (issue #104). Пустой список — секции нет: отказ этой
+     * ручки карточку не роняет, а заголовок над пустотой обещает то, чего нет.
+     */
+    val promotions: List<Promotion> = emptyList(),
 ) : UiState {
 
     val data: PlaceDetails? get() = (details as? ScreenState.Content)?.data

@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -27,9 +28,12 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.media.domain.MediaFile
+import uz.mahalla.feature.media.domain.MediaRejection
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeHttpInspector
+import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakeSessionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
 import uz.mahalla.testutil.MainDispatcherRule
@@ -229,12 +233,103 @@ class ProfileViewModelTest {
         isCurrent = current,
     )
 
+    // --- Фото профиля (issue #101) ---
+
+    @Test
+    fun `uploaded photo is remembered next to the rest of the profile`() = runTest {
+        val store = FakeUserProfileStore(
+            UserProfile(id = "u-1", phone = "+998901234567", fullName = "Alisher Usmonov"),
+        )
+        val media = FakeMediaRepository(
+            result = ApiResult.Success(MediaFile(id = "m-9", url = "https://cdn.mahalla.uz/a.jpg")),
+        )
+        val viewModel = viewModel(profileStore = store, media = media)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        assertEquals("https://cdn.mahalla.uz/a.jpg", store.current().avatarUrl)
+        // Имя и номер запись аватара не трогает: `save` пишет все поля разом.
+        assertEquals("Alisher Usmonov", store.current().fullName)
+        assertEquals("+998901234567", store.current().phone)
+        assertFalse(viewModel.state.value.avatarUpload.inProgress)
+        assertNull(viewModel.state.value.avatarUpload.failure)
+        // `entityId` — id пользователя: по нему загруженное потом находится.
+        assertEquals("u-1", media.uploads.single().entityId)
+        // `entityType` не выдумываем: словаря значений в схеме нет.
+        assertNull(media.uploads.single().entityType)
+        assertEquals(SOURCE, media.uploads.single().source)
+    }
+
+    @Test
+    fun `progress is shown while the file goes up`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val media = FakeMediaRepository(progress = listOf(0, 30, 70), gate = gate)
+        val viewModel = viewModel(media = media)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        assertTrue(viewModel.state.value.avatarUpload.inProgress)
+        assertEquals(70, viewModel.state.value.avatarUpload.percent)
+
+        gate.complete(Unit)
+        assertFalse(viewModel.state.value.avatarUpload.inProgress)
+    }
+
+    @Test
+    fun `second pick does not start a second upload`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val media = FakeMediaRepository(gate = gate)
+        val viewModel = viewModel(media = media)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        assertEquals(1, media.uploads.size)
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun `cancelled upload leaves neither progress nor photo`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val store = FakeUserProfileStore(UserProfile(id = "u-1"))
+        val viewModel = viewModel(profileStore = store, media = FakeMediaRepository(gate = gate))
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+        viewModel.onEvent(ProfileEvent.AvatarUploadCancelled)
+
+        assertFalse(viewModel.state.value.avatarUpload.inProgress)
+        assertEquals(0, viewModel.state.value.avatarUpload.percent)
+        // Отменённая загрузка ничего не сохраняет, даже если ответ приедет.
+        gate.complete(Unit)
+        assertNull(store.current().avatarUrl)
+    }
+
+    @Test
+    fun `failed upload explains itself and keeps the old photo`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(avatarUrl = "https://cdn.mahalla.uz/old.jpg"))
+        val media = FakeMediaRepository(
+            result = ApiResult.Failure(ApiError.Business(MediaRejection.TooLarge.code)),
+        )
+        val viewModel = viewModel(profileStore = store, media = media)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        val upload = viewModel.state.value.avatarUpload
+        assertFalse(upload.inProgress)
+        assertEquals(
+            ApiError.Business(MediaRejection.TooLarge.code),
+            requireNotNull(upload.failure).error,
+        )
+        assertEquals("https://cdn.mahalla.uz/old.jpg", store.current().avatarUrl)
+    }
+
     private fun viewModel(
         inspector: HttpInspector = FakeHttpInspector(),
         profileStore: FakeUserProfileStore = FakeUserProfileStore(),
         sessions: FakeSessionsRepository = FakeSessionsRepository(),
         auth: FakeAuthRepository = FakeAuthRepository(),
         settings: SettingsDataStore = SettingsDataStore(newDataStore()),
+        media: FakeMediaRepository = FakeMediaRepository(),
     ) = ProfileViewModel(
         settingsDataStore = settings,
         localeManager = RecreatingLocaleManager,
@@ -242,12 +337,17 @@ class ProfileViewModelTest {
         userProfileStore = profileStore,
         sessionsRepository = sessions,
         authRepository = auth,
+        mediaRepository = media,
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
     private fun newDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.create(
         produceFile = { File(temporaryFolder.root, "profile-vm.preferences_pb") },
     )
+
+    private companion object {
+        const val SOURCE = "content://media/external/images/media/42"
+    }
 
     /** API < 33: смену языка применяет пересоздание Activity. */
     private object RecreatingLocaleManager : AppLocaleManager {
