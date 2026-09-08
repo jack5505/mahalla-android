@@ -9,7 +9,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** Запись на время (issue #97): состояния, отмена и деление на разделы. */
+/**
+ * Запись на время (issue #97): состояния, отмена, перенос (эпик #11) и деление
+ * на разделы.
+ */
 class AppointmentTest {
 
     @Test
@@ -68,6 +71,45 @@ class AppointmentTest {
 
         assertTrue(passed.canCancel)
         assertFalse(passed.isUpcoming(NOW))
+    }
+
+    /**
+     * Правило переноса строже правила отмены, и это не перестраховка: своей
+     * ручки переноса у бэкенда нет, перенос — это новая запись плюс отмена
+     * старой, а новой нужны заведение и услуга.
+     */
+    @Test
+    fun `rescheduling needs the place and the service of the record`() {
+        assertTrue(appointment().canReschedule)
+
+        listOf(
+            appointment(placeId = null),
+            appointment(serviceId = null),
+            appointment(placeId = " "),
+            appointment(serviceId = ""),
+        ).forEach { appointment ->
+            // Запись без них показывается и отменяется как обычно — перенести
+            // её просто нечем.
+            assertTrue(appointment.canCancel)
+            assertFalse(appointment.canReschedule)
+        }
+    }
+
+    @Test
+    fun `finished appointments are not rescheduled`() {
+        listOf(
+            AppointmentStatus.Cancelled,
+            AppointmentStatus.Completed,
+            AppointmentStatus.NoShow,
+        ).forEach { status ->
+            assertFalse(status.name, appointment(status = status).canReschedule)
+        }
+
+        // Незакрытая — можно, включая прошедшую и с незнакомым статусом: то же
+        // правило, что у отмены.
+        assertTrue(appointment(date = LocalDate.of(2026, 9, 1)).canReschedule)
+        assertTrue(appointment(status = AppointmentStatus.Unknown).canReschedule)
+        assertFalse(appointment(id = "").canReschedule)
     }
 
     @Test
@@ -137,11 +179,15 @@ class AppointmentTest {
 
     private fun appointment(
         id: String = "a-1",
+        placeId: String? = "p-1",
+        serviceId: String? = "s-1",
         date: LocalDate? = LocalDate.of(2026, 9, 5),
         startTime: LocalTime? = LocalTime.of(10, 0),
         status: AppointmentStatus = AppointmentStatus.Pending,
     ) = Appointment(
         id = id,
+        placeId = placeId,
+        serviceId = serviceId,
         date = date,
         startTime = startTime,
         status = status,

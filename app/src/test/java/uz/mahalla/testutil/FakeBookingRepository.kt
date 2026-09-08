@@ -1,11 +1,13 @@
 package uz.mahalla.testutil
 
+import kotlinx.coroutines.CompletableDeferred
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BarberService
+import uz.mahalla.feature.booking.domain.Rescheduled
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -43,9 +45,30 @@ class FakeBookingRepository : BookingRepository {
     /** Исход отмены; `null` — вернуть ту же запись со статусом «отменена». */
     var cancelResult: ApiResult<Appointment>? = null
 
+    /**
+     * Пока задан и не завершён, `cancel` не отвечает. Нужен там, где
+     * проверяется поведение экрана **во время** отмены: с обычным фейком она
+     * заканчивается в тот же момент, в который началась.
+     */
+    var cancelGate: CompletableDeferred<Unit>? = null
+
     val cancelled = mutableListOf<String>()
 
+    /** Исход переноса; `null` — новая запись и снятая старая. */
+    var rescheduleResult: ApiResult<Rescheduled>? = null
+
+    /** Что ушло в `reschedule` — по порядку вызовов. */
+    val rescheduled = mutableListOf<RescheduleRequest>()
+
     data class BookedRequest(
+        val placeId: String,
+        val serviceId: String,
+        val date: LocalDate,
+        val time: LocalTime,
+    )
+
+    data class RescheduleRequest(
+        val appointmentId: String,
         val placeId: String,
         val serviceId: String,
         val date: LocalDate,
@@ -82,6 +105,29 @@ class FakeBookingRepository : BookingRepository {
         )
     }
 
+    override suspend fun reschedule(
+        appointmentId: String,
+        placeId: String,
+        serviceId: String,
+        date: LocalDate,
+        time: LocalTime,
+    ): ApiResult<Rescheduled> {
+        rescheduled += RescheduleRequest(appointmentId, placeId, serviceId, date, time)
+        return rescheduleResult ?: ApiResult.Success(
+            Rescheduled(
+                appointment = Appointment(
+                    id = "a-2",
+                    placeId = placeId,
+                    serviceId = serviceId,
+                    date = date,
+                    startTime = time,
+                    status = AppointmentStatus.Pending,
+                ),
+                previousCancelled = true,
+            ),
+        )
+    }
+
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> {
         requestedPages += page
         return pages[page] ?: defaultPage
@@ -89,6 +135,7 @@ class FakeBookingRepository : BookingRepository {
 
     override suspend fun cancel(appointment: Appointment): ApiResult<Appointment> {
         cancelled += appointment.id
+        cancelGate?.await()
         return cancelResult
             ?: ApiResult.Success(appointment.copy(status = AppointmentStatus.Cancelled))
     }

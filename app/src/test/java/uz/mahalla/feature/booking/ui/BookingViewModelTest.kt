@@ -22,6 +22,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BarberService
+import uz.mahalla.feature.booking.domain.Rescheduled
 import uz.mahalla.testutil.FakeBookingRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Clock
@@ -31,7 +32,8 @@ import java.time.LocalTime
 import java.time.ZoneOffset
 
 /**
- * Экран записи (issue #97): услуга → день → слот → подтверждение.
+ * Экран записи (issue #97): услуга → день → слот → подтверждение. Он же —
+ * экран переноса записи (эпик #11), когда маршрут назвал `rescheduleId`.
  *
  * Под Robolectric, потому что `SavedStateHandle.toRoute()` разбирает
  * типизированный маршрут через настоящий `Bundle` — на голой JVM аргументы
@@ -301,6 +303,150 @@ class BookingViewModelTest {
             assertEquals(listOf(BookingEffect.OpenMyAppointments), effects)
         }
 
+    // --- Перенос записи (эпик #11) ---
+
+    @Test
+    fun `rescheduling keeps the service of the route and asks for its slots`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-2")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+
+            val viewModel = viewModel(serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertTrue(state.isReschedule)
+            // Услуга приехала маршрутом; единственная услуга каталога её не
+            // подменяет — иначе человека перенесли бы на другую услугу.
+            assertEquals("s-1", state.selectedServiceId)
+            assertEquals(listOf("s-1" to TODAY), repository.requestedSlots)
+            assertEquals(
+                listOf(LocalTime.of(16, 0)),
+                (state.slots as ScreenState.Content).data,
+            )
+        }
+
+    /**
+     * Услуги в каталоге может уже не быть — заведение вправе её убрать, — но
+     * время-то за человеком занято, и перенос обязан остаться возможным.
+     */
+    @Test
+    fun `rescheduling survives a service missing from the catalogue`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Failure(ApiError.NoConnection)
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+
+            val viewModel = viewModel(serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+            runCurrent()
+
+            assertNull(viewModel.state.value.selectedService)
+            assertTrue(viewModel.state.value.canBook)
+        }
+
+    @Test
+    fun `confirming a reschedule carries the old appointment and the new slot`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+
+            val viewModel = viewModel(serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+            viewModel.onEvent(BookingEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(
+                listOf(
+                    FakeBookingRepository.RescheduleRequest(
+                        appointmentId = "a-1",
+                        placeId = "p-1",
+                        serviceId = "s-1",
+                        date = TODAY,
+                        time = LocalTime.of(16, 0),
+                    ),
+                ),
+                repository.rescheduled,
+            )
+            // Обычная запись при переносе не создаётся: иначе у человека
+            // осталось бы две.
+            assertTrue(repository.booked.isEmpty())
+
+            val state = viewModel.state.value
+            assertEquals("a-2", state.booked?.id)
+            assertTrue(state.previousCancelled)
+        }
+
+    @Test
+    fun `an old appointment that stayed is reported, not hidden`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+            repository.rescheduleResult = ApiResult.Success(
+                Rescheduled(
+                    appointment = Appointment(
+                        id = "a-2",
+                        date = TODAY,
+                        startTime = LocalTime.of(16, 0),
+                        status = AppointmentStatus.Pending,
+                    ),
+                    previousCancelled = false,
+                ),
+            )
+
+            val viewModel = viewModel(serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+            viewModel.onEvent(BookingEvent.BookClicked)
+            runCurrent()
+
+            val state = viewModel.state.value
+            // Новое время получено — это успех, но про лишнюю запись экран
+            // обязан сказать прямо.
+            assertEquals("a-2", state.booked?.id)
+            assertNull(state.bookFailure)
+            assertFalse(state.previousCancelled)
+        }
+
+    @Test
+    fun `a refused reschedule keeps the chosen slot and shows the text of the server`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+            repository.rescheduleResult = ApiResult.Failure(ApiError.Business("SLOT_TAKEN"))
+
+            val viewModel = viewModel(serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+            viewModel.onEvent(BookingEvent.BookClicked)
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertNull(state.booked)
+            assertEquals(ApiError.Business("SLOT_TAKEN"), state.bookFailure?.error)
+            // Выбор остаётся: терять его из-за отказа незачем.
+            assertEquals(LocalTime.of(16, 0), state.selectedTime)
+            assertFalse(state.isBooking)
+        }
+
+    @Test
+    fun `without an id in the route the screen books instead of rescheduling`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+
+            val viewModel = viewModel(serviceId = "s-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+            viewModel.onEvent(BookingEvent.BookClicked)
+            runCurrent()
+
+            assertFalse(viewModel.state.value.isReschedule)
+            assertTrue(repository.rescheduled.isEmpty())
+            assertEquals(1, repository.booked.size)
+        }
+
     private fun service(id: String) = BarberService(
         id = id,
         title = "Soch olish",
@@ -308,11 +454,19 @@ class BookingViewModelTest {
         durationMinutes = 40,
     )
 
-    private fun viewModel() = BookingViewModel(
+    private fun viewModel(
+        serviceId: String = "",
+        rescheduleId: String = "",
+    ) = BookingViewModel(
         repository = repository,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         savedStateHandle = SavedStateHandle(
-            mapOf("placeId" to "p-1", "placeName" to "Barber House"),
+            mapOf(
+                "placeId" to "p-1",
+                "placeName" to "Barber House",
+                "serviceId" to serviceId,
+                "rescheduleId" to rescheduleId,
+            ),
         ),
     )
 

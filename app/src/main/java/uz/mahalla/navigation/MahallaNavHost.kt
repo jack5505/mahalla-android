@@ -531,13 +531,23 @@ fun MahallaNavHost(
         // Вертикаль «Бронь» (эпик #11, issue #97): записываются с карточки
         // места, а следят за записью в «моих записях» — туда же ведёт и
         // подтверждение.
-        composable<BookingRoute> {
+        composable<BookingRoute> { entry ->
+            val isReschedule = entry.toRoute<BookingRoute>().rescheduleId.isNotBlank()
             BookingScreen(
                 // Экран записи из стека уходит: возвращаться в собранную форму
                 // после того, как запись создана, некуда.
                 onOpenMyAppointments = {
                     navController.navigate(MyAppointmentsRoute()) {
-                        popUpTo<BookingRoute> { inclusive = true }
+                        // Перенос начинается в «моих записях», и второй их
+                        // экран поверх первого дал бы «назад», ведущий на
+                        // устаревшую копию того же списка. Обычная запись
+                        // приходит с карточки места — там снимать нечего, и
+                        // popUpTo просто не находит цели.
+                        if (isReschedule) {
+                            popUpTo<MyAppointmentsRoute> { inclusive = true }
+                        } else {
+                            popUpTo<BookingRoute> { inclusive = true }
+                        }
                     }
                 },
                 onBack = { navController.navigateUp() },
@@ -545,7 +555,26 @@ fun MahallaNavHost(
         }
 
         composable<MyAppointmentsRoute> {
-            MyAppointmentsScreen(onBack = { navController.navigateUp() })
+            MyAppointmentsScreen(
+                // Новое время выбирают на экране записи: календарь и слоты уже
+                // там. Услуга едет маршрутом — менять её при переносе нельзя.
+                onReschedule = { appointmentId, placeId, serviceId ->
+                    navController.navigate(
+                        BookingRoute(
+                            placeId = placeId,
+                            serviceId = serviceId,
+                            rescheduleId = appointmentId,
+                        ),
+                    ) {
+                        // Двойное нажатие иначе кладёт в стек два экрана
+                        // переноса одной записи, и «назад» после успеха ведёт
+                        // на второй — перенос уже отменённой записи, то есть
+                        // прямой путь к лишней третьей.
+                        launchSingleTop = true
+                    }
+                },
+                onBack = { navController.navigateUp() },
+            )
         }
 
         // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с
