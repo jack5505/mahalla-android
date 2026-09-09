@@ -1,27 +1,23 @@
 package uz.mahalla.feature.onboarding.ui
 
-import android.content.Context
-import android.content.ContextWrapper
-import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.ui.biometric.findFragmentActivity
+import uz.mahalla.core.ui.biometric.showBiometricPrompt
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
-import uz.mahalla.data.security.AndroidBiometricAvailability
 import uz.mahalla.data.security.BiometricStatus
 
 /**
@@ -121,58 +117,6 @@ private fun BiometricStatus.explanationRes(): Int? = when (this) {
     BiometricStatus.NotEnrolled -> R.string.onboarding_biometric_not_enrolled
     BiometricStatus.NoHardware, BiometricStatus.Unavailable ->
         R.string.onboarding_biometric_unavailable
-}
-
-/**
- * `BiometricPrompt` умеет работать только с `FragmentActivity` — ради этого
- * `MainActivity` от неё и наследуется. Контекст в Compose может быть обёрнут
- * (тема, локаль), поэтому обёртки разворачиваются.
- */
-private fun Context.findFragmentActivity(): FragmentActivity? {
-    var current: Context? = this
-    while (current is ContextWrapper) {
-        if (current is FragmentActivity) return current
-        current = current.baseContext
-    }
-    return null
-}
-
-private fun showBiometricPrompt(
-    activity: FragmentActivity,
-    title: String,
-    subtitle: String,
-    negativeLabel: String,
-    onSuccess: () -> Unit,
-    onCancelled: () -> Unit,
-    onFailed: () -> Unit,
-) {
-    val prompt = BiometricPrompt(
-        activity,
-        ContextCompat.getMainExecutor(activity),
-        object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                onSuccess()
-            }
-
-            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                // Отмена — не ошибка: пользователь просто закрыл диалог.
-                val cancelled = errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
-                    errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                    errorCode == BiometricPrompt.ERROR_CANCELED
-                if (cancelled) onCancelled() else onFailed()
-            }
-            // onAuthenticationFailed — один неудачный отпечаток; диалог
-            // остаётся открытым, и вмешиваться в него не нужно.
-        },
-    )
-    prompt.authenticate(
-        BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setNegativeButtonText(negativeLabel)
-            .setAllowedAuthenticators(AndroidBiometricAvailability.AUTHENTICATORS)
-            .build(),
-    )
 }
 
 @ThemeLanguagePreviews

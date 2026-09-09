@@ -256,6 +256,52 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 | PUT | `notifications/read-all` |
 | PUT | `notifications/{id}/read` |
 
+## PinApi ✅ форма, ⚠️ успешный ответ
+
+`app/src/main/java/uz/mahalla/data/network/pin/PinApi.kt` — сверен со схемой и
+пробой `contract/security.sh` (issue #102, 2026-09-09). Форма запросов взята из
+`/v3/api-docs` и совпадает с кодом дословно; успешного ответа **под токеном
+никто не видел** — без него все три ручки отвечают `401 UNAUTHORIZED`.
+
+| Метод | Путь | Тело / query | |
+|---|---|---|---|
+| GET | `pin/status` | query `deviceId` (обяз.) | ✅ форма |
+| PUT | `pin/change` | `{currentPin, newPin, deviceId}` | ✅ форма |
+| PUT | `pin/biometric` | `{enabled, deviceId, pin}` | ✅ форма |
+
+**Оба кода — ровно шесть цифр**: у `currentPin`, `newPin` и `pin` в схеме стоит
+`pattern: ^[0-9]{6}$`. `Char.isDigit()` для проверки не годится — он принимает
+и полноширинные `１２３４５６`, которые бэкенд отвергнет.
+
+**PIN у `pin/biometric` обязателен** (`required: [deviceId, enabled, pin]`):
+включение отпечатка — смена настройки безопасности, и подтверждают её кодом.
+
+Ответ `pin/status` — `{pinSet, biometricEnabled, lockedSecondsRemaining,
+pinChangedAt, lastUsedAt}`, все поля необязательные. `lockedSecondsRemaining`
+считает сервер: **своего счётчика попыток в серверном режиме приложение не
+ведёт** (issue #51).
+
+Три ручки контроллера не подключены осознанно: `POST pin/set` и
+`POST pin/reset` требуют пары `otpToken` + `otpCode` (установку делает
+`auth/setup-pin`, сброс — выход и вход заново), `DELETE pin` выключил бы
+app-lock при живой сессии. `POST pin/verify` не понадобился — подтверждение
+кодом делают сами `change` и `biometric`.
+
+## SessionApi (замок) ✅ форма, ⚠️ успешный ответ
+
+`app/src/main/java/uz/mahalla/data/network/auth/SessionApi.kt` — сверен со
+схемой и пробой (issue #102, 2026-09-09).
+
+| Метод | Путь | Тело | |
+|---|---|---|---|
+| POST | `auth/session/check` | `{device}` → `{sessionValid, pinRequired, user, reason}` | ✅ форма |
+| POST | `auth/pin-resume` | `{device, pin, lat, lng}` → `AuthResponse` | ✅ форма |
+
+**Обе ручки требуют Bearer** — в отличие от анонимных `auth/pin-login` и
+`auth/setup-pin`. Проверено живым запросом: без токена приходит
+`401 UNAUTHORIZED`. Поэтому `PinApi` и `SessionApi` собираются на **основном**
+Retrofit, а не на `@RefreshClient`, где живёт остальная авторизация.
+
 ## PharmacyApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
@@ -339,12 +385,18 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 
 ## Как сверять
 
-Руками не надо — есть харнесс. Пилот пока на одной вертикали (`booking`),
-остальные добавляются по образцу.
+Руками не надо — есть харнесс. Сейчас две пробы, остальные добавляются
+по образцу.
 
 ```bash
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/booking.sh
+CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/security.sh
 ```
+
+`security.sh` — **только читающая**: `pin/change` сменил бы PIN живого
+аккаунта, а неверный код у `pin/change` и `pin/biometric` тратит серверную
+попытку и может залочить аккаунт. Такое дёргать автоматически нельзя, цена
+ошибки — человек, запертый вне приложения (ADR 0006).
 
 Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
 в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает

@@ -47,4 +47,9 @@ class FakeOnboardingRepository(
         writeFailure?.let { throw it }
         state.update { it.copy(onboardingCompleted = true) }
     }
+
+    override suspend fun clearCompleted() {
+        writeFailure?.let { throw it }
+        state.update { it.copy(onboardingCompleted = false) }
+    }
 }

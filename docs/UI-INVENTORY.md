@@ -75,8 +75,8 @@
 | `freelancer` | `GET freelancers`, `GET/POST freelancers/me`, `PUT me/toggle-availability` | ✗ | каталог мастеров + «стать исполнителем» |
 | `subscription` | `GET subscriptions/plans`, `current`, `POST subscribe`, `trial`, `cancel`, `PUT auto-renew` | ✗ | подписки (в ТЗ есть); `PlanResponse` уже с `nameUz`, `trialDays`, `isPopular` |
 | `payment` | `GET payments/subscription`, `payments/transactions`, callbacks Click/Payme | ✗ | реальная оплата |
-| `pin-code` | `GET pin/status`, `POST pin/set`, `verify`, `reset`, `PUT change`, `PUT biometric`, `DELETE pin` | ✗ (используется только `auth/setup-pin`, `auth/pin-login`) | смена PIN из профиля, app-lock |
-| `bank-auth` | `GET auth/sessions`, `POST auth/sessions/revoke`, `sessions/{id}/trust`, `auth/session/check`, `auth/pin-resume` | частично | «мои устройства», отзыв сессии, замок при возврате |
+| `pin-code` | `GET pin/status`, `POST pin/set`, `verify`, `reset`, `PUT change`, `PUT biometric`, `DELETE pin` | **есть** 4 из 7 (issue #102: `status`, `change`, `biometric` + `auth/setup-pin`/`pin-login`) | `pin/set` и `reset` требуют SMS-кода, `DELETE pin` выключил бы app-lock — см. ADR 0006 |
+| `bank-auth` | `GET auth/sessions`, `POST auth/sessions/revoke`, `sessions/{id}/trust`, `auth/session/check`, `auth/pin-resume` | **есть** (замок — issue #102) | — |
 | `app-version` | `POST app/version/check`, `POST app/version/skip` | ✗ | экран обязательного обновления (`updateRequired`, `remainingSkips`, `storeUrl`) |
 | `analytics` | `POST analytics/track` | ✗ | продуктовая аналитика |
 | `place` | `GET places/nearby`, `search`, `places/{id}` | **есть** | — |
@@ -254,9 +254,12 @@ issue #53.
 всегда `null` — поле ждёт FCM. Токен отправляется вместе с устройством в
 `send-otp`/`refresh`. Связать с B5.
 
-**D5. App-lock.** PIN/биометрия при возврате в приложение:
-`POST auth/session/check`, `POST auth/pin-resume`, `GET pin/status`. Флаги
-`biometricEnabled` и PIN уже сохраняются с эпика 3, но замка нет.
+**D5. App-lock — сделано** (issue #102). PIN или биометрия при возврате из
+фона (`ProcessLifecycleOwner` + оверлей поверх навигации, отсрочка 30 сек),
+экран «Безопасность» в профиле: статус PIN, смена кода (`PUT pin/change`),
+переключатель биометрии (`PUT pin/biometric`). Источник истины у PIN — сервер,
+локальный Keystore-хэш это его офлайновая копия (ADR 0006). Не проверено на
+устройстве: эмулятора в CI нет.
 
 **D6. Аналитика.** `POST analytics/track` — экраны, поиски, воронка заказа.
 

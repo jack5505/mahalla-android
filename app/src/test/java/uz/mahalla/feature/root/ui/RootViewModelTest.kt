@@ -25,14 +25,18 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.domain.AppUpdate
 import uz.mahalla.feature.update.domain.UpdateDecision
 import uz.mahalla.testutil.FakeAppVersionRepository
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakePinStorage
+import uz.mahalla.testutil.FakeSessionStore
 import java.io.File
 
 /**
@@ -228,11 +232,54 @@ class RootViewModelTest {
         assertEquals(0, versionRepository.checkCount)
     }
 
+    /**
+     * Экран блокировки сбросил вход (issue #102).
+     *
+     * Единственный случай, когда зафиксированный старт обязан пересчитаться:
+     * сессии больше нет, и держаться за `MainGraph` значит оставить человека
+     * там, где каждый запрос ответит 401. Раньше это делалось
+     * `Activity.recreate()`, но пересоздание сохраняет `ViewModelStore` — то
+     * есть эту же ViewModel с прежним решением.
+     */
+    @Test
+    fun `an auth restart moves the start destination back to onboarding`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        settings.setOnboardingCompleted(true)
+        val lock = appLockManager()
+        val viewModel = viewModel(settings, appLockManager = lock)
+        assertFalse(viewModel.awaitReady().startWithOnboarding)
+        lock.lockNow()
+        assertTrue(lock.locked.value)
+
+        // Так это делает экран блокировки: флаг онбординга уже сброшен выходом.
+        settings.setOnboardingCompleted(false)
+        viewModel.onAuthRestartRequired()
+
+        val latest = viewModel.state
+            .first { (it as? RootUiState.Ready)?.startWithOnboarding == true }
+            as RootUiState.Ready
+        assertTrue(latest.startWithOnboarding)
+        // И только теперь снимается замок: оверлей обязан дожить до того, как
+        // его эффект будет получен.
+        assertFalse(lock.locked.value)
+    }
+
+    private fun appLockManager() = AppLockManager(
+        sessionStore = FakeSessionStore(Session("a-1", "r-1")),
+        pinStorage = FakePinStorage(initialPin = "123456"),
+        clock = java.time.Clock.systemUTC(),
+    )
+
     private fun viewModel(
         settings: SettingsDataStore,
         authRepository: FakeAuthRepository = FakeAuthRepository(),
         overrideEnabled: Boolean = true,
         versionRepository: FakeAppVersionRepository = FakeAppVersionRepository(),
+        appLockManager: AppLockManager = AppLockManager(
+            sessionStore = FakeSessionStore(),
+            pinStorage = FakePinStorage(),
+            clock = java.time.Clock.systemUTC(),
+        ),
     ) = RootViewModel(
         settings,
         DataStoreOnboardingRepository(settings),
@@ -240,6 +287,9 @@ class RootViewModelTest {
         BackendUrlStore(settings, BUILD_URL, overrideEnabled),
         BackendCertificatePin(settings, overrideEnabled),
         AppUpdateGate(versionRepository),
+        // Замок (issue #102) корень только показывает и разбирает после
+        // сброса входа: на решение о старте графа он иначе не влияет.
+        appLockManager,
     )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =
