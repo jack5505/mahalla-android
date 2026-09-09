@@ -10,6 +10,30 @@ plugins {
 }
 
 /**
+ * Настроен ли Firebase в этой сборке (эпик 11).
+ *
+ * `google-services.json` — это ключи проекта Firebase, в репозиторий они не
+ * кладутся (файл в `.gitignore`), поэтому в CI и у чужого форка его нет.
+ * Отсутствие — не ошибка сборки, ровно как у ключа MapKit и DSN Sentry:
+ * приложение собирается и работает, просто пуши не приходят, а уведомления
+ * читаются в центре уведомлений (issue #81).
+ *
+ * `providers.fileContents`, а не `File.exists()`: значение читается через
+ * Gradle, то есть появление файла честно пересобирает конфигурацию.
+ */
+val firebaseConfigured: Boolean = providers
+    .fileContents(layout.projectDirectory.file("google-services.json"))
+    .asText
+    .orNull != null
+
+// Плагин генерирует ресурсы с ключами проекта — без файла ему нечего читать,
+// и применённый вхолостую он роняет сборку («File google-services.json is
+// missing»). Поэтому применяется условно, а не в блоке plugins.
+if (firebaseConfigured) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+}
+
+/**
  * Ключ Yandex MapKit (эпик 4.2). В репозиторий он не попадает — берётся из
  * переменной окружения `MAPKIT_API_KEY` (CI) или из `local.properties`,
  * строка `mapkit.apiKey=…` (машина разработчика; файл в .gitignore).
@@ -102,6 +126,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "MAPKIT_API_KEY", stringLiteral(mapkitApiKey()))
         buildConfigField("String", "SENTRY_DSN", stringLiteral(sentryDsn()))
+        // Пуши (эпик 11): без google-services.json Firebase не поднимается, и
+        // экран настроек уведомлений говорит об этом прямо, вместо того чтобы
+        // предлагать разрешение, от которого ничего не изменится.
+        buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
@@ -269,6 +297,11 @@ dependencies {
     // Картинки (issue #60). ImageLoader собирается в графе и ходит по тому же
     // OkHttp, что и остальное приложение, — см. MahallaImageLoader.
     implementation(libs.coil.compose)
+
+    // Push (эпик 11). Только messaging: аналитика и остальной Firebase
+    // приложению не нужны, а тянут за собой и размер, и сбор данных.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     implementation(libs.androidx.datastore.preferences)
 

@@ -265,8 +265,8 @@ class NotificationsViewModel @Inject constructor(
 
     /**
      * Переход по уведомлению. Цель разбирает [NotificationTarget]: для типов,
-     * у которых экрана ещё нет (очередь, бронь, акции, подписки), эффекта нет
-     * вовсе — такое уведомление просто гасится.
+     * у которых экрана ещё нет (очередь, бронь, акции), эффекта нет вовсе —
+     * такое уведомление просто гасится.
      */
     private fun open(id: String) {
         val notification = (currentState.items as? ScreenState.Content)
@@ -276,6 +276,7 @@ class NotificationsViewModel @Inject constructor(
         if (!notification.isRead) markRead(id)
         when (val target = NotificationTarget.of(notification)) {
             is NotificationTarget.Order -> emitEffect(NotificationsEffect.OpenOrder(target.orderId))
+            NotificationTarget.Subscription -> emitEffect(NotificationsEffect.OpenSubscription)
             NotificationTarget.None -> Unit
         }
     }

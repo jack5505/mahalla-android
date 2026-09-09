@@ -387,6 +387,31 @@ class NotificationsViewModelTest {
         assertEquals(NotificationsEffect.OpenOrder("o-42"), viewModel.effects.first())
     }
 
+    /**
+     * Подписка (эпик 11): цель без `entityId` — экран `SubscriptionRoute`
+     * аргументов не принимает. Сервер его и не присылает, и раньше такое
+     * уведомление никуда не вело.
+     */
+    @Test
+    fun `a subscription notification opens the subscription screen`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(
+            listOf(
+                notification(
+                    id = "n-1",
+                    type = NotificationType.SubscriptionExpires,
+                    entityId = null,
+                ),
+            ),
+            hasMore = false,
+        )
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        assertEquals(NotificationsEffect.OpenSubscription, viewModel.effects.first())
+    }
+
     @Test
     fun `a notification without a target does not navigate anywhere`() = runTest {
         val repository = FakeNotificationsRepository()

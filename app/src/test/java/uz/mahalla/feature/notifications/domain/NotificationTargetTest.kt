@@ -45,16 +45,32 @@ class NotificationTargetTest {
         }
     }
 
+    /**
+     * Подписка (эпик 11) — цель без `entityId`: экран `SubscriptionRoute`
+     * аргументов не принимает, какая подписка, бэкенд знает сам. Тем она и
+     * безопасна: разбирать нечего, значит и ошибиться не в чем.
+     */
+    @Test
+    fun `subscription notifications lead to the subscription screen`() {
+        val notification = notification(
+            type = NotificationType.SubscriptionExpires,
+            entityId = null,
+        )
+
+        assertEquals(NotificationTarget.Subscription, NotificationTarget.of(notification))
+        assertTrue(notification.isActionable)
+    }
+
     @Test
     fun `types without a screen lead nowhere instead of guessing`() {
-        // Очереди, брони, акций и подписок в приложении ещё нет, а у
-        // `REVIEW_ADDED` из контракта не следует, отзыв это или заведение.
+        // У очереди приходит id талона, а экран требует placeId; у записи по
+        // типу не отличить мастера от врача; у `REVIEW_ADDED` из контракта не
+        // следует, отзыв это или заведение. Своего экрана у акции тоже нет.
         listOf(
             NotificationType.WalkinRequest,
             NotificationType.AppointmentBooked,
             NotificationType.ReviewAdded,
             NotificationType.PromotionCreated,
-            NotificationType.SubscriptionExpires,
             NotificationType.Unknown,
         ).forEach { type ->
             val notification = notification(type = type, entityId = "e-1")

@@ -1,6 +1,7 @@
 package uz.mahalla
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -8,10 +9,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.runBlocking
@@ -46,6 +50,16 @@ class MainActivity : FragmentActivity() {
     @Volatile
     private var contentReady = false
 
+    /**
+     * Контроллер навигации живого экрана — нужен [onNewIntent] (эпик 11).
+     *
+     * Activity объявлена `singleTop`, поэтому нажатие на пуш при запущенном
+     * приложении не создаёт вторую Activity, а приносит новый `Intent` сюда.
+     * Первый `Intent` разбирает сам `NavHost` при построении графа, а этот —
+     * разбирать некому: композиция уже собрана.
+     */
+    private var navController: NavHostController? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -63,8 +77,17 @@ class MainActivity : FragmentActivity() {
             // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
             // сбрасывал бы back stack (см. RootViewModel).
             val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
+            val controller = rememberNavController()
+            // Ссылка держится только пока композиция жива: разобрать deep link
+            // мёртвым контроллером нельзя, а `onNewIntent` приходит и после
+            // того, как Activity ушла в фон.
+            DisposableEffect(controller) {
+                navController = controller
+                onDispose { navController = null }
+            }
             MahallaTheme(darkTheme = ready.settings.themeMode.isDark(isSystemInDarkTheme())) {
                 MahallaApp(
+                    navController = controller,
                     // Адрес бэкенда не задан (issue #26) — до него приложение
                     // всё равно никуда не сходит, поэтому он первый: без него
                     // и версию спросить не у кого.
@@ -90,6 +113,20 @@ class MainActivity : FragmentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Нажали на пуш, когда приложение уже запущено (эпик 11).
+     *
+     * `setIntent` обязателен: без него `getIntent()` возвращал бы тот, с
+     * которым Activity создавали, и пересозданная композиция ушла бы по старой
+     * ссылке. `handleDeepLink` отвечает `false`, если ссылки в графе нет, —
+     * тогда просто остаёмся на текущем экране, это лучше, чем упасть.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        navController?.handleDeepLink(intent)
     }
 
     /**

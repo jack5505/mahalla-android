@@ -39,7 +39,7 @@ Flutter / React Native / KMP запрещены (`rules/tech-stack.md` в диз
 ## Команды
 
 ```bash
-./gradlew testDebugUnitTest     # юнит-тесты (171 класс)
+./gradlew testDebugUnitTest     # юнит-тесты (184 класса)
 ./gradlew assembleDebug         # сборка
 ./gradlew lintDebug             # lint, warningsAsErrors включён
 ```
@@ -100,6 +100,10 @@ SDK лежит внутри проекта в `.sdk/` (в `.gitignore`), `local.
 - `MAPKIT_API_KEY` — без него на месте карты объяснение, а не тайлы;
 - `SENTRY_DSN` — без него падения у пользователей невидимы;
 - `DESIGN_REPO_PAT` — без него агент в CI работает без ТЗ и макетов;
+- **`google-services.json`** (эпик 11) — файл проекта Firebase, кладётся в
+  `app/`, в репозиторий не коммитится. Без него пуши не приходят: сборка
+  проходит, `BuildConfig.PUSH_ENABLED = false`, уведомления читаются только в
+  их центре;
 - `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` — docker-бэкенд
   в `claude-dev.yml`.
 

@@ -204,6 +204,8 @@ class RoutesSerializationTest {
             serializer<MyPlacesRoute>().descriptor.serialName,
             // Подписка (issue #103): тоже вне графов, открывается из профиля.
             serializer<SubscriptionRoute>().descriptor.serialName,
+            // Настройки уведомлений (эпик 11): из профиля и из их центра.
+            serializer<NotificationSettingsRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
@@ -224,6 +226,46 @@ class RoutesSerializationTest {
     fun `place deep link is built from the scheme`() {
         assertEquals("mahalla://place/p-42", DeepLinks.place("p-42"))
         assertTrue(DeepLinks.PLACE_PATTERN.startsWith("${DeepLinks.SCHEME}://"))
+    }
+
+    /**
+     * Ссылки пуша (эпик 11). Placeholder обязан совпадать с именем поля
+     * маршрута: расхождение не ломает сборку, а тихо открывает приложение на
+     * главной вместо нужного экрана.
+     */
+    @Test
+    fun `order deep link placeholder matches the route argument`() {
+        val descriptor = serializer<OrderStatusRoute>().descriptor
+        assertEquals(1, descriptor.elementsCount)
+        assertEquals("orderId", descriptor.getElementName(0))
+        assertTrue(DeepLinks.ORDER_PATTERN.endsWith("{orderId}"))
+        assertEquals("mahalla://order/o-42", DeepLinks.order("o-42"))
+    }
+
+    /**
+     * У центра уведомлений и подписки аргументов нет — значит нет и
+     * placeholder'ов: ссылка с `{...}` не совпала бы ни с чем.
+     */
+    @Test
+    fun `argumentless deep links carry no placeholders`() {
+        listOf(DeepLinks.NOTIFICATIONS_PATTERN, DeepLinks.SUBSCRIPTION_PATTERN).forEach { pattern ->
+            assertTrue(pattern.startsWith("${DeepLinks.SCHEME}://"))
+            assertTrue(!pattern.contains("{"))
+        }
+        assertEquals("mahalla://notifications", DeepLinks.notifications())
+        assertEquals("mahalla://subscription", DeepLinks.subscription())
+    }
+
+    /** Разные хосты: одинаковые склеили бы два экрана в один deep link. */
+    @Test
+    fun `deep link patterns are distinct`() {
+        val patterns = listOf(
+            DeepLinks.PLACE_PATTERN,
+            DeepLinks.ORDER_PATTERN,
+            DeepLinks.NOTIFICATIONS_PATTERN,
+            DeepLinks.SUBSCRIPTION_PATTERN,
+        )
+        assertEquals(patterns.size, patterns.toSet().size)
     }
 
     @Test

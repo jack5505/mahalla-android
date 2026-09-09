@@ -2,6 +2,7 @@ package uz.mahalla.data.device
 
 import android.os.Build
 import uz.mahalla.BuildConfig
+import uz.mahalla.data.push.PushTokenStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,7 +18,15 @@ data class DeviceDescriptor(
     val deviceName: String? = null,
     val osVersion: String? = null,
     val appVersion: String? = null,
-    /** Токен пуш-уведомлений. FCM в приложении пока нет — всегда `null`. */
+    /**
+     * Токен пуш-уведомлений (эпик 11). `null` — токена ещё нет: Firebase не
+     * настроен в сборке, сервисов Google на устройстве нет либо приложение
+     * просто не успело спросить.
+     *
+     * Это единственное место контракта, куда токен вообще можно положить:
+     * отдельной ручки регистрации устройства у бэкенда нет — см.
+     * [uz.mahalla.data.push.PushTokenRegistrar].
+     */
     val fcmToken: String? = null,
 ) {
     companion object {
@@ -37,6 +46,7 @@ interface DeviceInfoProvider {
 @Singleton
 class AndroidDeviceInfoProvider @Inject constructor(
     private val deviceIdStore: DeviceIdStore,
+    private val pushTokenStore: PushTokenStore,
 ) : DeviceInfoProvider {
 
     override suspend fun current(): DeviceDescriptor = DeviceDescriptor(
@@ -44,6 +54,10 @@ class AndroidDeviceInfoProvider @Inject constructor(
         deviceName = deviceName(),
         osVersion = "Android ${Build.VERSION.RELEASE.orEmpty()}".trim(),
         appVersion = BuildConfig.VERSION_NAME,
+        // Токен читается здесь, а не запоминается один раз: описание
+        // устройства собирается заново на каждый запрос авторизации, и токен,
+        // пришедший между входом и продлением сессии, уедет с ближайшим из них.
+        fcmToken = pushTokenStore.current(),
     )
 
     /**
