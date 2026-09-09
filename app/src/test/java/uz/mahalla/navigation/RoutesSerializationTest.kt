@@ -419,4 +419,53 @@ class RoutesSerializationTest {
         val route = PharmacyRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<PharmacyRoute>(json.encodeToString(route)))
     }
+
+    @Test
+    fun `business routes carry the arguments their view models read`() {
+        // Все четыре ViewModel панели читают `SavedStateHandle` по именам из
+        // `BusinessArgs`: `toRoute()` в JVM-тесте разбирает маршрут настоящим
+        // `Bundle`, а android.jar заглушен, и аргументы молча приходят
+        // пустыми. Переименование поля маршрута тогда сделало бы `placeId`
+        // пустым, `access("")` вернул бы «доступа нет», и панель перестала бы
+        // открываться вовсе — без единой ошибки компиляции (эпик #16).
+        val expected = listOf(BusinessArgs.PLACE_ID, BusinessArgs.PLACE_NAME)
+
+        listOf(
+            serializer<BusinessRoute>().descriptor,
+            serializer<BusinessQueueRoute>().descriptor,
+            serializer<BusinessOrdersRoute>().descriptor,
+            serializer<BusinessMenuRoute>().descriptor,
+        ).forEach { descriptor ->
+            assertEquals(
+                expected,
+                (0 until descriptor.elementsCount).map(descriptor::getElementName),
+            )
+        }
+
+        val route = BusinessRoute(placeId = "p-1", placeName = "Osh Markazi")
+        assertEquals(route, json.decodeFromString<BusinessRoute>(json.encodeToString(route)))
+
+        val queue = BusinessQueueRoute(placeId = "p-1")
+        assertEquals(queue, json.decodeFromString<BusinessQueueRoute>(json.encodeToString(queue)))
+
+        val orders = BusinessOrdersRoute(placeId = "p-1")
+        assertEquals(orders, json.decodeFromString<BusinessOrdersRoute>(json.encodeToString(orders)))
+
+        val menu = BusinessMenuRoute(placeId = "p-1")
+        assertEquals(menu, json.decodeFromString<BusinessMenuRoute>(json.encodeToString(menu)))
+    }
+
+    @Test
+    fun `business routes are distinguishable from each other`() {
+        // Поля у всех четырёх одинаковые, а экраны разные: перепутанный
+        // `composable<…>` привёл бы к меню вместо очереди.
+        val names = listOf(
+            serializer<BusinessRoute>().descriptor.serialName,
+            serializer<BusinessQueueRoute>().descriptor.serialName,
+            serializer<BusinessOrdersRoute>().descriptor.serialName,
+            serializer<BusinessMenuRoute>().descriptor.serialName,
+        )
+
+        assertEquals(names.size, names.toSet().size)
+    }
 }

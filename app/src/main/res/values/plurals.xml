@@ -160,4 +160,15 @@
         <item quantity="other">%1$d dan %2$d soatgacha tanlang</item>
     </plurals>
 
+    <!-- Бизнес-панель, форма новой позиции меню (эпик #16). -->
+    <plurals name="business_menu_error_too_long">
+        <item quantity="one">%1$d belgidan oshmasin</item>
+        <item quantity="other">%1$d belgidan oshmasin</item>
+    </plurals>
+
+    <plurals name="business_menu_error_prep_large">
+        <item quantity="one">%1$d daqiqadan oshmasin</item>
+        <item quantity="other">%1$d daqiqadan oshmasin</item>
+    </plurals>
+
 </resources>
