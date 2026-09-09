@@ -4,6 +4,7 @@ import uz.mahalla.core.format.DateTimeFormatters.AppZone
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
+import uz.mahalla.core.format.parseServerSlotInstant
 import uz.mahalla.feature.activity.domain.Activity
 import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
@@ -70,6 +71,12 @@ internal fun OrderViewDto.toActivity(): Activity? {
  * ищут «когда я играю», а не «когда я нажал кнопку». `createdAt` у этой схемы
  * нет вовсе, поэтому бронь без `startTime` остаётся без даты — в конце
  * списка, но в списке.
+ *
+ * `startTime` разбирает [parseServerSlotInstant], а не [parseServerInstant]:
+ * это время слота, местное по построению, ровно как `apptDate` + `startTime` у
+ * записи ([appointmentAt]). Две трактовки на один список давали расхождение в
+ * пять часов — бронь на 13:00 и запись на 13:00 того же дня оказывались в
+ * разных концах порядка «ближайшее сверху» (issue #144).
  */
 internal fun GamingBookingDto.toActivity(): Activity? {
     val bookingId = id?.takeIf { it.isNotBlank() } ?: return null
@@ -78,7 +85,7 @@ internal fun GamingBookingDto.toActivity(): Activity? {
         source = ActivitySource.GamingBookings,
         kind = ActivityKind.GamingBooking,
         status = ActivityStatus.ofBooking(status),
-        occurredAt = parseServerInstant(startTime),
+        occurredAt = parseServerSlotInstant(startTime),
         amount = totalPrice,
         // Длительность — единственное, что бэкенд сообщает о брони словами.
         // Подпись («2 ч») собирает экран: строка с числом должна быть

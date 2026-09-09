@@ -15,7 +15,9 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.activity.domain.Activity
+import uz.mahalla.feature.activity.domain.ActivityFilter
 import uz.mahalla.feature.activity.domain.ActivityKind
+import uz.mahalla.feature.activity.domain.ActivityMerge
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
@@ -140,7 +142,54 @@ class ActivityRepositoryTest {
         assertEquals(ActivityKind.GamingBooking, booking.kind)
         assertEquals(ActivityStatus.Confirmed, booking.status)
         assertEquals(60_000L, booking.amount)
-        assertEquals(Instant.parse("2026-09-05T13:00:00Z"), booking.occurredAt)
+        // `startTime` брони — время слота, а не отметка сервера: 13:00 в
+        // Ташкенте, то есть 08:00 UTC. Читать его как UTC значило бы показать
+        // бронь на 18:00 (issue #144).
+        assertEquals(Instant.parse("2026-09-05T08:00:00Z"), booking.occurredAt)
+    }
+
+    @Test
+    fun `a booking and an appointment at the same hour give the same moment`() = runTest {
+        // Расхождение issue #144: бронь разбиралась как UTC, а запись — в
+        // Asia/Tashkent, и два «13:00 пятого сентября» оказывались в пяти
+        // часах друг от друга — то есть в разных концах порядка «ближайшее
+        // сверху» на вкладке «Активные».
+        respond(
+            "/gaming/bookings/my",
+            """{"content":[{"id":"b-1","startTime":"2026-09-05T13:00:00",
+               "durationHours":2,"status":"CONFIRMED"}],"last":true}""",
+        )
+        respond(
+            "/appointments/my",
+            """{"content":[{"id":"a-1","apptDate":"2026-09-05",
+               "startTime":"13:00:00","status":"CONFIRMED"}],"last":true}""",
+        )
+
+        val moments = repository().feed().items.associate { it.id to it.occurredAt }
+
+        assertEquals(moments.getValue("a-1"), moments.getValue("b-1"))
+        assertEquals(Instant.parse("2026-09-05T08:00:00Z"), moments.getValue("b-1"))
+    }
+
+    @Test
+    fun `an earlier booking stands above a later appointment on the active tab`() = runTest {
+        // Тот же баг, но так его видит человек: вкладка «Активные» отвечает на
+        // вопрос «что дальше», а бронь на 13:00 уезжала под запись на 14:00 —
+        // на пять часов вперёд от того часа, который выбрали.
+        respond(
+            "/gaming/bookings/my",
+            """{"content":[{"id":"b-1","startTime":"2026-09-05T13:00:00",
+               "status":"CONFIRMED"}],"last":true}""",
+        )
+        respond(
+            "/appointments/my",
+            """{"content":[{"id":"a-1","apptDate":"2026-09-05",
+               "startTime":"14:00:00","status":"CONFIRMED"}],"last":true}""",
+        )
+
+        val active = ActivityMerge.filter(repository().feed().items, ActivityFilter.Active)
+
+        assertEquals(listOf("b-1", "a-1"), active.map(Activity::id))
     }
 
     @Test
