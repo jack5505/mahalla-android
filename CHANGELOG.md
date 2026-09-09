@@ -5650,3 +5650,19 @@ GEO_PERMISSION_REQUIRED`), но их ставит `GeoHeaderInterceptor` (issue 
   опираясь на `/v3/api-docs`.
 - На устройстве не проверено: эмулятора в CI нет, экран смотрелся по
   `@ThemeLanguagePreviews`.
+
+### Грабли: `action_required` читается как «CI упал» (PR #201, 2026-09-09)
+
+Оркестратор прислал «CI упал, попытка 1 из 3» с пустым логом. Лога не было
+потому, что не было job'ов: прогон `34388653834` завершился со статусом
+`action_required` и `jobs.total_count = 0` — GitHub держал его в «Approve and
+run» и ни одного шага не запустил. Ни сборка, ни тесты не падали: соседний
+прогон `34388536327` на той же ветке — `success`, локальный
+`assembleDebug testDebugUnitTest lintDebug` — BUILD SUCCESSFUL.
+
+Разница между прогонами — инициатор: тот, что ждал подтверждения, поднят
+`github-actions[bot]` (коммит, доехавший под `GITHUB_TOKEN`), зелёный —
+`claude[bot]`. Признак ситуации: `conclusion=action_required` **при нулевом
+числе job'ов**; в этом случае искать причину в коде нечего, нужен либо
+«Approve and run» руками, либо новый push (approve через API токену
+приложения недоступен — 403 `Resource not accessible by integration`).
