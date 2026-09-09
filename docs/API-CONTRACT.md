@@ -132,10 +132,23 @@
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
 
-**Аватар автора отзыва не сверен** (issue #60): схема `Response` в
-`/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
-разбирает поле под тремя именами — `userAvatarUrl`, `avatarUrl`, `userAvatar`.
-Молчание сервера — первая буква имени вместо фото, экран не ломается.
+**Имени и аватара автора у отзыва нет** — сверено 2026-09-09 (issue #92),
+коллизия springdoc разведена, вопрос из #60 и #76 закрыт отрицательным
+ответом:
+
+```
+ReviewResponse {id, placeId, userId, rating, text,
+                isVerified, ownerReply, helpfulCount, createdAt}
+```
+
+`ReviewDto` до сих пор разбирает `userName`/`author`/`authorName` и
+`userAvatarUrl`/`avatarUrl`/`userAvatar` — ни одного такого поля в ответе нет,
+поэтому имя автора всегда пустое, а аватар всегда `null`. Дефолты не дают
+разбору упасть, из-за чего это не замечали. Чинится в **issue #192**; там же
+разбор `isVerified`, `ownerReply` и `helpfulCount`.
+
+Тело `POST reviews` тоже разведено: `ReviewCreateRequest {placeId, rating,
+text, appointmentId}`.
 
 ## FashionApi ⚠️
 
@@ -199,11 +212,17 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
 
-**Тело `POST gaming/bookings` не подтверждено.** В схеме оно объявлено как
-`BookRequest`, а на это имя ссылаются три пути (коллизия springdoc), уцелел
-медицинский вариант. Поля названы по ответу того же эндпоинта — `{zoneId,
-startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh`, как только
-появится токен.
+**Тело `POST gaming/bookings` подтверждено схемой** — сверено 2026-09-09
+(issue #92). Коллизия springdoc разведена, `BookRequest` в схеме больше нет:
+
+```
+GamingBookRequest      {zoneId, startTime, durationHours}
+AppointmentBookRequest {placeId, serviceId, serviceName, date, startTime}
+HospitalBookRequest    {doctorId, date, startTime, complaint}
+```
+
+Угаданные ранее поля игровой брони совпали с настоящими. Успешный ответ под
+токеном по-прежнему не проверен — в CI нет `CONTRACT_REFRESH_TOKEN`.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
