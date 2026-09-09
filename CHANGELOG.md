@@ -5882,6 +5882,19 @@ PR #172): нумерация продолжена с T14, а от T7 там ос
 у `HospitalAppointmentResponse` нет ещё и `price` с названием услуги — строка
 записи к врачу выходит совсем голой.
 
+**Грабли окружения, не кода.** `kspDebugKotlin` несколько раз падал с
+`Internal compiler error` и `PersistentEnumeratorBase.catchCorruption` на
+`app/build/kspCaches/debug/symbolLookups/file-to-id.tab`. Выглядит как порча
+инкрементального кэша, но причина — **нехватка памяти**: за сессию
+накапливаются демоны `KotlinCompileDaemon` (свободной памяти оставалось около
+гигабайта), а хранилище KSP лежит на memory-mapped файлах и рвётся на середине
+записи. Ни `clean`, ни `--no-build-cache`, ни `-Pksp.incremental=false` причину
+не убирают — они только маскируют её, давая разово зелёный прогон. Лечится
+`./gradlew --stop` + `pkill -f KotlinCompileDaemon` (вернуло 14.6 ГБ вместо
+4.1 ГБ доступных), после чего `rm -rf app/build/kspCaches` и **обычный**
+`./gradlew testDebugUnitTest assembleDebug` проходят за 36 секунд. Если сборка
+покраснеет так же — смотреть на память, а не на кэш.
+
 **Не сделано / риски:**
 
 - **Ни один успешный путь не проверен на живых данных**: все пять ручек
