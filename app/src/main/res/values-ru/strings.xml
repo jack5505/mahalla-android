@@ -881,6 +881,8 @@
     <string name="activity_empty_active_description">Все заказы и брони завершены — они во вкладке «История».</string>
     <string name="activity_empty_history_title">История пуста</string>
     <string name="activity_empty_history_description">Завершённые заказы и брони попадут сюда.</string>
+    <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
+    <string name="activity_load_more">Показать ещё</string>
     <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
     <string name="activity_source_failed">Не удалось загрузить: %1$s</string>
     <string name="activity_source_orders">заказы</string>

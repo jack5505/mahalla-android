@@ -1,26 +1,21 @@
 package uz.mahalla.feature.activity.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -30,6 +25,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaButton
@@ -186,12 +182,12 @@ private fun LazyListScope.activityItems(
                     onClick = { onEvent(ActivityEvent.ActivityClicked(activity.key)) },
                 )
             }
-            // Хвост нужен и на **пустой** вкладке: там он показывает, что
-            // список ещё доливается, а если догрузка сорвалась — кнопку
-            // «повторить». Саму догрузку пустой вкладки ведёт ViewModel, а не
-            // этот хвост: он срабатывает только когда попал в видимую область,
-            // а пустое состояние плюс отметки сбойных разделов могут вытеснить
-            // его за нижнюю границу (issue #143).
+            // Хвост показан и на **пустой** вкладке — под пустым состоянием:
+            // там он говорит, что список ещё доливается, а если догрузка
+            // сорвалась — даёт «повторить». Но полагаться на нажатие там
+            // нельзя: человек читает «активных нет» как ответ и уходит, не
+            // дочитав до кнопки. Поэтому страницы пустой вкладки доливает
+            // ViewModel сама (issue #143).
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
                     LoadMoreItem(state = state, onEvent = onEvent)
@@ -312,20 +308,25 @@ private fun InlineFailure(
 }
 
 /**
- * Хвост списка: догрузка следующих страниц по достижению конца. Провал
- * показывает кнопку с причиной — иначе крутилка осталась бы навсегда, ведь
- * список не вырос и автотриггер больше не сработает.
+ * Хвост списка: кнопка «показать ещё» и причина, если страница не приехала.
  *
- * Триггер висит на **курсоре** [ActivityState.nextPages], а не на числе строк.
- * Так и должно быть, потому что вкладку отбирает клиент: догруженная страница
- * может целиком уехать в «историю», число строк «активных» при этом не
- * изменится — и триггер по нему не сработал бы ни разу, оставив крутилку
- * висеть при `hasMore = true`. Курсор же сдвигается после каждой удачной
- * страницы, поэтому догрузка идёт, пока источники не кончатся, и
- * останавливается сама: когда `nextPages` пуст, хвоста в списке уже нет.
+ * Догрузка **по нажатию**, а не сама по достижению конца списка (issue #151).
+ * Автотриггер здесь висел на курсоре [ActivityState.nextPages] — и курсор
+ * сдвигается после каждой удачной страницы, то есть эффект перезапускался сам,
+ * пока хвост оставался в композиции. Остановить это могла только вёрстка:
+ * список должен был перерасти экран и вытеснить хвост за нижнюю границу. У
+ * человека с парой активностей он не перерастает никогда, поэтому открытие
+ * таба выкачивало **все** страницы **всех пяти** источников пятикратными
+ * запросами подряд.
  *
- * Пустая вкладка на этот триггер не полагается: там хвост может не попасть в
- * видимую область, поэтому страницы доливает ViewModel (issue #143).
+ * Кнопка вместо крутилки заодно убирает случай «крутится навсегда»: пока
+ * страница в полёте, она показывает спиннер внутри себя ([ButtonState.Loading]
+ * — видима, но не нажимается), а не подменяется им.
+ *
+ * Пустая вкладка — единственное исключение: кнопка там тоже показана (под
+ * пустым состоянием), но ждать нажатия нельзя — человек читает «активных нет»
+ * как ответ и уходит, хотя активное лежит страницей ниже. Её страницы доливает
+ * ViewModel, с потолком и с остановкой на первой же непустой (issue #143).
  */
 @Composable
 private fun LoadMoreItem(
@@ -344,15 +345,13 @@ private fun LoadMoreItem(
         return
     }
 
-    LaunchedEffect(state.nextPages) { onEvent(ActivityEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
-    }
+    MahallaButton(
+        text = stringResource(R.string.activity_load_more),
+        onClick = { onEvent(ActivityEvent.LoadMore) },
+        modifier = modifier.padding(vertical = Spacing.item),
+        variant = MahallaButtonVariant.Secondary,
+        state = if (state.isLoadingMore) ButtonState.Loading else ButtonState.Default,
+    )
 }
 
 private fun ActivityFilter.labelRes(): Int = when (this) {
@@ -361,7 +360,6 @@ private fun ActivityFilter.labelRes(): Int = when (this) {
 }
 
 private const val LIST_SKELETONS = 4
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable
@@ -403,6 +401,10 @@ private fun ActivityScreenPreview() {
                 sourceFailures = mapOf(
                     ActivitySource.CinemaTickets to ApiFailure(ApiError.NoConnection),
                 ),
+                // Непустой курсор — чтобы в превью была видна и кнопка
+                // «показать ещё»: скриншот-тестов нет, превью — единственная
+                // проверка её вёрстки в четырёх темах и на двух языках.
+                nextPages = mapOf(ActivitySource.Orders to 1),
             ),
             onEvent = {},
         )

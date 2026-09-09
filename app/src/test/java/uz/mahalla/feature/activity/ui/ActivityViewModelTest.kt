@@ -254,7 +254,7 @@ class ActivityViewModelTest {
     @Test
     fun `the drain stops as soon as the tab has something to show`() = runTest {
         // Курсор ещё не пуст, но качать дальше незачем: на вкладке уже есть
-        // что читать, остальное дотянет хвост списка по мере прокрутки.
+        // что читать, остальное человек дотянет кнопкой «показать ещё».
         val repository = FakeActivityRepository()
         repository.pageFeeds = { pages ->
             when (pages.getValue(ActivitySource.Orders)) {
@@ -445,6 +445,31 @@ class ActivityViewModelTest {
         )
         assertFalse(state.hasMore)
         assertNull(state.loadMoreFailure)
+    }
+
+    @Test
+    fun `each tap on the button is one page, and no tap is no page`() = runTest {
+        // Курсор не должен опустошаться сам (issue #151): бесконечная история
+        // при непустой вкладке — это ровно одна страница на нажатие, а без
+        // нажатий — ни одной сверх первой загрузки.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            val page = pages.getValue(ActivitySource.Orders)
+            ActivityFeed(
+                items = listOf(activity("active-$page", status = ActivityStatus.InProgress)),
+                nextPages = mapOf(ActivitySource.Orders to page + 1),
+            )
+        }
+        val viewModel = ActivityViewModel(repository)
+
+        assertEquals(listOf(0), repository.requests.map { it.getValue(ActivitySource.Orders) })
+
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        viewModel.onEvent(ActivityEvent.LoadMore)
+
+        assertEquals(listOf(0, 1, 2), repository.requests.map { it.getValue(ActivitySource.Orders) })
+        assertTrue(viewModel.state.value.hasMore)
+        assertFalse(viewModel.state.value.isLoadingMore)
     }
 
     @Test
