@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.PathSensitivity
+import java.io.File
 import java.util.Properties
 
 plugins {
@@ -7,21 +9,27 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    // Скриншот-тесты темы (эпик 13.2): задачи recordRoborazziDebug /
+    // verifyRoborazziDebug / compareRoborazziDebug.
+    alias(libs.plugins.roborazzi)
+    // Baseline Profile (эпик 13.3): плагин связывает :app с модулем
+    // :baselineprofile, который снимает профиль на устройстве.
+    alias(libs.plugins.baselineprofile)
 }
 
 /**
- * Ключ Yandex MapKit (эпик 4.2). В репозиторий он не попадает — берётся из
- * переменной окружения `MAPKIT_API_KEY` (CI) или из `local.properties`,
- * строка `mapkit.apiKey=…` (машина разработчика; файл в .gitignore).
+ * Значение, которое нельзя держать в репозитории: переменная окружения
+ * (секрет Actions) или строка в `local.properties` на машине разработчика
+ * (файл в .gitignore).
  *
- * Пустое значение — не ошибка сборки: без ключа приложение собирается и
- * работает, а на месте карты показывается объяснение (см. `MapKitInitializer`).
- * Иначе один незаполненный секрет ронял бы сборку всем.
+ * providers.*, а не System.getenv/File.readText: иначе значение читается в
+ * обход Gradle, и configuration cache не пересобирается при смене ключа.
+ *
+ * Пустое значение — не ошибка сборки ни для одного из вызовов ниже: иначе
+ * один незаполненный секрет ронял бы сборку всем, включая форки.
  */
-fun mapkitApiKey(): String {
-    // providers.*, а не System.getenv/File.readText: иначе значение читается в
-    // обход Gradle, и configuration cache не пересобирается при смене ключа.
-    val fromEnvironment = providers.environmentVariable("MAPKIT_API_KEY").orNull
+fun secret(environmentName: String, localPropertyName: String): String {
+    val fromEnvironment = providers.environmentVariable(environmentName).orNull
     if (!fromEnvironment.isNullOrBlank()) return fromEnvironment.trim()
 
     val localProperties = providers.fileContents(
@@ -29,31 +37,26 @@ fun mapkitApiKey(): String {
     ).asText.orNull ?: return ""
 
     val properties = Properties().apply { load(localProperties.reader()) }
-    return properties.getProperty("mapkit.apiKey").orEmpty().trim()
+    return properties.getProperty(localPropertyName).orEmpty().trim()
 }
+
+/**
+ * Ключ Yandex MapKit (эпик 4.2). `MAPKIT_API_KEY` или `mapkit.apiKey`.
+ *
+ * Без ключа приложение собирается и работает, а на месте карты показывается
+ * объяснение (см. `MapKitInitializer`).
+ */
+fun mapkitApiKey(): String = secret("MAPKIT_API_KEY", "mapkit.apiKey")
 
 /**
  * DSN Sentry (issue #74) — адрес проекта, куда уезжают отчёты о падениях.
+ * `SENTRY_DSN` или `sentry.dsn`. В репозиторий не кладётся: DSN — это право
+ * писать в чужой проект.
  *
- * Читается ровно как ключ MapKit: переменная окружения `SENTRY_DSN` (секрет
- * Actions) или `local.properties`, строка `sentry.dsn=…`. В репозиторий не
- * кладётся: DSN — это право писать в чужой проект.
- *
- * Пустое значение — не ошибка сборки: приложение собирается и работает, просто
- * отчёты никуда не уходят (см. `CrashReportingConfig`). Иначе один
- * незаполненный секрет ронял бы сборку всем, включая форки.
+ * Без DSN приложение собирается и работает, просто отчёты никуда не уходят
+ * (см. `CrashReportingConfig`).
  */
-fun sentryDsn(): String {
-    val fromEnvironment = providers.environmentVariable("SENTRY_DSN").orNull
-    if (!fromEnvironment.isNullOrBlank()) return fromEnvironment.trim()
-
-    val localProperties = providers.fileContents(
-        rootProject.layout.projectDirectory.file("local.properties"),
-    ).asText.orNull ?: return ""
-
-    val properties = Properties().apply { load(localProperties.reader()) }
-    return properties.getProperty("sentry.dsn").orEmpty().trim()
-}
+fun sentryDsn(): String = secret("SENTRY_DSN", "sentry.dsn")
 
 /**
  * Слать ли отчёты из debug-сборки (issue #74).
@@ -87,6 +90,59 @@ fun backendUrlOverrideEnabled(): Boolean {
 fun stringLiteral(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+/**
+ * Адрес бэкенда для окружения (эпик 13.4). Значение по умолчанию зашито в
+ * buildType ниже, но сборку можно направить на другой стенд, не трогая код:
+ * `API_BASE_URL_DEBUG` / `API_BASE_URL_RELEASE` (переменная окружения или
+ * `-P`). Это нужно ровно для preview-стендов и релиз-кандидатов: заводить
+ * ради каждого стенда отдельный productFlavor — умножать варианты сборки.
+ *
+ * Адрес обязан оканчиваться на `/`: Retrofit молча отбрасывает последний
+ * сегмент baseUrl без слэша, и все запросы уезжают на уровень выше.
+ */
+fun apiBaseUrl(environmentName: String, default: String): String {
+    val fromEnvironment = providers.environmentVariable(environmentName).orNull
+    val fromProperty = providers.gradleProperty(environmentName).orNull
+    val override = (fromEnvironment ?: fromProperty).orEmpty().trim()
+    if (override.isEmpty()) return default
+    return if (override.endsWith("/")) override else "$override/"
+}
+
+/**
+ * Подпись release-сборки (эпик 13.4). Хранилище ключей в репозиторий не
+ * кладётся: `MAHALLA_KEYSTORE_FILE` + `MAHALLA_KEYSTORE_PASSWORD` +
+ * `MAHALLA_KEY_ALIAS` + `MAHALLA_KEY_PASSWORD` (секреты Actions) либо те же
+ * значения в `local.properties` как `release.keystore.file` и далее.
+ *
+ * Путь — абсолютный или относительно корня проекта. Хранилища нет — release
+ * собирается неподписанным (`assembleRelease` в CI проверяет R8, а не
+ * выкладку), и об этом печатается предупреждение, чтобы неподписанный APK не
+ * уехал в магазин молча.
+ */
+fun releaseKeystore(): ReleaseKeystore? {
+    val path = secret("MAHALLA_KEYSTORE_FILE", "release.keystore.file")
+    if (path.isEmpty()) return null
+
+    val keystoreFile = rootProject.layout.projectDirectory.file(path).asFile
+    if (!keystoreFile.exists()) {
+        logger.warn("Release keystore не найден: $keystoreFile — release будет неподписанным.")
+        return null
+    }
+    return ReleaseKeystore(
+        file = keystoreFile,
+        storePassword = secret("MAHALLA_KEYSTORE_PASSWORD", "release.keystore.password"),
+        keyAlias = secret("MAHALLA_KEY_ALIAS", "release.key.alias"),
+        keyPassword = secret("MAHALLA_KEY_PASSWORD", "release.key.password"),
+    )
+}
+
+data class ReleaseKeystore(
+    val file: File,
+    val storePassword: String,
+    val keyAlias: String,
+    val keyPassword: String,
+)
+
 android {
     namespace = "uz.mahalla"
     compileSdk = 35
@@ -106,6 +162,24 @@ android {
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
 
+    // Подпись release (эпик 13.4). Конфигурация создаётся только когда
+    // хранилище ключей реально есть: пустой signingConfig валит сборку на
+    // `Keystore file not set`, а собирать release без ключа надо — именно так
+    // CI проверяет, что R8 отработал.
+    signingConfigs {
+        releaseKeystore()?.let { keystore ->
+            create("release") {
+                // Схемы подписи (v1/v2/v3) не трогаем: AGP включает нужные по
+                // minSdk, а перечислять их руками — способ однажды выключить
+                // ту, без которой APK не ставится.
+                storeFile = keystore.file
+                storePassword = keystore.storePassword
+                keyAlias = keystore.keyAlias
+                keyPassword = keystore.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         // baseUrl задаётся buildType'ом (эпик 1.3): debug смотрит на стенд
         // разработки, release — на прод.
@@ -122,7 +196,16 @@ android {
             //
             // Путь `api/v1/` — часть baseUrl: эндпоинты бэкенда объявлены
             // относительно него (issue #42, `auth/send-otp` и остальные).
-            buildConfigField("String", "API_BASE_URL", "\"https://189-74-96-232.nip.io/api/v1/\"")
+            //
+            // Стенд разработки меняется на другой через `API_BASE_URL_DEBUG`
+            // (эпик 13.4) — например, когда бэкенд поднят в docker рядом.
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                stringLiteral(
+                    apiBaseUrl("API_BASE_URL_DEBUG", "https://189-74-96-232.nip.io/api/v1/"),
+                ),
+            )
             // Адрес бэкенда меняется прямо в приложении (issue #26).
             buildConfigField("boolean", "BACKEND_URL_OVERRIDE", "true")
             // Отчёты о падениях (issue #74): в debug — только по явному флагу.
@@ -133,8 +216,20 @@ android {
             )
         }
         getByName("release") {
-            isMinifyEnabled = false
-            buildConfigField("String", "API_BASE_URL", "\"https://api.mahalla.uz/api/v1/\"")
+            // R8 (эпик 13.4): выкидывает неиспользуемый код и переименовывает
+            // остальной. Правила — в proguard-rules.pro; всё, что резолвится
+            // рефлексией (kotlinx.serialization, Retrofit, JNI MapKit), должно
+            // быть перечислено там, иначе падение будет только в release.
+            isMinifyEnabled = true
+            // Ресурсы шринкуются только вместе с кодом: без minify AGP
+            // отказывается включать shrinkResources.
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release")
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                stringLiteral(apiBaseUrl("API_BASE_URL_RELEASE", "https://api.mahalla.uz/api/v1/")),
+            )
             // Экран адреса в релизе спрятан, пока сборку не попросили обратное:
             // иначе увести приложение на чужой сервер может кто угодно.
             buildConfigField(
@@ -171,6 +266,17 @@ android {
             // Robolectric нужен доступ к ресурсам (DAO- и DataStore-тесты).
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
+
+            all {
+                // Эталоны скриншот-тестов (эпик 13.2) — вход задачи тестов.
+                // Без этой строки Gradle считает задачу актуальной, если
+                // изменились только картинки, и `verifyRoborazziDebug`
+                // проходит, ничего не сверив: тест, который не краснеет.
+                it.inputs
+                    .dir(layout.projectDirectory.dir("src/test/screenshots"))
+                    .withPropertyName("roborazziGoldenImages")
+                    .withPathSensitivity(PathSensitivity.RELATIVE)
+            }
         }
     }
 
@@ -291,4 +397,16 @@ dependencies {
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Скриншот-тесты темы (эпик 13.2). Рисуют то же дерево, что и Compose на
+    // устройстве, но на JVM под Robolectric — эмулятора в CI нет.
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+
+    // Baseline Profile (эпик 13.3): библиотека ставит профиль из APK на
+    // устройстве при первом запуске. Без неё профиль в APK лежит мёртвым
+    // грузом на всех версиях Android до 9 и частично на новых.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 }

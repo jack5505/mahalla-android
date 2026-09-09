@@ -5589,3 +5589,85 @@ GEO_PERMISSION_REQUIRED`), но их ставит `GeoHeaderInterceptor` (issue 
 - На устройстве ничего не проверено (эмулятора в CI нет): режим переноса,
   предупреждение об оставшейся записи и кнопка в списке проверялись глазами по
   `@ThemeLanguagePreviews`.
+
+## Этап: качество и релиз (эпик 13, issue #17)
+
+Сквозной эпик: R8 и подпись, скриншот-тесты темы, Baseline Profile, покрытие.
+
+**13.4 Release-конфигурация.**
+
+- `isMinifyEnabled` + `isShrinkResources` в release — R8 включён впервые.
+  Правила в `app/proguard-rules.pro` переписаны: kotlinx.serialization
+  (официальный набор `-if @Serializable`), Retrofit (наши интерфейсы с
+  `@retrofit2.http.*` и generic-сигнатуры), MapKit (`com.yandex.**` целиком —
+  JNI), стектрейсы для Sentry (`SourceFile,LineNumberTable`), `-dontwarn` на
+  опциональные TLS-провайдеры. Дополнительно `uz.mahalla.**$$serializer`
+  держится классом целиком: release нечем проверить в CI, а цена ошибки —
+  падение на первом ответе бэкенда у всех.
+- Подпись — из `MAHALLA_KEYSTORE_FILE` / `..._PASSWORD` / `MAHALLA_KEY_ALIAS` /
+  `MAHALLA_KEY_PASSWORD` (или `local.properties`). Нет хранилища — release
+  собирается неподписанным с предупреждением, а не падает: иначе один
+  незаполненный секрет ломал бы сборку всем, включая форки.
+- Окружения: baseUrl остаётся за buildType, но перебивается
+  `API_BASE_URL_DEBUG` / `API_BASE_URL_RELEASE` (env или `-P`), завершающий
+  `/` дописывается сам. ProductFlavor не заводили — вчетверо больше вариантов
+  сборки ради одной строки.
+- Подробности и что придётся проверить руками — `docs/RELEASE.md`, ADR 0007.
+
+**13.2 Скриншот-тесты темы.** Roborazzi 1.38.0 поверх Robolectric
+(`GraphicsMode.NATIVE`): `ThemeGalleryScreenshotTest` снимает витрину кита
+(кнопки, поле, чипы, бейджи, карточка) в четырёх комбинациях light/dark ×
+uz/ru, эталоны — `app/src/test/screenshots/*.png`. Задачи
+`verifyRoborazziDebug` / `recordRoborazziDebug` / `compareRoborazziDebug`.
+Версия 1.38.0 — последняя, собранная Kotlin 1.9: свежие не читаются нашим
+компилятором 2.0.21. ADR 0006.
+
+**13.3 Baseline Profile.** Модуль `:baselineprofile` (`com.android.test` +
+`androidx.baselineprofile` 1.3.3): `StartupBaselineProfileGenerator` снимает
+профиль, `StartupBenchmark` меряет холодный старт с профилем и без него
+(`StartupTimingMetric`, 5 итераций). В `:app` добавлен
+`androidx.profileinstaller`. Команды и грабли — `docs/PERFORMANCE.md`.
+
+**13.1 Покрытие.** Отдельного кода не потребовалось: правило «тесты в том же
+коммите» действует, `testDebugUnitTest` в `ci.yml` уже обязателен, у каждого
+`*ViewModel` есть тест-класс. На момент эпика — 176 тест-классов, 1846 тестов;
+скриншот-тесты добавили машинную проверку темы, которой не было.
+
+**Прогоны:** `testDebugUnitTest` — 1846 тестов, зелено; `assembleDebug` —
+BUILD SUCCESSFUL; `lintDebug` (warningsAsErrors) — BUILD SUCCESSFUL;
+`verifyRoborazziDebug` — BUILD SUCCESSFUL; `assembleRelease` с R8 — BUILD
+SUCCESSFUL. Скриншот-тест проверен обратным прогоном: на подменённом эталоне
+`uzLight` краснеет.
+
+**Грабли этапа:**
+
+- **`verifyRoborazziDebug` молча проходил**, если менялись только PNG: Gradle
+  считал `testDebugUnitTest` актуальным, потому что эталоны не были входом
+  задачи. Лечится `inputs.dir("src/test/screenshots")` в `testOptions` —
+  без этого тест не мог покраснеть в принципе.
+- **Скриншот с грузящейся кнопкой недетерминирован**: внутри бесконечная
+  анимация индикатора, эталон зависел бы от кадра, на котором остановились
+  часы Robolectric. В витрине — выключенная кнопка.
+- **`com.android.test` нельзя объявить с версией в модуле** — приезжает тем же
+  артефактом, что и `com.android.application`; версия только в корневом
+  `build.gradle.kts` с `apply false`.
+- **APK release — 108 МБ**, из них ~103 МБ — нативный MapKit на четыре ABI;
+  кода после R8 всего 6 МБ. Play режет AAB по ABI, пользователь качает ~26 МБ.
+
+**Не сделано / риски:**
+
+- **R8 проверен только сборкой.** Ни один тест не запускает минифицированный
+  APK: эмулятора нет. Release перед выкладкой надо прогнать руками — вход,
+  карта, список мест, заказ.
+- **Baseline Profile не снят**: `:app:generateBaselineProfile` требует
+  эмулятора, в CI и песочнице его нет. В репозитории лежит инфраструктура, а
+  не профиль; чисел холодного старта тоже нет.
+- **Два шага не добавлены в `ci.yml`** — `assembleRelease` и
+  `verifyRoborazziDebug`: у GitHub App нет прав на `.github/workflows`.
+- **Эталоны скриншотов сняты на Linux.** На macOS рендер шрифтов отличается в
+  отдельных пикселях, поэтому проверка намеренно не входит в
+  `testDebugUnitTest` — иначе обязательный прогон краснел бы у разработчика на
+  маке. Переснимать эталоны нужно тем же способом, что и сняты (CI/Linux).
+- **`.claude/rules/compose-ui.md` и `testing.md` не обновлены** — правки в
+  `.claude/` заблокированы настройками песочницы. Строка «Скриншот-тестов в
+  проекте нет» в `compose-ui.md` устарела.
