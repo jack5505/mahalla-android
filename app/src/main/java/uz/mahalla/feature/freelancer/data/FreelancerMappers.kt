@@ -1,6 +1,7 @@
 package uz.mahalla.feature.freelancer.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
@@ -82,12 +83,10 @@ internal fun FreelancerOrderPageDto.toDomain(): FreelancerOrderPage = Freelancer
 )
 
 /**
- * Одно правило на обе страницы: `last`, иначе `page`/`totalPages`, иначе
- * останавливаемся. Полное молчание сервера о страницах — повод не показать
- * хвост списка, а не зациклить догрузку одной и той же страницы.
+ * Одно правило на обе страницы — общий [hasMorePages] (issue #142).
+ *
+ * Номер страницы берётся из ответа: запрошенного здесь нет — мапперы
+ * вызываются с одной только DTO.
  */
-private fun hasMore(page: Int?, totalPages: Int?, last: Boolean?): Boolean = when {
-    last != null -> !last
-    totalPages != null -> (page ?: 0) + 1 < totalPages
-    else -> false
-}
+private fun hasMore(page: Int?, totalPages: Int?, last: Boolean?): Boolean =
+    hasMorePages(page = page, totalPages = totalPages, last = last)

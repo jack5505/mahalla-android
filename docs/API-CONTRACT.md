@@ -40,6 +40,29 @@
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
+**Страничные ответы** — один конверт `PageResponse…` на все списки:
+`content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
+`last`. Есть ли следующая страница, решает одна общая функция
+`core/paging/hasMorePages` (issue #142): приоритет у `last`, без него —
+`page`/`totalPages`, при полном молчании сервера догрузка останавливается.
+
+---
+
+## «Мои активности» — своего `*Api.kt` нет
+
+`feature/activity/` (issue #73) не объявляет ни одной ручки и ни одного DTO:
+пять источников читаются интерфейсами вертикалей, которым принадлежат.
+Ходить в них мимо этих интерфейсов не надо — копия контракта уже разошлась с
+оригиналом один раз (issue #142).
+
+| Источник | Через что | Путь |
+|---|---|---|
+| Заказы всех вертикалей | `FashionApi.myOrders(vertical = null)` | `GET orders` |
+| Брони игровых зон | `GamingApi.myBookings` | `GET gaming/bookings/my` |
+| Записи к мастеру | `BookingApi.myAppointments` | `GET appointments/my` |
+| Записи к врачу | `HospitalApi.myAppointments` | `GET hospitals/appointments/my` |
+| Билеты в кино | `CinemaApi.myTickets` | `GET cinema/tickets/my` |
+
 ---
 
 ## AuthApi ✅
@@ -154,6 +177,13 @@
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+
+`GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
+отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
+перекрыто коллизией springdoc. Параметр `vertical` необязателен: с ним
+приезжают заказы одной вертикали (одежда), без него — **всех**
+(`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
+активности» (issue #73), см. ниже.
 
 ## FoodApi ✅
 
