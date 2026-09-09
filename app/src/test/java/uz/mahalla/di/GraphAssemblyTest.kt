@@ -455,7 +455,15 @@ class GraphAssemblyTest {
         val api = FreelancerDataModule.provideFreelancerApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
+        assertNotNull(
+            DefaultFreelancerRepository(
+                api = api,
+                // Кабинет мастера (issue #71) шлёт телефон в E.164 — тем же
+                // валидатором, что и анкета продавца.
+                phoneValidator = PhoneNumberValidator(),
+                clock = AppModule.provideClock(),
+            ),
+        )
     }
 
     /**

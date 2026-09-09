@@ -298,9 +298,13 @@ private fun ServicesBlock(
     }
 }
 
-/** Цена и длительность — то, что человек хочет знать до заказа. */
+/**
+ * Цена и длительность — то, что человек хочет знать до заказа. Той же строкой
+ * мастер видит свою услугу в кабинете (issue #71), поэтому подпись одна на оба
+ * экрана: разойдясь, они показали бы одну услугу по-разному.
+ */
 @Composable
-private fun BarberService.priceNote(): String? {
+internal fun BarberService.priceNote(): String? {
     val price = priceSum.takeIf { it > 0 }?.let { sum ->
         MoneyFormatter.withCurrency(sum, stringResource(R.string.currency_uzs))
     }

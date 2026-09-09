@@ -72,7 +72,7 @@
 | `hospital` | `GET hospitals/places/{id}/doctors`, `POST hospitals/appointments` | ✗ | вертикаль «больницы» |
 | `pharmacy` | `GET pharmacy/places/{id}/products` | ✗ | вертикаль «аптеки» (`requiresPrescription`, `stockQuantity`) |
 | `fashion` | `GET fashion/categories`, `stores/{id}/catalog`, `products/{id}`, корзина (`cart`, `cart/add`, `PUT`, `DELETE`), `POST fashion/orders` | ✗ | целая вторая вертикаль-магазин с серверной корзиной |
-| `freelancer` | `GET freelancers`, `GET/POST freelancers/me`, `PUT me/toggle-availability` | ✗ | каталог мастеров + «стать исполнителем» |
+| `freelancer` | `GET freelancers`, `GET/POST freelancers/me`, `PUT me/toggle-availability` | **есть** (issue #107 и #71) | каталог, заказ услуги и кабинет мастера; не подключены только входящие заказы мастера (`freelancers/me/orders`, смена статуса) — эпик #16 |
 | `subscription` | `GET subscriptions/plans`, `current`, `POST subscribe`, `trial`, `cancel`, `PUT auto-renew` | ✗ | подписки (в ТЗ есть); `PlanResponse` уже с `nameUz`, `trialDays`, `isPopular` |
 | `payment` | `GET payments/subscription`, `payments/transactions`, callbacks Click/Payme | ✗ | реальная оплата |
 | `pin-code` | `GET pin/status`, `POST pin/set`, `verify`, `reset`, `PUT change`, `PUT biometric`, `DELETE pin` | ✗ (используется только `auth/setup-pin`, `auth/pin-login`) | смена PIN из профиля, app-lock |
@@ -230,9 +230,16 @@ issue #53.
 еды тем, что корзина живёт на сервере — переиспользовать `CartCalculator`
 не получится, и это надо учесть в оценке.
 
-**C7. Фрилансеры.** `GET freelancers` (каталог с фильтрами) и «стать
-исполнителем» (`GET/POST freelancers/me`,
-`PUT freelancers/me/toggle-availability`).
+**C7. Фрилансеры — сделано.** Каталог, профиль мастера и заказ услуги —
+issue #107; «стать исполнителем» (`GET/POST freelancers/me`,
+`freelancers/me/services`, `PUT freelancers/me/toggle-availability`) —
+issue #71, экран «Мои услуги» в профиле. Обе формы — заказать услугу и
+выставить её — живут в одной вертикали, см.
+[ADR 0006](adr/0006-dve-formy-uslugi.md).
+Осталось от вертикали только входящие заказы мастера
+(`GET freelancers/me/orders`, `PUT freelancers/orders/{orderId}/status`) — это
+бизнес-панель, эпик #16: заказ мастеру придёт, а ответить на него в приложении
+нечем.
 
 ### Волна 3 — платформа (5 задач)
 
