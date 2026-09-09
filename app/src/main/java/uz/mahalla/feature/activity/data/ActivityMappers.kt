@@ -11,6 +11,7 @@ import uz.mahalla.feature.activity.domain.ActivityTarget
 import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.cinema.data.CinemaTicketDto
 import uz.mahalla.feature.food.data.OrderViewDto
+import uz.mahalla.feature.gaming.data.GamingBookingDto
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime

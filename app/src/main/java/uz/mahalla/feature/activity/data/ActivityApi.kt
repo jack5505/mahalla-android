@@ -1,13 +1,12 @@
 package uz.mahalla.feature.activity.data
 
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import retrofit2.http.GET
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.booking.data.AppointmentPageDto
 import uz.mahalla.feature.cinema.data.CinemaTicketPageDto
 import uz.mahalla.feature.fashion.data.OrderPageDto
+import uz.mahalla.feature.gaming.data.GamingBookingPageDto
 
 /**
  * «Мои активности» (issue #73, задача T7): пять источников, из которых
@@ -22,12 +21,13 @@ import uz.mahalla.feature.fashion.data.OrderPageDto
  * Пагинация у всех пяти настоящая и одинаковая: `page` + `size`, ответ —
  * конверт вокруг `PageResponse…` с `content`/`page`/`totalPages`/`last`.
  *
- * **Свои DTO здесь только у игровых зон.** Четыре из пяти ответов уже описаны
- * в вертикалях, которые ходят в те же ручки: [OrderPageDto] у одежды,
- * [AppointmentPageDto] у записи к мастеру (её же переиспользует больница) и
- * [CinemaTicketPageDto] у кино. У бэкенда это буквально одна модель на путь, и
- * вторая копия разъехалась бы с первой при первой же правке контракта — как
- * оно и вышло с `LocalTime` (см. `AppointmentDto`).
+ * **Своих DTO у этого API нет вовсе.** Все пять ответов уже описаны в
+ * вертикалях, которые ходят в те же ручки: [OrderPageDto] у одежды,
+ * [AppointmentPageDto] у записи к мастеру (её же переиспользует больница),
+ * [CinemaTicketPageDto] у кино и [GamingBookingPageDto] у игровых зон
+ * (issue #98 — приехала в `main` последней). У бэкенда это буквально одна
+ * модель на путь, и вторая копия разъехалась бы с первой при первой же правке
+ * контракта — как оно и вышло с `LocalTime` (см. `AppointmentDto`).
  *
  * **Почему заказы читаются общей ручкой.** `GET orders` отдаёт `OrderView` —
  * ту же схему, по которой экран статуса читает один заказ (issue #9), и в ней
@@ -66,8 +66,17 @@ interface ActivityApi {
     ): ApiResponse<AppointmentPageDto>
 
     /**
-     * Записи к врачу. Ручка отдельная, а схема ответа — та же
-     * `AppointmentResponse`, что у мастера: различает их только источник.
+     * Записи к врачу. Схема ответа — **своя**: сверка со стендом 2026-09-09
+     * показала, что общей `AppointmentResponse` больше нет, коллизия springdoc
+     * разошлась на `AppointmentBookingResponse` у мастера и
+     * `HospitalAppointmentResponse` у врача. Вторая беднее: вместо
+     * `placeId`/`serviceName`/`price`/`endTime` в ней `doctorId` и `complaint`.
+     *
+     * Читается всё равно одним [AppointmentPageDto] — так же, как это делает
+     * сама вертикаль больницы (`HospitalApi`, issue #99). Полей больше, чем
+     * приедет, но все они необязательные, а лишние `doctorId`/`complaint`
+     * пропускает `ignoreUnknownKeys`. Практическая разница одна: у записи к
+     * врачу не будет суммы — её бэкенд в этом ответе не отдаёт.
      */
     @GET("hospitals/appointments/my")
     suspend fun doctorAppointments(
@@ -81,41 +90,3 @@ interface ActivityApi {
         @Query("size") size: Int,
     ): ApiResponse<CinemaTicketPageDto>
 }
-
-/**
- * `GamingBooking` бэкенда: бронь игровой зоны.
- *
- * Названия заведения в ответе нет — только `placeId`, как и во всех остальных
- * четырёх источниках.
- */
-@Serializable
-data class GamingBookingDto(
-    @SerialName("id") val id: String? = null,
-    @SerialName("placeId") val placeId: String? = null,
-    @SerialName("zoneId") val zoneId: String? = null,
-    @SerialName("startTime") val startTime: String? = null,
-    @SerialName("endTime") val endTime: String? = null,
-    /**
-     * Длительность брони в часах. Объявлена, потому что документирует
-     * контракт, но в домен не доезжает: подпись «2 ч» обязана быть
-     * локализуемой строкой с plurals, а в списке у брони и так есть время
-     * начала, статус и сумма. Просится на экран брони, когда он появится.
-     */
-    @SerialName("durationHours") val durationHours: Int? = null,
-    @SerialName("totalPrice") val totalPrice: Long? = null,
-    /** `CONFIRMED` / `ACTIVE` / `COMPLETED` / `CANCELLED`. */
-    @SerialName("status") val status: String? = null,
-    @SerialName("createdAt") val createdAt: String? = null,
-)
-
-/** `PageResponseGamingBooking`. */
-@Serializable
-data class GamingBookingPageDto(
-    @SerialName("content") val content: List<GamingBookingDto> = emptyList(),
-    @SerialName("page") val page: Int? = null,
-    @SerialName("size") val size: Int? = null,
-    @SerialName("totalElements") val totalElements: Long? = null,
-    @SerialName("totalPages") val totalPages: Int? = null,
-    @SerialName("first") val first: Boolean? = null,
-    @SerialName("last") val last: Boolean? = null,
-)

@@ -44,32 +44,45 @@
 
 ## ActivityApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/activity/data/ActivityApi.kt` — пути
-существуют (проверено анонимным curl'ом по стенду: все пять отвечают `401`, а
-не `404`), **тела ответов не сверены**: под токеном в CI сходить нечем.
+`app/src/main/java/uz/mahalla/feature/activity/data/ActivityApi.kt` — пути и
+схемы сверены с `/v3/api-docs` стенда 2026-09-09; пути существуют и анонимно
+отвечают `401`, а не `404`. **Живые тела ответов не сверены**: все пять
+требуют Bearer, а под токеном в CI сходить нечем (нет
+`CONTRACT_REFRESH_TOKEN`), поэтому пробы в `contract/` на активности нет.
 
-Своих схем у него почти нет: четыре из пяти ответов разбираются DTO соседних
+Своих схем у него **нет ни одной**: все пять ответов разбираются DTO соседних
 вертикалей (`OrderPageDto` у одежды, `AppointmentPageDto` у записи,
-`CinemaTicketPageDto` у кино) — у бэкенда это одна модель на путь. Новое
-здесь только `GamingBooking`.
+`CinemaTicketPageDto` у кино, `GamingBookingPageDto` у игровых зон) — у
+бэкенда это одна модель на путь.
 
 | Метод | Путь | Схема ответа |
 |---|---|---|
 | GET | `orders` | `PageResponseOrderView` |
 | GET | `gaming/bookings/my` | `PageResponseGamingBooking` |
-| GET | `appointments/my` | `PageResponseAppointmentResponse` |
-| GET | `hospitals/appointments/my` | та же `AppointmentResponse` |
+| GET | `appointments/my` | `PageResponseAppointmentBookingResponse` |
+| GET | `hospitals/appointments/my` | `PageResponseHospitalAppointmentResponse` |
 | GET | `cinema/tickets/my` | `PageResponseCinemaTicket` |
 
 Все пять требуют Bearer и принимают `page` + `size`. `vertical` и `status` у
 `orders` не передаются намеренно: фильтр «активные / история» — набор
 статусов, а `status` принимает ровно один.
 
-**Названия заведения нет ни в одном из пяти ответов**, только `placeId`,
-поэтому в списке стоит «Заказ еды», а не имя точки. Нужен `placeName` в
-`OrderView`, `GamingBooking`, `AppointmentResponse` и `CinemaTicket` — это же
-закрыло бы имя заведения на экране статуса заказа (issue #9). Заведено на
-бэкенд: issue #150.
+**Две записи — две разные схемы, а не одна.** Сверка со стендом 2026-09-09:
+коллизия springdoc вокруг `AppointmentResponse` разошлась, у мастера теперь
+`AppointmentBookingResponse` (`placeId`, `serviceId`, `serviceName`, `price`,
+`apptDate`, `startTime`, `endTime`, `status`, `createdAt`), у врача —
+`HospitalAppointmentResponse` (`doctorId`, `apptDate`, `startTime`,
+`complaint`, `status`, `createdAt`). Обе читаются одним `AppointmentPageDto`:
+поля в нём необязательные, лишние пропускает `ignoreUnknownKeys`. Разница на
+экране одна — **у записи к врачу нет суммы**, бэкенд её в этом ответе не
+отдаёт.
+
+**Названия заведения нет ни в одном из пяти ответов** (перепроверено
+2026-09-09), только `placeId`, поэтому в списке стоит «Заказ еды», а не имя
+точки. Нужен `placeName` в `OrderView`, `GamingBooking`,
+`AppointmentBookingResponse` и `CinemaTicket` — это же закрыло бы имя
+заведения на экране статуса заказа (issue #9). Заведено на бэкенд: issue #150,
+**на 2026-09-09 не закрыт**.
 
 ## AuthApi ✅
 

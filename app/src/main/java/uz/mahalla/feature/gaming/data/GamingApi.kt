@@ -121,6 +121,12 @@ data class GamingBookingDto(
     @SerialName("durationHours") val durationHours: Int? = null,
     @SerialName("totalPrice") val totalPrice: Long? = null,
     @SerialName("status") val status: String? = null,
+    /**
+     * ISO-8601. Самой вертикали не нужен, но «Мои активности» (issue #73)
+     * сортируют пять источников одним списком и берут его, когда `startTime`
+     * не приехал: без него бронь ушла бы в конец, к записям без даты.
+     */
+    @SerialName("createdAt") val createdAt: String? = null,
 )
 
 /** `PageResponseGamingBooking`. */

@@ -11,6 +11,7 @@ import uz.mahalla.feature.activity.domain.ActivityFeed
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.cinema.data.CinemaTicketDto
 import uz.mahalla.feature.food.data.OrderViewDto
+import uz.mahalla.feature.gaming.data.GamingBookingDto
 import javax.inject.Inject
 import javax.inject.Singleton
 
