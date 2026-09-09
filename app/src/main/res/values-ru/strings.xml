@@ -899,6 +899,9 @@
     <string name="activity_kind_master_appointment">Запись к мастеру</string>
     <string name="activity_kind_doctor_appointment">Запись к врачу</string>
     <string name="activity_kind_cinema_ticket">Билет в кино</string>
+    <!-- Заголовок строки: вид активности и уточнение к нему (номер заказа,
+         услуга, место в зале). Разделитель — в ресурсе, а не в коде. -->
+    <string name="activity_title_with_note">%1$s · %2$s</string>
     <!-- Общий вид статусов пяти источников -->
     <string name="activity_status_placed">Принят</string>
     <string name="activity_status_confirmed">Подтверждён</string>

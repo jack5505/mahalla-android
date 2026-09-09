@@ -907,6 +907,9 @@
     <string name="activity_kind_master_appointment">Ustaga yozilish</string>
     <string name="activity_kind_doctor_appointment">Shifokorga yozilish</string>
     <string name="activity_kind_cinema_ticket">Kino chiptasi</string>
+    <!-- Заголовок строки: вид активности и уточнение к нему (номер заказа,
+         услуга, место в зале). Разделитель — в ресурсе, а не в коде. -->
+    <string name="activity_title_with_note">%1$s · %2$s</string>
     <!-- Общий вид статусов пяти источников -->
     <string name="activity_status_placed">Qabul qilindi</string>
     <string name="activity_status_confirmed">Tasdiqlandi</string>

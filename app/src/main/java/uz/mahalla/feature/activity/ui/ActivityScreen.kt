@@ -220,7 +220,9 @@ private fun ActivityRow(
             // Названия заведения бэкенд не отдаёт ни в одном из пяти ответов
             // (только `placeId`), поэтому заголовок — вид активности, а
             // уточнение (номер заказа, услуга, место в зале) идёт рядом.
-            title = activity.note?.let { "$kindLabel · $it" } ?: kindLabel,
+            title = activity.note
+                ?.let { stringResource(R.string.activity_title_with_note, kindLabel, it) }
+                ?: kindLabel,
             statusLabel = stringResource(activity.status.labelRes()),
             statusTone = activity.status.tone(),
             amountLabel = activity.amount

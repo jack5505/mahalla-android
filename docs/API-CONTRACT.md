@@ -1,6 +1,6 @@
 # Контракт бэкенда
 
-Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-06).
+Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-09).
 Базовый путь: `https://api.mahalla.uz/api/v1/` (release),
 `https://189-74-96-232.nip.io/api/v1/` (debug) — `BuildConfig.API_BASE_URL`.
 
@@ -41,6 +41,53 @@
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
 ---
+
+## ActivityApi ⚠️ частично
+
+`app/src/main/java/uz/mahalla/feature/activity/data/ActivityApi.kt` — пути и
+схемы сняты со стенда (`/v3/api-docs` + прямые curl'ы, issue #73), тела под
+токеном не проверены: все пять ручек отдают `401 UNAUTHORIZED` анонимно, а
+`CONTRACT_REFRESH_TOKEN` пока нет.
+
+| Метод | Путь | Схема ответа | |
+|---|---|---|---|
+| GET | `orders?page&size` | `PageResponseOrderView` | ⚠️ путь есть (`401`) |
+| GET | `gaming/bookings/my?page&size` | `PageResponseGamingBooking` | ⚠️ путь есть (`401`) |
+| GET | `appointments/my?page&size` | `PageResponseAppointmentResponse` | ⚠️ путь есть (`401`) |
+| GET | `hospitals/appointments/my?page&size` | та же `AppointmentResponse` | ⚠️ путь есть (`401`) |
+| GET | `cinema/tickets/my?page&size` | `PageResponseCinemaTicket` | ⚠️ путь есть (`401`) |
+
+Экран «Мои активности» собирает из этих пяти источников один список. Все ручки
+требуют Bearer — значит `ActivityApi` живёт на **основном** Retrofit, а не на
+«голом» `@RefreshClient`. Пагинация у всех одинаковая: `page` + `size` в
+запросе, `content` / `page` / `totalPages` / `last` в ответе.
+
+**`GET orders` вызывается без `vertical` — это новый способ вызова.** У ручки
+есть параметры `vertical` и `status`, но ни один не передаётся:
+
+- без `vertical` приезжают заказы **всех** вертикалей сразу (`FOOD`,
+  `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`) — один запрос вместо пяти;
+- `status` принимает ровно одно значение, а «активное» — это набор статусов,
+  поэтому деление на «активные / историю» считается на клиенте по уже
+  приехавшему списку.
+
+Та же ручка с `vertical` перечислена в разделе FashionApi — это один и тот же
+`order-controller`, разница только в наборе параметров.
+
+**Почему заказы читаются общей ручкой, а не `food/orders/my`.** У `GET orders`
+ответ описан схемой `OrderView` — той же, по которой экран статуса читает один
+заказ (issue #9), и в ней есть все суммы. У `food/orders/my` и
+`fashion/orders/my` ответ описан схемой `OrderResponse`, а это имя в
+`/v3/api-docs` перекрыто коллизией springdoc (issue #76): под ним лежит заказ
+**фрилансера** (`freelancerId`, `serviceTitle`), то есть имена полей оттуда
+взять нельзя.
+
+**`startTime`/`endTime` у записи — `JsonElement`, а не строка** (issue #141).
+springdoc описывает `LocalTime` объектом `{hour, minute, second, nano}`,
+Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёсткий тип уронил бы
+разбор **всей страницы** (`ApiError.Serialization` на весь ответ) — из списка
+разом выпали бы оба источника записей. Разбирает значение
+`parseServerLocalTime` в `core/format/ServerLocalTime.kt`.
 
 ## AuthApi ✅
 
@@ -151,9 +198,13 @@
 | PUT | `fashion/cart/{variantId}` |
 | DELETE | `fashion/cart/{variantId}` |
 | POST | `fashion/orders` |
-| GET | `orders` |
+| GET | `orders?vertical=CLOTHING&page&size` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+
+`GET orders` — общая ручка `order-controller`, а не «фэшн»-специфичная: здесь
+она вызывается с `vertical`, в «Моих активностях» — без него, чтобы получить
+заказы всех вертикалей разом (см. раздел ActivityApi).
 
 ## FoodApi ✅
 
@@ -197,7 +248,7 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 |---|---|---|
 | GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, отдала `data: []` |
 | POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
-| GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
+| GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена — см. ActivityApi |
 
 **Тело `POST gaming/bookings` не подтверждено.** В схеме оно объявлено как
 `BookRequest`, а на это имя ссылаются три пути (коллизия springdoc), уцелел
