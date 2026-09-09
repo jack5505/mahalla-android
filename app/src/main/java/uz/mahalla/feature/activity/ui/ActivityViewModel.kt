@@ -72,6 +72,11 @@ class ActivityViewModel @Inject constructor(
         updateState {
             copy(
                 items = if (showLoading) ScreenState.Loading else items,
+                // Отметки сбойных разделов держатся на списке, который они
+                // объясняют: уходит список в скелетон — уходят и они. Иначе
+                // «повторить» оставило бы пять строк «не загрузилось» висеть
+                // поверх скелетона.
+                sourceFailures = if (showLoading) emptyMap() else sourceFailures,
                 isRefreshing = refreshing,
                 isLoadingMore = false,
                 loadMoreFailure = null,
@@ -89,7 +94,11 @@ class ActivityViewModel @Inject constructor(
                         feed.items.isEmpty() -> ScreenState.Empty
                         else -> ScreenState.Content(feed.items)
                     },
-                    sourceFailures = feed.failures,
+                    // При полном отказе разделы не отмечаются: экран уже
+                    // показывает одну общую ошибку с одной кнопкой
+                    // «повторить», а пять строк «не загрузилось» рядом с ней —
+                    // шесть сообщений об одном и том же 401.
+                    sourceFailures = if (feed.isTotalFailure) emptyMap() else feed.failures,
                     nextPages = feed.nextPages,
                     isRefreshing = false,
                 )

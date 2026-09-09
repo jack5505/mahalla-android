@@ -108,6 +108,31 @@ class ActivityViewModelTest {
 
         // Истёкшая сессия — не «вы ещё ничего не заказывали».
         assertEquals(ApiError.Unauthorized, (state.items as ScreenState.Error).error)
+        // И не пять отметок разделов рядом с общей ошибкой: экран показал бы
+        // шесть сообщений об одном и том же 401, с шестью «повторить».
+        assertTrue(state.sourceFailures.isEmpty())
+    }
+
+    @Test
+    fun `retrying from a total failure does not keep the section marks`() = runTest {
+        // Отметка раздела держится на списке, который она объясняет: ушёл
+        // список в скелетон — ушла и она.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
+            items = listOf(activity("o-1", ActivitySource.Orders)),
+        )
+        val viewModel = ActivityViewModel(repository)
+        assertEquals(setOf(ActivitySource.CinemaTickets), viewModel.state.value.sourceFailures.keys)
+
+        // Список пропал (сессия истекла) — «повторить» показывает скелетон.
+        repository.defaultFeed = ActivityFeed(
+            failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
+        )
+        viewModel.onEvent(ActivityEvent.Retry)
+
+        assertTrue(viewModel.state.value.items is ScreenState.Error)
+        assertTrue(viewModel.state.value.sourceFailures.isEmpty())
     }
 
     @Test
@@ -174,6 +199,30 @@ class ActivityViewModelTest {
         viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.History))
 
         assertEquals(listOf("done"), viewModel.state.value.visible.map(Activity::id))
+    }
+
+    @Test
+    fun `an empty tab still has a cursor and can be loaded further`() = runTest {
+        // Вся первая страница уехала в «историю», а активный заказ — на
+        // второй. Пустая вкладка не имеет права остановить догрузку: иначе
+        // человек на «Faol» видит «ничего нет» и догрузить не может ничем —
+        // хвост списка на его вкладке не нарисован (см. `activityItems`).
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("done", status = ActivityStatus.Completed)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        assertTrue(viewModel.state.value.visible.isEmpty())
+        assertTrue(viewModel.state.value.hasMore)
+
+        viewModel.onEvent(ActivityEvent.LoadMore)
+
+        assertEquals(listOf("active"), viewModel.state.value.visible.map(Activity::id))
     }
 
     // --- Догрузка ---

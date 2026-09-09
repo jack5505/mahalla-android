@@ -25,6 +25,7 @@ import uz.mahalla.feature.fashion.data.FashionApi
 import uz.mahalla.feature.gaming.data.GamingApi
 import uz.mahalla.feature.hospital.data.HospitalApi
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * «Мои активности» (issue #73) на настоящем сетевом стеке ([NetworkFactory] +
@@ -39,8 +40,15 @@ import java.time.Instant
 class ActivityRepositoryTest {
 
     private lateinit var server: MockWebServer
-    private val bodies = mutableMapOf<String, MockResponse>()
-    private val requests = mutableMapOf<String, RecordedRequest>()
+
+    /**
+     * `ConcurrentHashMap`, а не `mutableMapOf`: репозиторий шлёт пять запросов
+     * параллельно, и `dispatch` вызывается MockWebServer'ом на своих потоках.
+     * На обычной карте это гонка по построению — потерянная запись превратила
+     * бы тест в плавающий.
+     */
+    private val bodies = ConcurrentHashMap<String, MockResponse>()
+    private val requests = ConcurrentHashMap<String, RecordedRequest>()
 
     @Before
     fun setUp() {

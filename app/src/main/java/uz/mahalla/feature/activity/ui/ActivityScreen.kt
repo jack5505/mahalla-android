@@ -179,7 +179,6 @@ private fun LazyListScope.activityItems(
                 // на главную» тому, у кого двадцать заказов в истории, значит
                 // не заметить его самого.
                 item(key = "empty-tab") { EmptyTab(filter = state.filter) }
-                return
             }
             items(visible, key = Activity::key) { activity ->
                 ActivityRow(
@@ -187,6 +186,11 @@ private fun LazyListScope.activityItems(
                     onClick = { onEvent(ActivityEvent.ActivityClicked(activity.key)) },
                 )
             }
+            // Хвост нужен и на **пустой** вкладке: первая страница могла
+            // целиком уехать в другую (двадцать завершённых заказов в истории,
+            // активный — на второй странице). Без него человек на «Faol»
+            // увидел бы «ничего нет» и не смог бы догрузить — триггер
+            // догрузки живёт внутри `LoadMoreItem`.
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
                     LoadMoreItem(state = state, onEvent = onEvent)
