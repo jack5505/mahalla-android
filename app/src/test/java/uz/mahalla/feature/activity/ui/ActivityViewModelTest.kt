@@ -159,6 +159,34 @@ class ActivityViewModelTest {
         assertEquals(setOf(ActivitySource.CinemaTickets), state.sourceFailures.keys)
     }
 
+    @Test
+    fun `a fully dropped first page does not end up an empty dead end`() = runTest {
+        // Нулевая страница пришла, но целиком отсеялась маппером (двадцать
+        // записей без `id`), а страницы у источника ещё есть. Объявить это
+        // пустым состоянием значит запереть список навсегда: хвост со своим
+        // `LaunchedEffect` рисуется только в ветке `Content`, и догрузку не
+        // запустить ни автоматически, ни кнопкой.
+        val repository = FakeActivityRepository()
+        repository.feeds[ActivityFeed.FIRST_PAGES.keys] = ActivityFeed(
+            items = emptyList(),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            items = listOf(activity("o-1", at = "2026-09-09T10:00:00Z")),
+        )
+
+        val viewModel = ActivityViewModel(repository)
+
+        // Не `Empty` — иначе следующей страницы никто не попросит.
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
+        assertTrue(viewModel.state.value.hasMore)
+        assertFalse(viewModel.state.value.isTabEmpty)
+
+        viewModel.onEvent(ActivityEvent.LoadMore)
+
+        assertEquals(listOf("o-1"), viewModel.state.value.visible.map(Activity::id))
+    }
+
     // --- Фильтр ---
 
     @Test

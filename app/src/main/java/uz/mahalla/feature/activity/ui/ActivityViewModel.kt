@@ -102,7 +102,16 @@ class ActivityViewModel @Inject constructor(
                         // Причину берём у любого источника: при полном отказе
                         // она у всех одна и та же (401, таймаут, нет сети).
                         feed.isTotalFailure -> ScreenState.Error(feed.failures.values.first())
-                        feed.items.isEmpty() -> ScreenState.Empty
+                        // Пусто — только когда догружать больше нечего.
+                        // Страница может целиком уехать в `mapNotNull` (двадцать
+                        // записей без `id`), и `Empty` при живом курсоре
+                        // означал бы тупик: хвост списка рисуется лишь в ветке
+                        // `Content`, а вместе с ним пропадает и его
+                        // `LaunchedEffect` — ни автодогрузки, ни кнопки. Пустой
+                        // `Content` при `hasMore` показывает хвост и цепочка
+                        // идёт дальше; «пустой вкладкой» его не объявят —
+                        // `isTabEmpty` требует, чтобы хвоста не было.
+                        feed.items.isEmpty() && !feed.hasMore -> ScreenState.Empty
                         else -> ScreenState.Content(feed.items)
                     },
                     // При полном отказе отметок разделов нет: экран и так

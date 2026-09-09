@@ -98,8 +98,15 @@ internal fun GamingBookingDto.toActivity(): Activity? {
 }
 
 /**
- * `AppointmentResponse` → строка списка. Одна и та же схема у мастера и у
- * врача, различает их только [source].
+ * Запись → строка списка. Схемы у мастера и у врача **разные**
+ * (`AppointmentBookingResponse` и `HospitalAppointmentResponse`, сверка со
+ * стендом 2026-09-09), но обе читаются одним `AppointmentDto`: поля в нём
+ * необязательные, лишние пропускает `ignoreUnknownKeys`. Различает источники
+ * [source].
+ *
+ * Следствие для врача: [amount] и [note] у него всегда пустые — `price` и
+ * `serviceName` есть только у мастера, а единственное человекочитаемое поле
+ * врача (`complaint`) в общий DTO не входит.
  */
 internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
     val appointmentId = id?.takeIf { it.isNotBlank() } ?: return null

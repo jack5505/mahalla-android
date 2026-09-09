@@ -20,6 +20,7 @@ import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * «Мои активности» (issue #73) на настоящем сетевом стеке ([NetworkFactory] +
@@ -34,8 +35,18 @@ import java.time.Instant
 class ActivityRepositoryTest {
 
     private lateinit var server: MockWebServer
-    private val bodies = mutableMapOf<String, MockResponse>()
-    private val requests = mutableMapOf<String, RecordedRequest>()
+
+    /**
+     * Обе карты — **конкурентные**, и это не перестраховка. `feed()` шлёт пять
+     * запросов разом, MockWebServer держит соединение на поток и зовёт
+     * [Dispatcher.dispatch] из пяти потоков сразу: обычный `LinkedHashMap`
+     * здесь теряет записи в `requests`, а чтение `bodies`, записанной
+     * из потока теста, не имеет с ними отношения happens-before — поток может
+     * не увидеть `respond(...)` и отдать пустой конверт по умолчанию. Тест
+     * краснел от этого случайно (`Key /orders is missing in the map`).
+     */
+    private val bodies = ConcurrentHashMap<String, MockResponse>()
+    private val requests = ConcurrentHashMap<String, RecordedRequest>()
 
     @Before
     fun setUp() {
@@ -214,7 +225,7 @@ class ActivityRepositoryTest {
     }
 
     @Test
-    fun `doctor appointments come from their own endpoint with the same schema`() = runTest {
+    fun `doctor appointments come from their own endpoint and share the DTO`() = runTest {
         respond(
             "/hospitals/appointments/my",
             """{"content":[{"id":"h-1","serviceName":"Terapevt","apptDate":"2026-09-11",

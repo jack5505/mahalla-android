@@ -150,9 +150,9 @@ enum class ActivityStatus {
         }
 
         /**
-         * `AppointmentResponse.status`: `PENDING`, `CONFIRMED`, `CANCELLED`,
-         * `COMPLETED`, `NO_SHOW`. Одна и та же схема у записи к мастеру и к
-         * врачу.
+         * `status` записи: `PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`,
+         * `NO_SHOW`. Схемы у мастера (`AppointmentBookingResponse`) и у врача
+         * (`HospitalAppointmentResponse`) разные, но набор статусов общий.
          */
         fun ofAppointment(value: String?): ActivityStatus = when (normalize(value)) {
             "PENDING" -> Placed
