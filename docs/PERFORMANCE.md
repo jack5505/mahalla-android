@@ -46,13 +46,20 @@ Google в замере старта только шумят), прогонит
 наличия (`BaselineProfileMode.Require`) и без профиля честно краснеет.
 
 ```bash
-./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
+./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest
 ```
 
-Фильтр обязателен: без него в том же прогоне запустится
-`StartupBaselineProfileGenerator`, которому нужен неминифицированный вариант
-сборки (`nonMinifiedRelease`), а не `benchmarkRelease`.
+Фильтр правил руками задавать **не нужно**: плагин сам выставляет
+`androidx.benchmark.enabledRules` по типу сборки — `macrobenchmark` для
+`benchmark*` и `baselineprofile` для `nonMinified*`, поэтому генератор профиля
+и замер старта не мешают друг другу.
+
+Причём задать его руками — вредно: плагин пропускает автоподстановку, если
+среди свойств сборки уже есть
+`android.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules`
+(см. `BaselineProfileProducerAgpPlugin`). Передав его один раз «на всякий
+случай», легко утащить тот же `-P` в `generateBaselineProfile` — там значение
+`Macrobenchmark` отфильтрует сам генератор, и профиль молча не снимется.
 
 Два теста на один вопрос — «профиль вообще что-то даёт?»:
 
@@ -66,7 +73,11 @@ Google в замере старта только шумят), прогонит
 крутится.
 
 Результаты — в
-`baselineprofile/build/outputs/connected_android_test_additional_output/`.
+`baselineprofile/build/outputs/managed_device_android_test_additional_output/pixel6Api34/`.
+Каталог именно `managed_device_…`, потому что замер идёт на управляемом
+эмуляторе (`useConnectedDevices = false`); `connected_…` появится только у
+`connectedBenchmarkReleaseAndroidTest`, то есть при запуске на воткнутом
+устройстве.
 
 ## Грабли
 

@@ -118,8 +118,10 @@ fun apiBaseUrl(environmentName: String, default: String): String {
  *
  * Путь — абсолютный или относительно корня проекта. Хранилища нет — release
  * собирается неподписанным (`assembleRelease` в CI проверяет R8, а не
- * выкладку), и об этом печатается предупреждение, чтобы неподписанный APK не
- * уехал в магазин молча.
+ * выкладку). Признак этого — имя файла `app-release-unsigned.apk`, а не запись
+ * в логе: предупреждение ниже печатается только когда путь задали, а файла по
+ * нему нет — то есть на опечатку, а не на незаполненный секрет. Логировать
+ * пустой секрет пришлось бы на каждом `assembleDebug`, где он ни при чём.
  */
 fun releaseKeystore(): ReleaseKeystore? {
     val path = secret("MAHALLA_KEYSTORE_FILE", "release.keystore.file")
@@ -413,9 +415,11 @@ dependencies {
 
     // Скриншот-тесты темы (эпик 13.2). Рисуют то же дерево, что и Compose на
     // устройстве, но на JVM под Robolectric — эмулятора в CI нет.
+    // Только базовый артефакт: снимаем через
+    // `SemanticsNodeInteraction.captureRoboImage`, он лежит в нём.
+    // roborazzi-compose (съёмка @Composable без правила) и roborazzi-junit-rule
+    // (RoborazziRule) не нужны — лишний espresso в classpath юнит-тестов.
     testImplementation(libs.roborazzi)
-    testImplementation(libs.roborazzi.compose)
-    testImplementation(libs.roborazzi.junit.rule)
 
     // Baseline Profile (эпик 13.3): библиотека ставит профиль из APK на
     // устройстве при первом запуске. Без неё профиль в APK лежит мёртвым

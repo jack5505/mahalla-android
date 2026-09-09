@@ -23,10 +23,11 @@ import org.junit.runner.RunWith
  *
  * Запуск (нужно устройство или эмулятор), команда целиком — в
  * `docs/PERFORMANCE.md`: сначала `:app:generateBaselineProfile`, иначе
- * [startupWithBaselineProfile] честно падает на отсутствующем профиле, и
- * обязательно с фильтром `androidx.benchmark.enabledRules=Macrobenchmark` —
- * без него в том же прогоне запустится генератор профиля, которому нужен
- * неминифицированный вариант сборки.
+ * [startupWithBaselineProfile] честно падает на отсутствующем профиле.
+ *
+ * `androidx.benchmark.enabledRules` руками задавать не нужно: плагин сам
+ * разводит генератор профиля и этот замер по типам сборки. Заданное руками
+ * значение отключает автоподстановку — и ломает `generateBaselineProfile`.
  */
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
