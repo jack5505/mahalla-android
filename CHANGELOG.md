@@ -5606,7 +5606,7 @@ GEO_PERMISSION_REQUIRED`), но их ставит `GeoHeaderInterceptor` (issue 
 
 | источник | эндпоинт | схема ответа |
 |---|---|---|
-| заказы всех вертикалей | `GET orders?vertical&status&page&size` | `PageResponseOrderView` |
+| заказы всех вертикалей | `GET orders?page&size` (`vertical` и `status` схема допускает, но клиент их не шлёт) | `PageResponseOrderView` |
 | брони игровых зон | `GET gaming/bookings/my?page&size` | `PageResponseGamingBooking` |
 | записи к мастеру | `GET appointments/my?page&size` | `PageResponseAppointmentResponse` |
 | записи к врачу | `GET hospitals/appointments/my?page&size` | та же `AppointmentResponse` |

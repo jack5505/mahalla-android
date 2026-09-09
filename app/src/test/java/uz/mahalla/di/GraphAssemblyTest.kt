@@ -37,6 +37,8 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.KeystorePinStorage
+import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.di.ActivityDataModule
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.booking.data.DefaultBookingRepository
 import uz.mahalla.feature.booking.data.di.BookingDataModule
@@ -44,8 +46,6 @@ import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
 import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
-import uz.mahalla.feature.activity.data.DefaultActivityRepository
-import uz.mahalla.feature.activity.data.di.ActivityDataModule
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository

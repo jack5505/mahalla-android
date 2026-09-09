@@ -62,11 +62,13 @@
 «голом» `@RefreshClient`. Пагинация у всех одинаковая: `page` + `size` в
 запросе, `content` / `page` / `totalPages` / `last` в ответе.
 
-**`GET orders` вызывается без `vertical` — это новый способ вызова.** У ручки
-есть параметры `vertical` и `status`, но ни один не передаётся:
+**`GET orders` вызывается без `vertical` — это новый способ вызова.** По схеме
+стенда у ручки есть ещё два параметра, `vertical` и `status` (в `*Api.kt` их
+нет: ни один не передаётся):
 
-- без `vertical` приезжают заказы **всех** вертикалей сразу (`FOOD`,
-  `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`) — один запрос вместо пяти;
+- без `vertical` заказы **всех** вертикалей (`FOOD`, `CLOTHING`, `PHARMACY`,
+  `CINEMA`, `GAMING`) приезжают одним запросом — а «своя» ручка `*/orders/my`
+  есть только у двух из пяти;
 - `status` принимает ровно одно значение, а «активное» — это набор статусов,
   поэтому деление на «активные / историю» считается на клиенте по уже
   приехавшему списку.
@@ -113,7 +115,7 @@ Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёстки
 | GET | `barber-services/places/{placeId}` | ✅ |
 | GET | `barber-services/places/{placeId}/slots` | ✅ |
 | POST | `appointments` | ⚠️ не проверено — нужен токен |
-| GET | `appointments/my` | ⚠️ не проверено — нужен токен |
+| GET | `appointments/my` | ⚠️ не проверено — нужен токен; та же ручка у ActivityApi |
 | POST | `appointments/{id}/cancel` | ⚠️ не проверено — нужен токен |
 
 **`ServiceResponse` — имена были угаданы неверно.** Стенд отдаёт
@@ -165,6 +167,8 @@ Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёстки
 | POST | `cinema/sessions/{sessionId}/buy` |
 | GET | `cinema/tickets/my` |
 | PUT | `cinema/tickets/{id}/cancel` |
+
+`cinema/tickets/my` читает ещё и ActivityApi — см. его раздел.
 
 ## CatalogApi ✅
 
@@ -272,6 +276,8 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 | POST | `hospitals/appointments` |
 | GET | `hospitals/appointments/my` |
 | POST | `appointments/{id}/cancel` |
+
+`hospitals/appointments/my` читает ещё и ActivityApi — см. его раздел.
 
 ## MediaApi ✅
 
