@@ -98,7 +98,9 @@
   честнее закрыть его на сервере.
 
 `GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
-одной записи нет), `PUT appointments/{id}/status` — бизнес-панель, эпик #16.
+одной записи нет), `PUT appointments/{id}/status` бизнес-панель эпика #16 **не использует**: записи
+к мастеру она не ведёт — очередь в ней живая (`walkin`), а календарь записей
+остался вне панели (см. BusinessApi ниже).
 
 **Открытый вопрос к бэкенду: в чём измеряется `price`.** Стенд отдаёт за
 стрижку `5000000`, за подравнивание бороды `3000000`. Как сумы это
@@ -301,6 +303,66 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 | POST | `places` |
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
+
+## BusinessApi ⚠️ пути сверены
+
+`app/src/main/java/uz/mahalla/feature/business/data/BusinessApi.kt` — бизнес-панель
+(эпик #16). Пути сняты с живого `/v3/api-docs` **2026-09-09** и проверены
+curl'ом: каждый отвечает `401 UNAUTHORIZED`, то есть существует и требует
+Bearer. Тела под токеном не проверены — секрета `CONTRACT_REFRESH_TOKEN` нет.
+
+| Метод | Путь | |
+|---|---|---|
+| GET | `analytics/places/{placeId}/dashboard` | ✅ путь есть (`401`) |
+| GET | `walkin/barber/dashboard?placeId=` | ✅ путь есть (`401`) |
+| PUT | `walkin/{id}/accept?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
+| PUT | `walkin/{id}/decline?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
+| PUT | `walkin/{id}/start?placeId=` | ✅ путь есть (`401`), тела нет |
+| PUT | `walkin/{id}/complete?placeId=` | ✅ путь есть (`401`), тела нет |
+| GET | `food/places/{placeId}/orders` | ✅ путь есть (`401`) |
+| PUT | `food/places/{placeId}/orders/{orderId}/status` | ✅ путь есть (`401`), тело ⚠️ |
+| GET | `food/places/{placeId}/menu` | ✅ (та же ручка, что у витрины) |
+| PUT | `food/items/{itemId}/toggle` | ✅ путь есть (`401`) |
+| POST | `food/places/{placeId}/items` | ✅ путь есть (`401`) |
+
+Плюс две уже описанные ручки, которые панель переиспользует: `GET places/my`
+(права, см. ниже) и `PUT places/{id}/availability` («пауза»).
+
+**Дашборд отдаёт словарь без схемы.** `ApiResponseMapStringLong` —
+`additionalProperties: integer(int64)`, ни одного объявленного ключа. Клиент
+разбирает его как `Map<String, Long?>` и показывает **то, что приехало**:
+подписи переведены только у знакомых ключей, остальные выводятся из имени
+(`total_revenue` → «Total revenue»). Придумать фиксированные поля значило бы
+получить пустой дашборд на первом же расхождении.
+
+**Три ручки принимают безымянную `Map` — springdoc не знает имён ключей**,
+потому что контроллеры принимают голую `Map`:
+
+- `PUT food/places/{id}/orders/{orderId}/status` — `Map<String, String>`. Ключ
+  **`status`** выведен, а не угадан: ровно эту операцию у двух соседних
+  вертикалей описывают настоящие схемы — `UpdateOrderStatusRequest`
+  (`freelancers/orders/{id}/status`) и `ModerateRequest`
+  (`admin/places/{id}/status`), и в обеих единственное обязательное поле
+  называется `status`. То же решение, что для `CreatePlaceRequest` в issue #84.
+- `PUT walkin/{id}/accept` — `Map<String, Integer>`, судя по
+  `WalkInResponse.counterTime` это встречное предложение по времени. Имени
+  ключа нет, поэтому клиент шлёт **пустой объект**: обычное «принять как есть».
+  Предложить другое время из панели пока нечем.
+- `PUT walkin/{id}/decline` — `Map<String, String>`, по всей видимости причина
+  отказа. Тоже пустой объект: поле, текст которого сервер молча выбросит,
+  обещало бы человеку разговор, которого не будет.
+
+**Расписания работы у бэкенда нет вовсе.** `UpdateRequest` заведения
+(`PUT places/{id}`) принимает `name`, `description`, `address`, `lat`, `lng`,
+`city`, `phone`, `website` — и всё. Единственный признак работы заведения —
+`isAvailable` («открыто сейчас»), он же «пауза». Пункт «расписание» из задачи
+12.4 поэтому не реализован.
+
+**Отдельной ручки прав нет.** Разделение витрины клиента и панели бизнеса
+держится на `GET places/my`: бэкенд возвращает только «свои» заведения вместе
+с `Mine.role` (`OWNER` / `MANAGER` / `STAFF`). Фильтра по `id` у ручки нет,
+поэтому доступ ищется перелистыванием страниц (`BusinessRepository.access`,
+предел — 20 страниц).
 
 ## SubscriptionsApi ⚠️
 

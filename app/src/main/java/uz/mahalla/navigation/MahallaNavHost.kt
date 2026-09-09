@@ -13,6 +13,10 @@ import androidx.navigation.toRoute
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
+import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
+import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
+import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
+import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
 import uz.mahalla.feature.cinema.ui.movie.MovieScreen
 import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
 import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
@@ -376,8 +380,43 @@ fun MahallaNavHost(
                 // продавца, что и из «Моей анкеты». Возврат из неё приведёт
                 // назад в список, где заявка уже будет видна.
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
+                // Бизнес-панель (эпик #16) — отсюда единственный вход: роль в
+                // заведении известна именно этому списку.
+                onOpenBusiness = { placeId, placeName ->
+                    navController.navigate(BusinessRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Бизнес-панель (эпик #16) — вне обоих графов: это не таб клиента, а
+        // отдельный раздел, и нижняя навигация витрины здесь только мешала бы.
+        // Права проверяет сам экран (`places/my`), маршрут их не даёт.
+        composable<BusinessRoute> {
+            BusinessDashboardScreen(
+                onOpenQueue = { placeId, placeName ->
+                    navController.navigate(BusinessQueueRoute(placeId, placeName))
+                },
+                onOpenOrders = { placeId, placeName ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
+                },
+                onOpenMenu = { placeId, placeName ->
+                    navController.navigate(BusinessMenuRoute(placeId, placeName))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<BusinessQueueRoute> {
+            BusinessQueueScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessOrdersRoute> {
+            BusinessOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessMenuRoute> {
+            BusinessMenuScreen(onBack = { navController.navigateUp() })
         }
 
         // Подписка (issue #103) — вне обоих графов, как «мои заведения»:

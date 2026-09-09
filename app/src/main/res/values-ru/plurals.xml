@@ -196,4 +196,18 @@
         <item quantity="other">Выберите от %1$d до %2$d часов</item>
     </plurals>
 
+    <plurals name="business_menu_error_too_long">
+        <item quantity="one">Не длиннее %1$d символа</item>
+        <item quantity="few">Не длиннее %1$d символов</item>
+        <item quantity="many">Не длиннее %1$d символов</item>
+        <item quantity="other">Не длиннее %1$d символов</item>
+    </plurals>
+
+    <plurals name="business_menu_error_prep_large">
+        <item quantity="one">Не больше %1$d минуты</item>
+        <item quantity="few">Не больше %1$d минут</item>
+        <item quantity="many">Не больше %1$d минут</item>
+        <item quantity="other">Не больше %1$d минут</item>
+    </plurals>
+
 </resources>

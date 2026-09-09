@@ -525,3 +525,65 @@ data class CheckoutRoute(val placeId: String)
  */
 @Serializable
 data class OrderStatusRoute(val orderId: String)
+
+// --- Бизнес-панель (эпик #16) ---
+
+/**
+ * Панель заведения: метрики дня и вход в разделы.
+ *
+ * Вне обоих графов, как «мои заведения»: панель — не таб клиента, а отдельный
+ * раздел приложения, и нижняя навигация витрины здесь только мешала бы. Вход
+ * один — строка «панель» в карточке своего заведения ([MyPlacesRoute]), где
+ * роль уже известна.
+ *
+ * **Маршрут не даёт прав.** `placeId` в ссылке — это только «какое заведение
+ * показать»; можно ли его показывать, решает `GET places/my` уже внутри
+ * экрана (`BusinessAccess`). Поэтому deep link'а у панели нет: ссылка,
+ * ведущая в «доступа нет», ничего не даёт ни клиенту, ни владельцу.
+ *
+ * @param placeName название заведения. Едет маршрутом по той же причине, что и
+ * у [MenuRoute]: шапка рисуется раньше, чем приезжают права, а пустой
+ * заголовок читается как чужой экран. Как только доступ загрузится, имя
+ * берётся из ответа сервера — оно точнее.
+ */
+@Serializable
+data class BusinessRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/** Управление очередью (задача 12.2). */
+@Serializable
+data class BusinessQueueRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/** Входящие заказы (задача 12.3). */
+@Serializable
+data class BusinessOrdersRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/** Меню и стоп-лист (задача 12.4). */
+@Serializable
+data class BusinessMenuRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Имена аргументов всех четырёх маршрутов панели — ViewModel читают их из
+ * `SavedStateHandle` напрямую, как [MyAppointmentsArgs]: `toRoute()` разбирает
+ * маршрут через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
+ * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
+ * проверяет `RoutesSerializationTest`.
+ *
+ * Один объект на четыре маршрута, а не четыре одинаковых: поля у них те же, и
+ * разойтись они могут только по ошибке.
+ */
+object BusinessArgs {
+    const val PLACE_ID = "placeId"
+    const val PLACE_NAME = "placeName"
+}

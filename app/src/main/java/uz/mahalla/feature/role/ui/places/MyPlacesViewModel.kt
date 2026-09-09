@@ -49,6 +49,8 @@ class MyPlacesViewModel @Inject constructor(
             is MyPlacesEvent.AvailabilityToggled -> toggleAvailability(event.placeId)
             MyPlacesEvent.RegisterPlaceRequested ->
                 emitEffect(MyPlacesEffect.OpenProviderForm)
+
+            is MyPlacesEvent.BusinessPanelClicked -> openBusinessPanel(event.placeId)
         }
     }
 
@@ -192,6 +194,17 @@ class MyPlacesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Панель — только у опубликованного заведения (`MyPlace
+     * .canOpenBusinessPanel`). Роль здесь не проверяется: сотруднику панель
+     * тоже нужна, просто разделов у него меньше — это решает уже сама панель.
+     */
+    private fun openBusinessPanel(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canOpenBusinessPanel) return
+        emitEffect(MyPlacesEffect.OpenBusinessPanel(place.id, place.name))
     }
 
     private fun placeOrNull(placeId: String): MyPlace? =

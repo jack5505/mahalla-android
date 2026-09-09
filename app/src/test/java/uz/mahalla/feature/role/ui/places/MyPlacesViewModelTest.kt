@@ -219,6 +219,74 @@ class MyPlacesViewModelTest {
         assertTrue(repository.toggled.isEmpty())
     }
 
+    @Test
+    fun `an active place leads to the business panel with its name`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        // Имя едет вместе с id: панель рисует шапку раньше, чем подтверждает
+        // права, и пустой заголовок читался бы как чужой экран (эпик #16).
+        assertEquals(
+            MyPlacesEffect.OpenBusinessPanel("p-1", "Osh Markazi"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `an application under moderation has no business panel`() = runTest {
+        // Ни заказов, ни очереди у неё быть не может, а панель, умеющая
+        // сказать только «ждите модерацию», повторяет ту же карточку.
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
+    /**
+     * Сотруднику панель нужна — он и вызывает следующего, и принимает заказы;
+     * разделов у него просто меньше, и решает это уже сама панель.
+     */
+    @Test
+    fun `a staff member still gets into the business panel`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(
+                place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Staff),
+            ),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        assertEquals(
+            MyPlacesEffect.OpenBusinessPanel("p-1", "Osh Markazi"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `the business panel of an unknown place does not open`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-404"))
+
+        assertTrue(effects.isEmpty())
+    }
+
     private fun page(
         items: List<MyPlace>,
         hasMore: Boolean = false,
