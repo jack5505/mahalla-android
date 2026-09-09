@@ -28,6 +28,8 @@ Flutter / React Native / KMP запрещены (`rules/tech-stack.md` в диз
 | Почему принято решение (карты, БД, PIN…) | `docs/adr/` |
 | Что уже сделано, грабли прошлых этапов | `CHANGELOG.md` |
 | Инвентаризация экранов и план развития | `docs/UI-INVENTORY.md` |
+| Подпись, R8, окружения release | `docs/RELEASE.md` |
+| Baseline Profile и замер старта | `docs/PERFORMANCE.md` |
 | Правила по областям кода | `.claude/rules/` (подгружаются сами) |
 
 **Дизайн и ТЗ — в отдельном репозитории** `jack5505/mahalla`:
@@ -39,12 +41,15 @@ Flutter / React Native / KMP запрещены (`rules/tech-stack.md` в диз
 ## Команды
 
 ```bash
-./gradlew testDebugUnitTest     # юнит-тесты (171 класс)
+./gradlew testDebugUnitTest     # юнит-тесты (1846 тестов)
 ./gradlew assembleDebug         # сборка
 ./gradlew lintDebug             # lint, warningsAsErrors включён
+./gradlew verifyRoborazziDebug  # скриншот-тесты темы (эталоны сняты на Linux)
+./gradlew assembleRelease       # R8 — трогал сборку или зависимости, прогони
 ```
 
-Эмулятора нет ни в CI, ни в песочнице — instrumentation-тесты не запускать.
+Эмулятора нет ни в CI, ни в песочнице — instrumentation-тесты, Baseline
+Profile и замер старта не запускать (`docs/PERFORMANCE.md`).
 
 ## Окружение
 
@@ -101,7 +106,14 @@ SDK лежит внутри проекта в `.sdk/` (в `.gitignore`), `local.
 - `SENTRY_DSN` — без него падения у пользователей невидимы;
 - `DESIGN_REPO_PAT` — без него агент в CI работает без ТЗ и макетов;
 - `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` — docker-бэкенд
-  в `claude-dev.yml`.
+  в `claude-dev.yml`;
+- `MAHALLA_KEYSTORE_FILE` / `..._PASSWORD` / `MAHALLA_KEY_ALIAS` /
+  `MAHALLA_KEY_PASSWORD` — подпись release; без них release собирается
+  неподписанным (`docs/RELEASE.md`).
+
+Плюс два шага в `ci.yml`, которых там нет и которые агент добавить не может
+(у GitHub App нет прав на `.github/workflows`): `assembleRelease` — проверка
+R8, и `verifyRoborazziDebug` — скриншот-тесты темы.
 
 ## Как поддерживать эти файлы
 

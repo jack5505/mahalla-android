@@ -5589,3 +5589,170 @@ GEO_PERMISSION_REQUIRED`), но их ставит `GeoHeaderInterceptor` (issue 
 - На устройстве ничего не проверено (эмулятора в CI нет): режим переноса,
   предупреждение об оставшейся записи и кнопка в списке проверялись глазами по
   `@ThemeLanguagePreviews`.
+
+## Этап: качество и релиз (эпик 13, issue #17)
+
+Сквозной эпик: R8 и подпись, скриншот-тесты темы, Baseline Profile, покрытие.
+
+**13.4 Release-конфигурация.**
+
+- `isMinifyEnabled` + `isShrinkResources` в release — R8 включён впервые.
+  В `app/proguard-rules.pro` осталось **только то, чего нет в consumer-rules
+  библиотек** (сверено с `app/build/outputs/mapping/release/configuration.txt`):
+  `-renamesourcefileattribute SourceFile`, keep на `uz.mahalla.**$$serializer`,
+  MapKit (`com.yandex.**` целиком — JNI) и прежний блок Coil. Правила для
+  kotlinx.serialization, Retrofit и `-dontwarn` на TLS-провайдеров **писать не
+  нужно** — их привозят сами библиотеки.
+  `uz.mahalla.**$$serializer` держится классом целиком сверх официального
+  набора: release нечем проверить в CI, а цена ошибки — падение на первом
+  ответе бэкенда у всех.
+- Подпись — из `MAHALLA_KEYSTORE_FILE` / `..._PASSWORD` / `MAHALLA_KEY_ALIAS` /
+  `MAHALLA_KEY_PASSWORD` (или `local.properties`). Нет хранилища — release
+  собирается неподписанным, а не падает: иначе один незаполненный секрет ломал
+  бы сборку всем, включая форки. Признак — имя `app-release-unsigned.apk`;
+  предупреждения в логе при незаданном секрете **нет** (`logger.warn` ловит
+  только опечатку в пути).
+- Окружения: baseUrl остаётся за buildType, но перебивается
+  `API_BASE_URL_DEBUG` / `API_BASE_URL_RELEASE` (env или `-P`), завершающий
+  `/` дописывается сам. ProductFlavor не заводили — вчетверо больше вариантов
+  сборки ради одной строки.
+- Подробности и что придётся проверить руками — `docs/RELEASE.md`, ADR 0007.
+
+**13.2 Скриншот-тесты темы.** Roborazzi 1.38.0 поверх Robolectric
+(`GraphicsMode.NATIVE`): `ThemeGalleryScreenshotTest` снимает витрину кита
+(кнопки, поле, чипы, бейджи, карточка) в четырёх комбинациях light/dark ×
+uz/ru, эталоны — `app/src/test/screenshots/*.png`. Задачи
+`verifyRoborazziDebug` / `recordRoborazziDebug` / `compareRoborazziDebug`.
+Версия 1.38.0 — последняя, собранная Kotlin 1.9: свежие не читаются нашим
+компилятором 2.0.21. ADR 0006.
+
+**13.3 Baseline Profile.** Модуль `:baselineprofile` (`com.android.test` +
+`androidx.baselineprofile` 1.3.3): `StartupBaselineProfileGenerator` снимает
+профиль, `StartupBenchmark` меряет холодный старт с профилем и без него
+(`StartupTimingMetric`, 5 итераций). В `:app` добавлен
+`androidx.profileinstaller`. Команды и грабли — `docs/PERFORMANCE.md`.
+
+**13.1 Покрытие.** Отдельного кода не потребовалось: правило «тесты в том же
+коммите» действует, `testDebugUnitTest` в `ci.yml` уже обязателен, у каждого
+`*ViewModel` есть тест-класс. На момент эпика — 178 тест-классов, 1846 тестов;
+скриншот-тесты добавили машинную проверку темы, которой не было.
+
+**Прогоны:** `testDebugUnitTest` — 178 классов, 1846 тестов, 0 падений
+(2 skipped); `assembleDebug` — BUILD SUCCESSFUL; `lintDebug`
+(warningsAsErrors) — BUILD SUCCESSFUL; `verifyRoborazziDebug` — BUILD
+SUCCESSFUL; `assembleRelease` с R8 — BUILD SUCCESSFUL.
+
+Скриншот-тест проверен обратным прогоном: подменил эталон `gallery-uz-dark`
+светлым — `uzDark FAILED` с `AssertionError`, и задача переисполнилась только
+из-за смены PNG, то есть проводка `inputs.dir` работает. Эталон восстановлен.
+
+R8 проверен не только фактом сборки: `uz.mahalla.MahallaApplication` и
+`uz.mahalla.MainActivity` (единственные классы из манифеста) остались
+непереименованными в `mapping.txt` и лежат в `classes.dex`; в `seeds.txt` —
+1336 наших `$$serializer`, в `mapping.txt` — 661 `*Dao_Impl`.
+
+**Грабли этапа:**
+
+- **`verifyRoborazziDebug` молча проходил**, если менялись только PNG: Gradle
+  считал `testDebugUnitTest` актуальным, потому что эталоны не были входом
+  задачи. Лечится `inputs.dir("src/test/screenshots")` в `testOptions` —
+  без этого тест не мог покраснеть в принципе.
+- **Скриншот с грузящейся кнопкой недетерминирован**: внутри бесконечная
+  анимация индикатора, эталон зависел бы от кадра, на котором остановились
+  часы Robolectric. В витрине — выключенная кнопка.
+- **`com.android.test` нельзя объявить с версией в модуле** — приезжает тем же
+  артефактом, что и `com.android.application`; версия только в корневом
+  `build.gradle.kts` с `apply false`.
+- **APK release — 108 МБ**, из них ~103 МБ — нативный MapKit на четыре ABI;
+  кода после R8 всего 6 МБ. Play режет AAB по ABI, поэтому пользователь качает
+  порядка 30 МБ (26 МБ нативного MapKit под arm64 + код). Это оценка по одной
+  ABI, а не измерение: `bundleRelease` пока никто не гонял.
+
+**Не сделано / риски:**
+
+- **R8 проверен только сборкой.** Ни один тест не запускает минифицированный
+  APK: эмулятора нет. Release перед выкладкой надо прогнать руками — вход,
+  карта, список мест, заказ.
+- **Baseline Profile не снят**: `:app:generateBaselineProfile` требует
+  эмулятора, в CI и песочнице его нет. В репозитории лежит инфраструктура, а
+  не профиль; чисел холодного старта тоже нет.
+- **Два шага не добавлены в `ci.yml`** — `assembleRelease` и
+  `verifyRoborazziDebug`: у GitHub App нет прав на `.github/workflows`.
+- **Эталоны скриншотов сняты на Linux.** На macOS рендер шрифтов отличается в
+  отдельных пикселях, поэтому проверка намеренно не входит в
+  `testDebugUnitTest` — иначе обязательный прогон краснел бы у разработчика на
+  маке. Переснимать эталоны нужно тем же способом, что и сняты (CI/Linux).
+- **`.claude/rules/compose-ui.md` и `testing.md` не обновлены** — правки в
+  `.claude/` заблокированы настройками песочницы. Строка «Скриншот-тестов в
+  проекте нет» в `compose-ui.md` устарела.
+
+### Правки после ревью субагентом (тот же эпик)
+
+- **`StartupBenchmark` не запустился бы ни разу**: `CompilationMode.Partial(
+  baselineProfileMode = Disable, warmupIterations = 0)` запрещён самим
+  benchmark'ом (`require` в конструкторе, «Must set baselineProfileMode !=
+  Ignore, or warmup iterations > 0»). Проверено разбором `benchmark-macro`
+  1.3.3, заменено на `CompilationMode.None()`. Машина этого поймать не могла:
+  замер требует устройства.
+- **Правила ProGuard подрезаны**: блоки kotlinx.serialization, Retrofit и
+  `-dontwarn` на TLS-провайдеров дублировали consumer-rules библиотек —
+  сверено с `app/build/outputs/mapping/release/configuration.txt`. Осталось
+  только своё: `-renamesourcefileattribute`, keep на `uz.mahalla.**$$serializer`,
+  MapKit и Coil. Комментарий про «Retrofit не покрывает наши интерфейсы» был
+  неверен — Retrofit 2.11 привозит `-if interface * { @retrofit2.http.* }`.
+- Порядок «сначала профиль, потом замер» дописан в `docs/PERFORMANCE.md` —
+  `BaselineProfileMode.Require` без профиля краснеет.
+- Пустая переменная окружения `API_BASE_URL_*` больше не перебивает `-P`;
+  заданное хранилище ключей без пароля/алиаса падает с внятным сообщением, а
+  не в недрах apksigner.
+- В `docs/RELEASE.md` добавлен раздел про `release-internal.yml` (сейчас
+  тестировщикам уезжает debug-APK), оценка размера загрузки помечена как
+  оценка.
+
+### Правки после второго ревью субагентом (перед PR)
+
+Первый прогон эпика не дошёл до PR; второй забрал его коммиты и прогнал ревью
+ещё раз, в свежем контексте. Блокеров не нашлось, но нашлось вредное указание
+в документации:
+
+- **`-P…androidx.benchmark.enabledRules=Macrobenchmark` из `docs/PERFORMANCE.md`
+  убран, а объяснение к нему было неверным.** Плагин `androidx.baselineprofile`
+  выставляет `enabledRules` сам: `macrobenchmark` для `benchmark*`-вариантов и
+  `baselineprofile` для `nonMinified*`. Проверено разбором
+  `BaselineProfileProducerAgpPlugin` 1.3.3: автоподстановка **пропускается**,
+  если среди свойств сборки уже есть
+  `android.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules`
+  (флаг отказа — `androidx.baselineprofile.dontdisablerules`). То есть флаг был
+  не только лишним: утащив тот же `-P` в `generateBaselineProfile`, им можно
+  отфильтровать сам генератор — и профиль молча не снимется.
+- **Путь к результатам замера исправлен** на
+  `managed_device_android_test_additional_output/pixel6Api34/`: при
+  `useConnectedDevices = false` замер идёт на управляемом эмуляторе, а
+  `connected_…` бывает только у `connectedBenchmarkReleaseAndroidTest`.
+- **Обещание «Gradle пишет предупреждение о неподписанном release» убрано** из
+  `docs/RELEASE.md` и комментария в `app/build.gradle.kts` — его не было:
+  `releaseKeystore()` при пустом секрете возвращает `null` молча, а `logger.warn`
+  ловит только заданный путь к несуществующему файлу. Признак теперь назван
+  честно — имя `app-release-unsigned.apk`.
+- **Список правил ProGuard в пункте 13.4 приведён к тому, что реально в файле:**
+  он перечислял Retrofit, `SourceFile,LineNumberTable` и `-dontwarn` на TLS,
+  которые сам же следующий раздел объявлял вырезанными как дубли. Расхождение
+  ровно того рода, из-за которого следующий прогон добавил бы правила заново.
+- **`roborazzi-compose` и `roborazzi-junit-rule` убраны** из зависимостей и из
+  version catalog: используется только
+  `SemanticsNodeInteraction.captureRoboImage` из базового артефакта — проверено
+  тем, что `compileDebugUnitTestKotlin` зелёный без них. Заодно ушёл лишний
+  espresso из classpath юнит-тестов.
+- Формулировка в ADR 0006 про «переснять эталоны прогоном в CI» исправлена:
+  шага в `ci.yml` нет, пока его не добавит человек.
+- Оценка размера загрузки согласована между `CHANGELOG` и `docs/RELEASE.md`
+  (порядка 30 МБ; было «~26 МБ» в одном месте и «~30 МБ» в другом).
+
+**Грабли самого прогона (не про код):** первые две попытки прогнать тесты
+упали на `transformDebugUnitTestClassesWithAsm` («Unable to delete directory» /
+`!directory.isDirectory`) и на «Could not write XML test results». Причина — две
+одновременные сборки на одном `app/build`: фоновый прогон агента и прогон
+stop-хука. Гонять Gradle в фоне, если ход может закончиться, нельзя. После
+`clean` и последовательного прогона всё зелёное; тесты переисполнены
+принудительно (`--rerun`), чтобы `UP-TO-DATE` не выдал за зелёное чужой
+прогон.
