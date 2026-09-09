@@ -42,6 +42,30 @@
 
 ---
 
+## ActivityApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/activity/data/ActivityApi.kt` — НЕ СВЕРЕН:
+все пять ручек под токеном, а `CONTRACT_REFRESH_TOKEN` в CI нет. Пути и схемы
+взяты из `/v3/api-docs`, каждая уже объявлена в своей вертикали — новых
+эндпоинтов «Мои активности» не вводят (issue #73).
+
+| Метод | Путь | Где ещё объявлен |
+|---|---|---|
+| GET | `orders` | `FashionApi` |
+| GET | `gaming/bookings/my` | `GamingApi` |
+| GET | `appointments/my` | `BookingApi` |
+| GET | `hospitals/appointments/my` | `HospitalApi` |
+| GET | `cinema/tickets/my` | `CinemaApi` |
+
+**`GET orders` вызывается без `vertical`** — так он отдаёт заказы всех
+вертикалей сразу, что этому экрану и нужно. Что параметр необязателен, взято из
+схемы; пробой не подтверждено. Все пять — постранично (`page`, `size`), ответ
+`PageResponse`.
+
+**Форма `startTime`/`endTime`** у `appointments/my` и
+`hospitals/appointments/my` — см. `BookingApi` ниже (issue #141): она не
+определена, поэтому в DTO это `JsonElement?`.
+
 ## AuthApi ✅
 
 `app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram).
