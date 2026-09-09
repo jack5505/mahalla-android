@@ -3,6 +3,7 @@ package uz.mahalla.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -12,12 +13,23 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import uz.mahalla.R
 import uz.mahalla.core.ui.components.MahallaBottomNav
+import uz.mahalla.core.ui.components.MahallaSnackbarHost
+import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.NavItemUi
+import uz.mahalla.core.ui.components.rememberSnackbarController
+import uz.mahalla.core.ui.snackbar.SnackbarLength
+import uz.mahalla.core.ui.snackbar.SnackbarMessage
 
 /**
  * Корневой каркас приложения: нижняя навигация показывается только внутри
  * основного графа — в онбординге и на экранах-деталях её нет.
+ *
+ * @param sessionExpired сессия умерла, пока приложение работало (issue #138):
+ * повод увести человека на вход с любого экрана.
  */
 @Composable
 fun MahallaApp(
@@ -28,14 +40,31 @@ fun MahallaApp(
     afterBackendUrl: Any = OnboardingGraph,
     afterUpdate: Any = OnboardingGraph,
     backendUrlOverrideEnabled: Boolean = false,
+    sessionExpired: Flow<Unit> = emptyFlow(),
     navController: NavHostController = rememberNavController(),
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentDestination = currentEntry?.destination
     val selectedItem = BottomNavItem.entries.firstOrNull { it.matches(currentDestination) }
+    val snackbarController = rememberSnackbarController()
+    val expiredMessage = stringResource(R.string.error_unauthorized)
+
+    SessionExpiryEffect(navController = navController, sessionExpired = sessionExpired) {
+        // Экран входа, возникший сам собой, читается как сброс приложения,
+        // поэтому причина говорится словами. `Long`, а не `Short`: человек
+        // мог отвернуться от телефона именно в этот момент.
+        snackbarController.show(
+            SnackbarMessage(
+                text = expiredMessage,
+                tone = MahallaTone.Error,
+                length = SnackbarLength.Long,
+            ),
+        )
+    }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { MahallaSnackbarHost(controller = snackbarController) },
         bottomBar = {
             if (selectedItem != null) {
                 // Нижняя навигация — компонент UI-кита (эпик 2.2): цвета,
@@ -74,11 +103,69 @@ fun MahallaApp(
 }
 
 /**
+ * Уход на экран входа, когда сессия умерла на ходу (issue #138): токенов
+ * больше нет и вернуть их нечем, а значит каждый следующий экран отвечал бы
+ * ошибкой сервера и кнопкой «повторить», которая не может помочь. Идём туда
+ * же, куда ведёт явный выход из профиля.
+ *
+ * Отдельной функцией, а не блоком внутри [MahallaApp], чтобы это можно было
+ * проверить тестом: композиция [MahallaNavHost] поднимает настоящие экраны с
+ * `hiltViewModel()`, а здесь нужен только контроллер навигации.
+ *
+ * @param onExpired объяснение для человека; вызывается только когда уход
+ * действительно случился.
+ */
+@Composable
+internal fun SessionExpiryEffect(
+    navController: NavHostController,
+    sessionExpired: Flow<Unit>,
+    onExpired: suspend () -> Unit,
+) {
+    LaunchedEffect(sessionExpired, navController) {
+        sessionExpired.collect {
+            if (!navController.currentDestination.needsLogin()) return@collect
+            navController.navigate(WelcomeRoute) {
+                // Стек чистится целиком, а не до `MainGraph`: без сессии в нём
+                // не осталось ни одного работающего экрана, включая детали,
+                // открытые из уведомления мимо основного графа.
+                popUpTo(navController.graph.id) { inclusive = true }
+                launchSingleTop = true
+            }
+            onExpired()
+        }
+    }
+}
+
+/**
  * Таб считается выбранным, если маршрут есть в иерархии текущего назначения:
  * на вложенном экране таба подсветка не должна пропадать.
  */
 private fun BottomNavItem.matches(destination: NavDestination?): Boolean =
     destination?.hierarchy?.any { it.hasRoute(route::class) } == true
+
+/**
+ * Кого уводить на вход при смерти сессии.
+ *
+ * Не уводим из графа онбординга (человек как раз входит, и welcome посреди
+ * ввода кода стёр бы шаг) и с двух экранов, стоящих до входа: адрес бэкенда
+ * (issue #26) и обновление (issue #80) — они ведут дальше сами.
+ *
+ * Анкеты последнего шага регистрации (`RoleRoute` и формы) лежат **вне**
+ * графа онбординга, потому что открываются ещё и из профиля, — их это
+ * исключение не покрывает, и незаполненная анкета при смерти сессии
+ * потеряется. Так и надо: отправить её всё равно нечем.
+ *
+ * `null` — граф ещё не построен: навигировать некуда, да и ходить в сеть с
+ * такого экрана было некому.
+ */
+private fun NavDestination?.needsLogin(): Boolean {
+    val destination = this ?: return false
+    return destination.hierarchy.none { entry ->
+        entry.hasRoute(OnboardingGraph::class) ||
+            entry.hasRoute(BackendUrlRoute::class) ||
+            entry.hasRoute(UpdateRoute::class)
+    }
+}
 
 /**
  * Переключение таба: стек не растёт (`launchSingleTop`), состояние таба

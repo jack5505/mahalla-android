@@ -38,6 +38,9 @@
 
 **Авторизация.** `Authorization: Bearer <access>` вешает `AuthInterceptor`.
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
+Сессию заканчивает только **отказ** refresh (401/403, `success: false`,
+прочие 4xx, 2xx без токенов) — обрыв связи, таймаут, 5xx и 404 токены не
+стирают. Отказ уводит приложение на экран входа (issue #138).
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
 ---

@@ -1,11 +1,16 @@
 package uz.mahalla.data.network
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -18,6 +23,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
+import uz.mahalla.data.prefs.SessionExpiry
 import uz.mahalla.feature.discovery.data.CatalogApi
 import uz.mahalla.feature.discovery.data.PlaceDetailDto
 import uz.mahalla.testutil.FakeDeviceInfoProvider
@@ -26,6 +32,7 @@ import uz.mahalla.testutil.FakeSessionStore
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 /**
@@ -39,6 +46,14 @@ class NetworkStackTest {
 
     private lateinit var server: MockWebServer
     private lateinit var sessionStore: FakeSessionStore
+    private lateinit var sessionExpiry: SessionExpiry
+
+    /**
+     * События «сессия кончилась» (issue #138). Собираются в список, а не
+     * проверяются флагом: лишнее событие — это лишний выброс на экран входа.
+     */
+    private lateinit var expiryEvents: MutableList<Unit>
+    private lateinit var expiryScope: CoroutineScope
 
     /** Фиксированные часы: срок жизни токена должен быть детерминированным. */
     private val fixedClock: Clock =
@@ -49,10 +64,19 @@ class NetworkStackTest {
         server = MockWebServer()
         server.start()
         sessionStore = FakeSessionStore()
+        sessionExpiry = SessionExpiry()
+        expiryEvents = CopyOnWriteArrayList()
+        // `Dispatchers.Unconfined`: подписка регистрируется до выхода из
+        // `launch`, а событие приезжает на том же потоке, где его отправили, —
+        // authenticator работает на пуле OkHttp, и ждать чужой поток тест не
+        // должен. `SessionExpiry` без replay: подписаться надо заранее.
+        expiryScope = CoroutineScope(Dispatchers.Unconfined)
+        expiryScope.launch { sessionExpiry.expired.collect { expiryEvents += it } }
     }
 
     @After
     fun tearDown() {
+        expiryScope.cancel()
         server.shutdown()
     }
 
@@ -136,6 +160,7 @@ class NetworkStackTest {
             sessionStore.current(),
         )
         assertEquals("сессия перезаписана один раз", 2, sessionStore.saveCount)
+        assertEquals("сессия жива — на вход выгонять некого", 0, expiryEvents.size)
     }
 
     @Test
@@ -150,6 +175,86 @@ class NetworkStackTest {
         assertNull(sessionStore.current())
         // Ровно один повтор: исходный запрос + refresh, без бесконечного цикла.
         assertEquals(2, server.requestCount)
+        // Стереть токены недостаточно: человек остался бы внутри приложения,
+        // где каждый экран отвечает 401 (issue #138).
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a broken connection during refresh keeps the session`() = runTest {
+        // Обрыв связи — это «спросить не удалось», а не «сессия кончилась».
+        // Стереть токены значило бы выкинуть на экран входа человека, у
+        // которого они живы, из-за секундной потери сети (issue #138).
+        sessionStore.save(Session("stale", "refresh-1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = apiCall { catalogApi().place("p-1") }
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals("на вход выгонять некого", 0, expiryEvents.size)
+    }
+
+    @Test
+    fun `a server error during refresh keeps the session`() = runTest {
+        // Авария бэкенда лечится сама; разлогин всех пользователей — нет.
+        sessionStore.save(Session("stale", "refresh-1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        apiCall { catalogApi().place("p-1") }
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `a throttled refresh keeps the session`() = runTest {
+        // 429 говорит «зайдите позже», а не «токен мёртв». Выход на экран
+        // входа стоит человеку платного SMS и регистрации заново — за
+        // троттлинг такой цены быть не должно.
+        sessionStore.save(Session("stale", "refresh-1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        apiCall { catalogApi().place("p-1") }
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `a refresh answered without tokens ends the session`() = runTest {
+        // 200, конверт в порядке, а токенов нет: продлевать сессию сервер не
+        // стал. Ходить в сеть после этого нечем.
+        sessionStore.save(Session("stale", "refresh-1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+
+        apiCall { catalogApi().place("p-1") }
+
+        assertNull(sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a rejected refresh token ends the session`() = runTest {
+        // 2xx с `success: false` — сервер ответил и отказал: токен мёртв, и
+        // дальше приложение ходить в сеть нечем.
+        sessionStore.save(Session("stale", "refresh-1"))
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(
+            jsonResponse(
+                """{"success":false,"error":{"code":"TOKEN_INVALID",""" +
+                    """"message":"Sessiya tugadi, qaytadan kiring"}}""",
+            ),
+        )
+
+        apiCall { catalogApi().place("p-1") }
+
+        assertNull(sessionStore.current())
+        assertEquals(1, expiryEvents.size)
     }
 
     @Test
@@ -160,6 +265,9 @@ class NetworkStackTest {
 
         assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
         assertEquals(1, server.requestCount)
+        // Сессии не было и до запроса: это не «она кончилась», а анонимный
+        // запрос к закрытой ручке. Разбираться с этим стартовому экрану.
+        assertEquals(0, expiryEvents.size)
     }
 
     @Test
@@ -284,6 +392,7 @@ class NetworkStackTest {
             .create(AuthApi::class.java)
         return TokenAuthenticator(
             sessionStore = sessionStore,
+            sessionExpiry = sessionExpiry,
             authApi = authApi,
             deviceInfoProvider = FakeDeviceInfoProvider(),
             locationProvider = FakeRequestLocationProvider(),

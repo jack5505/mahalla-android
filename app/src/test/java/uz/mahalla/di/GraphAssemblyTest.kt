@@ -33,6 +33,7 @@ import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.network.tls.PinnedCertificateHostnameVerifier
 import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.DataStoreUserProfileStore
+import uz.mahalla.data.prefs.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
@@ -111,6 +112,7 @@ class GraphAssemblyTest {
             authInterceptor = AuthInterceptor(sessionStore),
             tokenAuthenticator = TokenAuthenticator(
                 sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
                 authApi = authApi,
                 deviceInfoProvider = deviceInfoProvider(context),
                 locationProvider = locationProvider(context),

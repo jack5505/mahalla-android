@@ -250,6 +250,11 @@ fun MahallaNavHost(
                     onLoggedOut = {
                         navController.navigate(WelcomeRoute) {
                             popUpTo(MainGraph) { inclusive = true }
+                            // Запрос с прошлым токеном мог доехать до 401
+                            // ровно в этот момент, и на вход уже увёл корень
+                            // (issue #138) — второй welcome в стеке означал бы
+                            // «назад» на экран входа с экрана входа.
+                            launchSingleTop = true
                         }
                     },
                     // «Кто вы» и анкеты (issue #84): в онбординге шаг можно
