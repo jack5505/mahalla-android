@@ -2,6 +2,7 @@ package uz.mahalla.feature.activity.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import retrofit2.http.GET
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
@@ -127,10 +128,15 @@ data class GamingBookingDto(
 /**
  * `AppointmentResponse` бэкенда: запись к мастеру или к врачу.
  *
- * `apptDate` — дата без времени (`2026-09-10`), `startTime` — объект
- * `LocalTime` (`{hour, minute, second, nano}`), а не строка: Jackson
- * сериализует `java.time.LocalTime` полями, если для него не настроен
- * `JavaTimeModule`. Собирает их в момент времени `ActivityMappers`.
+ * `apptDate` — дата без времени (`2026-09-10`). `startTime`/`endTime` —
+ * `LocalTime`, и его форма из схемы стенда не следует: springdoc описывает
+ * его объектом `{hour, minute, second, nano}`, а Jackson с `JavaTimeModule`
+ * отдаёт строку `"09:30:00"`. Поэтому тип — [JsonElement], как в
+ * `feature/booking/data/BookingApi.kt` у той же схемы: жёсткий тип уронил бы
+ * разбор **всей страницы** (`ApiError.Serialization` на весь ответ), то есть
+ * из «Моих активностей» разом выпали бы оба источника записей — и мастер, и
+ * врач. `startTime` разбирает `ActivityMappers` через `parseServerLocalTime`;
+ * `endTime` объявлен только ради контракта — в список он не доезжает.
  */
 @Serializable
 data class AppointmentDto(
@@ -141,20 +147,11 @@ data class AppointmentDto(
     @SerialName("serviceName") val serviceName: String? = null,
     @SerialName("price") val price: Long? = null,
     @SerialName("apptDate") val apptDate: String? = null,
-    @SerialName("startTime") val startTime: LocalTimeDto? = null,
-    @SerialName("endTime") val endTime: LocalTimeDto? = null,
+    @SerialName("startTime") val startTime: JsonElement? = null,
+    @SerialName("endTime") val endTime: JsonElement? = null,
     /** `PENDING` / `CONFIRMED` / `CANCELLED` / `COMPLETED` / `NO_SHOW`. */
     @SerialName("status") val status: String? = null,
     @SerialName("createdAt") val createdAt: String? = null,
-)
-
-/** `LocalTime` бэкенда — объект, а не строка. */
-@Serializable
-data class LocalTimeDto(
-    @SerialName("hour") val hour: Int? = null,
-    @SerialName("minute") val minute: Int? = null,
-    @SerialName("second") val second: Int? = null,
-    @SerialName("nano") val nano: Int? = null,
 )
 
 /** `CinemaTicket` бэкенда: билет в кино. */

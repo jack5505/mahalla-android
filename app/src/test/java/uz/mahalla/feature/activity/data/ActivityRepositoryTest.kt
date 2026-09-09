@@ -146,14 +146,15 @@ class ActivityRepositoryTest {
     }
 
     @Test
-    fun `an appointment date and LocalTime become one moment in Tashkent`() = runTest {
-        // `startTime` приходит объектом `{hour, minute, second, nano}`:
-        // Jackson так сериализует `java.time.LocalTime` без `JavaTimeModule`.
+    fun `an appointment date and object LocalTime become one moment in Tashkent`() = runTest {
+        // Форма `LocalTime` из схемы стенда не следует: springdoc описывает
+        // его объектом `{hour, minute, second, nano}`.
         respond(
             "/appointments/my",
             """{"content":[{"id":"a-1","placeId":"p-3","serviceId":"s-1",
                "serviceName":"Soch olish","price":45000,"apptDate":"2026-09-10",
                "startTime":{"hour":9,"minute":30,"second":0,"nano":0},
+               "endTime":{"hour":10,"minute":0,"second":0,"nano":0},
                "status":"PENDING","createdAt":"2026-09-01T07:00:00"}],"last":true}""",
         )
 
@@ -167,6 +168,50 @@ class ActivityRepositoryTest {
         // 09:30 в Ташкенте — это 04:30 UTC. Разворачивать местную дату в UTC
         // значило бы показать запись на пять часов позже.
         assertEquals(Instant.parse("2026-09-10T04:30:00Z"), appointment.occurredAt)
+    }
+
+    @Test
+    fun `a string LocalTime gives the same moment as the object one`() = runTest {
+        // А Jackson с `JavaTimeModule` отдаёт ту же `AppointmentResponse`
+        // строкой. Жёсткий тип поля ронял бы разбор **всей страницы**
+        // (`ApiError.Serialization` на весь ответ), то есть выносил бы из
+        // списка сразу оба источника записей — и мастера, и врача.
+        respond(
+            "/appointments/my",
+            """{"content":[{"id":"a-1","placeId":"p-3","serviceId":"s-1",
+               "serviceName":"Soch olish","price":45000,"apptDate":"2026-09-10",
+               "startTime":"09:30:00","endTime":"10:00:00",
+               "status":"PENDING","createdAt":"2026-09-01T07:00:00"}],"last":true}""",
+        )
+        respond(
+            "/hospitals/appointments/my",
+            """{"content":[{"id":"h-1","serviceName":"Terapevt",
+               "apptDate":"2026-09-10","startTime":"09:30:00",
+               "status":"CONFIRMED"}],"last":true}""",
+        )
+
+        val feed = repository().feed()
+
+        // Ни один источник не потерян, и момент времени тот же, что у объекта.
+        assertTrue(feed.failures.isEmpty())
+        assertEquals(listOf("a-1", "h-1"), feed.items.map(Activity::id).sorted())
+        feed.items.forEach {
+            assertEquals(Instant.parse("2026-09-10T04:30:00Z"), it.occurredAt)
+        }
+    }
+
+    @Test
+    fun `a string LocalTime without seconds is understood too`() = runTest {
+        respond(
+            "/appointments/my",
+            """{"content":[{"id":"a-1","apptDate":"2026-09-10","startTime":"09:30",
+               "status":"CONFIRMED"}],"last":true}""",
+        )
+
+        assertEquals(
+            Instant.parse("2026-09-10T04:30:00Z"),
+            repository().feed().items.single().occurredAt,
+        )
     }
 
     @Test
@@ -194,6 +239,31 @@ class ActivityRepositoryTest {
         )
 
         assertNull(repository().feed().items.single().occurredAt)
+    }
+
+    @Test
+    fun `an unexpected time shape costs the time, not the page`() = runTest {
+        // Ни строка-мусор, ни число, ни час вне суток не должны уронить разбор
+        // страницы: запись остаётся, у неё просто начало дня. Собранное из
+        // мусора время хуже отсутствующего — человек поверит цифрам на экране.
+        respond(
+            "/appointments/my",
+            """{"content":[{"id":"a-1","apptDate":"2026-09-10","startTime":"—",
+               "status":"CONFIRMED"},
+               {"id":"a-2","apptDate":"2026-09-10","startTime":930,
+               "status":"CONFIRMED"},
+               {"id":"a-3","apptDate":"2026-09-10",
+               "startTime":{"hour":31,"minute":99},"status":"CONFIRMED"}],
+               "last":true}""",
+        )
+
+        val feed = repository().feed()
+
+        assertTrue(feed.failures.isEmpty())
+        assertEquals(listOf("a-1", "a-2", "a-3"), feed.items.map(Activity::id).sorted())
+        feed.items.forEach {
+            assertEquals(Instant.parse("2026-09-09T19:00:00Z"), it.occurredAt)
+        }
     }
 
     @Test

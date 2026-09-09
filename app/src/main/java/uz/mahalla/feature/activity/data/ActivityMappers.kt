@@ -2,6 +2,7 @@ package uz.mahalla.feature.activity.data
 
 import uz.mahalla.core.format.DateTimeFormatters.AppZone
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.feature.activity.domain.Activity
 import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
@@ -123,12 +124,13 @@ internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
  * `apptDate` — местная дата без зоны, поэтому она разворачивается в
  * [AppZone] (Asia/Tashkent), а не в UTC: иначе запись на 09:00 в Ташкенте
  * показывалась бы как 14:00, а запись после 19:00 уезжала бы на следующий
- * день. Время — объект `LocalTime` бэкенда; его отсутствие не повод потерять
- * дату, тогда берётся начало дня.
+ * день. Время разбирает [parseServerLocalTime] — он понимает обе формы
+ * `LocalTime`, объект и строку; неразобранное или отсутствующее время не
+ * повод потерять дату, тогда берётся начало дня.
  */
 private fun AppointmentDto.appointmentAt(): Instant? {
     val date = parseLocalDate(apptDate) ?: return null
-    val time = startTime?.toLocalTime() ?: LocalTime.MIDNIGHT
+    val time = parseServerLocalTime(startTime) ?: LocalTime.MIDNIGHT
     return date.atTime(time).atZone(AppZone).toInstant()
 }
 
@@ -140,19 +142,6 @@ private fun parseLocalDate(value: String?): LocalDate? {
     } catch (invalid: DateTimeParseException) {
         null
     }
-}
-
-/**
- * `{hour, minute, second, nano}` → [LocalTime]. Значения вне суток
- * отбрасываются целиком: собранное из мусора время хуже отсутствующего —
- * человек поверит цифрам на экране.
- */
-private fun LocalTimeDto.toLocalTime(): LocalTime? {
-    val h = hour ?: return null
-    val m = minute ?: 0
-    val s = second ?: 0
-    if (h !in 0..23 || m !in 0..59 || s !in 0..59) return null
-    return LocalTime.of(h, m, s)
 }
 
 /**
