@@ -5660,9 +5660,18 @@ run» и ни одного шага не запустил. Ни сборка, н
 прогон `34388536327` на той же ветке — `success`, локальный
 `assembleDebug testDebugUnitTest lintDebug` — BUILD SUCCESSFUL.
 
-Разница между прогонами — инициатор: тот, что ждал подтверждения, поднят
-`github-actions[bot]` (коммит, доехавший под `GITHUB_TOKEN`), зелёный —
-`claude[bot]`. Признак ситуации: `conclusion=action_required` **при нулевом
-числе job'ов**; в этом случае искать причину в коде нечего, нужен либо
-«Approve and run» руками, либо новый push (approve через API токену
-приложения недоступен — 403 `Resource not accessible by integration`).
+Разница между прогонами — не коммит, а событие. Зелёный поднят открытием PR
+(`triggering_actor = claude[bot]` — приложение, открывшее PR), а прогоны от
+push'ей в уже открытый PR идут с `triggering_actor = github-actions[bot]`,
+потому что `claude.yml` пушит под `secrets.GITHUB_TOKEN`, и такие GitHub
+ставит в очередь на подтверждение. Проверено: коммиты `1fd5943`, `431b60d`
+и `f1ab471` по авторству неотличимы (committer `github-actions[bot]`), а
+прогоны у них разные — `success` у первого и `action_required` у двух
+остальных.
+
+Практический вывод. Признак ситуации — `conclusion=action_required` **при
+нулевом числе job'ов**; причину в коде искать нечего, и **новым push'ем это
+не лечится**: следующий прогон встанет в ту же очередь. Нужен «Approve and
+run» руками в Actions. Approve через API агенту недоступен — 403
+`Resource not accessible by integration`: в `claude.yml` у job'а
+`actions: read`, для approve нужен `actions: write`.
