@@ -35,10 +35,22 @@ jobs:
       - name: Gradle (с кэшем)
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Сборка + unit-тесты
-        # lintDebug убран: в main есть давняя lint-ошибка, которая не входит
-        # в объём ai-dev-задач; прежний CI репозитория lint тоже не гонял.
-        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest
+      - name: Сборка + unit-тесты + lint
+        # lintDebug вернулся: причина, по которой его убирали («давняя
+        # lint-ошибка в main»), устарела — замечания починили позже, в
+        # a07d612, и там же включили abortOnError + warningsAsErrors.
+        # Проверено прогоном на 3367d6f: BUILD SUCCESSFUL, «No issues found».
+        # Теперь app/build.gradle.kts и этот workflow снова согласованы:
+        # в build.gradle.kts прямо написано, что шаг гоняется в CI.
+        run: ./gradlew --no-daemon assembleDebug testDebugUnitTest lintDebug
+
+      - name: Отчёт lint (если упал)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results-debug
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
 
       # ── VPN-часть ────────────────────────────────────────────────
       # TODO: подставьте проверку своего VPN-модуля, например:

@@ -5,6 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import java.time.Instant
@@ -120,6 +121,25 @@ class PlaceMappersTest {
         assertEquals(Instant.parse("2026-08-25T10:15:30Z"), instant.createdAt)
         assertEquals(Instant.parse("2026-08-25T10:15:30.123Z"), local.createdAt)
         assertNull(broken.createdAt)
+    }
+
+    /**
+     * Имя поля с аватаром не сверено (issue #60): схема `Response` перекрыта
+     * коллизией springdoc, поэтому DTO разбирает три вероятных имени. Опечатка
+     * в любом из них тихо оставила бы всех авторов без фотографий, а заметить
+     * это можно было бы только на живом стенде.
+     */
+    @Test
+    fun `review avatar is read under all three names and a blank one is no avatar`() {
+        val json = NetworkFactory.json()
+        fun avatar(body: String): String? =
+            json.decodeFromString<ReviewDto>(body).toDomain().avatarUrl
+
+        assertEquals("a.jpg", avatar("""{"id":"r","userAvatarUrl":"a.jpg"}"""))
+        assertEquals("b.jpg", avatar("""{"id":"r","avatarUrl":"b.jpg"}"""))
+        assertEquals("c.jpg", avatar("""{"id":"r","userAvatar":"c.jpg"}"""))
+        assertNull(avatar("""{"id":"r","userAvatarUrl":"  "}"""))
+        assertNull(avatar("""{"id":"r"}"""))
     }
 
     @Test

@@ -223,6 +223,7 @@ dependencies {
     // BiometricPrompt требует FragmentActivity — fragment приходит транзитивно,
     // поэтому MainActivity наследуется от неё (эпик 3.5).
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -268,6 +269,10 @@ dependencies {
     // проходило через вычистку секретов (CrashScrubber).
     implementation(libs.sentry.android.core)
 
+    // Картинки (issue #60). ImageLoader собирается в графе и ходит по тому же
+    // OkHttp, что и остальное приложение, — см. MahallaImageLoader.
+    implementation(libs.coil.compose)
+
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.androidx.room.runtime)
@@ -280,4 +285,13 @@ dependencies {
     testImplementation(libs.okhttp.tls)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+
+    // Compose-тесты под Robolectric (issue #137). Нужны там, где проверять
+    // надо саму композицию: MahallaAsyncImage не грузил картинки именно
+    // из-за того, как устроено дерево, — на уровне ViewModel такое не видно.
+    // ui-test-manifest даёт ComponentActivity для createComposeRule; в debug,
+    // потому что unit-тесты собираются из манифеста debug-варианта.
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

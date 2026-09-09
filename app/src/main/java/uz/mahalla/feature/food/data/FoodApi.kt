@@ -1,8 +1,10 @@
 package uz.mahalla.feature.food.data
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -70,6 +72,7 @@ data class MenuSectionDto(
  * Модификаторов (`optionGroups`) в контракте нет — см. `FoodMappers`.
  */
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class MenuItemDto(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
@@ -79,6 +82,13 @@ data class MenuItemDto(
     @SerialName("isAvailable") val isAvailable: Boolean? = null,
     @SerialName("available") val available: Boolean? = null,
     @SerialName("isHalal") val isHalal: Boolean? = null,
+    /**
+     * Фото блюда (issue #60). В схеме стенда у `ItemResponse` его **нет** —
+     * поле объявлено на вырост и разбирается под тремя вероятными именами:
+     * `imageUrl` бэкенд уже использует у `CartItemResponse`, значит имя у него
+     * такое. Молчание сервера — строка списка без картинки, ровно как сейчас.
+     */
+    @JsonNames("photoUrl", "image") @SerialName("imageUrl") val imageUrl: String? = null,
 )
 
 /**

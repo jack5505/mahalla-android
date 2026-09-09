@@ -53,6 +53,11 @@ import uz.mahalla.feature.freelancer.data.DefaultFreelancerRepository
 import uz.mahalla.feature.freelancer.data.di.FreelancerDataModule
 import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.di.HospitalDataModule
+import uz.mahalla.feature.media.data.AndroidImageCompressor
+import uz.mahalla.feature.media.data.DefaultMediaRepository
+import uz.mahalla.feature.media.data.di.MediaDataModule
+import uz.mahalla.feature.gaming.data.DefaultGamingRepository
+import uz.mahalla.feature.gaming.data.di.GamingDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
@@ -63,6 +68,8 @@ import uz.mahalla.feature.security.data.di.SecurityDataModule
 import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
+import uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository
+import uz.mahalla.feature.pharmacy.data.di.PharmacyDataModule
 import uz.mahalla.feature.role.data.DataStoreRoleRepository
 import uz.mahalla.feature.queue.data.DataStoreWalkInTicketStore
 import uz.mahalla.feature.queue.data.DefaultWalkInRepository
@@ -456,10 +463,48 @@ class GraphAssemblyTest {
     }
 
     /**
+     * Аптека (issue #100): витрина анонимна (`200` без токена, проверено на
+     * стенде), но и лишний `Authorization` ей не мешает — отдельного клиента
+     * ради неё заводить незачем, API собирается на **основном** Retrofit.
+     */
+    @Test
+    fun `pharmacy assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = PharmacyDataModule.providePharmacyApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultPharmacyRepository(api = api))
+    }
+
+    /**
      * Очередь (issue #96): `walkin/send` и `walkin/{id}/cancel` требуют Bearer
      * — значит API собирается на **основном** Retrofit. Взятый талон живёт в
      * DataStore, потому что прочитать его у бэкенда нечем.
      */
+    /**
+     * Игровые зоны (issue #98): список зон анонимен, а бронь и «мои брони»
+     * требуют Bearer — значит API собирается на **основном** Retrofit, а не
+     * на «голом» `@RefreshClient`.
+     */
+    @Test
+    fun `gaming assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = GamingDataModule.provideGamingApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultGamingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
     @Test
     fun `queue assembles on the main retrofit and the data store`() {
         val retrofit = NetworkModule.provideRetrofit(
@@ -492,7 +537,7 @@ class GraphAssemblyTest {
     @Test
     fun `security assembles on the main retrofit`() {
         val retrofit = NetworkModule.provideRetrofit(
-            okhttp3.OkHttpClient(),
+            OkHttpClient(),
             NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
             NetworkModule.provideBaseUrl(),
         )
@@ -516,6 +561,25 @@ class GraphAssemblyTest {
                 clock = AppModule.provideClock(),
             ),
         )
+    }
+
+    /**
+     * Загрузка файлов (issue #101). API — на основном Retrofit: `media/upload`
+     * требует Bearer. Сжатие в графе настоящее: подменить его на JVM нечем, а
+     * проверяется здесь именно сборка, а не декодирование.
+     */
+    @Test
+    fun `media upload assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = MediaDataModule.provideMediaApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultMediaRepository(api = api, compressor = AndroidImageCompressor(context)))
     }
 
     /**

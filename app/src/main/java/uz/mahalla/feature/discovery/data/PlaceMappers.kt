@@ -109,6 +109,7 @@ fun ReviewDto.toDomain(): Review = Review(
     text = text,
     createdAt = parseServerInstant(createdAt),
     authorId = userId?.takeIf(String::isNotBlank),
+    avatarUrl = avatarUrl?.takeIf(String::isNotBlank),
 )
 
 fun Place.toEntity(

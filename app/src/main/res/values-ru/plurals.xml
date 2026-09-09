@@ -173,4 +173,35 @@
         <item quantity="many">Слишком длинно: не больше %1$d символов.</item>
         <item quantity="other">Слишком длинно: не больше %1$d символа.</item>
     </plurals>
+
+    <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
+    <plurals name="pharmacy_stock_left">
+        <item quantity="one">Осталась %1$d упаковка</item>
+        <item quantity="few">Осталось %1$d упаковки</item>
+        <item quantity="many">Осталось %1$d упаковок</item>
+        <item quantity="other">Осталось %1$d упаковки</item>
+    </plurals>
+
+    <!-- Игровые зоны (issue #98): места в зоне, часы брони, границы длительности. -->
+    <plurals name="gaming_zone_seats">
+        <item quantity="one">%1$d место</item>
+        <item quantity="few">%1$d места</item>
+        <item quantity="many">%1$d мест</item>
+        <item quantity="other">%1$d места</item>
+    </plurals>
+
+    <plurals name="gaming_duration_hours">
+        <item quantity="one">%1$d час</item>
+        <item quantity="few">%1$d часа</item>
+        <item quantity="many">%1$d часов</item>
+        <item quantity="other">%1$d часа</item>
+    </plurals>
+
+    <plurals name="gaming_error_duration">
+        <item quantity="one">Выберите от %1$d до %2$d часа</item>
+        <item quantity="few">Выберите от %1$d до %2$d часов</item>
+        <item quantity="many">Выберите от %1$d до %2$d часов</item>
+        <item quantity="other">Выберите от %1$d до %2$d часов</item>
+    </plurals>
+
 </resources>

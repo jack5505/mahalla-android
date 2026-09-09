@@ -14,7 +14,12 @@ class PlaceActionsTest {
     @Test
     fun `actions follow the layout order`() {
         val actions = PlaceActions.resolve(
-            capabilities = PlaceCapabilities(queue = true, booking = true, ordering = true),
+            capabilities = PlaceCapabilities(
+                queue = true,
+                booking = true,
+                ordering = true,
+                products = true,
+            ),
             contacts = PlaceContacts(phone = "+998901234567"),
             place = place("p", point = GeoPoint(41.31, 69.28)),
         )
@@ -24,6 +29,7 @@ class PlaceActionsTest {
                 PlaceAction.Queue,
                 PlaceAction.Booking,
                 PlaceAction.Order,
+                PlaceAction.Products,
                 PlaceAction.Call,
                 PlaceAction.Route,
             ),
@@ -98,7 +104,7 @@ class PlaceActionsTest {
     }
 
     @Test
-    fun `queue is offered to barbers and nothing is offered to the rest`() {
+    fun `each category gets the vertical it has a screen for, the rest get nothing`() {
         // Флагов «что место умеет» в контракте нет (issue #53): вертикаль
         // следует из категории, и до issue #96 ни одна из них не включалась.
         // Бронь добавилась в issue #97: у мастера это второй способ попасть к
@@ -106,6 +112,14 @@ class PlaceActionsTest {
         assertEquals(
             PlaceCapabilities(queue = true, booking = true),
             PlaceCapabilities.of(PlaceCategory.Master),
+        )
+
+        // Игровые клубы добавились в issue #98: зона клуба — свой
+        // контроллер (`gaming-controller`) и свой экран, а не запись на
+        // время к мастеру.
+        assertEquals(
+            PlaceCapabilities(gaming = true),
+            PlaceCapabilities.of(PlaceCategory.Playground),
         )
 
         // Больницы добавились в issue #99: у них своя запись — к врачу
@@ -129,17 +143,55 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Fashion),
         )
 
+        // Витрина аптеки (issue #100) — действие, которое ничего не начинает:
+        // товары бэкенд отдаёт, а заказать их нечем, и `ordering` тут остаётся
+        // выключенным намеренно.
+        assertEquals(
+            PlaceCapabilities(products = true),
+            PlaceCapabilities.of(PlaceCategory.Pharmacy),
+        )
+
         listOf(
             PlaceCategory.Food,
-            PlaceCategory.Pharmacy,
-            PlaceCategory.Playground,
             PlaceCategory.Other,
         ).forEach {
             // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
             // бэкенд отдаёт у мастеров (`barber-services`) и у больниц
-            // (`hospitals`), а «Заказать» — вне объёма этих задач.
+            // (`hospitals`), зоны — у игровых клубов, товары — только у
+            // аптек, а «Заказать» — вне объёма этих задач.
             assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
         }
+    }
+
+    @Test
+    fun `a gaming club card shows the zone as the primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Playground),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Именно `Gaming`, а не `Booking`: последнее ведёт к услугам мастера,
+        // которых у клуба нет (issue #97 против issue #98).
+        assertEquals(listOf(PlaceAction.Gaming, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Gaming, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Booking !in actions)
+    }
+
+    @Test
+    fun `a pharmacy card offers the showcase and never a purchase`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Pharmacy),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // «Купить» здесь быть не должно: своей ручки заказа
+        // `pharmacy-controller` не отдаёт, и корзину аптеки бэкенду нечем
+        // принять (issue #100).
+        assertEquals(listOf(PlaceAction.Products, PlaceAction.Call), actions)
+        assertEquals(PlaceAction.Products, PlaceActions.primary(actions))
+        assertTrue(PlaceAction.Order !in actions)
     }
 
     @Test

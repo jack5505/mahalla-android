@@ -4,15 +4,16 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
@@ -20,10 +21,12 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
+import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.RateReview
 import androidx.compose.material.icons.outlined.ShoppingBag
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -31,13 +34,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
@@ -46,11 +51,14 @@ import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonCaption
 import uz.mahalla.core.ui.components.ButtonState
+import uz.mahalla.core.ui.components.MahallaAsyncImage
+import uz.mahalla.core.ui.components.MahallaAvatar
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
+import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaDialog
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaIconButton
@@ -61,7 +69,6 @@ import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
-import uz.mahalla.core.ui.components.SkeletonBox
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.ui.distanceLabel
 import uz.mahalla.feature.place.domain.OpeningHours
@@ -91,9 +98,11 @@ fun PlaceDetailsScreen(
     onOrderClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onQueueClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onBookingClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onGamingClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onDoctorClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onCinemaClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     onShopClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onProductsClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: PlaceDetailsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -121,15 +130,19 @@ fun PlaceDetailsScreen(
                 )
 
                 // Заказ — вертикаль «Еда» (эпик 5), очередь — walk-in
-                // (issue #96), бронь — запись на время (issue #97), врач —
-                // больницы (issue #99), магазин — одежда (issue #108).
+                // (issue #96), бронь — запись на время (issue #97), зона —
+                // игровые клубы (issue #98), врач — больницы (issue #99),
+                // магазин — одежда (issue #108), товары — витрина аптеки
+                // (issue #100).
                 is PlaceDetailsEffect.OpenVertical -> when (effect.action) {
                     PlaceAction.Order -> onOrderClick(effect.placeId, effect.placeName)
                     PlaceAction.Queue -> onQueueClick(effect.placeId, effect.placeName)
                     PlaceAction.Booking -> onBookingClick(effect.placeId, effect.placeName)
+                    PlaceAction.Gaming -> onGamingClick(effect.placeId, effect.placeName)
                     PlaceAction.Doctor -> onDoctorClick(effect.placeId, effect.placeName)
                     PlaceAction.Cinema -> onCinemaClick(effect.placeId, effect.placeName)
                     PlaceAction.Shop -> onShopClick(effect.placeId, effect.placeName)
+                    PlaceAction.Products -> onProductsClick(effect.placeId, effect.placeName)
                     else -> Unit
                 }
             }
@@ -193,7 +206,9 @@ private fun DetailsList(
         verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         contentPadding = PaddingValues(bottom = Spacing.gutter),
     ) {
-        item(key = "gallery") { Gallery(photoCount = details.photos.size) }
+        item(key = "gallery") {
+            Gallery(photos = details.photos, placeName = details.place.name)
+        }
 
         item(key = "summary") { Summary(details = details, openNow = state.openNow) }
 
@@ -241,21 +256,35 @@ private fun DetailsList(
 }
 
 /**
- * Галерея — пока скелетоны по числу фото: загрузчика изображений в проекте
- * ещё нет (Coil появится вместе с медиа-эпиком), а рисовать пустоту вместо
- * известного количества снимков хуже, чем показать их места.
+ * Галерея (issue #60): фотографии заведения лентой.
+ *
+ * Одна фотография занимает не всю ширину намеренно — край следующей говорит,
+ * что ленту можно листать. Подпись для TalkBack одна на весь блок: читать
+ * «фотографии такого-то» столько раз, сколько снимков, бессмысленно.
  */
 @Composable
-private fun Gallery(photoCount: Int, modifier: Modifier = Modifier) {
-    if (photoCount == 0) return
-    Row(
-        modifier = modifier.fillMaxWidth(),
+private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
+    // Ключ элемента LazyRow — сама ссылка, а дубликат ключа роняет список.
+    // Бэкенд повторов и пустых строк не обещает, поэтому чистим здесь: то же
+    // решение, что у SearchHistory.decode (PR #23).
+    val shown = remember(photos) { photos.filter(String::isNotBlank).distinct() }
+    if (shown.isEmpty()) return
+    val description = stringResource(R.string.image_gallery_of, placeName)
+    LazyRow(
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        repeat(photoCount.coerceAtMost(MAX_GALLERY_PREVIEW)) {
-            Box(modifier = Modifier.weight(1f)) {
-                SkeletonBox(modifier = Modifier.fillMaxWidth(), height = GALLERY_HEIGHT)
-            }
+        items(items = shown, key = { it }) { photo ->
+            MahallaAsyncImage(
+                url = photo,
+                contentDescription = null,
+                modifier = Modifier.size(
+                    width = MahallaComponentDefaults.galleryImageWidth,
+                    height = MahallaComponentDefaults.galleryImageHeight,
+                ),
+            )
         }
     }
 }
@@ -517,12 +546,16 @@ private fun ReviewCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val author = if (isMine) {
+                stringResource(R.string.place_review_mine)
+            } else {
+                review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
+            }
+            // Имя автора стоит той же строкой — аватар только рисуется,
+            // TalkBack не должен читать его дважды.
+            MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
             Text(
-                text = if (isMine) {
-                    stringResource(R.string.place_review_mine)
-                } else {
-                    review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
-                },
+                text = author,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -631,10 +664,12 @@ private fun OpeningHours.label(): String = when {
 private fun PlaceAction.labelRes(): Int = when (this) {
     PlaceAction.Queue -> R.string.place_action_queue
     PlaceAction.Booking -> R.string.place_action_booking
+    PlaceAction.Gaming -> R.string.place_action_gaming
     PlaceAction.Doctor -> R.string.place_action_doctor
     PlaceAction.Cinema -> R.string.place_action_cinema
     PlaceAction.Order -> R.string.place_action_order
     PlaceAction.Shop -> R.string.place_action_shop
+    PlaceAction.Products -> R.string.place_action_products
     PlaceAction.Call -> R.string.place_action_call
     PlaceAction.Route -> R.string.place_action_route
 }
@@ -642,10 +677,12 @@ private fun PlaceAction.labelRes(): Int = when (this) {
 private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Queue -> Icons.Outlined.ConfirmationNumber
     PlaceAction.Booking -> Icons.Outlined.EventAvailable
+    PlaceAction.Gaming -> Icons.Outlined.SportsEsports
     PlaceAction.Doctor -> Icons.Outlined.MedicalServices
     PlaceAction.Cinema -> Icons.Outlined.Movie
     PlaceAction.Order -> Icons.Outlined.ShoppingBag
     PlaceAction.Shop -> Icons.Outlined.Storefront
+    PlaceAction.Products -> Icons.Outlined.LocalPharmacy
     PlaceAction.Call -> Icons.Outlined.Call
     PlaceAction.Route -> Icons.Outlined.Directions
 }
@@ -673,5 +710,3 @@ private fun android.content.Context.startActivitySafely(intent: Intent) {
 }
 
 private val HOUR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
-private val GALLERY_HEIGHT = 120.dp
-private const val MAX_GALLERY_PREVIEW = 3

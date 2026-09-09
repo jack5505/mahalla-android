@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +40,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.MahallaAsyncImage
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -57,6 +59,8 @@ import uz.mahalla.core.ui.userMessage
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.media.ui.mediaMessage
+import uz.mahalla.feature.media.ui.rememberPhotoPicker
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
 import uz.mahalla.feature.role.domain.UserRole
@@ -79,6 +83,9 @@ import java.time.Instant
  * @param onOpenMyPlaces открыть «мои заведения» (issue #94). Строка видна
  * только продавцу: до неё судьбу отправленной заявки в приложении было не
  * видно вовсе.
+ * @param onOpenGamingBookings открыть «мои брони» игровых зон (issue #98).
+ * Строка видна всем: бронь берут с карточки клуба, и другого пути к своим
+ * броням, кроме как найти тот же клуб заново, у человека нет.
  * @param onOpenMyAppointments открыть «мои записи» (issue #97). Строка видна
  * всем: записаться может кто угодно, а следить за записью больше негде —
  * своего таба у брони нет.
@@ -108,6 +115,7 @@ fun ProfileScreen(
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
     onOpenSecurity: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -137,12 +145,20 @@ fun ProfileScreen(
         viewModel.onEvent(ProfileEvent.ScreenResumed)
     }
 
+    // Photo picker живёт здесь, а не в ProfileContentScreen: в превью реестра
+    // результатов активити нет, и `rememberLauncherForActivityResult` там
+    // упал бы (issue #101).
+    val pickAvatar = rememberPhotoPicker { source ->
+        viewModel.onEvent(ProfileEvent.AvatarPicked(source))
+    }
+
     ProfileContentScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onOpenRole = onOpenRole,
         onOpenMyPlaces = onOpenMyPlaces,
         onOpenSecurity = onOpenSecurity,
+        onOpenGamingBookings = onOpenGamingBookings,
         onOpenMyAppointments = onOpenMyAppointments,
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
@@ -151,6 +167,7 @@ fun ProfileScreen(
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
         onChangeServer = onChangeServer,
+        onPickAvatar = pickAvatar,
     )
 }
 
@@ -163,6 +180,7 @@ fun ProfileContentScreen(
     onOpenRole: () -> Unit,
     onOpenMyPlaces: () -> Unit,
     onOpenSecurity: () -> Unit,
+    onOpenGamingBookings: () -> Unit,
     onOpenMyAppointments: () -> Unit,
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
@@ -171,6 +189,7 @@ fun ProfileContentScreen(
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
     onChangeServer: (() -> Unit)? = null,
+    onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(title = stringResource(R.string.profile_title))
@@ -183,6 +202,13 @@ fun ProfileContentScreen(
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             ProfileHeader(profile = state.profile)
+
+            AvatarUploadSection(
+                upload = state.avatarUpload,
+                hasPhoto = !state.profile.avatarUrl.isNullOrBlank(),
+                onPick = onPickAvatar,
+                onCancel = { onEvent(ProfileEvent.AvatarUploadCancelled) },
+            )
 
             // Анкеты покупателя и продавца (issue #84). Подпись — текущая
             // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
@@ -204,6 +230,15 @@ fun ProfileContentScreen(
                     onClick = onOpenMyPlaces,
                 )
             }
+
+            // «Мои брони» игровых зон (issue #98). Без этой строки бронь можно
+            // было бы найти, только вернувшись на карточку того же клуба, —
+            // а после закрытия приложения его ещё надо вспомнить.
+            MahallaListItem(
+                title = stringResource(R.string.gaming_my_bookings),
+                subtitle = stringResource(R.string.gaming_bookings_profile_subtitle),
+                onClick = onOpenGamingBookings,
+            )
 
             // «Мои записи» (issue #97) — всем: записаться на время может
             // любой, а следить за записью больше негде.
@@ -351,9 +386,11 @@ fun ProfileContentScreen(
 }
 
 /**
- * Шапка: аватар, имя и номер. Картинки в приложении пока нет (загрузчик
- * изображений — отдельная задача), поэтому аватар — круг с инициалами;
- * `avatarUrl` уже хранится и подставится в него без изменений экрана.
+ * Шапка: аватар, имя и номер.
+ *
+ * Фото приезжает из `avatarUrl` (issue #60), а пока его нет — круг с
+ * инициалами. Инициалы, а не силуэт: имя они уже говорят, и на устройстве, где
+ * фото не загрузилось, шапка всё равно остаётся про конкретного человека.
  */
 @Composable
 private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
@@ -371,7 +408,19 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
-                if (initials.isEmpty()) {
+                // Пустая строка — не ссылка: бэкенд отдаёт `avatarUrl` как
+                // придётся, и на `""` шапка обязана остаться при инициалах, а
+                // не показать иконку «фото нет» (то же условие, что у кнопки
+                // удаления фото — `hasPhoto` выше).
+                if (!profile.avatarUrl.isNullOrBlank()) {
+                    // Имя стоит строкой рядом — фото для TalkBack пустое.
+                    MahallaAsyncImage(
+                        url = profile.avatarUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = CircleShape,
+                    )
+                } else if (initials.isEmpty()) {
                     Icon(
                         imageVector = Icons.Outlined.Person,
                         // Иконка дублирует имя рядом — для TalkBack пустая.
@@ -399,6 +448,81 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = LocalMahallaColors.current.fgMuted,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Фото профиля (issue #101): выбрать снимок, отправить, отменить.
+ *
+ * Самого фото здесь не видно, и это не забывчивость: показывать картинку по
+ * адресу пока нечем — загрузчик изображений это задача #60. Поэтому строка
+ * честно говорит, есть загруженное фото или нет, а появится Coil — в шапке
+ * встанет уже сохранённый `avatarUrl`.
+ *
+ * Прогресс — полоска с процентами, а не крутилка: на медленной связи она
+ * единственное, что отличает работу от зависшего экрана. Кнопка «Отменить»
+ * появляется на её месте — отменить длинную загрузку человек должен мочь, не
+ * закрывая приложение.
+ */
+@Composable
+private fun AvatarUploadSection(
+    upload: AvatarUpload,
+    hasPhoto: Boolean,
+    onPick: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MahallaCard(modifier = modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
+            Text(
+                text = stringResource(R.string.profile_avatar_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(
+                    if (hasPhoto) R.string.profile_avatar_present else R.string.profile_avatar_absent,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+
+            if (upload.inProgress) {
+                LinearProgressIndicator(
+                    progress = { upload.percent / PERCENT_SCALE },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    text = stringResource(R.string.profile_avatar_uploading, upload.percent),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
+                MahallaButton(
+                    text = stringResource(R.string.action_cancel),
+                    onClick = onCancel,
+                    variant = MahallaButtonVariant.Ghost,
+                )
+            } else {
+                MahallaButton(
+                    text = stringResource(
+                        if (hasPhoto) R.string.profile_avatar_replace else R.string.profile_avatar_pick,
+                    ),
+                    onClick = onPick,
+                    variant = MahallaButtonVariant.Secondary,
+                )
+            }
+
+            upload.failure?.let { failure ->
+                Text(
+                    text = failure.mediaMessage(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                // Клиентский отказ (файл не читается, не влезает) сервер не
+                // видел — подробностей ответа у него нет.
+                failure.server?.let { server -> MahallaErrorDetails(server = server) }
             }
         }
     }
@@ -570,6 +694,9 @@ private fun ThemeMode.labelRes(): Int = when (this) {
 }
 
 private val AVATAR_SIZE = 56.dp
+
+/** Проценты загрузки → доля для полоски прогресса. */
+private const val PERCENT_SCALE = 100f
 private const val DEVICE_SKELETONS = 2
 
 @ThemeLanguagePreviews
@@ -607,6 +734,7 @@ private fun ProfilePreview() {
             onOpenRole = {},
             onOpenMyPlaces = {},
             onOpenSecurity = {},
+            onOpenGamingBookings = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
             onOpenMyDoctorAppointments = {},

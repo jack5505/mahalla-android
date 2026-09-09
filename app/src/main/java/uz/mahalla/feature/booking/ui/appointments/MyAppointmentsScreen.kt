@@ -59,10 +59,15 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением.
+ * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением,
+ * перенос на другое время (эпик #11).
+ *
+ * @param onReschedule ведёт на экран записи с уже выбранной услугой: календарь,
+ * слоты и правило «прошедший слот не предлагать» там уже есть.
  */
 @Composable
 fun MyAppointmentsScreen(
+    onReschedule: (appointmentId: String, placeId: String, serviceId: String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyAppointmentsViewModel = hiltViewModel(),
@@ -74,6 +79,18 @@ fun MyAppointmentsScreen(
     // идёт и без запросов.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.onEvent(MyAppointmentsEvent.ScreenResumed)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is MyAppointmentsEffect.OpenReschedule -> onReschedule(
+                    effect.appointmentId,
+                    effect.placeId,
+                    effect.serviceId,
+                )
+            }
+        }
     }
 
     MyAppointmentsContentScreen(
@@ -197,6 +214,7 @@ private fun LazyListScope.section(
         AppointmentCard(
             appointment = appointment,
             vertical = state.vertical,
+            canReschedule = state.canReschedule && appointment.canReschedule,
             pending = state.pendingCancelId == appointment.id,
             // Пока идёт отмена по одной строке, остальные не трогаем: ответы
             // приехали бы на список, которого уже нет.
@@ -210,6 +228,7 @@ private fun LazyListScope.section(
 private fun AppointmentCard(
     appointment: Appointment,
     vertical: AppointmentVertical,
+    canReschedule: Boolean,
     pending: Boolean,
     enabled: Boolean,
     onEvent: (MyAppointmentsEvent) -> Unit,
@@ -248,6 +267,20 @@ private fun AppointmentCard(
                 modifier = Modifier.padding(top = Spacing.item),
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = colors.fgMuted,
+            )
+        }
+
+        // Перенос выше отмены: время можно передвинуть, и предлагать это
+        // первым честнее, чем сразу отдавать слот другому. Кнопки в столбец, а
+        // не в строку: две подписи по три слова в ряд не помещаются, а при
+        // fontScale 1.5 не помещается и одна.
+        if (canReschedule) {
+            MahallaButton(
+                text = stringResource(R.string.my_appointments_reschedule),
+                onClick = { onEvent(MyAppointmentsEvent.RescheduleRequested(appointment.id)) },
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Secondary,
+                state = ButtonState(enabled = enabled && !pending),
             )
         }
 
@@ -366,8 +399,12 @@ private val LOAD_MORE_INDICATOR = 24.dp
 @ThemeLanguagePreviews
 @Composable
 private fun MyAppointmentsPreview() {
+    // Заведение и услуга заданы намеренно: без них у записи нечем сделать
+    // перенос, и превью не показало бы его кнопку.
     val upcoming = Appointment(
         id = "a-1",
+        placeId = "p-1",
+        serviceId = "s-1",
         serviceName = "Soch olish",
         priceSum = 60_000,
         date = LocalDate.of(2026, 9, 6),

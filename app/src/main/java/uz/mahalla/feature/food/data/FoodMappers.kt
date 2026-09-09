@@ -50,7 +50,7 @@ fun MenuItemDto.toDomain(): MenuItem? {
         description = description?.takeIf(String::isNotBlank),
         // Отрицательная цена — ошибка сервера, а не подарок.
         priceSum = (price ?: 0).coerceAtLeast(0),
-        photoUrl = null,
+        photoUrl = imageUrl?.takeIf(String::isNotBlank),
         // Молчание сервера — «есть»: убрать позицию из продажи по
         // отсутствующему полю значит закрыть кухню целиком.
         isAvailable = isAvailable ?: available ?: true,

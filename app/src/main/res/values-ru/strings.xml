@@ -235,7 +235,7 @@
 
     <!-- Карта (эпик 4.2) -->
     <string name="map_unavailable_title">Карта не открылась</string>
-    <string name="map_missing_key_description">Приложение собрано без ключа карты. Списком пользоваться можно.</string>
+    <string name="map_missing_key_description">Приложение собрано без ключа карты — показать её нечем. Места рядом ниже списком.</string>
     <string name="map_engine_failed_description">Не удалось загрузить карту. Проверьте интернет и попробуйте снова.</string>
 
     <!-- Ошибки сетевого слоя -->
@@ -313,6 +313,7 @@
     <string name="map_empty_places">Здесь пока нет мест</string>
     <string name="map_location_denied">Разрешение на геолокацию не выдано. Чтобы видеть себя на карте, включите его в настройках.</string>
     <string name="map_location_unavailable">Не удалось определить местоположение. Проверьте, включена ли геолокация.</string>
+    <string name="map_fallback_places_title">Места рядом</string>
 
     <!-- Выбор точки на карте (issue #90) -->
     <string name="map_picker_title">Выберите точку на карте</string>
@@ -349,9 +350,11 @@
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>
     <string name="place_action_booking">Забронировать</string>
+    <string name="place_action_gaming">Забронировать зону</string>
     <string name="place_action_doctor">Записаться к врачу</string>
     <string name="place_action_cinema">Купить билет</string>
     <string name="place_action_order">Заказать</string>
+    <string name="place_action_products">Товары</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
     <string name="action_collapse">Свернуть</string>
@@ -517,6 +520,11 @@
     <string name="action_save">Сохранить</string>
     <string name="action_done">Готово</string>
 
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">Аватар: %1$s</string>
+    <string name="image_gallery_of">Фотографии: %1$s</string>
+
     <!-- Очередь (walk-in, issue #96) -->
     <string name="queue_title">Очередь</string>
     <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
@@ -573,6 +581,14 @@
     <string name="booking_submit">Записаться</string>
     <string name="booking_done_title">Вы записаны</string>
     <string name="booking_done_description">Заведение подтвердит запись. Состояние видно в «Моих записях».</string>
+    <string name="booking_reschedule_title">Перенос записи</string>
+    <string name="booking_reschedule_service_title">Услуга</string>
+    <string name="booking_reschedule_hint">Услуга остаётся та же — выберите новый день и время.</string>
+    <string name="booking_reschedule_submit">Перенести на новое время</string>
+    <string name="booking_reschedule_done_title">Запись перенесена</string>
+    <string name="booking_reschedule_done_description">Заведение подтвердит новое время. Прежняя запись отменена.</string>
+    <string name="booking_reschedule_done_description_kept">Заведение подтвердит новое время.</string>
+    <string name="booking_reschedule_old_kept">Новое время за вами, но прежнюю запись отменить не удалось. Отмените её сами в «Моих записях».</string>
     <string name="weekday_short_mon">пн</string>
     <string name="weekday_short_tue">вт</string>
     <string name="weekday_short_wed">ср</string>
@@ -593,12 +609,24 @@
     <string name="my_appointments_cancel_keep">Оставить</string>
     <string name="my_appointments_cancel_title">Отменить запись?</string>
     <string name="my_appointments_cancel_message">Время отдадут другому клиенту, записываться придётся заново.</string>
+    <string name="my_appointments_reschedule">Перенести время</string>
     <string name="appointment_status_pending">Ждёт подтверждения</string>
     <string name="appointment_status_confirmed">Подтверждена</string>
     <string name="appointment_status_cancelled">Отменена</string>
     <string name="appointment_status_completed">Завершена</string>
     <string name="appointment_status_no_show">Вы не пришли</string>
     <string name="appointment_status_unknown">Состояние неизвестно</string>
+
+    <!-- Загрузка изображений (issue #101) -->
+    <string name="profile_avatar_title">Фото профиля</string>
+    <string name="profile_avatar_present">Фото загружено</string>
+    <string name="profile_avatar_absent">Фото пока не загружено</string>
+    <string name="profile_avatar_pick">Выбрать фото</string>
+    <string name="profile_avatar_replace">Заменить фото</string>
+    <string name="profile_avatar_uploading">Загрузка: %1$d%%</string>
+    <string name="media_error_unreadable">Не удалось открыть файл. Выберите другое фото.</string>
+    <string name="media_error_unsupported">Это не изображение. Подойдут JPEG, PNG или WebP.</string>
+    <string name="media_error_too_large">Фото слишком большое. Выберите снимок меньше.</string>
 
     <!-- Вертикаль «Больницы» (эпик #11, issue #99) -->
     <string name="doctor_booking_title">Запись к врачу</string>
@@ -839,4 +867,43 @@
     <string name="my_tickets_cancel_title">Вернуть билет?</string>
     <string name="my_tickets_cancel_message">Место освободится. Условия возврата определяет кинотеатр.</string>
     <string name="my_tickets_cancel_keep">Оставить</string>
+    <!-- Вертикаль «Аптека» (issue #100): витрина товаров с наличием. -->
+    <string name="pharmacy_title">Аптека</string>
+    <string name="pharmacy_search_hint">Введите название лекарства</string>
+    <string name="pharmacy_stock_in">В наличии</string>
+    <string name="pharmacy_stock_out">Нет в наличии</string>
+    <string name="pharmacy_stock_unknown">Наличие неизвестно</string>
+    <string name="pharmacy_prescription_required">Отпускается по рецепту</string>
+    <string name="pharmacy_empty_title">Список пуст</string>
+    <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
+    <string name="pharmacy_not_found_title">Ничего не нашлось</string>
+    <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
+    <!-- Игровые зоны (эпик #11, issue #98). -->
+    <string name="gaming_title">Игровые зоны</string>
+    <string name="gaming_zones_empty_title">Зон пока нет</string>
+    <string name="gaming_zones_empty_description">Как только заведение добавит игровые зоны, они появятся здесь.</string>
+    <string name="gaming_zone_unnamed">Зона без названия</string>
+    <string name="gaming_zone_unavailable">Бронь недоступна</string>
+    <string name="gaming_zone_price">%1$s / час</string>
+    <string name="gaming_book">Забронировать</string>
+    <string name="gaming_sheet_time">Время начала</string>
+    <string name="gaming_sheet_duration">На сколько</string>
+    <string name="gaming_total">Итого</string>
+    <string name="gaming_error_time_required">Выберите время начала.</string>
+    <string name="gaming_error_time_too_soon">Это время уже прошло — выберите другое.</string>
+    <string name="gaming_booked">Зона забронирована.</string>
+    <string name="gaming_booked_at">%1$s забронирована на %2$s.</string>
+    <string name="gaming_my_bookings">Мои брони</string>
+    <string name="gaming_bookings_profile_subtitle">Брони игровых зон</string>
+    <string name="gaming_bookings_empty_title">Броней нет</string>
+    <string name="gaming_bookings_empty_description">Забронируйте зону с карточки игрового клуба — бронь появится здесь.</string>
+    <string name="gaming_booking_zone_unknown">Игровая зона</string>
+    <string name="gaming_booking_interval">%1$s — %2$s</string>
+    <string name="gaming_cancel_note">Отменить бронь в приложении нельзя: для этого позвоните в заведение.</string>
+    <string name="gaming_status_confirmed">Подтверждена</string>
+    <string name="gaming_status_active">Идёт сейчас</string>
+    <string name="gaming_status_completed">Завершена</string>
+    <string name="gaming_status_cancelled">Отменена</string>
+    <string name="gaming_status_unknown">Состояние неизвестно</string>
+
 </resources>

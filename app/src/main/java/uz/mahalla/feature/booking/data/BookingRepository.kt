@@ -1,5 +1,7 @@
 package uz.mahalla.feature.booking.data
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import uz.mahalla.core.format.toServerTime
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
@@ -12,6 +14,7 @@ import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.booking.domain.BookingSlots
+import uz.mahalla.feature.booking.domain.Rescheduled
 import java.time.Clock
 import java.time.LocalDate
 import java.time.LocalTime
@@ -19,7 +22,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Бронирование по времени (issue #97): услуги, слоты, запись, отмена.
+ * Бронирование по времени (issue #97): услуги, слоты, запись, отмена, перенос.
  *
  * Кэша нет намеренно — ни у слотов, ни у записей. Слот, свободный десять минут
  * назад, мог уже уйти, а показанный из Room занятый слот кончился бы отказом
@@ -54,6 +57,28 @@ interface BookingRepository : AppointmentsSource {
         date: LocalDate,
         time: LocalTime,
     ): ApiResult<Appointment>
+
+    /**
+     * Перенести запись на другое время.
+     *
+     * **Своей ручки у бэкенда нет** — проверено по живому `/v3/api-docs`
+     * 2026-09-08: у `appointments` только `my`, `{id}`, `{id}/cancel` и
+     * `{id}/status` (последняя — бизнес-панель, эпик #16). Поэтому перенос
+     * собирается из двух уже сверенных ручек: `POST appointments` и
+     * `POST appointments/{id}/cancel`. Ничего не выдумано — см.
+     * `docs/API-CONTRACT.md`.
+     *
+     * @param appointmentId что отменить после того, как новое время получено.
+     * @param placeId и [serviceId] — из переносимой записи: услуга остаётся та
+     * же, меняется только время.
+     */
+    suspend fun reschedule(
+        appointmentId: String,
+        placeId: String,
+        serviceId: String,
+        date: LocalDate,
+        time: LocalTime,
+    ): ApiResult<Rescheduled>
 
     companion object {
         /** Код отказа, когда записываться нечем ещё до запроса. */
@@ -125,6 +150,64 @@ class DefaultBookingRepository @Inject constructor(
         }.map(AppointmentDto::toCreated)
     }
 
+    /**
+     * Перенос: сначала новое время, потом отмена старого.
+     *
+     * **Порядок именно такой, и он важен.** Отмени сперва — и, если слот к
+     * этому моменту ушёл, человек останется вовсе без записи: вернуть
+     * отменённую нечем. При обратном порядке отказ на новой записи ничего не
+     * ломает, старая на месте, а текст сервера видно на экране (issue #34).
+     *
+     * Плата за такой порядок — риск, что бэкенд не даст второй записи на то же
+     * заведение, пока висит первая (правила на этот счёт контракт не
+     * описывает, а проверить под токеном пока нечем). Тогда перенос будет
+     * отказывать сообщением сервера, а починка — это перестановка двух вызовов
+     * здесь. Обратный порядок молча терял бы запись, и это хуже.
+     *
+     * Неудавшаяся отмена старой записи отказом **не** считается: новое время
+     * уже за человеком. Про лишнюю запись экран говорит прямо
+     * ([Rescheduled.previousCancelled]).
+     *
+     * Отмена идёт в [NonCancellable], и это не перестраховка: она —
+     * компенсирующая половина уже совершённого действия. Уйди человек с экрана
+     * в это самое мгновение, `viewModelScope` отменился бы, `apiCall`
+     * пробросил бы `CancellationException` (он делает это намеренно), и у
+     * человека молча осталось бы две записи. Отменить сам перенос отсюда уже
+     * нельзя — значит и обрывать вторую половину нельзя.
+     */
+    override suspend fun reschedule(
+        appointmentId: String,
+        placeId: String,
+        serviceId: String,
+        date: LocalDate,
+        time: LocalTime,
+    ): ApiResult<Rescheduled> {
+        if (appointmentId.isBlank()) {
+            return ApiResult.Failure(
+                ApiError.Business(BookingRepository.INVALID_REQUEST_CODE),
+            )
+        }
+
+        return when (
+            val created = book(
+                placeId = placeId,
+                serviceId = serviceId,
+                date = date,
+                time = time,
+            )
+        ) {
+            is ApiResult.Failure -> created
+            is ApiResult.Success -> ApiResult.Success(
+                Rescheduled(
+                    appointment = created.data,
+                    previousCancelled = withContext(NonCancellable) {
+                        cancelById(appointmentId) is ApiResult.Success
+                    },
+                ),
+            )
+        }
+    }
+
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> =
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
             .map(AppointmentPageDto::toDomain)
@@ -143,12 +226,20 @@ class DefaultBookingRepository @Inject constructor(
             )
         }
 
-        return apiCall {
-            val response = api.cancel(appointment.id)
-            response.ensureSuccess()
-            response.data
-        }.map { dto ->
+        return cancelById(appointment.id).map { dto ->
             dto?.toDomain() ?: appointment.copy(status = AppointmentStatus.Cancelled)
         }
     }
+
+    /**
+     * Сама отмена, без вывода состояния. Отдельно от [cancel], потому что
+     * [reschedule] знает только `id` переносимой записи — целой записи у него
+     * нет, а собирать её из пустых полей ради одного вызова незачем.
+     */
+    private suspend fun cancelById(appointmentId: String): ApiResult<AppointmentDto?> =
+        apiCall {
+            val response = api.cancel(appointmentId)
+            response.ensureSuccess()
+            response.data
+        }
 }
