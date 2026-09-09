@@ -6,7 +6,9 @@
 
 Все числа сняты командами, а не переписаны из прошлого снимка: команды указаны
 рядом, чтобы следующий агент пересчитал их за минуту и не поверил устаревшему
-файлу на слово. Ветка снимка — `claude/issue-36-*`, кода не менялось.
+файлу на слово. Команду смотри до того, как поверить числу: в этом же файле
+ноль `<plurals>` уже получался из-за grep'а не по тому файлу. Ветка снимка —
+`claude/issue-36-*`, кода не менялось.
 
 ## Состояние одной строкой
 
@@ -43,11 +45,11 @@ gh issue list --state open   # 47 открытых issue
 | Назначений в графе | **45** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
 | Экранов (`*Screen.kt`) | 45 | `find app/src/main -name '*Screen.kt' \| wc -l` |
 | ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
-| `*Api.kt` / эндпоинтов | 19 / **77** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("' --include='*Api.kt'` (79 аннотаций: `orders/{id}` и `appointments/{id}/cancel` объявлены в двух API каждый) |
-| Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://189-74-96-232.nip.io/v3/api-docs` |
+| `*Api.kt` / эндпоинтов | 19 / **77** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (79 аннотаций: `orders/{id}` и `appointments/{id}/cancel` объявлены в двух API каждый) |
+| Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://189-74-96-232.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
 | Тестов | **1842 в 177 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
-| `<plurals>` | 0 | см. техдолг |
+| `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
 | Room | 3 сущности, 3 DAO | `data/db/` |
 
 ---
@@ -73,15 +75,17 @@ gh issue list --state open   # 47 открытых issue
 | **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг) |
 | **Очередь** (walk-in) | талон, слежение, отмена | `walkin/send`, `walkin/{id}/cancel` | #96 |
 | **Бронь** (BARBER) | услуга → день → слот → подтверждение; «мои записи» с отменой и **переносом** | `barber-services/places/{id}`, `.../slots`, `appointments`, `appointments/my`, `appointments/{id}/cancel` | #97, перенос — #11 |
-| **Больницы** | врач → день → время → жалоба → подтверждение | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my` | #99 |
+| **Больницы** | врач → день → время → жалоба → подтверждение; «мои записи к врачу» (тот же экран, что у брони, с `vertical=Doctor`) | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my`, отмена — общая `appointments/{id}/cancel` (см. §4.1) | #99 |
 | **Игровые зоны** (GAMING) | зоны клуба → время и длительность → «мои брони» | `gaming/places/{id}/zones`, `gaming/bookings`, `gaming/bookings/my` | #98 |
 | **Кино** | афиша → фильм и сеансы → покупка → «мои билеты» | `cinema/movies`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `…/cancel` | #106 |
 | **Аптека** | витрина товаров с наличием — **только просмотр** | `pharmacy/places/{id}/products` | #100 (заказа нет и у бэкенда) |
 | **Одежда** (FASHION) | каталог → товар (цвет/размер) → **серверная** корзина → checkout → «мои заказы» | `fashion/categories`, `fashion/stores/{id}/catalog`, `fashion/products/{id}`, `fashion/cart*`, `fashion/orders` | #108 |
 | **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my` | #107 |
 
-Мастер — не заведение: у него свой каталог (`FreelancersRoute` с главной), а не
-`SearchRoute` с категорией.
+Мастер живёт в двух местах, и это не ошибка: плитка «Мастера» на главной — это
+категория `BARBER` в каталоге заведений (`SearchRoute`), то есть барбершопы, а
+`FreelancersRoute` — каталог самих исполнителей (`freelancers`), отдельная
+сущность бэкенда со своими услугами и заказами.
 
 ### 2.3 Платформа
 
@@ -141,14 +145,15 @@ gh issue list --state open   # 47 открытых issue
 ### 4.1 Клиентские ручки стенда, которые не зовёт никто
 
 Из 180 эндпоинтов стенда приложение использует 77. Разница — 103 ручки, и
-это **не** «отставание на порядок»: больше половины — бизнес-панель, кабинет
-мастера и админка. Клиентских среди них столько:
+это **не** «отставание на порядок»: около 63 из них — бизнес-панель, кабинет
+мастера и админка. Клиентские незакрытые области — десять, и четыре из них
+уже в открытых PR:
 
 | Область | Ручки | Состояние |
 |---|---|---|
 | Соцфункции | `places/{id}/like`, `/save`, `/comments` (GET/POST), `DELETE comments/{id}`, `saved-places`, `places/{id}/status` | issue #105, PR #78; вопросы к бэкенду — #88 |
 | Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #120. Сейчас PIN живёт на `auth/setup-pin` + `auth/pin-login`, сменить его из профиля нечем |
-| Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар на сервере менять нечем |
+| Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар на сервере менять нечем. **Осторожно: девять KDoc в коде утверждают, что этих ручек у бэкенда нет вовсе** (`ProfileViewModel`, `ProfileContract`, `PlaceDetailsViewModel`, `AuthRepository`, `CustomerForm`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`) — так было на момент issue #61, в схеме от 2026-09-09 они есть |
 | Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
 | Аналитика | `POST analytics/track` | issue **#169**: продуктовой аналитики в приложении нет вовсе — ни экранов, ни воронки заказа |
 | Карта | `GET places/map-bounds` | issue **#168**: `MapViewModel` берёт маркеры из `CatalogRepository` (`places/nearby`), то есть радиусом вокруг человека, а не прямоугольником видимой области |
@@ -158,6 +163,7 @@ gh issue list --state open   # 47 открытых issue
 | Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `PUT freelancers/orders/{id}/status` | «стать исполнителем» не начато |
 | Бизнес-панель | `analytics/places/{id}/dashboard`, `places/{id}/staff*`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163 |
 | Админка | `admin/*`, `auth/admin/users/{id}/block` | вне скоупа этого приложения |
+| Одиночки | `GET places` (постраничный список без гео), `POST p/request` (алиас запроса кода) | не нужны: каталог берётся `nearby`/`search`, код — `auth/send-otp` |
 
 Расхождение, которое стоит проверить (issue **#167**): **отмену записи к врачу
 клиент шлёт на `POST appointments/{id}/cancel`** (`HospitalApi.cancel`), и в
@@ -188,16 +194,23 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 ## 5. Техдолг (перепроверен по коду, а не переписан)
 
-- **Ноль `<plurals>`** при 760 строках: количества склеиваются в коде, для uz
-  и ru это неверно (`otp_input_description`, `pin_input_description`,
-  счётчики отзывов и позиций).
+### 5.1 В `main`
+
+- **Две a11y-строки не стали plural**: `otp_input_description` и
+  `pin_input_description` склеивают количество через `%1$d`
+  (`core/ui/components/TextFields.kt:179,181`). Остальные количества
+  переведены как надо — 26 `<plurals>` в каждой локали, правило есть в
+  `.claude/rules/i18n.md`.
 - **Скриншот-тестов в `main` нет** — Roborazzi приходит только с PR #164;
   соответствие макету проверяется глазами по `@ThemeLanguagePreviews`.
   `.claude/rules/compose-ui.md` про это говорит правду для `main`, но
   разойдётся сразу после мержа #164 (issue #166).
-- **`.claude/rules/testing.md` называет 163 тест-класса** — их 177. Правку
-  этого файла окружение агента не пропускает (`.claude/**` защищён), поэтому
-  число живёт здесь; поправить руками.
+- **`.claude/rules/testing.md` называет 163 тест-класса** — их 177. Правка
+  агентом не доезжает дважды: локально окружение просит подтверждения на
+  `.claude/**`, а в CI каталог входит в `SENSITIVE_PATHS` action'а
+  (`restore-config.ts`) и **восстанавливается из базовой ветки поверх ветки
+  PR** — то есть молча затирается (это же описано в комментарии
+  `.github/workflows/claude.yml`). Поправить руками.
 - **Compose-тестов почти нет**: `ui-test-junit4` в проекте есть, но
   использован ровно одним тестом (`MahallaAsyncImageTest`, #137). Цели
   нажатия и семантика не проверяются.
@@ -207,16 +220,23 @@ KDoc написано почему — на 2026-09-04 своей отмены �
   мёртвая.
 - **`TokenAuthenticator`**: `synchronized` + `runBlocking` на обновлении
   токена — блокирующий вызов на потоке OkHttp.
-- **`Idempotency-Key` и коды отказа оплаты не подтверждены** бэкендом
-  (issue #157), **единица денег** (сумы или тийины) — тоже (issue #149).
-- **Deep link из пуша вытесняет стартовый экран** обновления и адреса
-  бэкенда (issue #160).
 - **`content://` и `file://` обходят белый список схем картинок** (issue #139).
+- **Deep link вытесняет стартовый экран** обновления и адреса бэкенда
+  (issue #160). В `main` ссылка одна — `mahalla://place/{placeId}`; после
+  мержа #159 к ней добавится пуш, и цена вырастет.
 - **Контракт вертикалей сверен неравномерно**: в `docs/API-CONTRACT.md` ⚠️ у
   всего, что требует Bearer, — `CONTRACT_REFRESH_TOKEN` в CI нет, харнесс
   `contract/booking.sh` проверяет только анонимную половину. Два пропущенных
   теста в прогоне — ровно они (`BookingContractTest`): без токена они не
   падают, а тихо не проверяют ничего.
+
+### 5.2 Не в `main`, а в открытых PR — учитывать при планировании
+
+- **`Idempotency-Key` и коды отказа оплаты не подтверждены** бэкендом
+  (issue #157) и **единица денег** — сумы или тийины (issue #149): это долг
+  оплаты из PR #156/#158, самого кода в `main` нет.
+- **Одиннадцать замечаний ревью по «Моим активностям»** (#141–#151) — долг
+  PR #152, см. раздел 3.
 
 ---
 
