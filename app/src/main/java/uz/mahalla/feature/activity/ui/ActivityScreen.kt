@@ -173,15 +173,16 @@ private fun LazyListScope.activityItems(
         }
 
         is ScreenState.Content -> {
-            val visible = state.visible
-            if (visible.isEmpty()) {
+            if (state.showsEmptyTab) {
                 // Активности есть, но не в этой вкладке. Предлагать «сходите
                 // на главную» тому, у кого двадцать заказов в истории, значит
                 // не заметить его самого.
                 item(key = "empty-tab") { EmptyTab(filter = state.filter) }
                 return
             }
-            items(visible, key = Activity::key) { activity ->
+            // Вкладка может быть пуста и здесь — тогда единственной строкой
+            // остаётся хвост догрузки: страницы источников ещё не кончились.
+            items(state.visible, key = Activity::key) { activity ->
                 ActivityRow(
                     activity = activity,
                     onClick = { onEvent(ActivityEvent.ActivityClicked(activity.key)) },

@@ -51,6 +51,21 @@ data class ActivityState(
      * двадцать заказов в истории, значит не заметить его самого.
      */
     val visible: List<Activity> get() = ActivityMerge.filter(items.dataOrNull().orEmpty(), filter)
+
+    /**
+     * Показывать «пусто в этой вкладке» или ещё подождать.
+     *
+     * Пока курсор [nextPages] не пуст, догружать есть что, и пустая вкладка —
+     * не факт, а незнание: у источника, чья первая страница пришла целиком из
+     * истории, активная запись может лежать на второй. Сказать «активных нет»
+     * в этот момент значит соврать и заодно погасить автодогрузку — её триггер
+     * стоит хвостом списка, а на пустой вкладке хвоста нет.
+     */
+    val showsEmptyTab: Boolean
+        get() = items is ScreenState.Content &&
+            visible.isEmpty() &&
+            !hasMore &&
+            loadMoreFailure == null
 }
 
 sealed interface ActivityEvent : UiEvent {

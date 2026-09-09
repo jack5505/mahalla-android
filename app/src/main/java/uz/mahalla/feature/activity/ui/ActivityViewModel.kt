@@ -89,7 +89,11 @@ class ActivityViewModel @Inject constructor(
                         feed.items.isEmpty() -> ScreenState.Empty
                         else -> ScreenState.Content(feed.items)
                     },
-                    sourceFailures = feed.failures,
+                    // При полном отказе причина уже показана блоком ошибки
+                    // экрана; продублировать её пятью отметками разделов
+                    // значило бы шесть красных блоков и шесть кнопок
+                    // «Повторить» на самом частом пути — истёкшей сессии.
+                    sourceFailures = if (feed.isTotalFailure) emptyMap() else feed.failures,
                     nextPages = feed.nextPages,
                     isRefreshing = false,
                 )

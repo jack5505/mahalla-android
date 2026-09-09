@@ -108,6 +108,9 @@ class ActivityViewModelTest {
 
         // Истёкшая сессия — не «вы ещё ничего не заказывали».
         assertEquals(ApiError.Unauthorized, (state.items as ScreenState.Error).error)
+        // И не шесть красных блоков: причина одна, показывает её экран, а не
+        // пять отметок разделов поверх него.
+        assertTrue(state.sourceFailures.isEmpty())
     }
 
     @Test
@@ -174,6 +177,43 @@ class ActivityViewModelTest {
         viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.History))
 
         assertEquals(listOf("done"), viewModel.state.value.visible.map(Activity::id))
+    }
+
+    @Test
+    fun `an empty tab waits for the pages that are still coming`() = runTest {
+        // Первая страница пришла целиком из истории, но страницы не кончились:
+        // активная запись может лежать на второй. «Активных нет» здесь — и
+        // ложь, и погашенная автодогрузка: её триггер стоит хвостом списка.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("done", status = ActivityStatus.Completed)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        assertTrue(viewModel.state.value.visible.isEmpty())
+        assertFalse(viewModel.state.value.showsEmptyTab)
+
+        viewModel.onEvent(ActivityEvent.LoadMore)
+
+        assertEquals(listOf("active"), viewModel.state.value.visible.map(Activity::id))
+    }
+
+    @Test
+    fun `an empty tab is admitted once the pages have run out`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("done", status = ActivityStatus.Completed)),
+        )
+
+        val state = ActivityViewModel(repository).state.value
+
+        // Догружать больше нечего — теперь «активных нет» правда.
+        assertTrue(state.visible.isEmpty())
+        assertTrue(state.showsEmptyTab)
     }
 
     // --- Догрузка ---
