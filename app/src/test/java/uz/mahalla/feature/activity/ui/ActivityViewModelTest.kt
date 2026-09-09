@@ -536,11 +536,137 @@ class ActivityViewModelTest {
         repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
         val viewModel = ActivityViewModel(repository)
 
+        // Первый resume — это открытие экрана, его список уже запросил `init`.
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+        assertEquals(1, repository.requests.size)
+
+        // А второй — настоящий возврат: пока приложение было в фоне, заказ
+        // могли собрать.
         viewModel.onEvent(ActivityEvent.ScreenResumed)
 
-        // Пока приложение было в фоне, заказ могли собрать.
         assertEquals(2, repository.requests.size)
         assertTrue(viewModel.state.value.items is ScreenState.Content)
+    }
+
+    @Test
+    fun `the first resume does not double the initial load`() = runTest {
+        // `LifecycleEventEffect(ON_RESUME)` срабатывает на первой же
+        // композиции. Стартовая загрузка к этому моменту могла успеть
+        // завершиться — и тогда одной проверки `isLoading` не хватает: экран
+        // открывался бы двумя одинаковыми загрузками, то есть десятью
+        // запросами к пяти источникам вместо пяти (issue #145).
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+        )
+        val viewModel = ActivityViewModel(repository)
+        assertEquals(1, repository.requests.size)
+
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+
+        assertEquals(listOf(ActivityFeed.FIRST_PAGES), repository.requests)
+    }
+
+    @Test
+    fun `a second resume while the silent reload is in flight is ignored`() = runTest {
+        // Загрузка от возврата на экран идёт молча: ни `isLoading`, ни
+        // `isRefreshing` она не поднимает, поэтому по флагам состояния второй
+        // resume подряд (диалог поверх экрана, быстрый уход в фон и обратно)
+        // не отсечь — он снова стоил бы пяти запросов.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+        )
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+
+        val gate = CompletableDeferred<Unit>()
+        repository.gate = gate
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+        assertEquals(2, repository.requests.size)
+
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+
+        assertEquals(2, repository.requests.size)
+
+        repository.gate = null
+        gate.complete(Unit)
+
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
+    }
+
+    @Test
+    fun `a refresh started after a load more wins`() = runTest {
+        // Догрузка ушла в сеть, а обновление стартовало позже неё и ответило
+        // раньше. Ответ догрузки после этого приклеил бы к обновлённому списку
+        // страницу от **предыдущего** и вернул бы устаревший курсор.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("stale", status = ActivityStatus.InProgress)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        val loadMoreGate = CompletableDeferred<Unit>()
+        repository.gate = loadMoreGate
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        assertEquals(2, repository.requests.size)
+
+        // Обновление поверх незавершённой догрузки.
+        val refreshGate = CompletableDeferred<Unit>()
+        repository.gate = refreshGate
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            items = listOf(activity("stale-page-2", status = ActivityStatus.InProgress)),
+            nextPages = mapOf(ActivitySource.Orders to 2),
+        )
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("fresh", status = ActivityStatus.InProgress)),
+        )
+        viewModel.onEvent(ActivityEvent.Refreshed)
+
+        // Обновление отвечает первым, догрузка — уже после него. Её ответ
+        // нельзя применять: и список, и курсор он вернёт к состоянию «до».
+        refreshGate.complete(Unit)
+        loadMoreGate.complete(Unit)
+        repository.gate = null
+
+        val state = viewModel.state.value
+        assertEquals(
+            listOf("fresh"),
+            (state.items as ScreenState.Content).data.map(Activity::id),
+        )
+        // И курсор от обновления, а не от догрузки.
+        assertFalse(state.hasMore)
+        assertFalse(state.isRefreshing)
+        assertFalse(state.isLoadingMore)
+        assertNull(state.loadMoreFailure)
+    }
+
+    @Test
+    fun `load more while the list is refreshing does not touch the network`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        val gate = CompletableDeferred<Unit>()
+        repository.gate = gate
+        viewModel.onEvent(ActivityEvent.Refreshed)
+        assertEquals(2, repository.requests.size)
+
+        // Хвост списка виден и во время обновления: его первая композиция
+        // просит догрузку, а курсор у неё — от списка, который вот-вот уедет.
+        viewModel.onEvent(ActivityEvent.LoadMore)
+
+        assertEquals(2, repository.requests.size)
+
+        repository.gate = null
+        gate.complete(Unit)
+
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
+        assertFalse(viewModel.state.value.isLoadingMore)
     }
 
     @Test

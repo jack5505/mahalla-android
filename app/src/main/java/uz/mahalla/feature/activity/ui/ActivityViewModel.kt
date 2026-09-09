@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.dataOrNull
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.activity.data.ActivityRepository
 import uz.mahalla.feature.activity.domain.Activity
 import uz.mahalla.feature.activity.domain.ActivityFeed
@@ -39,19 +38,19 @@ class ActivityViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
 
+    /**
+     * Экран уже был на переднем плане. Нужен, чтобы отличить **возврат** на
+     * экран от его открытия — см. [onScreenResumed].
+     */
+    private var resumedOnce = false
+
     init {
         load()
     }
 
     override fun onEvent(event: ActivityEvent) {
         when (event) {
-            // Возврат на экран: пока приложение было в фоне, заказ могли
-            // собрать, а бронь — подтвердить. Во время загрузки перезапрашивать
-            // нечего: ответ приедет на уже сменившееся состояние.
-            ActivityEvent.ScreenResumed ->
-                if (!currentState.items.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            ActivityEvent.ScreenResumed -> onScreenResumed()
 
             ActivityEvent.Refreshed -> load(showLoading = false, refreshing = true)
 
@@ -79,6 +78,37 @@ class ActivityViewModel @Inject constructor(
             is ActivityEvent.ActivityClicked -> open(event.key)
             ActivityEvent.DiscoveryRequested -> emitEffect(ActivityEffect.OpenDiscovery)
         }
+    }
+
+    /**
+     * Возврат на экран: пока приложение было в фоне, заказ могли собрать, а
+     * бронь — подтвердить, и таб открывают как раз затем, чтобы это увидеть.
+     *
+     * **Первый resume пропускается.** `LifecycleEventEffect(ON_RESUME)`
+     * срабатывает на первой же композиции, то есть сразу после того, как
+     * список запросил `init` — и это не возврат на экран, а его открытие.
+     * Проверки `isLoading` для этого мало: она отсекает дубль только пока
+     * стартовая загрузка в полёте, а успела та дойти до конца — и экран
+     * открывался бы двумя одинаковыми загрузками, то есть **десятью**
+     * запросами к пяти источникам вместо пяти (issue #145).
+     *
+     * Флаг живёт в ViewModel, а не в композабле: композабл пересоздаётся при
+     * каждом уходе с таба, а ViewModel держится за запись бэкстека — и второй
+     * его resume перечитать список как раз обязан.
+     */
+    private fun onScreenResumed() {
+        if (!resumedOnce) {
+            resumedOnce = true
+            return
+        }
+        // Пока загрузка в полёте, перезапрашивать нечего: ответ приедет на уже
+        // сменившееся состояние. Проверяется job, а не `isLoading` с
+        // `isRefreshing`: загрузка **от самого resume** идёт молча и ни одного
+        // из этих флагов не поднимает, так что два resume подряд (диалог
+        // поверх экрана, быстрый уход в фон и обратно) снова дали бы десять
+        // запросов вместо пяти.
+        if (loadJob?.isActive == true) return
+        load(showLoading = false)
     }
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
@@ -160,6 +190,12 @@ class ActivityViewModel @Inject constructor(
         // Загрузка первой страницы в полёте — её ответ вот-вот заменит и
         // список, и курсор. Догрузка со старого курсора приклеила бы к новому
         // списку страницу от предыдущего и разошлась бы с ним же.
+        //
+        // Здесь же отсекается pull-to-refresh (issue #145): `isRefreshing`
+        // отдельной проверкой не нужен — обновление идёт тем же `loadJob`, и
+        // активен он строго дольше, чем поднят флаг. Обратный порядок —
+        // обновление стартовало **после** догрузки — держится на отмене в
+        // `load()`: отменённая догрузка своего ответа уже не применяет.
         if (loadJob?.isActive == true || loadMoreJob?.isActive == true) return
 
         loadMoreJob = viewModelScope.launch { drain() }
