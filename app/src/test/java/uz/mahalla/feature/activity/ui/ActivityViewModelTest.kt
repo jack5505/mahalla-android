@@ -1,5 +1,6 @@
 package uz.mahalla.feature.activity.ui
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -201,28 +202,223 @@ class ActivityViewModelTest {
         assertEquals(listOf("done"), viewModel.state.value.visible.map(Activity::id))
     }
 
+    // --- Пустая вкладка при непустом курсоре (issue #143) ---
+
     @Test
-    fun `an empty tab still has a cursor and can be loaded further`() = runTest {
+    fun `an empty tab pulls pages by itself until the cursor runs out`() = runTest {
         // Вся первая страница уехала в «историю», а активный заказ — на
-        // второй. Пустая вкладка не имеет права остановить догрузку: иначе
-        // человек на «Faol» видит «ничего нет» и догрузить не может ничем —
-        // хвост списка на его вкладке не нарисован (см. `activityItems`).
+        // третьей. Пустая вкладка не имеет права остановить догрузку: вкладку
+        // отбирает клиент, и просить следующую страницу больше некому —
+        // человек на «Faol» видел бы «активных нет, всё в истории», и это
+        // неправда.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            when (pages.getValue(ActivitySource.Orders)) {
+                0 -> ActivityFeed(
+                    items = listOf(
+                        activity("done-1", status = ActivityStatus.Completed, at = "2026-09-01T10:00:00Z"),
+                    ),
+                    nextPages = mapOf(ActivitySource.Orders to 1),
+                )
+
+                1 -> ActivityFeed(
+                    items = listOf(
+                        activity("done-2", status = ActivityStatus.Completed, at = "2026-09-02T10:00:00Z"),
+                    ),
+                    nextPages = mapOf(ActivitySource.Orders to 2),
+                )
+
+                else -> ActivityFeed(
+                    items = listOf(activity("active", status = ActivityStatus.InProgress)),
+                )
+            }
+        }
+
+        val viewModel = ActivityViewModel(repository)
+        val state = viewModel.state.value
+
+        // Догрузка шла сама, пока курсор не опустел, — и активное приехало.
+        assertEquals(listOf("active"), state.visible.map(Activity::id))
+        assertEquals(
+            listOf(0, 1, 2),
+            repository.requests.map { it.getValue(ActivitySource.Orders) },
+        )
+        assertFalse(state.hasMore)
+        assertFalse(state.isLoadingMore)
+
+        // И ни одна из пройденных страниц не потерялась по дороге.
+        viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.History))
+        assertEquals(listOf("done-2", "done-1"), viewModel.state.value.visible.map(Activity::id))
+    }
+
+    @Test
+    fun `the drain stops as soon as the tab has something to show`() = runTest {
+        // Курсор ещё не пуст, но качать дальше незачем: на вкладке уже есть
+        // что читать, остальное дотянет хвост списка по мере прокрутки.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            when (pages.getValue(ActivitySource.Orders)) {
+                0 -> ActivityFeed(
+                    items = listOf(activity("done", status = ActivityStatus.Completed)),
+                    nextPages = mapOf(ActivitySource.Orders to 1),
+                )
+
+                else -> ActivityFeed(
+                    items = listOf(activity("active", status = ActivityStatus.InProgress)),
+                    nextPages = mapOf(ActivitySource.Orders to 2),
+                )
+            }
+        }
+
+        val viewModel = ActivityViewModel(repository)
+        val state = viewModel.state.value
+
+        assertEquals(2, repository.requests.size)
+        assertEquals(listOf("active"), state.visible.map(Activity::id))
+        assertTrue(state.hasMore)
+    }
+
+    @Test
+    fun `a page that brings nothing new stops the drain`() = runTest {
+        // Сервер отдаёт один и тот же хвост. Номер следующей страницы считает
+        // клиент («запрошенная + 1»), поэтому по курсору такой цикл не
+        // отличить от честной догрузки — смотреть надо на список: страница,
+        // которую целиком съела дедупликация, следующей не сдвинет ничего.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            ActivityFeed(
+                items = listOf(activity("done", status = ActivityStatus.Completed)),
+                nextPages = mapOf(ActivitySource.Orders to pages.getValue(ActivitySource.Orders) + 1),
+            )
+        }
+
+        val viewModel = ActivityViewModel(repository)
+
+        assertEquals(2, repository.requests.size)
+        assertTrue(viewModel.state.value.visible.isEmpty())
+        assertFalse(viewModel.state.value.isLoadingMore)
+    }
+
+    @Test
+    fun `the drain gives up after a sane number of pages`() = runTest {
+        // История, у которой нет конца: качать её всю на каждый возврат на
+        // экран нельзя. Дальше потолка тянет хвост списка — на пустой вкладке
+        // он и так на виду.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            val page = pages.getValue(ActivitySource.Orders)
+            ActivityFeed(
+                items = listOf(activity("done-$page", status = ActivityStatus.Completed)),
+                nextPages = mapOf(ActivitySource.Orders to page + 1),
+            )
+        }
+
+        val viewModel = ActivityViewModel(repository)
+        val state = viewModel.state.value
+
+        // Первая страница плюс потолок догрузки (`MAX_DRAIN_PAGES`).
+        assertEquals(21, repository.requests.size)
+        assertTrue(state.hasMore)
+        assertFalse(state.isLoadingMore)
+    }
+
+    @Test
+    fun `a tab tap while the list is reloading does not use the old cursor`() = runTest {
+        // Ответ обновления вот-вот заменит и список, и курсор. Догрузка,
+        // начатая тапом по вкладке в этот момент, приклеила бы к новому списку
+        // страницу от предыдущего — и разошлась бы с ним курсором.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        val gate = CompletableDeferred<Unit>()
+        repository.gate = gate
+        viewModel.onEvent(ActivityEvent.Refreshed)
+
+        // «История» пуста — обычно это повод долить страницу, но не сейчас.
+        viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.History))
+
+        assertEquals(2, repository.requests.size)
+
+        repository.gate = null
+        gate.complete(Unit)
+
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
+        assertFalse(viewModel.state.value.isLoadingMore)
+    }
+
+    @Test
+    fun `a tap on the tab that is already open does not touch the network`() = runTest {
+        // `selectable` зовёт `onClick` и на выбранном элементе: человек,
+        // увидевший «активных нет», тычет в «Faol» именно так.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("done", status = ActivityStatus.Completed)),
             nextPages = mapOf(ActivitySource.Orders to 1),
         )
         repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
-            items = listOf(activity("active", status = ActivityStatus.InProgress)),
+            failures = mapOf(ActivitySource.Orders to ApiFailure(ApiError.Timeout)),
         )
         val viewModel = ActivityViewModel(repository)
+        assertEquals(2, repository.requests.size)
 
-        assertTrue(viewModel.state.value.visible.isEmpty())
-        assertTrue(viewModel.state.value.hasMore)
+        viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.Active))
 
-        viewModel.onEvent(ActivityEvent.LoadMore)
+        // Ни нового запроса, ни стёртой причины: иначе кнопка «повторить»
+        // исчезала бы из хвоста от каждого тычка по своей же вкладке.
+        assertEquals(2, repository.requests.size)
+        assertEquals(ApiError.Timeout, viewModel.state.value.loadMoreFailure?.error)
+    }
 
-        assertEquals(listOf("active"), viewModel.state.value.visible.map(Activity::id))
+    @Test
+    fun `a failed page on an empty tab stops the drain with a reason`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("done", status = ActivityStatus.Completed)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            failures = mapOf(ActivitySource.Orders to ApiFailure(ApiError.Timeout)),
+        )
+
+        val viewModel = ActivityViewModel(repository)
+        val state = viewModel.state.value
+
+        // Дёргать сеть по кругу молча нельзя: причина уходит в хвост списка
+        // вместе с кнопкой «повторить», а источник остаётся в курсоре.
+        assertEquals(2, repository.requests.size)
+        assertEquals(ApiError.Timeout, state.loadMoreFailure?.error)
+        assertEquals(mapOf(ActivitySource.Orders to 1), state.nextPages)
+        assertFalse(state.isLoadingMore)
+    }
+
+    @Test
+    fun `switching to an empty tab loads the pages it needs`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            when (pages.getValue(ActivitySource.Orders)) {
+                0 -> ActivityFeed(
+                    items = listOf(activity("active", status = ActivityStatus.InProgress)),
+                    nextPages = mapOf(ActivitySource.Orders to 1),
+                )
+
+                else -> ActivityFeed(
+                    items = listOf(activity("done", status = ActivityStatus.Completed)),
+                )
+            }
+        }
+        val viewModel = ActivityViewModel(repository)
+
+        // На «активных» есть что показать — доливать нечего.
+        assertEquals(1, repository.requests.size)
+
+        viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.History))
+
+        // А «история» пуста при непустом курсоре: тап по вкладке её доливает.
+        assertEquals(listOf("done"), viewModel.state.value.visible.map(Activity::id))
     }
 
     // --- Догрузка ---

@@ -12,6 +12,7 @@ import uz.mahalla.feature.activity.data.ActivityRepository
 import uz.mahalla.feature.activity.domain.Activity
 import uz.mahalla.feature.activity.domain.ActivityFeed
 import uz.mahalla.feature.activity.domain.ActivityMerge
+import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityTarget
 import javax.inject.Inject
 
@@ -35,6 +36,7 @@ class ActivityViewModel @Inject constructor(
     private val repository: ActivityRepository,
 ) : MviViewModel<ActivityState, ActivityEvent, ActivityEffect>(ActivityState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
 
     init {
@@ -61,7 +63,19 @@ class ActivityViewModel @Inject constructor(
             // возможно, вообще не интересует.
             ActivityEvent.Retry -> load(showLoading = currentState.items !is ScreenState.Content)
             ActivityEvent.LoadMore -> loadMore()
-            is ActivityEvent.FilterSelected -> updateState { copy(filter = event.filter) }
+
+            // Переключение вкладки сети не касается — кроме одного случая:
+            // вкладка, на которую перешли, пуста, а страницы ещё есть. Тогда
+            // «пусто» — не ответ, а недогруженный список (issue #143).
+            //
+            // Тап по уже выбранной вкладке — не переключение: `selectable`
+            // зовёт `onClick` и на выбранном элементе, а человек, увидевший
+            // «активных нет», тычет в «Faol» именно так. Каждый такой тап
+            // запускал бы догрузку заново и стирал бы из хвоста «повторить».
+            is ActivityEvent.FilterSelected -> if (event.filter != currentState.filter) {
+                updateState { copy(filter = event.filter) }
+                if (currentState.visible.isEmpty()) loadMore()
+            }
             is ActivityEvent.ActivityClicked -> open(event.key)
             ActivityEvent.DiscoveryRequested -> emitEffect(ActivityEffect.OpenDiscovery)
         }
@@ -69,6 +83,10 @@ class ActivityViewModel @Inject constructor(
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadMoreJob?.cancel()
+        // И предыдущую загрузку тоже: два ответа на один экран — это список от
+        // одного запроса с курсором от другого. Возврат на экран во время
+        // pull-to-refresh даёт ровно такую пару.
+        loadJob?.cancel()
         updateState {
             copy(
                 items = if (showLoading) ScreenState.Loading else items,
@@ -82,7 +100,7 @@ class ActivityViewModel @Inject constructor(
                 loadMoreFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val feed = repository.feed(pages = ActivityFeed.FIRST_PAGES)
             updateState {
                 copy(
@@ -103,6 +121,15 @@ class ActivityViewModel @Inject constructor(
                     isRefreshing = false,
                 )
             }
+            // Первая страница могла целиком уехать в другую вкладку: двадцать
+            // выполненных заказов в «истории», а активный — на второй
+            // странице. На «активных» при этом пусто, и остановиться на этом
+            // значит соврать, что активностей нет (issue #143).
+            //
+            // Догрузка идёт этой же корутиной, а не через `loadMore()`: та
+            // отказывается стартовать, пока загрузка в полёте, — а мы внутри
+            // неё и есть.
+            if (currentState.visible.isEmpty()) drain()
         }
     }
 
@@ -122,29 +149,90 @@ class ActivityViewModel @Inject constructor(
      *
      * Поэтому любой отказ догрузки, а не только полный, показывается хвостом
      * списка: молча не догрузить часть списка — то же, что потерять её.
+     *
+     * Страниц за один раз может уйти несколько: пока текущая вкладка пуста, а
+     * список от страницы к странице растёт, догрузка идёт сама — см. [drain].
      */
     private fun loadMore() {
         val state = currentState
         if (!state.hasMore || state.isLoadingMore) return
-        val loaded = state.items.dataOrNull() ?: return
-        if (loadMoreJob?.isActive == true) return
+        if (state.items.dataOrNull() == null) return
+        // Загрузка первой страницы в полёте — её ответ вот-вот заменит и
+        // список, и курсор. Догрузка со старого курсора приклеила бы к новому
+        // списку страницу от предыдущего и разошлась бы с ним же.
+        if (loadJob?.isActive == true || loadMoreJob?.isActive == true) return
 
-        val pages = state.nextPages
+        loadMoreJob = viewModelScope.launch { drain() }
+    }
+
+    /**
+     * Догрузка страницами, пока текущая вкладка пуста.
+     *
+     * Пустая вкладка при непустом курсоре — не конец списка, а недогруженный
+     * список: вкладку отбирает **клиент**, и приехавшая страница могла целиком
+     * уехать в соседнюю. Останавливаться на этом нельзя — человек на «активных»
+     * увидел бы «активных нет, всё в истории», хотя активное лежит на второй
+     * странице (issue #143).
+     *
+     * Раньше это дело было целиком за хвостом списка, а он срабатывает только
+     * когда `LoadMoreItem` попал в видимую область: пустое состояние плюс
+     * несколько отметок сбойных разделов сверху — и хвост уже за нижней
+     * границей, догрузка не стартует ни разу. Курсор от вёрстки не зависит.
+     *
+     * Условия остановки — четыре, и три из них про то, чтобы цикл не стал
+     * бесконечным:
+     * - вкладка перестала быть пустой: дальше догружает хвост списка, по мере
+     *   прокрутки, а не мы разом;
+     * - страница не удалась: причина уходит в хвост с кнопкой «повторить», а
+     *   молча дёргать сеть по кругу нельзя;
+     * - **страница не принесла ничего нового**: дедупликация съела её целиком,
+     *   значит сервер отдаёт один и тот же хвост, и следующий запрос будет
+     *   ровно таким же. Проверка именно по списку, а не по номеру страницы:
+     *   номер считает клиент (`запрошенная + 1`), и на сервере, который всегда
+     *   отвечает `hasMore`, он растёт вечно;
+     * - [MAX_DRAIN_PAGES] страниц за раз: столько истории подряд — это уже не
+     *   догрузка вкладки, и остаток пусть тянет хвост списка.
+     */
+    private suspend fun drain() {
+        if (currentState.items.dataOrNull() == null || !currentState.hasMore) return
+
         updateState { copy(isLoadingMore = true, loadMoreFailure = null) }
-        loadMoreJob = viewModelScope.launch {
-            val feed = repository.feed(pages = pages)
-            val retryPages = pages.filterKeys { it in feed.failures }
-            updateState {
-                copy(
-                    items = ScreenState.Content(appended(loaded, feed.items)),
-                    // Отказ догрузки показывается хвостом списка, а не
-                    // отметкой раздела: раздел уже показан выше своими первыми
-                    // страницами, и «не загрузился» про него было бы неправдой.
-                    loadMoreFailure = feed.failures.values.firstOrNull(),
-                    nextPages = feed.nextPages + retryPages,
-                    isLoadingMore = false,
-                )
-            }
+        var page = 0
+        while (true) {
+            val pages = currentState.nextPages
+            val before = currentState.items.dataOrNull().orEmpty()
+            loadPage(pages, before)
+            page++
+
+            val loaded = currentState
+            val grew = loaded.items.dataOrNull().orEmpty().size > before.size
+            val goOn = loaded.visible.isEmpty() &&
+                loaded.loadMoreFailure == null &&
+                loaded.hasMore &&
+                grew &&
+                page < MAX_DRAIN_PAGES
+            if (!goOn) break
+        }
+        updateState { copy(isLoadingMore = false) }
+    }
+
+    /**
+     * Одна страница у каждого источника из курсора [pages]. [loaded] — список,
+     * к которому её приклеить: он снят до запроса, чтобы дедупликация видела
+     * ровно то, что показано.
+     */
+    private suspend fun loadPage(pages: Map<ActivitySource, Int>, loaded: List<Activity>) {
+        val feed = repository.feed(pages = pages)
+        val retryPages = pages.filterKeys { it in feed.failures }
+        updateState {
+            copy(
+                items = ScreenState.Content(appended(loaded, feed.items)),
+                // Отказ догрузки показывается хвостом списка, а не отметкой
+                // раздела: раздел уже показан выше своими первыми страницами,
+                // и «не загрузился» про него было бы неправдой.
+                loadMoreFailure = feed.failures.values.firstOrNull(),
+                nextPages = feed.nextPages + retryPages,
+            )
         }
     }
 
@@ -169,5 +257,16 @@ class ActivityViewModel @Inject constructor(
 
             ActivityTarget.None -> Unit
         }
+    }
+
+    private companion object {
+        /**
+         * Потолок страниц за одну догрузку пустой вкладки. Двадцать страниц по
+         * двадцать активностей — четыреста штук истории подряд без единой
+         * активной: дальше это уже не «вкладка ещё не догрузилась», а
+         * выкачивание всей истории на каждый возврат на экран. Остаток тянет
+         * хвост списка — на пустой вкладке он и так на виду.
+         */
+        const val MAX_DRAIN_PAGES = 20
     }
 }
