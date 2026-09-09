@@ -5660,35 +5660,37 @@ run» и ни одного шага не запустил. Ни сборка, н
 прогон `34388536327` на той же ветке — `success`, локальный
 `assembleDebug testDebugUnitTest lintDebug` — BUILD SUCCESSFUL.
 
-Разница между прогонами — не коммит и не событие, а **чьим токеном сделан
-push**. Авторство коммитов тут ни при чём: у `1fd5943`, `431b60d`, `f1ab471`
-и `5f9c27a` и author, и committer — `claude[bot]`, а прогоны разные. Событие
-у всех тоже одно и то же (`pull_request`). Отличается `triggering_actor`, и
-он берётся от токена, которым push дошёл до GitHub: push под токеном workflow
-(`secrets.GITHUB_TOKEN`, `github-actions[bot]`) даёт прогон в очереди на
-подтверждение, push под токеном GitHub-приложения (`claude[bot]`) — обычный
-прогон, который стартует сам. Зелёный `34388536327` никто не подтверждал
-руками: `created_at` = `run_started_at` = 18:21:52, первый job начался в
-18:21:54.
+Разница между прогонами — **не коммит и не токен push'а, а само событие**.
 
-Важное: **какой из токенов лежит в `remote origin`, от сессии к сессии
-меняется** — поэтому «push не помогает» верно не всегда. Проверять так:
+Что проверено и отброшено:
 
-```bash
-gh api graphql -f query='{ viewer { login } }'          # кто мы для GitHub
-GH_TOKEN="$DEFAULT_WORKFLOW_TOKEN" gh api graphql -f query='{ viewer { login } }'
-```
+- *авторство коммита* — не оно: у `1fd5943`, `431b60d`, `f1ab471`, `5f9c27a`
+  и `6f8960f` и author, и committer — `claude[bot]`, а прогоны разные;
+- *чьим токеном push* — тоже не оно, хотя выглядело правдоподобно. В сессии
+  попытки 2 `GH_TOKEN` (он же в `remote origin`) оказался токеном
+  приложения — `gh api graphql -f query='{ viewer { login } }'` вернул
+  `claude[bot]`, тогда как `DEFAULT_WORKFLOW_TOKEN` в той же сессии —
+  `github-actions[bot]`. Push `6f8960f` из-под этого токена приложения всё
+  равно поднял `34390775224` с `triggering_actor = github-actions[bot]` и
+  `action_required`, job'ов 0. Гипотеза закрыта прямой проверкой.
 
-В прогоне на попытке 1 `GH_TOKEN` был токеном workflow — отсюда
-`action_required` и вывод «лечится только руками». В прогоне на попытке 2
-`GH_TOKEN` (он же в `remote origin`) — токен приложения, `viewer.login =
-claude[bot]`, то есть тот же, под которым поднялся зелёный прогон.
+Остаётся событие. Единственный зелёный прогон `34388536327` — от **открытия
+PR** (PR создан 18:21:49, прогон создан 18:21:52 на тогдашнем head `1fd5943`,
+`created_at` = `run_started_at`, первый job в 18:21:54 — руками никто не
+подтверждал). Всё, что после, — `synchronize` от push'ей изнутри job'а
+Actions, и такие GitHub приписывает `github-actions[bot]` независимо от
+токена и ставит в очередь на подтверждение.
+
+Почему очередь вообще возникает — из репозитория не видно: `claude[bot]` для
+PR числится `CONTRIBUTOR` (`author_association`), а ветка своя, не форк.
+Настройки Actions агенту не читаются — `repos/…/actions/permissions` и
+`…/actions/permissions/fork-pr-contributor-approval` отдают 403
+`Resource not accessible by integration`. Смотреть человеку: Settings →
+Actions → General → раздел про approval для сторонних контрибьюторов.
 
 Практический вывод. Признак ситуации — `conclusion=action_required` **при
-нулевом числе job'ов**: искать причину в коде нечего, лога нет потому, что
-нет job'ов. Дальше по обстановке: если `viewer.login = claude[bot]` — push
-поднимет нормальный прогон; если `github-actions[bot]` — нужен «Approve and
-run» руками в Actions. Approve через API агенту недоступен в любом случае —
-403 `Resource not accessible by integration`: в `claude.yml` у job'а
-`actions: read`, для approve нужен `actions: write`. Настройки Actions
-(`repos/…/actions/permissions`) агенту тоже не читаются — те же 403.
+нулевом числе job'ов**: причину в коде искать нечего, лога нет потому, что
+нет job'ов. **Новым push'ем это не лечится** — проверено дважды, на попытке 1
+и на попытке 2. Нужен «Approve and run» руками в Actions (или снятая
+настройка). Approve через API агенту недоступен — 403: в `claude.yml` у job'а
+`actions: read`, для approve нужен `actions: write`.
