@@ -121,4 +121,17 @@ class FreelancerServiceFormTest {
         assertEquals("60", form.durationText)
         assertTrue(FreelancerServiceForm().isNew)
     }
+
+    /**
+     * У бесплатной услуги поле цены открывается явным нулём: пустое не дало бы
+     * поправить ни описание, ни длительность — валидатор потребовал бы сперва
+     * набрать «0» руками.
+     */
+    @Test
+    fun `free service opens with an explicit zero`() {
+        val form = FreelancerServiceForm.of(BarberService(id = "s-1", title = "Ko'rik"))
+
+        assertEquals("0", form.priceText)
+        assertTrue(FreelancerServiceFormValidator.validate(form).isEmpty())
+    }
 }

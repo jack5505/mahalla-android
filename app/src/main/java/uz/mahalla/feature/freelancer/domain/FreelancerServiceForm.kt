@@ -42,12 +42,20 @@ data class FreelancerServiceForm(
         const val MAX_TITLE_LENGTH = 200
         const val MAX_DESCRIPTION_LENGTH = 2000
 
-        /** Уже выставленная услуга — та же форма: правят её тем же полем. */
+        /**
+         * Уже выставленная услуга — та же форма: правят её тем же полем.
+         *
+         * Ноль ценой попадает в поле **явным нулём**, а не пустотой (в отличие
+         * от ставки в [FreelancerProfileForm], где ноль значит «не указана»):
+         * цена обязательна, и пустое поле не дало бы поправить у бесплатной
+         * услуги ни описание, ни длительность — валидатор потребовал бы сперва
+         * набрать «0» руками.
+         */
         fun of(service: BarberService): FreelancerServiceForm = FreelancerServiceForm(
             id = service.id,
             title = service.title,
             description = service.description.orEmpty(),
-            priceText = service.priceSum.takeIf { it > 0 }?.toString().orEmpty(),
+            priceText = service.priceSum.toString(),
             durationText = service.durationMinutes?.toString().orEmpty(),
         )
     }

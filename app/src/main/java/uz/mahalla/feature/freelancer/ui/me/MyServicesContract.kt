@@ -34,8 +34,9 @@ import uz.mahalla.feature.freelancer.domain.FreelancerServiceFormError
  * показывает, есть ли несохранённое.
  * @param formOpen форма анкеты раскрыта. Пока анкеты нет — всегда: заполнить
  * её и есть единственное дело этого экрана.
- * @param services свои услуги, **включая выключенные**: это состав, который
- * мастер видит про себя, а не витрина для клиента.
+ * @param services свои услуги, **включая выключенные** (если сервер их отдаёт,
+ * см. риски в `docs/API-CONTRACT.md`): это состав, который мастер видит про
+ * себя, а не витрина для клиента.
  * @param serviceForm открытая форма услуги: новая ([FreelancerServiceForm.isNew])
  * или правка выставленной. `null` — форма закрыта.
  * @param confirmDelete услуга, которую собираются снять. Спрашиваем: услугу с
@@ -65,9 +66,6 @@ data class MyServicesState(
 
     /** Анкета прочитана, и её нет: `404` — это ответ, а не отказ. */
     val hasNoProfile: Boolean get() = profile is ScreenState.Empty
-
-    /** Пока анкеты нет, выставлять услуги некуда — их и не показываем. */
-    val canManageServices: Boolean get() = freelancer != null
 
     val visibleFormErrors: List<FreelancerProfileFormError>
         get() = if (formValidationShown) formErrors else emptyList()

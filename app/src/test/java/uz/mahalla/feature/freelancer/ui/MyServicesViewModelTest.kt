@@ -53,7 +53,6 @@ class MyServicesViewModelTest {
         assertEquals("Aziz Karimov", state.form.name)
         assertEquals("901234567", state.form.phoneDigits)
         // Услуги выставлять некуда: их ручка ходит по `id` анкеты.
-        assertFalse(state.canManageServices)
         assertTrue(repository.requestedMyServices.isEmpty())
     }
 

@@ -365,10 +365,12 @@ private fun ServicesBlock(
             ?.takeIf { state.serviceForm == null }
             ?.let { InlineFailure(failure = it) }
 
+        // Кнопка всегда активна: блок целиком показывается только когда
+        // анкета есть, а без неё выставлять услуги было бы некуда — их ручка
+        // ходит по `id` анкеты.
         MahallaButton(
             text = stringResource(R.string.my_services_add),
             onClick = { onEvent(MyServicesEvent.AddServiceClicked) },
-            state = ButtonState(enabled = state.canManageServices),
         )
     }
 }
@@ -463,7 +465,11 @@ private fun ServiceFormSheet(
         ),
     ) {
         Column(
-            modifier = Modifier.imePadding(),
+            // Полей четыре, и с открытой клавиатурой кнопка сохранения иначе
+            // уезжает за край шторки: она не прокручивается сама.
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {
             MahallaTextField(
