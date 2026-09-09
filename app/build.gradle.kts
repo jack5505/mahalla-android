@@ -101,7 +101,9 @@ fun stringLiteral(value: String): String =
  * сегмент baseUrl без слэша, и все запросы уезжают на уровень выше.
  */
 fun apiBaseUrl(environmentName: String, default: String): String {
-    val fromEnvironment = providers.environmentVariable(environmentName).orNull
+    // Пустая переменная окружения не должна перебивать `-P`: в CI переменные
+    // объявляют заранее, а значение подставляют не всегда.
+    val fromEnvironment = providers.environmentVariable(environmentName).orNull?.takeIf(String::isNotBlank)
     val fromProperty = providers.gradleProperty(environmentName).orNull
     val override = (fromEnvironment ?: fromProperty).orEmpty().trim()
     if (override.isEmpty()) return default
@@ -128,12 +130,23 @@ fun releaseKeystore(): ReleaseKeystore? {
         logger.warn("Release keystore не найден: $keystoreFile — release будет неподписанным.")
         return null
     }
-    return ReleaseKeystore(
+    val keystore = ReleaseKeystore(
         file = keystoreFile,
         storePassword = secret("MAHALLA_KEYSTORE_PASSWORD", "release.keystore.password"),
         keyAlias = secret("MAHALLA_KEY_ALIAS", "release.key.alias"),
         keyPassword = secret("MAHALLA_KEY_PASSWORD", "release.key.password"),
     )
+    // Хранилище задали, а пароль или алиас забыли — падаем здесь и по-русски,
+    // а не в недрах apksigner на «keystore password was incorrect».
+    require(
+        keystore.storePassword.isNotEmpty() &&
+            keystore.keyAlias.isNotEmpty() &&
+            keystore.keyPassword.isNotEmpty(),
+    ) {
+        "Задан MAHALLA_KEYSTORE_FILE, но не заданы MAHALLA_KEYSTORE_PASSWORD, " +
+            "MAHALLA_KEY_ALIAS или MAHALLA_KEY_PASSWORD (см. docs/RELEASE.md)."
+    }
+    return keystore
 }
 
 data class ReleaseKeystore(

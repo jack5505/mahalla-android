@@ -21,9 +21,12 @@ import org.junit.runner.RunWith
  * абсолютные миллисекунды сами по себе ни о чём не говорят — они зависят от
  * устройства.
  *
- * Запуск (нужно устройство или эмулятор):
- * `./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest`.
- * Числа — в `baselineprofile/build/outputs/connected_android_test_additional_output/`.
+ * Запуск (нужно устройство или эмулятор), команда целиком — в
+ * `docs/PERFORMANCE.md`: сначала `:app:generateBaselineProfile`, иначе
+ * [startupWithBaselineProfile] честно падает на отсутствующем профиле, и
+ * обязательно с фильтром `androidx.benchmark.enabledRules=Macrobenchmark` —
+ * без него в том же прогоне запустится генератор профиля, которому нужен
+ * неминифицированный вариант сборки.
  */
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
@@ -31,10 +34,12 @@ class StartupBenchmark {
     @get:Rule
     val benchmarkRule = MacrobenchmarkRule()
 
+    // `None`, а не `Partial(Disable, warmupIterations = 0)`: такая пара
+    // запрещена самим benchmark'ом («Must set baselineProfileMode != Ignore,
+    // or warmup iterations > 0») и тест падал бы, не начавшись. `None` — это
+    // и есть состояние приложения сразу после установки, без профиля.
     @Test
-    fun startupWithoutBaselineProfile() = measureStartup(
-        CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Disable, warmupIterations = 0),
-    )
+    fun startupWithoutBaselineProfile() = measureStartup(CompilationMode.None())
 
     @Test
     fun startupWithBaselineProfile() = measureStartup(

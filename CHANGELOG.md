@@ -5671,3 +5671,28 @@ SUCCESSFUL. Скриншот-тест проверен обратным прог
 - **`.claude/rules/compose-ui.md` и `testing.md` не обновлены** — правки в
   `.claude/` заблокированы настройками песочницы. Строка «Скриншот-тестов в
   проекте нет» в `compose-ui.md` устарела.
+
+### Правки после ревью субагентом (тот же эпик)
+
+- **`StartupBenchmark` не запустился бы ни разу**: `CompilationMode.Partial(
+  baselineProfileMode = Disable, warmupIterations = 0)` запрещён самим
+  benchmark'ом (`require` в конструкторе, «Must set baselineProfileMode !=
+  Ignore, or warmup iterations > 0»). Проверено разбором `benchmark-macro`
+  1.3.3, заменено на `CompilationMode.None()`. Машина этого поймать не могла:
+  замер требует устройства.
+- **Правила ProGuard подрезаны**: блоки kotlinx.serialization, Retrofit и
+  `-dontwarn` на TLS-провайдеров дублировали consumer-rules библиотек —
+  сверено с `app/build/outputs/mapping/release/configuration.txt`. Осталось
+  только своё: `-renamesourcefileattribute`, keep на `uz.mahalla.**$$serializer`,
+  MapKit и Coil. Комментарий про «Retrofit не покрывает наши интерфейсы» был
+  неверен — Retrofit 2.11 привозит `-if interface * { @retrofit2.http.* }`.
+- **Замер старта требует фильтра** `androidx.benchmark.enabledRules=
+  Macrobenchmark`: иначе в том же прогоне стартует генератор профиля, которому
+  нужен неминифицированный вариант сборки. Порядок «сначала профиль, потом
+  замер» тоже дописан — `BaselineProfileMode.Require` без профиля краснеет.
+- Пустая переменная окружения `API_BASE_URL_*` больше не перебивает `-P`;
+  заданное хранилище ключей без пароля/алиаса падает с внятным сообщением, а
+  не в недрах apksigner.
+- В `docs/RELEASE.md` добавлен раздел про `release-internal.yml` (сейчас
+  тестировщикам уезжает debug-APK), оценка размера загрузки помечена как
+  оценка.

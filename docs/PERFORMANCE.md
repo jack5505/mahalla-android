@@ -42,13 +42,22 @@ Google в замере старта только шумят), прогонит
 
 ## Померить холодный старт
 
+**Сначала снимите профиль** (шаг выше): замер «с профилем» требует его
+наличия (`BaselineProfileMode.Require`) и без профиля честно краснеет.
+
 ```bash
-./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest
+./gradlew :baselineprofile:pixel6Api34BenchmarkReleaseAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
 ```
+
+Фильтр обязателен: без него в том же прогоне запустится
+`StartupBaselineProfileGenerator`, которому нужен неминифицированный вариант
+сборки (`nonMinifiedRelease`), а не `benchmarkRelease`.
 
 Два теста на один вопрос — «профиль вообще что-то даёт?»:
 
-- `startupWithoutBaselineProfile` — как при первой установке из магазина;
+- `startupWithoutBaselineProfile` (`CompilationMode.None`) — как при первой
+  установке из магазина;
 - `startupWithBaselineProfile` — с профилем из репозитория.
 
 Метрика — `StartupTimingMetric`: `timeToInitialDisplay` (первый кадр) и
@@ -61,9 +70,11 @@ Google в замере старта только шумят), прогонит
 
 ## Грабли
 
-- **Эмулятор нужен API 28+.** minSdk приложения — 26, но снять профиль и
-  трассировать старт на API 26–27 нечем; поэтому `minSdk = 28` в модуле
-  `:baselineprofile`. На сборку приложения это не влияет.
+- **Эмулятор нужен API 28+.** `BaselineProfileRule` помечен
+  `@RequiresApi(28)`: снять профиль на API 26–27 нечем. Отсюда `minSdk = 28` в
+  модуле `:baselineprofile` — на сборку приложения (minSdk 26) это не влияет.
+  Сам macrobenchmark работает и ниже, но держать в модуле два разных
+  минимальных API незачем.
 - **Замер на debug-сборке бессмыслен**: benchmark гоняет `benchmarkRelease` —
   тип сборки, который плагин создаёт сам поверх release.
 - **Эмулятор шумит.** Пять итераций — минимум, на котором разброс холодного
