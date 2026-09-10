@@ -58,13 +58,15 @@ internal fun OrderViewDto.toActivity(): Activity? {
         occurredAt = parseServerInstant(createdAt),
         amount = totalAmount.tiyinToSom(),
         // Номер заказа — то, что человек называет в поддержке. Названия
-        // заведения в `OrderView` нет вовсе, только `placeId`.
+        // заведения в `OrderView` нет вовсе, только `placeId` — его
+        // дорезолвит `PlaceNameResolver` (issue #182).
         note = orderNumber?.takeIf { it.isNotBlank() },
         target = if (orderKind == ActivityKind.FoodOrder) {
             ActivityTarget.FoodOrder(orderId)
         } else {
             ActivityTarget.None
         },
+        placeId = placeId?.takeIf { it.isNotBlank() },
     )
 }
 
@@ -96,6 +98,7 @@ internal fun GamingBookingDto.toActivity(): Activity? {
         // локализуемой, а в данных ей делать нечего.
         note = null,
         target = ActivityTarget.None,
+        placeId = placeId?.takeIf { it.isNotBlank() },
     )
 }
 
@@ -120,6 +123,7 @@ internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
         // оно же самое полезное: «Soch olish» говорит больше, чем «Запись».
         note = serviceName?.takeIf { it.isNotBlank() },
         target = ActivityTarget.None,
+        placeId = placeId?.takeIf { it.isNotBlank() },
     )
 }
 
@@ -145,6 +149,10 @@ private fun AppointmentDto.appointmentAt(): Instant? {
  * Времени сеанса в ответе нет — только `sessionId`, — поэтому сортировка идёт
  * по времени покупки. Это единственный источник, где так: подставить сеанс
  * неоткуда, пока бэкенд его не отдаёт.
+ *
+ * `placeId` в ответе тоже нет вовсе (только `sessionId`), поэтому билет —
+ * единственный источник, для которого `PlaceNameResolver` (issue #182)
+ * ничего не резолвит: резолвить нечего. Открытый хвост issue #150.
  */
 internal fun CinemaTicketDto.toActivity(): Activity? {
     val ticketId = id?.takeIf { it.isNotBlank() } ?: return null

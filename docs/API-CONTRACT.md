@@ -341,11 +341,28 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 |---|---|
 | GET | `places/nearby` |
 | GET | `places/map-bounds` |
+| GET | `places` (`ids=`) |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places?ids=`** — заведения пачкой по id (issue #182, снимает
+клиентскую часть #150), снят со схемы при сверке issue #92:
+
+```
+GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
+→ List<Summary> {id, name, category, address, lat, lng, isAvailable,
+    ratingAvg, ratingCount, distanceMeters, logoUrl, subscriptionPlan}
+```
+
+`ids` обязателен и повторяемый. Ответ разбирается тем же `PlaceSummaryDto`,
+что у `nearby`/`map-bounds` — полей достаточно, `subscriptionPlan` клиенту не
+нужен и не разбирается. Лимита на число `ids` в схеме нет; клиент режет
+список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
+ограничение длины запроса на сервере — это не подтверждено ручкой, только
+предосторожность.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой

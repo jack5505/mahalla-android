@@ -215,13 +215,15 @@ private fun ActivityRow(
     modifier: Modifier = Modifier,
 ) {
     val kindLabel = stringResource(activity.kind.labelRes())
+    // Названием заведения открывается заголовок, если оно дорезолвилось
+    // (issue #182, `GET places?ids=`); не дорезолвилось или резолвить
+    // нечего (билет кино — issue #150) — вид активности, как раньше.
+    val titleLead = activity.placeName?.takeIf(String::isNotBlank) ?: kindLabel
     OrderCard(
         order = OrderCardUi(
             id = activity.key,
-            // Названия заведения бэкенд не отдаёт ни в одном из пяти ответов
-            // (только `placeId`), поэтому заголовок — вид активности, а
-            // уточнение (номер заказа, услуга, место в зале) идёт рядом.
-            title = activity.note?.let { "$kindLabel · $it" } ?: kindLabel,
+            // Уточнение (номер заказа, услуга, место в зале) идёт рядом.
+            title = activity.note?.let { "$titleLead · $it" } ?: titleLead,
             statusLabel = stringResource(activity.status.labelRes()),
             statusTone = activity.status.tone(),
             amountLabel = activity.amount

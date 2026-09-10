@@ -192,6 +192,18 @@ interface CatalogApi {
     @GET("places/{id}")
     suspend fun place(@Path("id") id: String): ApiResponse<PlaceDetailDto>
 
+    /**
+     * Заведения пачкой по id (issue #182, снимает клиентскую часть #150).
+     *
+     * Ручка снята со схемы стенда при сверке issue #92: требует токена — без
+     * него `401`. `ids` обязателен и повторяемый (`?ids=<uuid>&ids=<uuid>…`) —
+     * Retrofit разворачивает `List<String>` в `@Query` этим же способом.
+     * Лимита на число `ids` в схеме нет, поэтому вызывающий обязан резать
+     * длинный список на пачки сам — здесь это [uz.mahalla.feature.activity.data.PlaceNameResolver].
+     */
+    @GET("places")
+    suspend fun places(@Query("ids") ids: List<String>): ApiResponse<List<PlaceSummaryDto>>
+
     @GET("reviews/places/{placeId}")
     suspend fun reviews(
         @Path("placeId") placeId: String,
