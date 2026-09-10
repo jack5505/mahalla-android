@@ -48,7 +48,7 @@ gh issue list --state open   # 47 открытых issue
 | ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
 | `*Api.kt` / эндпоинтов | 19 / **77** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (79 аннотаций: `orders/{id}` и `appointments/{id}/cancel` объявлены в двух API каждый) |
 | Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://189-74-96-232.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
-| Тестов | **1842 в 177 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` |
+| Тестов | **1967 в 184 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
 | `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
 | Room | 3 сущности, 3 DAO | `data/db/` |
@@ -62,7 +62,7 @@ gh issue list --state open   # 47 открытых issue
 | Таб | Экран | Состояние |
 |---|---|---|
 | Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
-| Заказы | `activity/ui/ActivityScreen.kt` | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба пока `nav_orders` — issue #211 |
+| Заказы | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба пока `nav_orders` — issue #211 |
 | Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
 | Профиль | `profile/ui/ProfileScreen.kt` (731) | **работает**: имя, телефон, аватар (`media/upload`), мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |
 
