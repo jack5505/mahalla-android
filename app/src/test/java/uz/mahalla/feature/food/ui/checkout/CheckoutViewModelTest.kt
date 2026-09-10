@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +28,7 @@ import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCartRepository
+import uz.mahalla.testutil.FakeDeliveryFeeRepository
 import uz.mahalla.testutil.FakeOrderRepository
 import uz.mahalla.testutil.FakeRoleRepository
 import uz.mahalla.feature.wallet.domain.Wallet
@@ -39,6 +41,9 @@ import uz.mahalla.testutil.cartLine
  *
  * Ни времени заказа, ни комментария в форме нет: `PlaceOrderRequest` бэкенда
  * их не принимает.
+ *
+ * Стоимость доставки приезжает отдельным запросом с задержкой (issue #179):
+ * тесты, которым она важна, двигают время `advanceUntilIdle()`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -52,20 +57,97 @@ class CheckoutViewModelTest {
     private val orderRepository = FakeOrderRepository()
     private val walletRepository = FakeWalletRepository()
     private val roleRepository = FakeRoleRepository()
+    private val deliveryFeeRepository = FakeDeliveryFeeRepository()
 
     @Test
-    fun `the total is the price of the items, without an invented delivery fee`() = runTest {
-        // Стоимость доставки бэкенд называет только в ответе о созданном
-        // заказе — до оформления её не знает никто.
+    fun `an unknown delivery fee leaves the total at the price of the items`() = runTest {
+        // Сервер доставку не назвал: итог — сумма позиций, как до issue #179,
+        // а не выдуманное число.
         seed()
+        deliveryFeeRepository.fee = ApiResult.Success(null)
         val viewModel = viewModel()
+
+        advanceUntilIdle()
 
         assertEquals(0L, viewModel.state.value.totals.deliverySum)
         assertEquals(60_000L, viewModel.state.value.totals.totalSum)
+    }
+
+    @Test
+    fun `the delivery fee from the server is part of the total`() = runTest {
+        // Именно эту сумму человек и увидит списанной (issue #179).
+        seed()
+        deliveryFeeRepository.fee = ApiResult.Success(100)
+        val viewModel = viewModel()
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(60_000L), deliveryFeeRepository.requestedSums)
+        assertEquals(100L, viewModel.state.value.totals.deliverySum)
+        assertEquals(60_100L, viewModel.state.value.totals.totalSum)
+    }
+
+    @Test
+    fun `pickup has no delivery fee, neither in the total nor in a request`() = runTest {
+        // У `PICKUP` и `DINE_IN` доставки в заказе нет — спрашивать цену
+        // того, чего не будет, незачем.
+        seed()
+        deliveryFeeRepository.fee = ApiResult.Success(100)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        deliveryFeeRepository.requestedSums.clear()
 
         viewModel.onEvent(CheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
+        advanceUntilIdle()
+
+        assertEquals(0L, viewModel.state.value.totals.deliverySum)
+        assertEquals(60_000L, viewModel.state.value.totals.totalSum)
+        assertEquals(emptyList<Long>(), deliveryFeeRepository.requestedSums)
+    }
+
+    @Test
+    fun `coming back to delivery asks for the fee again`() = runTest {
+        // Иначе после «самовывоза» человек оформил бы доставку с итогом без
+        // неё.
+        seed()
+        deliveryFeeRepository.fee = ApiResult.Success(100)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onEvent(CheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
+        advanceUntilIdle()
+
+        viewModel.onEvent(CheckoutEvent.MethodSelected(DeliveryMethod.Delivery))
+        advanceUntilIdle()
+
+        assertEquals(60_100L, viewModel.state.value.totals.totalSum)
+    }
+
+    @Test
+    fun `the wallet is checked against the total with the delivery fee`() = runTest {
+        // Баланс, которого хватает на позиции, но не на доставку, — отказ
+        // сервера при оформлении; сказать об этом надо раньше.
+        seed()
+        deliveryFeeRepository.fee = ApiResult.Success(5_000)
+        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 60_000))
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        advanceUntilIdle()
+
+        assertEquals(5_000L, viewModel.state.value.insufficientFunds?.missingSum)
+    }
+
+    @Test
+    fun `a refused fee request does not block the order`() = runTest {
+        seed()
+        deliveryFeeRepository.fee = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        advanceUntilIdle()
 
         assertEquals(60_000L, viewModel.state.value.totals.totalSum)
+        assertTrue(viewModel.state.value.canSubmit)
     }
 
     /**
@@ -250,6 +332,7 @@ class CheckoutViewModelTest {
         orderRepository = orderRepository,
         walletRepository = walletRepository,
         roleRepository = roleRepository,
+        deliveryFeeRepository = deliveryFeeRepository,
         analytics = analytics,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )

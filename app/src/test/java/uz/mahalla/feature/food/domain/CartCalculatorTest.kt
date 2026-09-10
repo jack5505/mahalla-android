@@ -109,6 +109,44 @@ class CartCalculatorTest {
     }
 
     @Test
+    fun `a delivery fee from the server grows the total by exactly its own price`() {
+        // `food/delivery-fee` называет доставку до оформления (issue #179):
+        // 100 сум доставки — это ровно 100 сум сверху, а не другой итог.
+        val lines = listOf(cartLine("osh", unitPriceSum = 50_000))
+
+        val totals = CartCalculator.totals(lines, deliverySum = 100)
+
+        assertEquals(50_000L, totals.subtotalSum)
+        assertEquals(100L, totals.deliverySum)
+        assertEquals(50_100L, totals.totalSum)
+    }
+
+    @Test
+    fun `free delivery leaves the total equal to the items`() {
+        // На стенде доставка бесплатна от 2 000 сум — ноль здесь штатный
+        // ответ, а не «неизвестно».
+        val totals = CartCalculator.totals(
+            listOf(cartLine("osh", unitPriceSum = 30_000)),
+            deliverySum = 0,
+        )
+
+        assertEquals(30_000L, totals.totalSum)
+    }
+
+    @Test
+    fun `a negative delivery fee does not shrink the total`() {
+        // Отрицательную доставку сервер назвать не должен, но вычитать её из
+        // итога всё равно нечем: заказ не может стоить меньше своих позиций.
+        val totals = CartCalculator.totals(
+            listOf(cartLine("osh", unitPriceSum = 30_000)),
+            deliverySum = -5_000,
+        )
+
+        assertEquals(0L, totals.deliverySum)
+        assertEquals(30_000L, totals.totalSum)
+    }
+
+    @Test
     fun `a cart without a server discount has none`() {
         val totals = CartCalculator.totals(listOf(cartLine("osh", unitPriceSum = 30_000)))
 

@@ -27,6 +27,12 @@ data class CheckoutState(
     val lines: List<CartLine> = emptyList(),
     val form: CheckoutForm = CheckoutForm(),
     val totals: CartTotals = CartTotals(),
+    /**
+     * Стоимость доставки от `food/delivery-fee` (issue #179); `null` —
+     * неизвестна или заказ забирают сами. Итог тогда — сумма позиций, как до
+     * issue #179: отказывать в оформлении из-за неотвеченного запроса нельзя.
+     */
+    val deliverySum: Long? = null,
     val walletBalanceSum: Long = 0,
     val balanceKnown: Boolean = false,
     val errors: List<CheckoutError> = emptyList(),

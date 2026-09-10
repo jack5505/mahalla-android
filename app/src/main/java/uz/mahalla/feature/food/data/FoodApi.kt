@@ -9,10 +9,11 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 
 /**
- * Вертикаль «Еда» (эпик 5): меню, заказы.
+ * Вертикаль «Еда» (эпик 5): меню, стоимость доставки, заказы.
  *
  * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы) — прежние пути
  * (`places/{id}/menu`, `orders`) были подобраны по образцу каталога и у
@@ -36,6 +37,29 @@ interface FoodApi {
      */
     @GET("food/places/{placeId}/menu")
     suspend fun menu(@Path("placeId") placeId: String): ApiResponse<List<MenuSectionDto>>
+
+    /**
+     * Стоимость доставки до оформления (issue #179). Отвечает анонимно, схема —
+     * `ApiResponseMapStringLong`: `data` это **карта**, а не DTO с
+     * фиксированными полями, поэтому сумма читается по ключу
+     * [DeliveryFeeRepository.DELIVERY_AMOUNT_KEY], а отсутствие ключа — не
+     * ошибка разбора, а «доставка неизвестна».
+     *
+     * Значения — `JsonElement`, а не `Long`, хотя схема обещает числа:
+     * `ignoreUnknownKeys` карту не страхует (неизвестных ключей у неё не
+     * бывает), и одно чужое значение — `"currency":"UZS"` или
+     * `"deliveryAmount":null` — уронило бы разбор всего ответа, то есть
+     * убрало бы доставку из всех корзин. Разбирает значение
+     * `DefaultDeliveryFeeRepository`.
+     *
+     * `itemsAmount` обязателен и, как все деньги в API, считается в тийинах
+     * (issue #149): на стенде доставка бесплатна от 200 000 тийинов, так что
+     * ошибка единицы здесь меняет не цифру на экране, а сам ответ сервера.
+     */
+    @GET("food/delivery-fee")
+    suspend fun deliveryFee(
+        @Query("itemsAmount") itemsAmount: Long,
+    ): ApiResponse<Map<String, JsonElement>>
 
     @POST("food/orders")
     suspend fun createOrder(@Body request: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>

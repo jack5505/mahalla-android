@@ -8,8 +8,10 @@ import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import uz.mahalla.feature.food.data.CartRepository
 import uz.mahalla.feature.food.data.DefaultCartRepository
+import uz.mahalla.feature.food.data.DefaultDeliveryFeeRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
+import uz.mahalla.feature.food.data.DeliveryFeeRepository
 import uz.mahalla.feature.food.data.FoodApi
 import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.data.OrderRepository
@@ -38,4 +40,7 @@ interface FoodBindingsModule {
 
     @Binds
     fun bindOrderRepository(impl: DefaultOrderRepository): OrderRepository
+
+    @Binds
+    fun bindDeliveryFeeRepository(impl: DefaultDeliveryFeeRepository): DeliveryFeeRepository
 }

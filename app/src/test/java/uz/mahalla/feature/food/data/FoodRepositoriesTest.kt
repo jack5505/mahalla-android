@@ -143,6 +143,85 @@ class FoodRepositoriesTest {
         assertEquals("Joy topilmadi", result.failure.server?.message)
     }
 
+    // --- Стоимость доставки (issue #179) ---
+
+    @Test
+    fun `the delivery fee is asked in tiyin and comes back in som`() = runTest {
+        // Ошибка единицы в запросе опаснее, чем в ответе: она не умножает
+        // цифру на экране, а меняет сам ответ — корзина на 50 000 сум,
+        // отправленная как `50000`, попала бы под порог бесплатной доставки.
+        server.enqueue(json(DELIVERY_FEE_BODY))
+
+        val fee = (deliveryFeeRepository().deliveryFee(50_000) as ApiResult.Success).data
+
+        assertEquals("/food/delivery-fee?itemsAmount=5000000", server.takeRequest().path)
+        // 10 000 тийинов — это 100 сум, а не «10 000 so'm» за доставку.
+        assertEquals(100L, fee)
+    }
+
+    @Test
+    fun `a response without the key is unknown delivery, not a crash`() = runTest {
+        // `data` — карта, а не DTO: отсутствующий ключ разбор не ломает, и
+        // экран в этом случае показывает итог без доставки.
+        server.enqueue(json("""{"success":true,"data":{}}"""))
+
+        val result = deliveryFeeRepository().deliveryFee(50_000)
+
+        assertNull((result as ApiResult.Success).data)
+    }
+
+    @Test
+    fun `a fee of zero is free delivery, not an unknown one`() = runTest {
+        // Так стенд отвечает от 200 000 тийинов, то есть от 2 000 сум.
+        server.enqueue(json("""{"success":true,"data":{"deliveryAmount":0}}"""))
+
+        val fee = (deliveryFeeRepository().deliveryFee(2_000) as ApiResult.Success).data
+
+        assertEquals("/food/delivery-fee?itemsAmount=200000", server.takeRequest().path)
+        assertEquals(0L, fee)
+    }
+
+    @Test
+    fun `a value of another type in the map does not break the fee`() = runTest {
+        // Карта на то и карта: `ignoreUnknownKeys` её не страхует, и одно
+        // чужое значение уронило бы разбор всего ответа — то есть убрало бы
+        // доставку из всех корзин.
+        server.enqueue(
+            json(
+                """{"success":true,"data":{"currency":"UZS","minOrderAmount":null,
+                     "deliveryAmount":10000}}""",
+            ),
+        )
+
+        val fee = (deliveryFeeRepository().deliveryFee(50_000) as ApiResult.Success).data
+
+        assertEquals(100L, fee)
+    }
+
+    @Test
+    fun `a fee that is not a number is unknown delivery`() = runTest {
+        // Лучше итог без доставки, чем экран ошибки на месте корзины.
+        server.enqueue(json("""{"success":true,"data":{"deliveryAmount":"free"}}"""))
+
+        val result = deliveryFeeRepository().deliveryFee(50_000)
+
+        assertNull((result as ApiResult.Success).data)
+    }
+
+    @Test
+    fun `a refused fee request is a failure, not a zero delivery`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(500)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"INTERNAL","message":"Xatolik"}}"""),
+        )
+
+        val result = deliveryFeeRepository().deliveryFee(50_000)
+
+        assertTrue(result is ApiResult.Failure)
+    }
+
     // --- Заказы ---
 
     @Test
@@ -378,6 +457,8 @@ class FoodRepositoriesTest {
 
     private fun menuRepository() = DefaultMenuRepository(api())
 
+    private fun deliveryFeeRepository() = DefaultDeliveryFeeRepository(api())
+
     private fun orderRepository(
         cart: FakeCartRepository = FakeCartRepository(),
         dao: FakeOrderDao = FakeOrderDao(),
@@ -462,6 +543,9 @@ class FoodRepositoriesTest {
               {"name":"Nomsiz","price":1000}
             ]}]}
         """
+
+        /** Ответ стенда 2026-09-09/10: `data` — карта, суммы в тийинах. */
+        const val DELIVERY_FEE_BODY = """{"success":true,"data":{"deliveryAmount":10000}}"""
 
         const val CREATED_ORDER_BODY = """{"success":true,"data":{"id":"o-1","status":"NEW"}}"""
 

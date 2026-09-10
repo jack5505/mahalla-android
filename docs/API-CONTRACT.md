@@ -393,9 +393,19 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | Метод | Путь |
 |---|---|
 | GET | `food/places/{placeId}/menu` |
+| GET | `food/delivery-fee?itemsAmount=` |
 | POST | `food/orders` |
 | GET | `orders/{orderId}` |
 | POST | `food/orders/{orderId}/cancel` |
+
+**`food/delivery-fee` отдаёт карту, а не DTO** (issue #179, подключён): схема —
+`ApiResponseMapStringLong`, поэтому сумма читается по ключу `deliveryAmount`, а
+отсутствие ключа — не ошибка разбора, а «доставка неизвестна». `itemsAmount`
+обязателен, целый, **в тийинах** (issue #149) — как и ответ. Отвечает
+анонимно, параметра заведения у неё нет: на стенде это правило платформы
+(2026-09-10: от 200 000 тийинов доставка бесплатна, ниже — 10 000). Итог
+заказа всё равно считает сервер, поэтому в корзине и чекауте это **оценка**, а
+суммы оформленного заказа берутся из `GET orders/{orderId}`.
 
 **Картинки у позиции меню в схеме нет вовсе** (issue #60): у `ItemResponse` ни
 одного поля со ссылкой. `MenuItemDto` объявляет его на вырост под тремя

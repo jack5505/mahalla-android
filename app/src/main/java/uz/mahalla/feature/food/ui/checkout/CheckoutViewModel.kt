@@ -11,11 +11,14 @@ import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
+import uz.mahalla.feature.food.data.DeliveryFeeRepository
 import uz.mahalla.feature.food.data.OrderRepository
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
+import uz.mahalla.feature.food.domain.DeliveryMethod
+import uz.mahalla.feature.food.ui.DeliveryFeeLoader
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.CheckoutRoute
@@ -28,6 +31,11 @@ import javax.inject.Inject
  * кошельком не блокируем: отказать в оформлении из-за неотвеченного запроса
  * хуже, чем получить отказ на стороне сервера, который всё равно проверит
  * деньги повторно.
+ *
+ * Стоимость доставки (issue #179) запрашивается по сумме позиций и только при
+ * доставке: у самовывоза её в заказе нет, и строка исчезает вместе с ней.
+ * Итог при этом остаётся оценкой — окончательные суммы называет сервер в
+ * ответе о созданном заказе.
  */
 @HiltViewModel
 class CheckoutViewModel @Inject constructor(
@@ -35,6 +43,7 @@ class CheckoutViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    deliveryFeeRepository: DeliveryFeeRepository,
     private val analytics: AnalyticsTracker,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
@@ -44,12 +53,19 @@ class CheckoutViewModel @Inject constructor(
     /** Черновик корзины на момент открытия — из него собирается заказ. */
     private var cart: Cart = Cart(placeId = placeId, placeName = "")
 
+    private val deliveryFee = DeliveryFeeLoader(
+        repository = deliveryFeeRepository,
+        scope = viewModelScope,
+        onFee = { fee -> updateState { copy(deliverySum = fee).revalidated() } },
+    )
+
     init {
         updateState { copy(placeId = placeId).revalidated() }
         viewModelScope.launch {
             cartRepository.cart(placeId).collect { updated ->
                 cart = updated
                 updateState { withCart(updated).revalidated() }
+                refreshDeliveryFee()
             }
         }
         loadBalance()
@@ -58,7 +74,13 @@ class CheckoutViewModel @Inject constructor(
 
     override fun onEvent(event: CheckoutEvent) {
         when (event) {
-            is CheckoutEvent.MethodSelected -> updateForm { copy(method = event.method) }
+            is CheckoutEvent.MethodSelected -> {
+                updateForm { copy(method = event.method) }
+                // Способ получения решает, нужна ли доставка вообще: при
+                // переключении на самовывоз цена не просто перестаёт быть
+                // нужной — её нельзя оставлять в итоге.
+                refreshDeliveryFee()
+            }
             is CheckoutEvent.AddressChanged -> updateForm { copy(address = event.address) }
             is CheckoutEvent.PaymentSelected -> updateForm { copy(payment = event.payment) }
 
@@ -79,15 +101,39 @@ class CheckoutViewModel @Inject constructor(
     )
 
     /**
+     * Запрос стоимости доставки: нужна и сумма позиций, и способ получения,
+     * поэтому зовётся и на изменение корзины, и на переключение способа.
+     * Дальше решает [DeliveryFeeLoader] — та же сумма второй раз не
+     * запрашивается.
+     */
+    private fun refreshDeliveryFee() {
+        val state = currentState
+        deliveryFee.refresh(
+            itemsSum = state.totals.subtotalSum,
+            needed = state.form.method == DeliveryMethod.Delivery,
+        )
+    }
+
+    /**
      * Итог и ошибки считаются вместе: от суммы зависит проверка баланса, и
      * считать их по отдельности значит однажды показать итог, не совпадающий с
      * причиной отказа.
      *
-     * Доставка в сумму не входит: сколько она стоит, бэкенд сообщает только в
-     * ответе о созданном заказе — до оформления её не знает никто.
+     * Доставка входит в сумму, когда её назвал `food/delivery-fee` и заказ
+     * действительно доставляют (issue #179): именно эту сумму человек и увидит
+     * списанной, поэтому баланс кошелька проверяется против неё, а не против
+     * одних позиций — иначе «денег хватает» на экране кончалось бы отказом
+     * сервера после нажатия кнопки.
+     *
+     * **Цена этого решения**: если `food/delivery-fee` завысит доставку
+     * относительно расчёта в `POST food/orders`, оформление кошельком
+     * заблокируется у человека, которому денег на самом деле хватало. Оценке
+     * доверяем потому, что её называет тот же сервер; неизвестная доставка,
+     * наоборот, ничего не блокирует.
      */
     private fun CheckoutState.revalidated(): CheckoutState {
-        val totals = CartCalculator.totals(lines)
+        val delivery = if (form.method == DeliveryMethod.Delivery) deliverySum ?: 0 else 0
+        val totals = CartCalculator.totals(lines, deliverySum = delivery)
         return copy(
             totals = totals,
             errors = CheckoutValidator.validate(
