@@ -1,6 +1,7 @@
 package uz.mahalla.feature.wallet.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -147,22 +148,13 @@ internal fun WalletDto.toDomain(): Wallet {
  * в `LazyColumn` она стала бы дубликатом ключа, а отличить её от соседней всё
  * равно нечем.
  *
- * `hasMore` считается по `last`, а при его отсутствии — по `page`/`totalPages`.
- * Полного молчания сервера о страницах достаточно, чтобы остановиться: лучше
- * не показать хвост истории, чем зациклить догрузку одной и той же страницы.
+ * `hasMore` — общее правило [hasMorePages] (issue #142): `last`, иначе
+ * `page`/`totalPages`, иначе останавливаемся.
  */
-internal fun TransactionPageDto.toDomain(): WalletTransactionPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return WalletTransactionPage(
-        items = content.mapNotNull(TransactionDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun TransactionPageDto.toDomain(): WalletTransactionPage = WalletTransactionPage(
+    items = content.mapNotNull(TransactionDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 internal fun TransactionDto.toDomain(): WalletTransaction? {
     val transactionId = id?.takeIf { it.isNotBlank() } ?: return null

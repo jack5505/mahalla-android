@@ -87,11 +87,15 @@ interface GamingApi {
 /**
  * Тело брони (см. предупреждение о коллизии в [GamingApi.book]).
  *
- * [startTime] уходит **местным** временем без зоны (`2026-09-05T18:30:00`):
- * так его отдаёт сам бэкенд в ответах (Jackson сериализует `LocalDateTime`
- * без зоны — правило `parseServerInstant`), и так его примет `LocalDateTime`
- * на той стороне. Строка со смещением на поле `LocalDateTime` разобралась бы
- * не везде, а зона в Узбекистане одна.
+ * [startTime] уходит **местным ташкентским** временем без зоны
+ * (`2026-09-05T18:30:00` = 18:30 по часам заведения): так его отдаёт сам
+ * бэкенд в ответах (Jackson сериализует `LocalDateTime` без зоны), и так его
+ * примет `LocalDateTime` на той стороне. Строка со смещением на поле
+ * `LocalDateTime` разобралась бы не везде, а зона в Узбекистане одна.
+ *
+ * Зону выбирает `gamingRequestTime`, читает обратно
+ * `parseServerSlotInstant` — одна трактовка на отправку и на чтение
+ * (issue #144), менять её можно только в обеих сразу.
  */
 @Serializable
 data class CreateGamingBookingRequest(
@@ -129,7 +133,11 @@ data class GamingBookingDto(
     @SerialName("zoneId") val zoneId: String? = null,
     @SerialName("placeId") val placeId: String? = null,
     @SerialName("userId") val userId: String? = null,
-    /** ISO-8601; Jackson отдаёт и без зоны — разбирает `parseServerInstant`. */
+    /**
+     * ISO-8601; Jackson отдаёт и без зоны. Это **время слота**, а не отметка
+     * сервера, поэтому зоне-менее строка читается как местное ташкентское —
+     * `parseServerSlotInstant`, а не `parseServerInstant` (issue #144).
+     */
     @SerialName("startTime") val startTime: String? = null,
     @SerialName("endTime") val endTime: String? = null,
     @SerialName("durationHours") val durationHours: Int? = null,
