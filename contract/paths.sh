@@ -15,7 +15,9 @@
 # списком руками: второй список разъезжается с первым.
 #
 #   contract/paths.sh                  сверка с живым стендом, отчёт в stdout
-#   contract/paths.sh --client-only    только вызовы приложения (без сети)
+#   contract/paths.sh --client-only    только вызовы приложения (без сети):
+#                                      в stdout чистый список, по строке на
+#                                      путь, счётчики — в stderr
 #   contract/paths.sh --write FILE     сверку сложить в FILE как JSON
 #
 # Переменные окружения:
@@ -45,7 +47,13 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --client-only) CLIENT_ONLY=1; shift ;;
         --write)
-            WRITE_TO="${2:?--write требует путь к файлу}"
+            # Без пути или с флагом вместо пути — ошибка вызова (код 3), а не
+            # находка: иначе `--write --client-only` молча создаст файл
+            # «--client-only», а голый `--write` уйдёт с кодом 1.
+            case "${2:-}" in
+                ''|-*) echo "--write требует путь к файлу" >&2; exit 3 ;;
+            esac
+            WRITE_TO="$2"
             # Относительный путь — от каталога, откуда запустили, а не от
             # корня репозитория, куда скрипт сейчас перейдёт.
             case "$WRITE_TO" in /*) ;; *) WRITE_TO="$PWD/$WRITE_TO" ;; esac
@@ -105,7 +113,11 @@ DECLARED_N=$(find app/src/main -name '*Api.kt' -print0 |
     { xargs -0 grep -hcE '@(GET|POST|PUT|DELETE|PATCH)\("' || true; } |
     awk '{s+=$1} END {print s+0}')
 
-echo "Вызовы приложения: $DECLARED_N объявлений, $CLIENT_N уникальных путей"
+SUMMARY="Вызовы приложения: $DECLARED_N объявлений, $CLIENT_N уникальных путей"
+# В --client-only stdout — это данные (их сравнивают и кладут в фикстуру),
+# поэтому счётчики уходят в stderr: в списке путей они были бы ложным вызовом,
+# а меняющиеся цифры шумели бы в каждом диффе.
+if [ "$CLIENT_ONLY" = "1" ]; then echo "$SUMMARY" >&2; else echo "$SUMMARY"; fi
 
 if [ "$CLIENT_N" -eq 0 ]; then
     echo "Не разобрался ни один вызов — сломан разбор аннотаций, а не контракт." >&2
