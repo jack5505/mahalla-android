@@ -1,5 +1,6 @@
 package uz.mahalla.feature.pharmacy.data
 
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
 import uz.mahalla.feature.pharmacy.domain.PharmacyProductPage
 import uz.mahalla.feature.pharmacy.domain.ProductStock
@@ -14,6 +15,8 @@ import uz.mahalla.feature.pharmacy.domain.ProductStock
  *
  * Всё остальное товар не прячет: нет цены — не показываем цену, нет флага
  * наличия — [ProductStock.Unknown], а не выдуманное «есть».
+ *
+ * `price` приходит в тийинах, пересчёт `Money.tiyinToSom` (issue #149).
  */
 internal fun ProductDto.toDomain(): PharmacyProduct? {
     val productId = id?.takeIf { it.isNotBlank() } ?: return null
@@ -30,7 +33,7 @@ internal fun ProductDto.toDomain(): PharmacyProduct? {
         strength = strength?.trim()?.takeIf { it.isNotEmpty() },
         // Отрицательная цена — тоже мусор; ноль оставляем: бесплатное
         // приложение к рецепту вполне бывает.
-        priceSum = price?.takeIf { it >= 0 },
+        priceSum = price.tiyinToSom()?.takeIf { it >= 0 },
         stockQuantity = stockQuantity,
         stock = ProductStock.of(isAvailable = availability, stockQuantity = stockQuantity),
         requiresPrescription = requiresPrescription ?: prescriptionRequired ?: false,

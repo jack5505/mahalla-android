@@ -49,7 +49,10 @@ data class WalletDto(
     @SerialName("totalAvailable") val totalAvailable: Long? = null,
     @SerialName("currency") val currency: String? = null,
     @SerialName("status") val status: String? = null,
-    /** Тот же баланс «в сумах» — по нему определяется единица целых полей. */
+    /**
+     * Тот же баланс «в сумах» — для удобства чтения ответа. Раньше по этой паре
+     * выводилась единица целых полей; теперь она известна — тийины (issue #149).
+     */
     @SerialName("balanceSom") val balanceSom: Double? = null,
     @SerialName("bonusBalanceSom") val bonusBalanceSom: Double? = null,
 )
@@ -72,9 +75,8 @@ data class TransactionPageDto(
  * бэкенд получал бы запрос без суммы (та же грабля, что у `revokeAll` в
  * issue #61).
  *
- * `amount` — **в единицах бэкенда**, не в сумах: перевод делает
- * [uz.mahalla.feature.wallet.domain.WalletTopUp.toMinor] по делителю, который
- * вывела выдача баланса.
+ * `amount` — **в тийинах**, не в сумах: перевод делает
+ * [uz.mahalla.core.format.Money.somToTiyin] в репозитории (issue #149).
  */
 @Serializable
 data class TopUpRequest(

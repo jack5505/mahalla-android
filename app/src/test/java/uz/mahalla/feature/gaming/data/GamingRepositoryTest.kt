@@ -50,7 +50,7 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"z-1","placeId":"p-1","name":"PlayStation 5","zoneType":"CONSOLE",
-                    "pricePerHour":35000,"totalSeats":4,"isAvailable":true}]""",
+                    "pricePerHour":3500000,"totalSeats":4,"isAvailable":true}]""",
             ),
         )
 
@@ -64,9 +64,28 @@ class GamingRepositoryTest {
         assertEquals("z-1", zone.id)
         assertEquals("PlayStation 5", zone.name)
         assertEquals("CONSOLE", zone.zoneType)
+        // Бэкенд шлёт тийины: 3 500 000 — это 35 000 сум за час (issue #149).
         assertEquals(35_000L, zone.pricePerHour)
         assertEquals(4, zone.totalSeats)
         assertTrue(zone.isBookable)
+    }
+
+    /** Без пересчёта час стоил бы «5 000 000 so'm»; без цены зона не бронируется. */
+    @Test
+    fun `price per hour is converted from tiyin and a missing one is zero`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"z-1","pricePerHour":5000000,"isAvailable":true},
+                    {"id":"z-2","isAvailable":true},
+                    {"id":"z-3","pricePerHour":150,"isAvailable":true},
+                    {"id":"z-4","pricePerHour":49,"isAvailable":true}]""",
+            ),
+        )
+
+        val zones = (repository().zones("p-1") as ApiResult.Success).data
+
+        assertEquals(listOf(50_000L, 0L, 2L, 0L), zones.map { it.pricePerHour })
+        assertEquals(listOf(true, false, true, false), zones.map { it.isBookable })
     }
 
     @Test
@@ -75,8 +94,8 @@ class GamingRepositoryTest {
         // здесь увела бы в «закрыто» все зоны сразу.
         server.enqueue(
             envelope(
-                """[{"id":"z-1","pricePerHour":1000,"available":true},
-                    {"id":"z-2","pricePerHour":1000,"isAvailable":true}]""",
+                """[{"id":"z-1","pricePerHour":100000,"available":true},
+                    {"id":"z-2","pricePerHour":100000,"isAvailable":true}]""",
             ),
         )
 
@@ -87,7 +106,7 @@ class GamingRepositoryTest {
 
     @Test
     fun `a zone the server said nothing about is shown as closed`() = runTest {
-        server.enqueue(envelope("""[{"id":"z-1","pricePerHour":1000}]"""))
+        server.enqueue(envelope("""[{"id":"z-1","pricePerHour":100000}]"""))
 
         val zone = (repository().zones("p-1") as ApiResult.Success).data.single()
 
@@ -103,7 +122,7 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"name":"no id"},{"id":"z-2","pricePerHour":0,"isAvailable":true},
-                    {"id":"z-3","name":"","pricePerHour":5000,"isAvailable":true}]""",
+                    {"id":"z-3","name":"","pricePerHour":500000,"isAvailable":true}]""",
             ),
         )
 
@@ -127,15 +146,17 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """{"id":"b-1","zoneId":"z-1","placeId":"p-1",
-                    "startTime":"2026-09-04T13:00:00","endTime":"2026-09-04T15:00:00",
-                    "durationHours":2,"totalPrice":70000,"status":"CONFIRMED"}""",
+                    "startTime":"2026-09-04T18:00:00","endTime":"2026-09-04T20:00:00",
+                    "durationHours":2,"totalPrice":7000000,"status":"CONFIRMED"}""",
             ),
         )
 
+        // 18:00 по часам в Ташкенте — то, что человек выбрал в сетке слотов.
+        val slot = Instant.parse("2026-09-04T13:00:00Z")
         val result = repository().book(
             GamingBookingDraft(
                 zoneId = "z-1",
-                startTime = Instant.parse("2026-09-04T13:00:00Z"),
+                startTime = slot,
                 durationHours = 2,
             ),
             zoneName = "PlayStation 5",
@@ -144,9 +165,10 @@ class GamingRepositoryTest {
         val request = server.takeRequest()
         assertEquals("/gaming/bookings", request.path)
         assertEquals("POST", request.method)
-        // Время уходит без зоны — так же, как бэкенд отдаёт его сам.
+        // Время уходит без зоны — так же, как бэкенд отдаёт его сам, — и в
+        // местных часах заведения: выбрано 18:00, ушло «18:00» (issue #144).
         assertEquals(
-            """{"zoneId":"z-1","startTime":"2026-09-04T13:00:00","durationHours":2}""",
+            """{"zoneId":"z-1","startTime":"2026-09-04T18:00:00","durationHours":2}""",
             request.body.readUtf8(),
         )
 
@@ -154,8 +176,10 @@ class GamingRepositoryTest {
         assertEquals("b-1", booking.id)
         assertEquals(GamingBookingStatus.Confirmed, booking.status)
         assertEquals(2, booking.durationHours)
+        // Сумма брони — тийины, как и цена часа (issue #149).
         assertEquals(70_000L, booking.totalPrice)
-        assertEquals(Instant.parse("2026-09-04T13:00:00Z"), booking.startTime)
+        // Что ушло, то и вернулось: отправка и чтение слота в одной зоне.
+        assertEquals(slot, booking.startTime)
         // Имя зоны в ответе не приходит: его знает только экран зон.
         assertEquals("PlayStation 5", booking.zoneName)
     }
@@ -247,7 +271,7 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """{"content":[{"id":"b-1","zoneId":"z-1","startTime":"2026-09-04T13:00:00",
-                    "durationHours":2,"totalPrice":70000,"status":"ACTIVE"}],
+                    "durationHours":2,"totalPrice":7000000,"status":"ACTIVE"}],
                     "page":0,"totalPages":2,"last":false}""",
             ),
         )
@@ -258,8 +282,9 @@ class GamingRepositoryTest {
         assertEquals("/gaming/bookings/my?page=0&size=20", request.path)
         assertTrue(page.hasMore)
         assertEquals(GamingBookingStatus.Active, page.items.single().status)
-        // Дата без зоны разбирается общим `parseServerInstant`.
-        assertEquals(Instant.parse("2026-09-04T13:00:00Z"), page.items.single().startTime)
+        // Время слота без зоны — местное ташкентское (`parseServerSlotInstant`,
+        // issue #144): 13:00 на стене, то есть 08:00 UTC.
+        assertEquals(Instant.parse("2026-09-04T08:00:00Z"), page.items.single().startTime)
     }
 
     @Test

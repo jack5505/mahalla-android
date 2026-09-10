@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
@@ -41,6 +44,7 @@ class CheckoutViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    private val analytics: AnalyticsTracker,
     paymentFlows: WalletPaymentFlowFactory,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
@@ -76,7 +80,7 @@ class CheckoutViewModel @Inject constructor(
         }
         viewModelScope.launch {
             // Заказ создан и оплачен: черновик корзины уже почистил репозиторий.
-            payment.paid.collect { orderId -> emitEffect(CheckoutEffect.OrderCreated(orderId)) }
+            payment.paid.collect { orderId -> onOrderCreated(orderId) }
         }
         updateState { copy(placeId = placeId).revalidated() }
         viewModelScope.launch {
@@ -227,9 +231,15 @@ class CheckoutViewModel @Inject constructor(
                 is ApiResult.Success -> {
                     cashIdempotencyKey = null
                     updateState { copy(isSubmitting = false) }
-                    emitEffect(CheckoutEffect.OrderCreated(result.data))
+                    onOrderCreated(result.data)
                 }
             }
         }
+    }
+
+    /** Общий финал обоих способов оплаты: событие `ordered` не зависит от того, чем платили. */
+    private fun onOrderCreated(orderId: String) {
+        analytics.track(AnalyticsEvents.ordered(placeId, AnalyticsVertical.Food))
+        emitEffect(CheckoutEffect.OrderCreated(orderId))
     }
 }

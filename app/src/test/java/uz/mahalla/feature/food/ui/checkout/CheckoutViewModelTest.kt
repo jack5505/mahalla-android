@@ -16,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.domain.Cart
@@ -28,6 +30,7 @@ import uz.mahalla.data.security.PaymentConfirmationMethod
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletPaymentRejection
 import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlowFactory
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeOrderRepository
 import uz.mahalla.testutil.FakePaymentConfirmationPolicy
@@ -335,11 +338,63 @@ class CheckoutViewModelTest {
         )
     }
 
+    @Test
+    fun `a created order is an ORDER of the food vertical`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Success("o-42")
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        assertEquals(
+            listOf(AnalyticsEvents.ordered(PLACE_ID, AnalyticsVertical.Food)),
+            analytics.events,
+        )
+    }
+
+    /**
+     * С 8.3 у кошелька и наличных разные пути к созданному заказу — тест выше
+     * идёт кошельком (он по умолчанию), этот держит наличные.
+     */
+    @Test
+    fun `a cash order is counted as well`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Success("o-42")
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        assertEquals(
+            listOf(AnalyticsEvents.ordered(PLACE_ID, AnalyticsVertical.Food)),
+            analytics.events,
+        )
+    }
+
+    @Test
+    fun `a refused order is not counted`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Failure(ApiError.Business("PLACE_CLOSED"))
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        // Иначе воронка покажет заказы, которых не было.
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = CheckoutViewModel(
         cartRepository = cartRepository,
         orderRepository = orderRepository,
         walletRepository = walletRepository,
         roleRepository = roleRepository,
+        analytics = analytics,
         paymentFlows = WalletPaymentFlowFactory(
             walletRepository = walletRepository,
             pinStorage = pinStorage,
