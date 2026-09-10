@@ -15,6 +15,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.domain.Cart
@@ -23,6 +25,7 @@ import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeOrderRepository
 import uz.mahalla.testutil.FakeRoleRepository
@@ -211,11 +214,43 @@ class CheckoutViewModelTest {
         )
     }
 
+    @Test
+    fun `a created order is an ORDER of the food vertical`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Success("o-42")
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        assertEquals(
+            listOf(AnalyticsEvents.ordered(PLACE_ID, AnalyticsVertical.Food)),
+            analytics.events,
+        )
+    }
+
+    @Test
+    fun `a refused order is not counted`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Failure(ApiError.Business("PLACE_CLOSED"))
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        // Иначе воронка покажет заказы, которых не было.
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = CheckoutViewModel(
         cartRepository = cartRepository,
         orderRepository = orderRepository,
         walletRepository = walletRepository,
         roleRepository = roleRepository,
+        analytics = analytics,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )
 

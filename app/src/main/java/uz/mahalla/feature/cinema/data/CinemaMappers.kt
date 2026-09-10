@@ -3,6 +3,7 @@ package uz.mahalla.feature.cinema.data
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.cinema.domain.CinemaSession
 import uz.mahalla.feature.cinema.domain.CinemaTicket
 import uz.mahalla.feature.cinema.domain.CinemaTicketPage
@@ -48,7 +49,7 @@ internal fun CinemaSessionDto.toDomain(): CinemaSession? {
         startTime = parseServerLocalTime(startTime),
         endTime = parseServerLocalTime(endTime),
         // Отрицательная цена — не скидка, а мусор.
-        priceSum = ticketPrice?.coerceAtLeast(0) ?: 0,
+        priceSum = ticketPrice.tiyinToSom()?.coerceAtLeast(0) ?: 0,
         totalSeats = totalSeats?.takeIf { it >= 0 },
         // Отрицательный остаток мест считаем нулём: это «мест нет», а не
         // «сервер промолчал», и предлагать билет на такой сеанс нельзя.
@@ -82,7 +83,7 @@ private fun CinemaTicketDto.ticket(ticketId: String) = CinemaTicket(
     id = ticketId,
     sessionId = sessionId?.takeIf { it.isNotBlank() },
     seatNumber = seatNumber?.trim()?.takeIf { it.isNotEmpty() },
-    priceSum = price?.coerceAtLeast(0) ?: 0,
+    priceSum = price.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     code = qrCode?.trim()?.takeIf { it.isNotEmpty() },
     status = CinemaTicketStatus.fromApi(status),
     createdAt = parseServerInstant(createdAt),

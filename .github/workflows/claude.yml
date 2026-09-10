@@ -64,10 +64,26 @@ jobs:
       HAS_DESIGN_PAT: ${{ secrets.DESIGN_REPO_PAT != '' }}
 
     steps:
+      # persist-credentials: false обязателен (issue #225). checkout@v6 кладёт
+      # GITHUB_TOKEN в отдельный файл и подключает его через
+      # `includeIf.gitdir:…path`, а claude-code-action при подмене токена
+      # чистит локальный конфиг и файлы из `include.path`, но не `includeIf`
+      # (upstream anthropics/claude-code-action#1721, фикс — PR #1722) — в
+      # логе прогона «No existing authentication headers to remove».
+      # Заголовок с GITHUB_TOKEN оставался в git и перебивал токен приложения
+      # из URL remote: пуш агента шёл от github-actions[bot], и `synchronize`
+      # в уже открытый PR вставал в action_required с нулём job'ов. Без
+      # сохранённого токена git авторизуется только токеном приложения.
+      #
+      # Держится на том, что репо ПУБЛИЧНЫЙ: action делает fetch ветки PR до
+      # подмены токена, и с этой настройкой — анонимно. Станет приватным —
+      # @claude упадёт на «could not read Username» (upstream #1236); тогда
+      # вернуть сохранение токена, а #225 лечить иначе.
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
       # репозиторий: токен этого job'а прав на него не даёт, а WebFetch

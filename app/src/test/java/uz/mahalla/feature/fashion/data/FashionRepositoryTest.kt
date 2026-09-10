@@ -99,7 +99,7 @@ class FashionRepositoryTest {
             envelope(
                 """{"products":[
                      {"id":"p-1","storeId":"$STORE","name":"Oq ko'ylak","brand":"Mahalla",
-                      "gender":"FEMALE","basePrice":320000,"salePrice":240000,
+                      "gender":"FEMALE","basePrice":32000000,"salePrice":24000000,
                       "ratingAvg":4.5,"ratingCount":12,"isNew":true,"bestseller":true},
                      {"name":"Nomsiz"}],
                    "page":0,"totalPages":3,"totalElements":42}""",
@@ -113,6 +113,8 @@ class FashionRepositoryTest {
         val product = page.items.single()
         assertEquals("p-1", product.id)
         assertEquals(ProductGender.Female, product.gender)
+        // Цены приезжают в тийинах (issue #149): 32 000 000 → 320 000 сум.
+        assertEquals(320_000L, product.basePriceSum)
         assertEquals(240_000L, product.priceSum)
         assertTrue(product.hasDiscount)
         assertTrue(product.isNew)
@@ -126,12 +128,12 @@ class FashionRepositoryTest {
         server.enqueue(
             envelope(
                 """{"id":"p-1","storeId":"$STORE","name":"Oq ko'ylak","description":"Paxta",
-                    "material":"Paxta 100%","gender":"UNISEX","basePrice":320000,
+                    "material":"Paxta 100%","gender":"UNISEX","basePrice":32000000,
                     "variantsByColor":{
-                      "Oq":[{"id":"v-1","size":"M","price":240000,"stockQuantity":3},
-                            {"id":"v-2","size":"L","price":240000,"stockQuantity":0},
+                      "Oq":[{"id":"v-1","size":"M","price":24000000,"stockQuantity":3},
+                            {"id":"v-2","size":"L","price":24000000,"stockQuantity":0},
                             {"size":"XL"}],
-                      "Qora":[{"id":"v-3","colorName":"Qora","size":"M","price":260000,
+                      "Qora":[{"id":"v-3","colorName":"Qora","size":"M","price":26000000,
                                "available":false}]}}""",
             ),
         )
@@ -148,6 +150,33 @@ class FashionRepositoryTest {
         assertFalse(detail.variant("v-2")!!.isOrderable)
         assertFalse(detail.variant("v-3")!!.isOrderable)
         assertEquals("Paxta 100%", detail.material)
+        // Тийины → сумы и у карточки, и у варианта (issue #149).
+        assertEquals(320_000L, detail.basePriceSum)
+        assertNull(detail.salePriceSum)
+        assertEquals(260_000L, detail.variant("v-3")!!.priceSum)
+    }
+
+    @Test
+    fun `catalog prices are converted from tiyin to som once`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"products":[
+                     {"id":"p-1","storeId":"$STORE","name":"Shim","basePrice":5000000},
+                     {"id":"p-2","storeId":"$STORE","name":"Kepka","basePrice":150,
+                      "salePrice":149}]}""",
+            ),
+        )
+
+        val items = (repository().catalog(STORE) as ApiResult.Success).data.items
+
+        // 5 000 000 тийинов — это 50 000 сум, а не пять миллионов.
+        assertEquals(50_000L, items[0].basePriceSum)
+        assertNull(items[0].salePriceSum)
+        assertEquals(50_000L, items[0].priceSum)
+        // Округление до целого сума: 150 → 2, 149 → 1.
+        assertEquals(2L, items[1].basePriceSum)
+        assertEquals(1L, items[1].salePriceSum)
+        assertTrue(items[1].hasDiscount)
     }
 
     @Test

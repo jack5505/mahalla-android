@@ -16,11 +16,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.queue.domain.WalkInRequestError
 import uz.mahalla.feature.queue.domain.WalkInStatus
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeUserProfileStore
 import uz.mahalla.testutil.FakeWalkInRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -297,12 +300,46 @@ class QueueViewModelTest {
             assertEquals(listOf(QueueEffect.OpenNotifications), effects)
         }
 
+    @Test
+    fun `a taken ticket is a BOOK of the queue vertical`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.takeResult = ApiResult.Success(walkInTicket(status = WalkInStatus.Accepted))
+            val viewModel = viewModel()
+            runCurrent()
+
+            viewModel.onEvent(QueueEvent.SubmitClicked)
+            runCurrent()
+
+            // Своего вида события у очереди у бэкенда нет — различает вертикаль
+            // только `metadata`.
+            assertEquals(
+                listOf(AnalyticsEvents.booked("p-1", AnalyticsVertical.Queue)),
+                analytics.events,
+            )
+        }
+
+    @Test
+    fun `a refused ticket is not counted`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.takeResult = ApiResult.Failure(ApiError.Business("QUEUE_CLOSED"))
+        val viewModel = viewModel()
+        runCurrent()
+
+        viewModel.onEvent(QueueEvent.SubmitClicked)
+        runCurrent()
+
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel(
         profileStore: FakeUserProfileStore = this.profileStore,
         clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC),
     ) = QueueViewModel(
         repository = repository,
         profileStore = profileStore,
+        analytics = analytics,
         clock = clock,
         savedStateHandle = SavedStateHandle(
             mapOf("placeId" to "p-1", "placeName" to "Barber House"),

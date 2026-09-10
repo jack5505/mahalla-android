@@ -9,6 +9,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.fashion.domain.FashionCart
@@ -22,6 +24,7 @@ import uz.mahalla.feature.role.data.RoleProfile
 import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.navigation.FashionArgs
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeFashionCartRepository
 import uz.mahalla.testutil.FakeFashionOrderRepository
 import uz.mahalla.testutil.FakeRoleRepository
@@ -74,6 +77,7 @@ class FashionCheckoutViewModelTest {
             roleRepository = FakeRoleRepository(
                 RoleProfile(customer = CustomerForm(address = "Amir Temur 1")),
             ),
+            analytics = analytics,
             savedStateHandle = handle(),
         )
 
@@ -199,11 +203,43 @@ class FashionCheckoutViewModelTest {
         assertEquals(1, viewModel.state.value.items.size)
     }
 
+    @Test
+    fun `a created order is an ORDER of the fashion vertical with the store as the place`() =
+        runTest {
+            cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+            val viewModel = viewModel()
+            viewModel.onEvent(FashionCheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
+
+            viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+
+            // `storeId` магазина одежды — это и есть `placeId` (`Routes.kt`).
+            assertEquals(
+                listOf(AnalyticsEvents.ordered(STORE, AnalyticsVertical.Fashion)),
+                analytics.events,
+            )
+        }
+
+    @Test
+    fun `a refused order is not counted`() = runTest {
+        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+        orderRepository.createResult = ApiResult.Failure(ApiError.Business("OUT_OF_STOCK"))
+        val viewModel = viewModel()
+        viewModel.onEvent(FashionCheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
+
+        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = FashionCheckoutViewModel(
         cartRepository = cartRepository,
         orderRepository = orderRepository,
         walletRepository = walletRepository,
         roleRepository = roleRepository,
+        analytics = analytics,
         savedStateHandle = handle(),
     )
 

@@ -8,11 +8,12 @@ import uz.mahalla.feature.booking.domain.AppointmentPage
  * Откуда экран «мои записи» берёт список и куда отправляет отмену.
  *
  * Вертикалей записи у бэкенда две — к мастеру (`appointments`, issue #97) и к
- * врачу (`hospitals/appointments`, issue #99), — но **модель у них одна**: обе
- * ручки `my` отдают `PageResponseAppointmentResponse`, а отменяет обе один и
- * тот же `POST appointments/{id}/cancel` (своей отмены у `hospitals` нет
- * вовсе). Значит и экран у них может быть один: он отличается заголовком, а не
- * поведением.
+ * врачу (`hospitals/appointments`, issue #99), — и **на сервере они разные**:
+ * свои схемы (`AppointmentBookingResponse` против `HospitalAppointmentResponse`)
+ * и свои ручки, включая отмену (issue #167). Общим остаётся то, ради чего
+ * интерфейс и заведён: набор полей, который показывает экран, и порядок
+ * действий над записью. Значит и экран у них может быть один: он отличается
+ * заголовком и источником, а не поведением.
  *
  * Интерфейс существует ровно ради этого — чтобы
  * [uz.mahalla.feature.booking.ui.appointments.MyAppointmentsViewModel] выбирал

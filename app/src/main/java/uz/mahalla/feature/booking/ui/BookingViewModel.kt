@@ -6,6 +6,9 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.dataOrNull
 import uz.mahalla.core.result.map
@@ -31,11 +34,15 @@ import javax.inject.Inject
  *
  * Тот же экран **переносит** запись, если маршрут назвал `rescheduleId`
  * (эпик #11): услуга тогда приезжает готовой, выбирают только день и слот, а
- * подтверждение уходит в `reschedule` вместо `book`.
+ * подтверждение уходит в `reschedule` вместо `book`. Вместе с ней маршрутом
+ * едут подпись переносимой записи и её прежние день и время (issue #155):
+ * взять их здесь больше негде — в каталоге услуги может уже не быть, а
+ * `GET appointments/{id}` приложение не использует.
  */
 @HiltViewModel
 class BookingViewModel @Inject constructor(
     private val repository: BookingRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<BookingState, BookingEvent, BookingEffect>(BookingState()) {
@@ -58,6 +65,9 @@ class BookingViewModel @Inject constructor(
                 selectedDate = dates.firstOrNull(),
                 selectedServiceId = preselected,
                 isReschedule = rescheduleId.isNotEmpty(),
+                rescheduleLabel = route.rescheduleLabel.trim(),
+                rescheduleDate = parseDate(route.rescheduleDate),
+                rescheduleTime = parseTime(route.rescheduleTime),
             )
         }
         loadServices()
@@ -202,18 +212,50 @@ class BookingViewModel @Inject constructor(
                 copy(isBooking = false, bookFailure = result.failure)
             }
 
-            is ApiResult.Success -> updateState {
-                copy(
-                    isBooking = false,
-                    previousCancelled = previousCancelled,
-                    booked = result.data.copy(
-                        serviceName = result.data.serviceName
-                            ?: selectedService?.title?.takeIf { it.isNotBlank() },
-                        date = result.data.date ?: date,
-                        startTime = result.data.startTime ?: time,
+            is ApiResult.Success -> {
+                updateState {
+                    copy(
+                        isBooking = false,
+                        previousCancelled = previousCancelled,
+                        booked = result.data.copy(
+                            serviceName = result.data.serviceName
+                                ?: selectedService?.title?.takeIf { it.isNotBlank() }
+                                ?: rescheduleLabel.takeIf { it.isNotBlank() },
+                            date = result.data.date ?: date,
+                            startTime = result.data.startTime ?: time,
+                        ),
+                    )
+                }
+                // Перенос отправляет `BOOK` тоже: с точки зрения заведения это
+                // новая запись, и она действительно создана — `reschedule`
+                // именно так и устроен (`BookingRepository.reschedule`).
+                // Из «Моих записей» маршрут приходит с пустым `placeId`
+                // (`Appointment.placeId` там nullable) — тогда заведение
+                // берётся из ответа сервера, иначе событие отбросил бы
+                // репозиторий, и переносы в панель не попадали бы.
+                analytics.track(
+                    AnalyticsEvents.booked(
+                        placeId = route.placeId.ifBlank { result.data.placeId.orEmpty() },
+                        vertical = AnalyticsVertical.Booking,
                     ),
                 )
             }
         }
     }
+
+    /**
+     * Прежние день и время переносимой записи (issue #155). Разбор мягкий:
+     * аргументы маршрута переживают смерть процесса и приходят строками, а
+     * упасть из-за подписи над календарём экран не вправе — перенос от неё не
+     * зависит.
+     */
+    private fun parseDate(value: String): LocalDate? =
+        value.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+
+    private fun parseTime(value: String): LocalTime? =
+        value.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { LocalTime.parse(it) }.getOrNull()
+        }
 }

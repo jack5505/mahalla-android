@@ -28,7 +28,7 @@ import uz.mahalla.data.network.ApiResponse
  */
 interface BookingApi {
 
-    /** Услуги заведения. `data` — массив `ServiceResponse`. */
+    /** Услуги заведения. `data` — массив `AppointmentServiceResponse`. */
     @GET("barber-services/places/{placeId}")
     suspend fun services(@Path("placeId") placeId: String): ApiResponse<List<ServiceDto>>
 
@@ -69,32 +69,27 @@ interface BookingApi {
 }
 
 /**
- * Тело `POST /api/v1/appointments` — **самое рискованное место этой задачи**.
+ * Тело `POST /api/v1/appointments` — **сверено чтением схемы** (2026-09-10,
+ * issue #154).
  *
- * В `/v3/api-docs` оно объявлено как `BookRequest`, а это имя перекрыто
- * коллизией springdoc: на него ссылаются **три** пути (`appointments`,
- * `gaming/bookings`, `hospitals/appointments`), и показан один набор полей —
- * `{doctorId, date, startTime, complaint}`, то есть заведомо больничный
- * вариант. Групповых документов (`/v3/api-docs/{group}`), где коллизии бы не
- * было, у стенда нет: `swagger-config` отдаёт единственный `url`. Живым
- * запросом форму тела тоже не проверить — `401` приходит **до** валидации
- * (проверено и на пустом теле, и на заполненном).
+ * Долго было самым рискованным местом вертикали: в `/v3/api-docs` тело
+ * называлось `BookRequest`, а на это имя ссылались **три** пути
+ * (`appointments`, `gaming/bookings`, `hospitals/appointments`), и побеждал
+ * больничный набор `{doctorId, date, startTime, complaint}`. Живым запросом
+ * форму тоже не проверить — `401` приходит **до** валидации. Поэтому имена
+ * здесь были выведены, а не прочитаны.
  *
- * Поэтому имена выведены, а не прочитаны, — как для отзывов (issue #76) и
- * заявки заведения (issue #84):
+ * Теперь коллизия разведена, схема читается как есть:
+ * `AppointmentBookRequest {placeId, serviceId, serviceName, date, startTime}`,
+ * обязательные — `date`, `placeId`, `startTime`. **Выведенные имена оказались
+ * верны, менять нечего.**
  *
- * - `serviceId` и `placeId` — из ответа того же эндпоинта
- *   (`AppointmentResponse`); `serviceId` здесь занимает место `doctorId`
- *   больничного варианта.
- * - `date` и `startTime` — из самой `BookRequest`: это ровно те два поля,
- *   которые у всех трёх склеенных запросов общие, поэтому шанс, что они
- *   называются так же и у записи к мастеру, наибольший. Обратите внимание:
- *   в **ответе** день называется `apptDate` — имена запроса и ответа у этого
- *   бэкенда расходятся не впервые.
+ * `serviceName` не отправляется намеренно: поле необязательное, а имя услуги у
+ * сервера уже есть по `serviceId` — дублировать его с клиента значит дать двум
+ * источникам разойтись.
  *
- * Проверять это надо первым делом под токеном. Не совпадёт — бэкенд ответит
- * `VALIDATION_ERROR`, и текст сервера будет виден прямо на экране (issue #34),
- * а чинится расхождение здесь, в одном месте.
+ * Обратите внимание: в **ответе** день называется `apptDate` — имена запроса и
+ * ответа у этого бэкенда расходятся не впервые.
  */
 @Serializable
 data class BookAppointmentRequest(
@@ -107,8 +102,15 @@ data class BookAppointmentRequest(
 )
 
 /**
- * `ServiceResponse`. Все поля необязательные: отсутствие любого из них — не
- * повод показать экран ошибки вместо списка услуг.
+ * `AppointmentServiceResponse`. Все поля необязательные: отсутствие любого из
+ * них — не повод показать экран ошибки вместо списка услуг.
+ *
+ * **Осторожно: этим же DTO разбирается ответ мастеров** (`FreelancerApi`,
+ * `GET freelancers/{id}/services`), а там схема другая —
+ * `FreelancerServiceResponse` с `title` и `priceAmount`. Пока эти две ручки
+ * выглядели одной схемой `ServiceResponse`, это было незаметно; после развода
+ * коллизии видно, что у услуг мастера будет пустое название и цена 0. Живой
+ * баг, issue #216 — чинится отдельно, здесь ничего менять не надо.
  *
  * **Имена сверены с живым стендом** контрактной пробой (`contract/booking.sh`,
  * фикстура `services.json`). До неё здесь стояли выведенные из схемы `title` и
@@ -118,20 +120,26 @@ data class BookAppointmentRequest(
  * `colorHex` стенд шлёт, но в домен он не идёт: цвет услуги экрану не нужен.
  * Объявлен, чтобы контрактный тест видел поле как известное, а не как утечку.
  *
- * `description` стенд не шлёт вовсе — на экране описания услуги не будет,
- * пока бэкенд его не добавит.
+ * `description` и `freelancerId` **схемой не предусмотрены** (сверено
+ * 2026-09-10): оба поля принадлежат `FreelancerServiceResponse`, то есть
+ * вертикали мастеров, и здесь были видны только из-за склейки имён. Описания
+ * услуги на экране записи не будет, пока бэкенд его не добавит, а выбирать
+ * мастера в барбершопе нечем — issue #154, пункт 2.
  *
  * `isActive` принимается и под именем `active`: Jackson сериализует
  * `boolean isActive` то так, то так, в зависимости от геттера, а ошибка здесь
  * спрятала бы все услуги заведения (то же правило, что у `isRead` в issue #81
- * и `isAvailable` в issue #94). В пробе не встретилось ни одного, ни другого —
- * поэтому отсутствие пары контрактный тест считает допустимым.
+ * и `isAvailable` в issue #94). В схеме флага нет ни под одним из имён, и в
+ * пробе он не встретился — поэтому отсутствие пары контрактный тест считает
+ * допустимым, но сама пара оставлена: разбор мягкий, лишнее известное поле
+ * дешевле пропавшего списка.
  */
 @Serializable
 data class ServiceDto(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
     @SerialName("colorHex") val colorHex: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     @SerialName("durationMinutes") val durationMinutes: Int? = null,
     @SerialName("isActive") val isActive: Boolean? = null,
@@ -139,8 +147,23 @@ data class ServiceDto(
 )
 
 /**
- * `AppointmentResponse`. Имя в схеме встречается один раз — коллизии здесь
- * нет, поля прочитаны как есть.
+ * `AppointmentBookingResponse` — поля прочитаны как есть (сверено 2026-09-10).
+ * `status` у бэкенда enum: `PENDING | CONFIRMED | CANCELLED | COMPLETED |
+ * NO_SHOW`; здесь он строка намеренно — новое значение не должно ронять разбор
+ * всей записи.
+ *
+ * Ни `prepayment`, ни `paid`, ни суммы к оплате в ответе нет: предоплата брони
+ * у бэкенда не предусмотрена (issue #154, пункт 3).
+ *
+ * [price] — **тийины** (бэкенд подтвердил единицу, см. `docs/API-CONTRACT.md`);
+ * в `priceSum` сумами его переводит `BookingMappers` через `Money.tiyinToSom`
+ * (issue #149, PR #233).
+ *
+ * Этими же DTO разбираются ответы больниц, хотя схема у них своя,
+ * `HospitalAppointmentResponse` (issue #167): общих полей хватает на всё, что
+ * показывает экран, а `doctorId` и `complaint` больничной записи здесь не
+ * объявлены и теряются — из-за чего запись к врачу остаётся без имени врача
+ * (issue #219).
  *
  * [startTime] и [endTime] типизированы как [JsonElement] по той же причине,
  * что `counterTime` талона очереди (issue #96): springdoc описывает
@@ -155,6 +178,7 @@ data class AppointmentDto(
     @SerialName("userId") val userId: String? = null,
     @SerialName("serviceId") val serviceId: String? = null,
     @SerialName("serviceName") val serviceName: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     /** `yyyy-MM-dd`. */
     @SerialName("apptDate") val apptDate: String? = null,
@@ -165,7 +189,13 @@ data class AppointmentDto(
     @SerialName("createdAt") val createdAt: String? = null,
 )
 
-/** `PageResponseAppointmentResponse`. */
+/**
+ * Страница записей. Схема у каждой вертикали своя —
+ * `PageResponseAppointmentBookingResponse` у брони,
+ * `PageResponseHospitalAppointmentResponse` у больниц (issue #167), — но
+ * обёртка страницы у них одна и та же, а содержимое разбирается
+ * [AppointmentDto].
+ */
 @Serializable
 data class AppointmentPageDto(
     @SerialName("content") val content: List<AppointmentDto> = emptyList(),

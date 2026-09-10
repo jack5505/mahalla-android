@@ -42,15 +42,14 @@ class FakeWalletRepository(
         TopUpOrder(paymentUrl = "https://checkout.paycom.uz/abc"),
     )
 
-    /** Запросы пополнения: сумма уходит в сумах, перевод в единицы — внутри. */
-    val topUpRequests = mutableListOf<Triple<Long, TopUpProvider, Long>>()
+    /** Запросы пополнения: сумма уходит в сумах, перевод в тийины — внутри. */
+    val topUpRequests = mutableListOf<Pair<Long, TopUpProvider>>()
 
     override suspend fun topUp(
         amountSum: Long,
         provider: TopUpProvider,
-        scale: Long,
     ): ApiResult<TopUpOrder> {
-        topUpRequests += Triple(amountSum, provider, scale)
+        topUpRequests += amountSum to provider
         return topUp
     }
 }
