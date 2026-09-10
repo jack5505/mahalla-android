@@ -28,12 +28,12 @@ import java.time.ZoneOffset
  * [MockWebServer]): подмена Retrofit фейком не поймала бы ни ошибку в пути
  * запроса, ни несовпадение схемы JSON.
  *
- * Контракт снят со стенда 2026-09-04. Список врачей анонимен (`200` без
- * токена), запись, список и отмена требуют Bearer (`401`). Тело
- * `POST hospitals/appointments` подтвердить живым запросом нельзя — `401`
- * приходит до валидации; тест закрепляет то, что приложение отправляет
- * **сейчас**, чтобы правка после проверки под токеном была видна одной
- * строкой.
+ * Контракт снят со стенда 2026-09-04, пути и схемы пересверены 2026-09-10
+ * (issue #167). Список врачей анонимен (`200` без токена), запись, список и
+ * отмена требуют Bearer (`401`). Что именно бэкенд делает с запросом,
+ * по-прежнему не проверить — `401` приходит до валидации и до маршрутизации;
+ * тест закрепляет то, что приложение отправляет **сейчас**, чтобы правка после
+ * проверки под токеном была видна одной строкой.
  */
 class HospitalRepositoryTest {
 
@@ -202,18 +202,21 @@ class HospitalRepositoryTest {
     }
 
     /**
-     * Своей отмены у больниц нет — идём в общую ручку записи. Тела у запроса
-     * нет.
+     * Отмена идёт в **свою** ручку больниц (issue #167): общая
+     * `appointments/{id}/cancel` объявлена над другой схемой ответа
+     * (`AppointmentBookingResponse` против `HospitalAppointmentResponse`) —
+     * значит, и записи это разные, и на чужую общая ручка рассчитана вряд ли.
+     * Тела у запроса нет.
      */
     @Test
-    fun `cancel goes to the shared appointments endpoint`() = runTest {
+    fun `cancel goes to the hospital endpoint`() = runTest {
         server.enqueue(envelope("""{"id":"a-1","status":"CANCELLED"}"""))
 
         val result = repository().cancel(Appointment(id = "a-1"))
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/appointments/a-1/cancel", request.path)
+        assertEquals("/hospitals/appointments/a-1/cancel", request.path)
         assertEquals("", request.body.readUtf8())
         assertEquals(
             AppointmentStatus.Cancelled,

@@ -113,20 +113,32 @@ quantity}], fulfillment, paymentMethod, deliveryAddress` — **ни модифи
 Это одновременно и задача для Android (переписать `FoodApi` под реальность,
 как в issue #53 для каталога), и запрос к `jack5505/mahalla` (§5).
 
-### 3.2 Схемы в OpenAPI перекрыты коллизиями springdoc
+### 3.2 Схемы в OpenAPI были перекрыты коллизиями springdoc — починено
 
-Один и тот же `#/components/schemas/BookRequest` объявлен телом сразу трёх
-разных эндпоинтов — `POST gaming/bookings`, `POST appointments`,
-`POST hospitals/appointments` — а его поля (`complaint, date, doctorId,
-startTime`) явно от больницы. Для игровой зоны нужны `zoneId`/`durationHours`
-(они видны в `GamingBooking`), для барбера — `serviceId`. То же у
-`CreateRequest` (отзывы) и `CheckRequest` (версия), и то же было с `Response` в
-issue #53.
+**Было.** Один и тот же `#/components/schemas/BookRequest` был объявлен телом
+сразу трёх разных эндпоинтов — `POST gaming/bookings`, `POST appointments`,
+`POST hospitals/appointments`, — а его поля (`complaint, date, doctorId,
+startTime`) явно от больницы. Для игровой зоны нужны `zoneId`/`durationHours`,
+для барбера — `serviceId`. То же было у `CreateRequest` (отзывы) и
+`CheckRequest` (версия), и то же — с `Response` в issue #53. Вывод был:
+вертикали gaming/barber/hospital нельзя писать «по схеме», тела придётся
+снимать curl'ами.
 
-**Практический вывод: вертикали gaming/barber/hospital нельзя писать «по
-схеме» — тела запросов придётся снимать curl'ами или ждать починки springdoc
-(`springdoc.use-fqn=true`).** Это делает их дороже, чем кажется, и поэтому они
-не в первой волне задач.
+**Стало** (сверено по живому `/v3/api-docs` 2026-09-10, issue #167). Имени
+`BookRequest` в схеме больше нет: у каждого пути своё тело —
+`AppointmentBookRequest`, `HospitalBookRequest`, `GamingBookRequest`. Разошлись
+и `CreateRequest`/`CheckRequest` (`ReviewCreateRequest`,
+`FreelancerCreateRequest`, `PharmacyCreateRequest`, `CheckSessionRequest`, …).
+Телом больше одного пути остались ровно пять схем — `AdminPlanRequest`,
+`CreateDoctorRequest`, `SendOtpRequest`, `ServiceRequest`,
+`UserSubscriptionSubscribeRequest`, — и это настоящее переиспользование, а не
+коллизия.
+
+Выведенные тогда имена полей коллизия, как оказалось, не испортила: и у
+барбера, и у игровой зоны догадка совпала со схемой (см. `docs/API-CONTRACT.md`).
+**Новый вывод: тело запроса теперь можно читать из схемы.** Живым запросом
+по-прежнему не проверяется только то, что бэкенд с ним сделает: `401` приходит
+до валидации, нужен `CONTRACT_REFRESH_TOKEN`.
 
 ---
 
@@ -290,10 +302,10 @@ issue #53.
 
 ## 5. Вопросы и просьбы к `jack5505/mahalla` (не блокеры этого issue)
 
-1. **Коллизии имён в OpenAPI** (`BookRequest`, `CreateRequest`,
-   `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`. Сейчас по
-   схеме нельзя понять тело трёх разных эндпоинтов бронирования — каждая
-   вертикаль начинается с обратной разработки curl'ами.
+1. ~~**Коллизии имён в OpenAPI** (`BookRequest`, `CreateRequest`,
+   `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`.~~
+   **Сделано** — в схеме от 2026-09-09 у каждого пути своё тело (см. §3.2,
+   issue #167).
 2. **Нет `GET /users/me` и обновления профиля**: данные пользователя приходят
    только в ответе на вход, аватар/имя менять нечем.
 3. **`PlaceOrderRequest` беднее корзины приложения**: нет модификаторов
