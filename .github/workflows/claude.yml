@@ -142,6 +142,7 @@ jobs:
       #     script: echo "Emulator is ready"
 
       - name: Claude Code
+        id: claude
         uses: anthropics/claude-code-action@v1
         env:
           # Без GH_TOKEN у Claude не работает `gh`: ни создать issue/PR, ни
@@ -184,6 +185,13 @@ jobs:
           # Поддержаны оба имени секрета: сначала каноническое
           # CLAUDE_CODE_OAUTH_TOKEN, иначе исторический ANTHROPIC_OAUTH_TOKEN.
           # Незаданный секрет даёт пустую строку, поэтому || работает.
+          #
+          # Поменяли эту строку (или имя секрета в ней) — проверять НОВЫМ
+          # комментарием @claude, а не кнопкой Re-run: перезапуск берёт workflow
+          # той версии, что была при исходном событии. 2026-09-10 откат токена в
+          # main «не помог» именно поэтому — прогон 34490398082 перезапускали на
+          # старой версии файла. Новое ЗНАЧЕНИЕ того же секрета Re-run подхватит:
+          # секреты читаются при запуске.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN || secrets.ANTHROPIC_OAUTH_TOKEN }}
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
@@ -205,3 +213,65 @@ jobs:
           claude_args: |
             --model ${{ vars.CLAUDE_MODEL || 'claude-sonnet-5' }}
             --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite
+
+      # Причина падения Claude. Action прячет весь вывод (show_full_output:
+      # false — и правильно: репо публичный, а там промпт и вывод
+      # инструментов), поэтому упавший прогон выглядит как «Claude encountered
+      # an error after 0s» без единого слова о причине (прогоны 34476815400,
+      # 34490181983, 34490398082). Сама причина при этом лежит в файле
+      # выполнения: тип ошибки у сообщения assistant и текст в итоговом
+      # сообщении. Печатаем только их — ни промпта, ни вывода инструментов — и
+      # дублируем первой строкой в аннотацию, чтобы она была видна в сводке
+      # прогона без раскрытия лога. Типичное: authentication_failed (секрет
+      # токена неверный или протух), rate_limit (кончился лимит подписки).
+      #
+      # Текст итогового сообщения печатается ТОЛЬКО при is_error: шаг
+      # срабатывает на любом падении action, и если Claude отработал, а упал
+      # другой внутренний шаг, в .result лежит его финальный ответ — туда может
+      # быть процитирован вывод инструментов. Сам текст пришёл извне, поэтому
+      # печатается под ::stop-commands:: — строка вида «::add-mask::» внутри
+      # него не выполнится как команда раннера.
+      #
+      # Скрипт инлайном, а не файлом: action переключается на ветку PR, и файла
+      # из .github/ на старой ветке может не быть (см. комментарий к settings).
+      - name: Причина ошибки Claude
+        if: failure() && steps.claude.outcome == 'failure'
+        shell: bash
+        env:
+          EXECUTION_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          f="${EXECUTION_FILE:-$RUNNER_TEMP/claude-execution-output.json}"
+          if [ ! -s "$f" ]; then
+            echo "::error title=Claude::Файла выполнения нет — Claude упал до запуска (см. шаги выше)."
+            exit 0
+          fi
+          if ! jq -e 'type == "array"' "$f" >/dev/null 2>&1; then
+            echo "::error title=Claude::Файл выполнения не разобрался как JSON-массив."
+            exit 0
+          fi
+          last='[.[] | select(.type == "result")] | last'
+          kind=$(jq -r '[.[] | select(.type == "assistant") | .error // empty] | unique | join(" ")' "$f")
+          summary=$(jq -r "$last"' | if . == null then "итогового сообщения нет"
+            else "is_error=\(.is_error) subtype=\(.subtype) http=\(.api_error_status // "-") ходов=\(.num_turns) стоимость=$\(.total_cost_usd)" end' "$f")
+          # Обрезка — в jq и в bash, не через `| head`: шаг идёт с pipefail
+          # (shell: bash), и head, закрыв трубу, убил бы jq по SIGPIPE.
+          text=$(jq -r "$last"' | if .is_error == true then (.result // "") | tostring | .[0:1500] else "" end' "$f")
+          errors=$(jq -r "$last"' | (.errors // []) | join("; ") | .[0:500]' "$f")
+          token=$(openssl rand -hex 16)
+          echo "::stop-commands::$token"
+          echo "Итог:       $summary"
+          echo "Тип ошибки: ${kind:-не указан}"
+          if [ -n "$errors" ]; then echo "Ошибки:     $errors"; fi
+          echo "Текст:"
+          printf '%s\n' "${text:-(пусто или не ошибка)}"
+          echo "::$token::"
+          first=${text:-$errors}
+          first=${first%%$'\n'*}
+          first=${first//$'\r'/}
+          first=${first:0:300}
+          first=${first//%/%25}
+          first=${first//::/: :}
+          title="Claude: ${kind:-ошибка}"
+          title=${title//,/%2C}
+          title=${title//:/%3A}
+          echo "::error title=$title::${first:-без текста, см. лог шага}"
