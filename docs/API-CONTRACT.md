@@ -336,9 +336,12 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 именами — `imageUrl` (бэкенд уже использует это имя у `CartItemResponse`),
 `photoUrl`, `image`. Пока поле не приедет, строка меню рисуется без фото.
 
-## FreelancerApi ⚠️
+## FreelancerApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/freelancer/data/FreelancerApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/freelancer/data/FreelancerApi.kt` — пути
+сверены curl'ами 2026-09-04 (issue #107, таблица проб — в KDoc файла), схемы
+ответов прочитаны 2026-09-10. Под токеном (`orders/my`, создание заказа) ответы
+не проверены: `401` приходит до валидации.
 
 | Метод | Путь |
 |---|---|
@@ -371,8 +374,9 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 **Тело `POST gaming/bookings` сверено чтением** (2026-09-10, после развода
 коллизии): `GamingBookRequest {zoneId, startTime, durationHours}` — ровно то,
 что клиент угадал по ответу того же эндпоинта. Раньше это имя занимал
-медицинский вариант, поэтому поля считались выведенными. Обязательны `zoneId` и `durationHours`, `durationHours` — целое от 1 до 24 (issue #167).
-Сам ответ под токеном всё ещё не проверен — кандидат на пробу
+медицинский вариант, поэтому поля считались выведенными. Обязательны `zoneId`
+и `durationHours`, `durationHours` — целое **от 1 до 24** (issue #167). Сам
+ответ под токеном всё ещё не проверен — кандидат на пробу
 `contract/gaming.sh`.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
