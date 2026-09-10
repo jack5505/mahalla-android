@@ -56,6 +56,18 @@ interface GamingApi {
      *
      * Сам ответ под токеном по-прежнему не снят: `401` приходит **до**
      * валидации, а `CONTRACT_REFRESH_TOKEN` в CI нет.
+     * **Форма тела подтверждена схемой** (2026-09-10, issue #167). Раньше тело
+     * звалось `BookRequest` и было перекрыто коллизией springdoc: на имя
+     * ссылались три пути (`/hospitals/appointments`, `/appointments` и этот),
+     * а уцелел медицинский вариант, поэтому поля здесь были названы по ответу
+     * того же эндпоинта (`GamingBooking`) — как для отзывов (issue #76) и
+     * заявки продавца (issue #84).
+     *
+     * В схеме 2026-09-09 коллизии нет, у пути своя `GamingBookRequest`, и
+     * догадка совпала: `{zoneId, startTime, durationHours}`, обязательны
+     * `zoneId` и `durationHours`, `durationHours` — целое от 1 до 24.
+     * Что бэкенд сделает с запросом, по-прежнему не проверено: `401` приходит
+     * до валидации, а токена в CI нет.
      */
     @POST("gaming/bookings")
     suspend fun book(@Body body: CreateGamingBookingRequest): ApiResponse<GamingBookingDto>

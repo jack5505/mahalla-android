@@ -173,6 +173,29 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 пара **`purpose` + `purposeId`** (`purpose` — свободная строка, не enum)
 выглядит тем местом, куда запись могла бы лечь. Но это догадка, не контракт:
 экран предоплаты без ответа бэкенда был бы выдумкой.
+=======
+**Тело `POST appointments` подтверждено схемой** (2026-09-10, issue #167).
+Коллизия springdoc вокруг имени `BookRequest` рассосалась, у пути появилась
+своя `AppointmentBookRequest`: `{placeId, serviceId, serviceName, date,
+startTime}`, обязательны `placeId`, `date`, `startTime`. Выведенные имена
+`{placeId, serviceId, date, startTime}` совпали — правка `BookAppointmentRequest`
+не нужна; необязательное `serviceName` в теле клиент не шлёт.
+
+**Своей ручки переноса записи у бэкенда нет** (сверено по живому
+`/v3/api-docs` 2026-09-08, эпик #11). Под `appointments` есть ровно пять
+путей: сам `POST`, `my`, `{id}`, `{id}/cancel` и `{id}/status`; ни
+`reschedule`, ни `PUT appointments/{id}` среди них нет. Поэтому перенос в
+приложении собран из двух уже сверенных ручек — `POST appointments` плюс
+`POST appointments/{id}/cancel`, **в этом порядке** (см.
+`BookingRepository.reschedule`). Отсюда два открытых вопроса к бэкенду:
+
+- **даёт ли он создать вторую запись в том же заведении, пока висит первая?**
+  Если нет, перенос будет отказывать сообщением сервера, и правильный порядок
+  придётся выяснять уже с бэкендом — обратный (отмена → запись) молча терял бы
+  запись, если слот к этому моменту ушёл, и потому не выбран;
+- **не понадобится ли атомарная ручка.** Между двумя запросами есть окно, в
+  котором у человека две записи; клиент это окно закрывает как может, но
+  честнее закрыть его на сервере.
 
 `GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
 одной записи нет), `PUT appointments/{id}/status` — бизнес-панель, эпик #16.
@@ -235,6 +258,16 @@ ownerReply, createdAt}` — ни фото, ни имени, только `userId
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
 
+**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
+оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
+#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
+fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
+`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
+(состав берётся из серверной корзины `fashion/cart*`), зато есть
+`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
+`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
+пути больше нет.
+
 ## FoodApi ✅
 
 `app/src/main/java/uz/mahalla/feature/food/data/FoodApi.kt` — сверен: issue #9, второй круг.
@@ -288,6 +321,14 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 что клиент угадал по ответу того же эндпоинта. Раньше это имя занимал
 медицинский вариант, поэтому поля считались выведенными. Сам ответ под токеном
 всё ещё не проверен — кандидат на пробу `contract/gaming.sh`.
+=======
+**Тело `POST gaming/bookings` подтверждено схемой** (2026-09-10, issue #167).
+Раньше оно было объявлено как `BookRequest` — имя делили три пути (коллизия
+springdoc), и поля были названы по ответу того же эндпоинта. Теперь у пути своя
+`GamingBookRequest`, и догадка совпала: `{zoneId, startTime, durationHours}`,
+обязательны `zoneId` и `durationHours`, `durationHours` — целое **от 1 до 24**.
+Что бэкенд с запросом сделает, всё ещё не проверено: кандидат на пробу
+`contract/gaming.sh`, как только появится токен.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
@@ -295,16 +336,46 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 `startTime` уходит зоне-менее в UTC (`2026-09-05T13:00:00`) — согласовано с
 `parseServerInstant`, который читает зоне-менее время сервера как UTC.
 
-## HospitalApi ⚠️
+## HospitalApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — пути и схемы сверены с живым `/v3/api-docs` (2026-09-10, issue #167); поведение под токеном не проверялось — нужен `CONTRACT_REFRESH_TOKEN`.
 
-| Метод | Путь |
-|---|---|
-| GET | `hospitals/places/{placeId}/doctors` |
-| POST | `hospitals/appointments` |
-| GET | `hospitals/appointments/my` |
-| POST | `appointments/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
+| GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
+
+**Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
+`hospital-controller` не было и клиент слал отмену в общую
+`POST appointments/{id}/cancel`. В схеме от 2026-09-09 своя отмена есть, и
+заодно рассосалась коллизия springdoc, из-за которой обе вертикали выглядели
+одной сущностью: у больниц теперь свои `HospitalBookRequest` и
+`HospitalAppointmentResponse` (`{id, doctorId, apptDate, startTime, complaint,
+status, createdAt}`), у брони — `AppointmentBookRequest` и
+`AppointmentBookingResponse` (`{id, placeId, userId, serviceId, serviceName,
+price, apptDate, startTime, endTime, status, createdAt}`). Записи разные —
+значит, общая ручка чужую отменить не может.
+
+Живой пробой это не доказать: `401` приходит до маршрутизации, оба пути
+отвечают им одинаково (проверено `curl` 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
+не задан. Как только токен появится — контрактная проба вертикали, по образцу
+`contract/booking.sh`.
+
+Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
+общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
+теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
+никогда — на экране «мои записи» она останется без имени врача (issue #219).
+
+Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
+`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
+свободные слоты; приложение вместо них рисует сетку времени из
+`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
+бизнес-панельные
+`POST hospitals/places/{placeId}/doctors`,
+`PUT hospitals/places/{placeId}/doctors/{id}` и
+`PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
 ## MediaApi ✅
 

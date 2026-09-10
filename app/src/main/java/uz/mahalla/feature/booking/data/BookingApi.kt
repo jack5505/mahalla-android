@@ -90,6 +90,22 @@ interface BookingApi {
  *
  * Обратите внимание: в **ответе** день называется `apptDate` — имена запроса и
  * ответа у этого бэкенда расходятся не впервые.
+=======
+ * Тело `POST /api/v1/appointments` — схема `AppointmentBookRequest`.
+ *
+ * Имена полей здесь были **выведены**, а не прочитаны: в схеме 2026-09-04 тело
+ * называлось `BookRequest`, и это имя перекрывала коллизия springdoc — на него
+ * ссылались три пути (`appointments`, `gaming/bookings`,
+ * `hospitals/appointments`), а показан был больничный набор
+ * `{doctorId, date, startTime, complaint}`.
+ *
+ * В схеме 2026-09-09 коллизии нет, и собственная `AppointmentBookRequest`
+ * **подтверждает догадку** (сверено 2026-09-10, issue #167):
+ * `{placeId, serviceId, serviceName, date, startTime}`, обязательны `placeId`,
+ * `date`, `startTime`. Лишнее здесь только необязательное `serviceName` —
+ * клиент его не шлёт, услугу задаёт `serviceId`. Обратите внимание: в
+ * **ответе** день называется `apptDate` — имена запроса и ответа у этого
+ * бэкенда расходятся не впервые.
  */
 @Serializable
 data class BookAppointmentRequest(
@@ -158,6 +174,14 @@ data class ServiceDto(
  * но `BookingMappers` кладёт его в `priceSum` как есть, и экраны рисуют суммы
  * в сто раз больше настоящих. Делитель вводится сквозной задачей #149, а не
  * здесь.
+ * `AppointmentBookingResponse` (в схеме 2026-09-04 — `AppointmentResponse`):
+ * поля прочитаны как есть, коллизии имён у ответа не было ни разу.
+ *
+ * Этими же DTO разбираются ответы больниц, хотя схема у них своя,
+ * `HospitalAppointmentResponse` (issue #167): общих полей хватает на всё, что
+ * показывает экран, а `doctorId` и `complaint` больничной записи здесь не
+ * объявлены и теряются — из-за чего запись к врачу остаётся без имени врача
+ * (issue #219).
  *
  * [startTime] и [endTime] типизированы как [JsonElement] по той же причине,
  * что `counterTime` талона очереди (issue #96): springdoc описывает
@@ -182,7 +206,15 @@ data class AppointmentDto(
     @SerialName("createdAt") val createdAt: String? = null,
 )
 
+
 /** `PageResponseAppointmentBookingResponse`. */
+/**
+ * Страница записей. Схема у каждой вертикали своя —
+ * `PageResponseAppointmentBookingResponse` у брони,
+ * `PageResponseHospitalAppointmentResponse` у больниц (issue #167), — но
+ * обёртка страницы у них одна и та же, а содержимое разбирается
+ * [AppointmentDto].
+ */
 @Serializable
 data class AppointmentPageDto(
     @SerialName("content") val content: List<AppointmentDto> = emptyList(),

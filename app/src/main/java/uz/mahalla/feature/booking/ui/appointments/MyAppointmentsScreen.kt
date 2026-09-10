@@ -63,11 +63,13 @@ import java.time.LocalTime
  * перенос на другое время (эпик #11).
  *
  * @param onReschedule ведёт на экран записи с уже выбранной услугой: календарь,
- * слоты и правило «прошедший слот не предлагать» там уже есть.
+ * слоты и правило «прошедший слот не предлагать» там уже есть. Вместе с ids
+ * туда едут подпись записи и её прежнее время — их на том экране больше взять
+ * негде (issue #155).
  */
 @Composable
 fun MyAppointmentsScreen(
-    onReschedule: (appointmentId: String, placeId: String, serviceId: String) -> Unit,
+    onReschedule: (RescheduleTarget) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyAppointmentsViewModel = hiltViewModel(),
@@ -84,11 +86,7 @@ fun MyAppointmentsScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is MyAppointmentsEffect.OpenReschedule -> onReschedule(
-                    effect.appointmentId,
-                    effect.placeId,
-                    effect.serviceId,
-                )
+                is MyAppointmentsEffect.OpenReschedule -> onReschedule(effect.target)
             }
         }
     }

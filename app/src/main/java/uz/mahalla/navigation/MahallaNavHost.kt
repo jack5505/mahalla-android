@@ -568,12 +568,19 @@ fun MahallaNavHost(
             MyAppointmentsScreen(
                 // Новое время выбирают на экране записи: календарь и слоты уже
                 // там. Услуга едет маршрутом — менять её при переносе нельзя.
-                onReschedule = { appointmentId, placeId, serviceId ->
+                // Вместе с ней едут подпись записи и её прежние день и время
+                // (issue #155): на том экране их больше взять негде, а перенос
+                // без них подтверждают вслепую. День и время — строкой ISO,
+                // формат выберет сам экран.
+                onReschedule = { target ->
                     navController.navigate(
                         BookingRoute(
-                            placeId = placeId,
-                            serviceId = serviceId,
-                            rescheduleId = appointmentId,
+                            placeId = target.placeId,
+                            serviceId = target.serviceId,
+                            rescheduleId = target.appointmentId,
+                            rescheduleLabel = target.serviceName,
+                            rescheduleDate = target.date?.toString().orEmpty(),
+                            rescheduleTime = target.startTime?.toString().orEmpty(),
                         ),
                     ) {
                         // Двойное нажатие иначе кладёт в стек два экрана
