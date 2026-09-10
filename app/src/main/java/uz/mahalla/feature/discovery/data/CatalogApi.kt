@@ -159,6 +159,25 @@ interface CatalogApi {
         @Query("category") category: String? = null,
     ): ApiResponse<List<PlaceSummaryDto>>
 
+    /**
+     * Маркеры для видимой области карты (issue #168).
+     *
+     * Прямоугольник, а не радиус: `nearby` отдаёт то, что попало в круг вокруг
+     * человека, и заведения на другом краю кадра в него не входят.
+     *
+     * Ответ — тот же `PlaceSummaryDto`, что у `nearby`, вместе с
+     * `distanceMeters`: расстояние сервер считает по заголовкам `X-Geo-*`, а не
+     * по прямоугольнику. Пагинации нет — область целиком одним списком.
+     */
+    @GET("places/map-bounds")
+    suspend fun mapBounds(
+        @Query("minLat") minLatitude: Double,
+        @Query("minLng") minLongitude: Double,
+        @Query("maxLat") maxLatitude: Double,
+        @Query("maxLng") maxLongitude: Double,
+        @Query("category") category: String? = null,
+    ): ApiResponse<List<PlaceSummaryDto>>
+
     /** Поиск по индексу: описание, город и название, а не только имя. */
     @GET("search")
     suspend fun search(
