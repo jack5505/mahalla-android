@@ -87,9 +87,15 @@ interface FashionApi {
     suspend fun removeCartItem(@Path("variantId") variantId: String): ApiResponse<JsonElement>
 
     /**
-     * Оформление. Тело — тот же `PlaceOrderRequest`, что у «Еды» (одна схема
-     * на два пути, коллизии здесь нет), поэтому DTO переиспользуется.
-     * Из ответа разбирается только идентификатор: см. KDoc интерфейса.
+     * Оформление. Тело — тот же `PlaceOrderRequest`, что у «Еды»: на момент
+     * написания это была одна схема на два пути. Из ответа разбирается только
+     * идентификатор: см. KDoc интерфейса.
+     *
+     * **Схемы разъехались, и это, похоже, сломано** (issue #221, найдено при
+     * сверке в issue #167): у пути теперь свой `FashionPlaceOrderRequest` —
+     * обязателен `storeId`, а не `placeId`, поля `items` нет вовсе (состав
+     * берётся из серверной корзины), зато есть `deliveryLat`/`deliveryLng` и
+     * `promoCode`. Правится в issue #221 вместе с тестом на тело.
      */
     @POST("fashion/orders")
     suspend fun createOrder(@Body body: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
