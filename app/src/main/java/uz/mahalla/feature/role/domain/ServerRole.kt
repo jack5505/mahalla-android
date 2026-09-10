@@ -50,9 +50,20 @@ enum class ServerRole {
      * другую, и вторая дороже. [Admin] — нет: администратору приложение
      * ничего не показывает, админка живёт отдельно. [Unknown] — нет: гадать о
      * правах роли, которой ещё не знаем, хуже, чем не показать строку.
+     *
+     * Перечислено, а не «всё кроме трёх»: бэкенд заведёт `MODERATOR` или
+     * `SUPPORT` — и список исключений молча выдал бы им чужие права. Здесь
+     * новая роль попадёт в [Unknown] и прав не получит, пока про неё не
+     * решат.
      */
     val isProvider: Boolean
-        get() = this != User && this != Admin && this != Unknown
+        get() = when (this) {
+            Barber, Baker, ShopOwner, FoodOwner, GamingOwner, MuseumOwner, ParkOwner,
+            MosqueOwner, PharmacyOwner, HospitalOwner, CinemaOwner, Freelancer,
+            -> true
+
+            User, Admin, Unknown -> false
+        }
 
     companion object {
         /**
