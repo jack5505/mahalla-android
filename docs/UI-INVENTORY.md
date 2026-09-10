@@ -180,7 +180,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 
 Из 180 эндпоинтов стенда приложение использует 77. Разница — 103 ручки, и
 это **не** «отставание на порядок»: около 63 из них — бизнес-панель, кабинет
-мастера и админка. Клиентские незакрытые области — десять, и четыре из них
+мастера и админка. Клиентские незакрытые области — десять, и пять из них
 уже в открытых PR:
 
 | Область | Ручки | Состояние |
@@ -189,7 +189,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 | Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #120. Сейчас PIN живёт на `auth/setup-pin` + `auth/pin-login`, сменить его из профиля нечем |
 | Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар на сервере менять нечем. **Осторожно: девять KDoc в коде утверждают, что этих ручек у бэкенда нет вовсе** (`ProfileViewModel`, `ProfileContract`, `PlaceDetailsViewModel`, `AuthRepository`, `CustomerForm`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`) — так было на момент issue #61, в схеме от 2026-09-09 они есть |
 | Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
-| Аналитика | `POST analytics/track` | issue **#169**: продуктовой аналитики в приложении нет вовсе — ни экранов, ни воронки заказа |
+| Аналитика | `POST analytics/track` | issue #169, PR #229 — **подключена**: `VIEW`/`CALL`/`NAVIGATE`/`REVIEW` на карточке места, `BOOK` в пяти вертикалях, `ORDER` в двух. Ручка place-центрична (`placeId` обязателен, перечисление видов закрыто), поэтому событие без заведения — экран, поиск, отказ бэкенда — отправить нечем: issue **#226** |
 | Карта | `GET places/map-bounds` | issue #168, PR #223: маркеры брались из `CatalogRepository` (`places/nearby`), то есть радиусом вокруг человека; в PR область приходит от полотна (`visibleRegion`) с дебаунсом, `nearby` остался первым кадром |
 | Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | не подключены: поля промокода в checkout нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI), стоимость доставки не запрашивается |
 | «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `freelancers/me/orders`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
@@ -210,7 +210,6 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 Заведено по итогам этой инвентаризации:
 
-- **Аналитика** (`analytics/track`) — issue #169.
 - **`users/me`** — редактирование профиля на сервере, issue #170.
 - **Отмена записи к врачу** — какой ручкой, issue #167.
 

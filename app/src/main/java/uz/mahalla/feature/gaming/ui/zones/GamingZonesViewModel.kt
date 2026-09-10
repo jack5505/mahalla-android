@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
@@ -30,6 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class GamingZonesViewModel @Inject constructor(
     private val repository: GamingRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<GamingZonesState, GamingZonesEvent, GamingZonesEffect>(GamingZonesState()) {
@@ -157,8 +161,13 @@ class GamingZonesViewModel @Inject constructor(
 
                 // Шторка закрывается, подтверждение остаётся на экране: бронь
                 // состоялась, и об этом надо сказать словами, а не пустотой.
-                is ApiResult.Success -> updateState {
-                    closedSheet().copy(isBooking = false, confirmed = result.data)
+                is ApiResult.Success -> {
+                    updateState {
+                        closedSheet().copy(isBooking = false, confirmed = result.data)
+                    }
+                    analytics.track(
+                        AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Gaming),
+                    )
                 }
             }
         }
