@@ -5,6 +5,7 @@ import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.domain.Place
+import uz.mahalla.feature.map.canvas.MapBounds
 import uz.mahalla.feature.map.canvas.MapCameraFit
 import uz.mahalla.feature.map.canvas.MapCameraPosition
 import uz.mahalla.feature.map.canvas.MapMarkerUi
@@ -64,6 +65,16 @@ sealed interface MapEvent : UiEvent {
 
     /** Карту подвинул пользователь — состояние догоняет полотно. */
     data class CameraMoved(val camera: MapCameraPosition) : MapEvent
+
+    /**
+     * Кадр карты сменился — по нему грузятся маркеры (issue #168).
+     *
+     * Отдельное событие, а не поле в [CameraMoved]: то говорит «пользователь
+     * подвинул карту» и своё же движение камеры не повторяет, а область нужна
+     * после любой смены кадра — в том числе после кнопок масштаба и полёта к
+     * «моему местоположению».
+     */
+    data class VisibleBoundsChanged(val bounds: MapBounds) : MapEvent
 
     data object ZoomInClicked : MapEvent
     data object ZoomOutClicked : MapEvent
