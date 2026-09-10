@@ -377,10 +377,15 @@ class DefaultAuthRepository @Inject constructor(
     }
 
     /**
-     * Кто вошёл — единственный источник этих данных (issue #61): отдельного
-     * `GET /users/me` у бэкенда нет, спросить профиль потом будет нечем.
-     * Ответ без блока `user` прежний профиль не стирает: это не «пользователь
-     * стал безымянным», а «эндпоинт про другое».
+     * Кто вошёл — пока единственный источник этих данных (issue #61):
+     * `GET /users/me` у бэкенда есть, но приложение его ещё не зовёт
+     * (issue #170). Ответ без блока `user` прежний профиль не стирает: это не
+     * «пользователь стал безымянным», а «эндпоинт про другое».
+     *
+     * Роль и статусы сохраняются вместе с именем (issue #237): бэкенд отдаёт
+     * их в том же блоке `user`, и раньше они молча выбрасывались — из-за этого
+     * настоящий владелец заведения ничем не отличался от покупателя, а
+     * заблокированный аккаунт выглядел сломанным приложением.
      */
     private suspend fun saveProfile(user: UserDto?) {
         if (user == null) return
@@ -390,6 +395,9 @@ class DefaultAuthRepository @Inject constructor(
                 phone = user.phone,
                 fullName = user.fullName,
                 avatarUrl = user.avatarUrl,
+                serverRole = user.role,
+                verificationStatus = user.verificationStatus,
+                accountStatus = user.accountStatus,
             ),
         )
     }
