@@ -100,10 +100,13 @@ jobs:
           --health-retries 10
 
     steps:
+      # persist-credentials: false — чтобы пуш агента шёл от claude[bot], а не
+      # от GITHUB_TOKEN; подробности в claude.yml у того же шага (issue #225).
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # Дизайн-репо (ТЗ-ANDROID, DESIGN-SYSTEM, SCREENS, прототип) — отдельный
       # репозиторий: токен этого job'а прав на него не даёт, а WebFetch
