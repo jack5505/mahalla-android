@@ -38,13 +38,13 @@ on:
         default: 'main'
         type: string
       model:
-        description: 'Модель Claude'
+        description: 'Модель Claude (Opus — для тяжёлых задач: лимит подписки уходит заметно быстрее)'
         required: false
-        default: 'claude-opus-5'
+        default: 'claude-sonnet-5'
         type: choice
         options:
-          - claude-opus-5
           - claude-sonnet-5
+          - claude-opus-5
           - claude-haiku-4-5
       max_turns:
         description: 'Максимум ходов Claude Code (защита от зацикливания)'
