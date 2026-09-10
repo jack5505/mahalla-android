@@ -16,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
@@ -24,6 +26,7 @@ import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
 import uz.mahalla.feature.hospital.domain.DoctorSchedule
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeHospitalRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Clock
@@ -302,8 +305,44 @@ class DoctorBookingViewModelTest {
         consultationPriceSum = 90_000,
     )
 
+    @Test
+    fun `a confirmed appointment is a BOOK of the hospital vertical`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+
+            viewModel.onEvent(DoctorBookingEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(
+                listOf(AnalyticsEvents.booked(PLACE, AnalyticsVertical.Hospital)),
+                analytics.events,
+            )
+        }
+
+    @Test
+    fun `a refused appointment is not counted as a booking`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
+            repository.bookResult = ApiResult.Failure(ApiError.Business("DOCTOR_BUSY"))
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+
+            viewModel.onEvent(DoctorBookingEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(emptyList<Any>(), analytics.events)
+        }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = DoctorBookingViewModel(
         repository = repository,
+        analytics = analytics,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         savedStateHandle = SavedStateHandle(
             mapOf("placeId" to PLACE, "placeName" to "Shifo klinikasi"),

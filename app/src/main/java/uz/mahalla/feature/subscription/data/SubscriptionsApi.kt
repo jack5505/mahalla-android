@@ -84,9 +84,9 @@ data class ToggleAutoRenewRequest(
  * `PlanResponse`. Все поля необязательные, как везде в этом API: отсутствие
  * любого из них — не повод показать экран ошибки вместо списка тарифов.
  *
- * Цены приезжают парами (`monthlyPrice` + `monthlyPriceSom`) — по ним
- * определяется единица целых полей
- * ([uz.mahalla.feature.subscription.domain.SubscriptionAmounts]).
+ * Цены приезжают парами (`monthlyPrice` + `monthlyPriceSom`): целое поле — в
+ * тийинах, дробное — то же в сумах для чтения. Клиент берёт целое и делит на
+ * сто ([uz.mahalla.core.format.Money], issue #149).
  */
 @Serializable
 data class PlanDto(

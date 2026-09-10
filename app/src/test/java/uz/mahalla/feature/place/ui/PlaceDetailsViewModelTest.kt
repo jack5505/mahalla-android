@@ -16,6 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEventType
+import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
@@ -28,6 +30,7 @@ import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -483,10 +486,86 @@ class PlaceDetailsViewModelTest {
         assertEquals(listOf("fresh"), viewModel.state.value.promotions.map { it.id })
     }
 
+    @Test
+    fun `an open card is a VIEW sent once, a retry does not repeat it`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.Retry)
+
+        // Второе событие превратило бы один просмотр в панели в несколько.
+        assertEquals(
+            listOf(AnalyticsEvents.placeViewed(PLACE_ID)),
+            analytics.events,
+        )
+    }
+
+    @Test
+    fun `a card that failed to load is still a VIEW`() = runTest {
+        // Карточку открыли — это факт, даже если её содержимое не приехало.
+        repository.details = ApiResult.Failure(ApiError.NoConnection)
+
+        viewModel()
+
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+    }
+
+    @Test
+    fun `call and route are sent along with the action, not instead of it`() = runTest {
+        repository.details = ApiResult.Success(
+            details(phone = "+998901234567", point = GeoPoint(41.31, 69.28)),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call))
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route))
+
+        assertEquals(
+            listOf(AnalyticsEventType.View, AnalyticsEventType.Call, AnalyticsEventType.Navigate),
+            analytics.events.map { it.type },
+        )
+    }
+
+    @Test
+    fun `there is no CALL without a phone to call`() = runTest {
+        repository.details = ApiResult.Success(details(phone = null, point = null))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call))
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route))
+
+        // Действия не было: нажали по кнопке, которой на экране быть не должно.
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+    }
+
+    @Test
+    fun `a review becomes an event only after the server accepted it`() = runTest {
+        repository.details = ApiResult.Success(details())
+        repository.addReviewResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.AddReviewClicked)
+        viewModel.onEvent(PlaceDetailsEvent.ReviewRatingSelected(5))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewSubmitted)
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+
+        repository.addReviewResult = ApiResult.Success(Unit)
+        viewModel.onEvent(PlaceDetailsEvent.ReviewSubmitted)
+
+        assertEquals(
+            listOf(AnalyticsEventType.View, AnalyticsEventType.Review),
+            analytics.events.map { it.type },
+        )
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel(clock: Clock = mondayAt("12:00")) = PlaceDetailsViewModel(
         repository = repository,
         promotions = promotions,
         profileStore = profileStore,
+        analytics = analytics,
         clock = clock,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )

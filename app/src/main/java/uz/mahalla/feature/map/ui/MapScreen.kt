@@ -136,6 +136,9 @@ fun MapContent(
                     showUserLocation = state.showUserLocation,
                     onMarkerClick = { placeId -> onEvent(MapEvent.MarkerClicked(placeId)) },
                     onCameraChanged = { camera -> onEvent(MapEvent.CameraMoved(camera)) },
+                    onVisibleBoundsChanged = { bounds ->
+                        onEvent(MapEvent.VisibleBoundsChanged(bounds))
+                    },
                 )
 
                 MapBanner(

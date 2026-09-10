@@ -83,6 +83,9 @@ class MainActivity : FragmentActivity() {
                     afterUpdate = appStart,
                     backendUrlOverrideEnabled = ready.backendUrlOverrideEnabled,
                     onOnboardingFinished = viewModel::onOnboardingFinished,
+                    // Сессия может умереть на любом экране (issue #138):
+                    // уводить на вход умеет только корень.
+                    sessionExpired = viewModel.sessionExpired,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
                     // иначе пользователь получит второй платный SMS-код.
                     onboardingStartDestination = if (ready.resumeOnboardingAtPin) {
@@ -96,19 +99,18 @@ class MainActivity : FragmentActivity() {
                 // навигации, а не маршрутом: он обязан накрывать любой экран,
                 // включая онбординг, обновление и ввод адреса бэкенда, и при
                 // этом не трогать back stack.
-                if (locked) {
-                    AppLockScreen(
-                        // «Забыли PIN» на экране блокировки уже выполнил выход
-                        // и сбросил флаг онбординга. Просто спрятать оверлей
-                        // мало: под ним остался экран, куда человека застал
-                        // фон, а сессии для него больше нет. Старт графа
-                        // пересчитывает `RootViewModel` — и он же снимает
-                        // замок. `recreate()`, как на смене языка, здесь не
-                        // годится: пересоздание сохраняет `ViewModelStore`, то
-                        // есть тот же зафиксированный старт.
-                        onAuthRestartRequired = viewModel::onAuthRestartRequired,
-                    )
-                }
+                AppLockScreen(
+                    locked = locked,
+                    // «Забыли PIN» на экране блокировки уже выполнил выход
+                    // и сбросил флаг онбординга. Просто спрятать оверлей
+                    // мало: под ним остался экран, куда человека застал
+                    // фон, а сессии для него больше нет. Старт графа
+                    // пересчитывает `RootViewModel` — и он же снимает
+                    // замок. `recreate()`, как на смене языка, здесь не
+                    // годится: пересоздание сохраняет `ViewModelStore`, то
+                    // есть тот же зафиксированный старт.
+                    onAuthRestartRequired = viewModel::onAuthRestartRequired,
+                )
             }
         }
     }

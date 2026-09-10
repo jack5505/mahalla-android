@@ -57,6 +57,19 @@ class SecurityViewModelTest {
     }
 
     @Test
+    fun `server status rewrites the local biometric flag`() = runTest {
+        onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = true))
+        repository.status = ApiResult.Success(
+            ServerPinStatus(pinSet = true, biometricEnabled = false, lockedSecondsRemaining = 0),
+        )
+
+        val viewModel = viewModel()
+
+        assertFalse(viewModel.state.value.biometricEnabled)
+        assertEquals(listOf(false), onboarding.biometricWrites)
+    }
+
+    @Test
     fun `enabling asks the sensor before anything is written`() = runTest {
         val viewModel = viewModel()
 
@@ -189,6 +202,19 @@ class SecurityViewModelTest {
 
         val status = (viewModel.state.value.status as ScreenState.Content).data
         assertFalse(status.pinSet)
+    }
+
+    @Test
+    fun `server pin absence blocks biometric management`() = runTest {
+        onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = true))
+        repository.status = ApiResult.Success(
+            ServerPinStatus(pinSet = false, biometricEnabled = false, lockedSecondsRemaining = 0),
+        )
+
+        val viewModel = viewModel()
+
+        assertFalse(viewModel.state.value.canToggleBiometric)
+        assertFalse(viewModel.state.value.canChangePin)
     }
 
     @Test

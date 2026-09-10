@@ -123,7 +123,7 @@ private fun SecurityContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = Spacing.gap),
+                .padding(horizontal = Spacing.gutter, bottom = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             AppLockCard(armed = state.appLockArmed)
@@ -133,7 +133,7 @@ private fun SecurityContent(
                 MahallaListItem(
                     title = stringResource(R.string.security_change_pin),
                     subtitle = state.status.pinSubtitle(),
-                    onClick = onChangePin,
+                    onClick = onChangePin.takeIf { state.canChangePin },
                 )
                 MahallaSwitchRow(
                     title = stringResource(R.string.security_biometric),
@@ -163,7 +163,6 @@ private fun SecurityContent(
             (state.status as? ScreenState.Error)?.let { screen ->
                 SecurityFailure(
                     failure = screen.failure,
-                    modifier = Modifier.padding(horizontal = Spacing.gutter),
                     onRetry = { onEvent(SecurityEvent.RetryRequested) },
                 )
             }
@@ -182,7 +181,7 @@ private fun SecurityContent(
  */
 @Composable
 private fun AppLockCard(armed: Boolean) {
-    MahallaCard(modifier = Modifier.padding(horizontal = Spacing.gutter)) {
+    MahallaCard {
         Column(
             modifier = Modifier.padding(Spacing.card),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
@@ -279,7 +278,6 @@ private fun SecurityFailure(
 private fun SecurityNote(text: String) {
     Text(
         text = text,
-        modifier = Modifier.padding(horizontal = Spacing.gutter),
         style = MaterialTheme.typography.bodyMedium,
         color = LocalMahallaColors.current.fgMuted,
     )

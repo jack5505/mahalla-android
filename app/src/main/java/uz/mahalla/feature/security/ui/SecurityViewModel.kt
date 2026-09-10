@@ -4,7 +4,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.isLoading
@@ -98,6 +100,11 @@ class SecurityViewModel @Inject constructor(
         viewModelScope.launch {
             if (showLoading) updateState { copy(status = ScreenState.Loading) }
             val loaded = securityRepository.pinStatus().toScreenState()
+            if (loaded is ScreenState.Content && currentState.biometricEnabled != loaded.data.biometricEnabled) {
+                runCatchingCancellable {
+                    onboardingRepository.setBiometricEnabled(loaded.data.biometricEnabled)
+                }.reportSwallowed("security.syncBiometricEnabled")
+            }
             updateState { copy(status = loaded) }
         }
     }

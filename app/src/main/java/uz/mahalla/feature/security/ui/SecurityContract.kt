@@ -5,6 +5,7 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.state.dataOrNull
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.security.domain.ChangePinRules
@@ -38,6 +39,11 @@ data class SecurityState(
     val biometricPromptFailed: Boolean = false,
 ) : UiState {
 
+    /** `pin/change` и `pin/biometric` имеют смысл только когда серверный PIN уже есть. */
+    val hasServerPin: Boolean get() = status.dataOrNull()?.pinSet != false
+
+    val canChangePin: Boolean get() = hasServerPin
+
     /**
      * Переключать биометрию можно, только когда устройство её умеет: иначе
      * человек включил бы вход, которым не сможет воспользоваться. Выключить
@@ -45,7 +51,7 @@ data class SecurityState(
      * работал.
      */
     val canToggleBiometric: Boolean
-        get() = !busy && (biometricEnabled || biometricStatus.canEnable)
+        get() = hasServerPin && !busy && (biometricEnabled || biometricStatus.canEnable)
 }
 
 sealed interface SecurityEvent : UiEvent {

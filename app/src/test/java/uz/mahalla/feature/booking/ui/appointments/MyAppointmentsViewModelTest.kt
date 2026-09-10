@@ -297,24 +297,53 @@ class MyAppointmentsViewModelTest {
 
     @Test
     fun `rescheduling sends the place and the service of the record onward`() = runTest {
-        repository.defaultPage = page(listOf(appointment("a-1", LocalDate.of(2026, 9, 5))))
+        repository.defaultPage = page(
+            listOf(appointment("a-1", LocalDate.of(2026, 9, 5), time = LocalTime.of(10, 40))),
+        )
         val viewModel = viewModel()
 
         viewModel.onEvent(MyAppointmentsEvent.RescheduleRequested("a-1"))
         val effects = collectEffects(viewModel)
 
         // Взять их больше негде: своего экрана у одной записи нет, а
-        // `POST appointments` без заведения и услуги не примут.
+        // `POST appointments` без заведения и услуги не примут. Подпись и
+        // прежнее время едут туда же (issue #155): без них перенос
+        // подтверждают, не видя, что и с какого времени переносят.
         assertEquals(
             listOf(
                 MyAppointmentsEffect.OpenReschedule(
-                    appointmentId = "a-1",
-                    placeId = "p-1",
-                    serviceId = "s-1",
+                    RescheduleTarget(
+                        appointmentId = "a-1",
+                        placeId = "p-1",
+                        serviceId = "s-1",
+                        serviceName = "Soch olish",
+                        date = LocalDate.of(2026, 9, 5),
+                        startTime = LocalTime.of(10, 40),
+                    ),
                 ),
             ),
             effects,
         )
+    }
+
+    /**
+     * Услугу сервер называть не обязан (`AppointmentResponse`), и запись без
+     * имени переносить всё равно можно: подпись просто уезжает пустой, а имя
+     * экран переноса поищет в каталоге заведения.
+     */
+    @Test
+    fun `a record without a service name still travels, just without a label`() = runTest {
+        repository.defaultPage = page(
+            listOf(appointment("a-1", LocalDate.of(2026, 9, 5), serviceName = null)),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MyAppointmentsEvent.RescheduleRequested("a-1"))
+        val effects = collectEffects(viewModel)
+
+        val target = (effects.single() as MyAppointmentsEffect.OpenReschedule).target
+        assertEquals("", target.serviceName)
+        assertEquals("s-1", target.serviceId)
     }
 
     @Test
@@ -402,11 +431,12 @@ class MyAppointmentsViewModelTest {
         time: LocalTime = LocalTime.of(10, 0),
         placeId: String? = "p-1",
         serviceId: String? = "s-1",
+        serviceName: String? = "Soch olish",
     ) = Appointment(
         id = id,
         placeId = placeId,
         serviceId = serviceId,
-        serviceName = "Soch olish",
+        serviceName = serviceName,
         date = date,
         startTime = time,
         status = status,

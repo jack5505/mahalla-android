@@ -1,13 +1,14 @@
 package uz.mahalla.feature.gaming.data
 
-import uz.mahalla.core.format.parseServerInstant
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import uz.mahalla.core.format.DateTimeFormatters
+import uz.mahalla.core.format.parseServerSlotInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
 import uz.mahalla.feature.gaming.domain.GamingZone
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): зона **без `id`** отбрасывается —
@@ -31,7 +32,7 @@ internal fun GamingZoneDto.toDomain(placeId: String): GamingZone? {
         description = description?.takeIf { it.isNotBlank() },
         zoneType = zoneType?.takeIf { it.isNotBlank() },
         // Отрицательная цена — не «скидка», а мусор.
-        pricePerHour = pricePerHour?.takeIf { it > 0 } ?: 0,
+        pricePerHour = pricePerHour.tiyinToSom()?.takeIf { it > 0 } ?: 0,
         totalSeats = totalSeats?.takeIf { it > 0 },
         // Молчание сервера — «закрыта»: обещать бронь зоны, про которую ничего
         // не известно, хуже, чем её не обещать.
@@ -59,10 +60,12 @@ internal fun GamingBookingDto.toDomain(
         zoneId = zoneId?.takeIf { it.isNotBlank() }.orEmpty(),
         placeId = placeId?.takeIf { it.isNotBlank() }.orEmpty(),
         zoneName = zoneName,
-        startTime = parseServerInstant(startTime),
-        endTime = parseServerInstant(endTime),
+        // Время слота, а не отметка сервера: зоне-менее строка — местное
+        // ташкентское время, см. `parseServerSlotInstant` (issue #144).
+        startTime = parseServerSlotInstant(startTime),
+        endTime = parseServerSlotInstant(endTime),
         durationHours = durationHours?.takeIf { it > 0 },
-        totalPrice = totalPrice?.takeIf { it >= 0 },
+        totalPrice = totalPrice.tiyinToSom()?.takeIf { it >= 0 },
         status = GamingBookingStatus.fromApi(status),
     )
 }
@@ -90,16 +93,20 @@ internal fun GamingBookingPageDto.toDomain(): GamingBookingPage {
  * отдаёт время в своих ответах (Jackson и `LocalDateTime`), а поле со
  * смещением такой тип принял бы не везде.
  *
- * **Зона — UTC, и это решение, а не мелочь.** Приложение читает зоне-менее
- * время сервера как UTC (`parseServerInstant`), и стенд подтверждает
- * договорённость своими же метками (`"timestamp":"…Z"`). Отправив местное
- * ташкентское, приложение получило бы обратно ту же строку, прочитало бы её
- * как UTC — и показало бы бронь на пять часов позже выбранной. Если окажется,
- * что бэкенд понимает зоне-менее время как местное, менять надо здесь **и** в
- * `parseServerInstant` — вместе, иначе показ и отправка разъедутся.
+ * **Зона — Asia/Tashkent, и это решение, а не мелочь.** Слот — местное время
+ * заведения: человек выбрал 13:00 по часам на стене, и такой же его ждёт
+ * запись к мастеру (`apptDate` + `startTime`, местные по построению). Одна
+ * трактовка на оба источника — условие того, чтобы бронь и запись на 13:00
+ * встали в «Моих активностях» рядом, а не в пяти часах друг от друга
+ * (issue #144). Отправка и чтение — две стороны одного решения: пара к этой
+ * функции — `parseServerSlotInstant`, менять их можно только вместе.
+ *
+ * До issue #144 здесь был UTC — тоже замкнуто (что ушло, то и вернулось), но
+ * бронь, созданную кем-то другим (бизнес-панель, сам бэкенд), приложение
+ * читало на пять часов позже, а заведение видело у себя 08:00 вместо 13:00.
  */
 internal fun gamingRequestTime(instant: Instant): String =
-    REQUEST_TIME_PATTERN.format(instant.atZone(ZoneOffset.UTC))
+    REQUEST_TIME_PATTERN.format(instant.atZone(DateTimeFormatters.AppZone))
 
 /**
  * Секунды пишутся всегда: `ISO_LOCAL_DATE_TIME` их опускает, когда они нули, а

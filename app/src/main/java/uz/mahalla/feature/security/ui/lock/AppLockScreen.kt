@@ -51,11 +51,17 @@ import uz.mahalla.ui.theme.Spacing
  * Маршрутом он вмешивался бы в back stack и в deep links; оверлей же строго
  * добавочный — навигация под ним остаётся ровно такой, какой была.
  *
+ * Коллектор эффектов живёт всегда, даже когда оверлей скрыт: `session/check`
+ * может вернуться уже после локальной разблокировки, и `AuthRestartRequired`
+ * тогда обязан дойти до Activity, а не пропасть вместе с исчезнувшим экраном.
+ *
+ * @param locked показывать ли оверлей прямо сейчас.
  * @param onAuthRestartRequired сессии больше нет: замок снят, но пускать
  * некуда. Приложение уходит на вход.
  */
 @Composable
 fun AppLockScreen(
+    locked: Boolean,
     onAuthRestartRequired: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AppLockViewModel = hiltViewModel(),
@@ -68,10 +74,12 @@ fun AppLockScreen(
 
     // Каждое появление оверлея — заново: перечитать длину PIN, спросить
     // сервер о сессии и предложить отпечаток.
-    LaunchedEffect(Unit) { viewModel.onEvent(AppLockEvent.Shown) }
+    LaunchedEffect(locked) {
+        if (locked) viewModel.onEvent(AppLockEvent.Shown)
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        viewModel.onEvent(AppLockEvent.ScreenResumed)
+        if (locked) viewModel.onEvent(AppLockEvent.ScreenResumed)
     }
 
     LaunchedEffect(viewModel) {
@@ -101,7 +109,9 @@ fun AppLockScreen(
         }
     }
 
-    AppLockContent(state = state, onEvent = viewModel::onEvent, modifier = modifier)
+    if (locked) {
+        AppLockContent(state = state, onEvent = viewModel::onEvent, modifier = modifier)
+    }
 }
 
 @Composable

@@ -145,11 +145,12 @@ class AppLockViewModel @Inject constructor(
             // сессию по биометрии» у бэкенда нет, есть только `pin-resume`.
             // Счётчик неверных кодов при этом обнуляется: датчик подтвердил
             // хозяина, и держать за ним прошлые опечатки незачем.
-            AppLockEvent.BiometricSucceeded -> {
-                appLockManager.unlock()
-                updateState { copy(attemptsLeft = AppLockState.MAX_ATTEMPTS) }
-                viewModelScope.launch { resetAttempts() }
-            }
+            AppLockEvent.BiometricSucceeded ->
+                if (!currentState.busy) {
+                    appLockManager.unlock()
+                    updateState { copy(attemptsLeft = AppLockState.MAX_ATTEMPTS) }
+                    viewModelScope.launch { resetAttempts() }
+                }
 
             AppLockEvent.BiometricFailed ->
                 updateState { copy(error = AppLockError.BIOMETRIC_FAILED) }

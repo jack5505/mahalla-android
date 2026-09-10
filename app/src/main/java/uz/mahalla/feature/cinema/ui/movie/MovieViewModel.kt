@@ -6,6 +6,9 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
@@ -30,6 +33,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MovieViewModel @Inject constructor(
     private val repository: CinemaRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<MovieState, MovieEvent, MovieEffect>(MovieState()) {
@@ -193,6 +197,9 @@ class MovieViewModel @Inject constructor(
                             ),
                         )
                     }
+                    analytics.track(
+                        AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Cinema),
+                    )
                     currentState.selectedDate?.let { loadSchedule(it, showLoading = false) }
                 }
             }

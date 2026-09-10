@@ -17,6 +17,14 @@ class OtpFieldStateTest {
     }
 
     @Test
+    fun `rejects non ascii digits`() {
+        val state = OtpFieldState().onInput("１２34५६")
+
+        assertEquals("34", state.code)
+        assertFalse(state.isComplete)
+    }
+
+    @Test
     fun `is incomplete until all digits are entered`() {
         val state = OtpFieldState().onInput("1234")
 
