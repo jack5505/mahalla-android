@@ -37,6 +37,7 @@ import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
+import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.booking.data.DefaultBookingRepository
@@ -66,6 +67,10 @@ import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
 import uz.mahalla.feature.promotions.data.di.PromotionsDataModule
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
+import uz.mahalla.feature.security.data.DefaultSecurityRepository
+import uz.mahalla.feature.security.data.di.SecurityDataModule
+import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository
 import uz.mahalla.feature.pharmacy.data.di.PharmacyDataModule
@@ -570,6 +575,44 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultMediaRepository(api = api, compressor = AndroidImageCompressor(context)))
+    }
+
+    /**
+     * Аккаунтный PIN и app-lock (issue #102). Все ручки `pin-code`, а также
+     * `auth/session/check` и `auth/pin-resume`, требуют Bearer — значит оба
+     * API собираются на **основном** Retrofit, а не на «голом»
+     * `@RefreshClient`, где живёт остальная авторизация.
+     */
+    @Test
+    fun `security assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val pinApi = SecurityDataModule.providePinApi(retrofit)
+        val sessionApi = SecurityDataModule.provideSessionApi(retrofit)
+        val dataStore = sharedDataStore(context)
+        val settings = SettingsDataStore(dataStore)
+
+        assertNotNull(pinApi)
+        assertNotNull(sessionApi)
+        // Счётчик попыток замка (ADR 0004) — на том же DataStore, где PIN и
+        // сессия: своего файла ему не завели.
+        assertNotNull(DataStorePinAttemptStore(dataStore))
+        assertNotNull(
+            DefaultSecurityRepository(
+                pinApi = pinApi,
+                sessionApi = sessionApi,
+                sessionStore = DataStoreSessionStore(dataStore),
+                onboardingRepository = DataStoreOnboardingRepository(settings),
+                pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
+                deviceInfoProvider = FakeDeviceInfoProvider(),
+                locationProvider = FakeRequestLocationProvider(),
+                clock = AppModule.provideClock(),
+            ),
+        )
     }
 
     /**

@@ -72,6 +72,14 @@
         <item quantity="other">Текст слишком длинный: не больше %1$d символа.</item>
     </plurals>
 
+    <!-- Безопасность (issue #102): остаток серверной блокировки PIN. -->
+    <plurals name="security_locked">
+        <item quantity="one">PIN-код временно заблокирован. Осталась %1$d секунда.</item>
+        <item quantity="few">PIN-код временно заблокирован. Осталось %1$d секунды.</item>
+        <item quantity="many">PIN-код временно заблокирован. Осталось %1$d секунд.</item>
+        <item quantity="other">PIN-код временно заблокирован. Осталось %1$d секунды.</item>
+    </plurals>
+
     <!-- Мастера (issue #107) -->
     <plurals name="freelancer_experience">
         <item quantity="one">%1$d год опыта</item>

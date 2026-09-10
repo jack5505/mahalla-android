@@ -128,7 +128,7 @@ gh issue list --state open   # 47 открытых issue
 | #159 | Push (FCM): каналы, разрешение, deep links | #15 |
 | #158 | Подписки: состояния, продление, история списаний | #13 |
 | #156 | Оплата из кошелька: подтверждение, идемпотентность, отказы | #12 |
-| #120 | Серверный PIN и app-lock: смена PIN, биометрия, `session/check` | #102 |
+| #195 | Серверный PIN и app-lock: смена PIN, биометрия, `session/check` | #102 |
 | #78 | Соцфункции: лайк, «Избранное», комментарии | #105 |
 | #72 | Формы заказа и выставления услуги | #71 |
 | #41 | Чистый `lintDebug` (устарел: lint вернулся в CI отдельным PR #132) | #39 |
@@ -186,7 +186,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 | Область | Ручки | Состояние |
 |---|---|---|
 | Соцфункции | `places/{id}/like`, `/save`, `/comments` (GET/POST), `DELETE comments/{id}`, `saved-places`, `places/{id}/status` | issue #105, PR #78; вопросы к бэкенду — #88 |
-| Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #120. Сейчас PIN живёт на `auth/setup-pin` + `auth/pin-login`, сменить его из профиля нечем |
+| Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #195. В PR уже есть app-lock, смена PIN, переключатель биометрии, `session/check` и `pin-resume`; `pin/set`/`reset`/`DELETE pin` не подключены — см. ADR 0007 |
 | Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар на сервере менять нечем. **Осторожно: девять KDoc в коде утверждают, что этих ручек у бэкенда нет вовсе** (`ProfileViewModel`, `ProfileContract`, `PlaceDetailsViewModel`, `AuthRepository`, `CustomerForm`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`) — так было на момент issue #61, в схеме от 2026-09-09 они есть |
 | Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
 | Аналитика | `POST analytics/track` | issue #169, PR #229 — **подключена**: `VIEW`/`CALL`/`NAVIGATE`/`REVIEW` на карточке места, `BOOK` в пяти вертикалях, `ORDER` в двух. Ручка place-центрична (`placeId` обязателен, перечисление видов закрыто), поэтому событие без заведения — экран, поиск, отказ бэкенда — отправить нечем: issue **#226** |
@@ -277,7 +277,7 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 ---
 
 
-## 5. Вопросы и просьбы к `jack5505/mahalla` (не блокеры этого issue)
+## 6. Вопросы и просьбы к `jack5505/mahalla` (не блокеры этого issue)
 
 1. ~~**Коллизии имён в OpenAPI** (`BookRequest`, `CreateRequest`,
    `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`.~~
@@ -301,7 +301,7 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 8. **Каталог стенда пуст** — до наполнения ни один экран discovery проверить
    на живых данных нельзя.
 
-## 6. Ждёт действий пользователя
+## 7. Ждёт действий пользователя
 
 `MAPKIT_API_KEY`, `SENTRY_DSN`, `DESIGN_REPO_PAT`, `BACKEND_IMAGE` — см.
 AGENTS.md. Плюс `CONTRACT_REFRESH_TOKEN` для `contract-check.yml`: без него
@@ -310,7 +310,7 @@ AGENTS.md. Плюс `CONTRACT_REFRESH_TOKEN` для `contract-check.yml`: без
 
 ---
 
-## 7. Как обновлять этот файл
+## 8. Как обновлять этот файл
 
 Пересчитывать числа командами из раздела 1 и ставить новую дату снимка.
 История этапов — в `CHANGELOG.md`, он не переписывается задним числом; здесь

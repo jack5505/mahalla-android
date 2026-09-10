@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
@@ -20,6 +23,7 @@ import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
+import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.domain.UpdateDecision
 
@@ -63,6 +67,7 @@ class RootViewModel @Inject constructor(
     private val backendUrlStore: BackendUrlStore,
     private val backendCertificatePin: BackendCertificatePin,
     private val appUpdateGate: AppUpdateGate,
+    private val appLockManager: AppLockManager,
     sessionExpiry: SessionExpiry,
 ) : ViewModel() {
 
@@ -72,6 +77,15 @@ class RootViewModel @Inject constructor(
      * с любого экрана.
      */
     val sessionExpired: Flow<Unit> = sessionExpiry.expired
+
+    /**
+     * Показывать ли экран блокировки поверх всего (issue #102).
+     *
+     * Отдельным потоком, а не полем [RootUiState]: замок защёлкивается и
+     * снимается независимо от настроек, а состояние корня фиксируется один
+     * раз за процесс — стартовый пункт графа от блокировки меняться не должен.
+     */
+    val locked: StateFlow<Boolean> = appLockManager.locked
 
     /**
      * Стартовый пункт графа решается один раз за жизнь процесса.
@@ -84,10 +98,25 @@ class RootViewModel @Inject constructor(
      *
      * Поле безопасно: `stateIn` держит одну подписку на upstream, то есть
      * `map` ниже исполняется в одной корутине.
+     *
+     * Единственное исключение — [onAuthRestartRequired]: там сессии больше
+     * нет, и держаться за прежний старт значит оставить человека в `MainGraph`
+     * с 401 на каждый запрос.
      */
     private var start: Start? = null
 
-    val state: StateFlow<RootUiState> = settingsDataStore.settings
+    /**
+     * Сессию сбросили из-под приложения (экран блокировки: «забыли PIN»,
+     * исчерпанные попытки, мёртвая сессия). Отдельный поток нужен, потому что
+     * решение о старте надо пересчитать, а настройки могли к этому моменту уже
+     * эмитить всё, что собирались.
+     */
+    private val authRestarts = MutableStateFlow(0)
+
+    val state: StateFlow<RootUiState> = combine(
+        settingsDataStore.settings,
+        authRestarts,
+    ) { settings, _ -> settings }
         .map<AppSettings, RootUiState> { settings ->
             val start = start ?: resolveStart(settings).also { start = it }
             RootUiState.Ready(
@@ -104,6 +133,22 @@ class RootViewModel @Inject constructor(
             started = SharingStarted.Eagerly,
             initialValue = RootUiState.Loading,
         )
+
+    /**
+     * Экран блокировки сбросил вход (issue #102): пересчитать старт графа и
+     * только теперь разобрать замок.
+     *
+     * Почему не `Activity.recreate()`, как на смене языка: пересоздание
+     * сохраняет `ViewModelStore`, то есть эту самую ViewModel вместе с
+     * зафиксированным [start] — приложение вернулось бы в `MainGraph`, где
+     * сессии уже нет. А замок снимается здесь, а не в `AppLockViewModel`:
+     * оверлей должен дожить до того, как его эффект будет получен.
+     */
+    fun onAuthRestartRequired() {
+        start = null
+        authRestarts.update { it + 1 }
+        appLockManager.disarm()
+    }
 
     fun onOnboardingFinished() {
         viewModelScope.launch {

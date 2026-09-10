@@ -156,6 +156,29 @@ class KeystorePinStorageTest {
         assertEquals(4, KeystorePinStorage(store, ReversibleCipher()).configuredLength())
     }
 
+    /**
+     * Счётчик попыток замка принадлежит коду (issue #102): и смена PIN, и
+     * выход из аккаунта (`logout` зовёт `clear`) обязаны его обнулить —
+     * иначе потраченные попытки достанутся новому коду или следующему
+     * пользователю устройства, и одна опечатка выкинет его в SMS-вход.
+     */
+    @Test
+    fun `saving and clearing the pin resets the attempt counter`() = runTest {
+        val store = dataStore()
+        val storage = KeystorePinStorage(store, ReversibleCipher())
+        val attempts = DataStorePinAttemptStore(store)
+        storage.save("123456")
+        attempts.recordFailure()
+        attempts.recordFailure()
+
+        storage.save("654321")
+        assertEquals(0, attempts.failedAttempts())
+
+        attempts.recordFailure()
+        storage.clear()
+        assertEquals(0, attempts.failedAttempts())
+    }
+
     @Test
     fun `corrupted base64 does not crash verification`() = runTest {
         val store = dataStore()

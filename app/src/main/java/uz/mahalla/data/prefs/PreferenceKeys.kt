@@ -67,6 +67,14 @@ internal object PreferenceKeys {
      */
     val PinLength = intPreferencesKey("pin_length")
 
+    /**
+     * Неверные попытки на экране блокировки (issue #102). В памяти счётчик
+     * обходился перезапуском приложения — с появлением app-lock это уже не
+     * теоретическая дыра, а способ подбирать код бесконечно; перенос в
+     * DataStore предписан ADR 0004.
+     */
+    val PinFailedAttempts = intPreferencesKey("pin_failed_attempts")
+
     /** История поиска (эпик 4.3) — одна строка, порядок значим. */
     val SearchHistory = stringPreferencesKey("discovery_search_history")
 
