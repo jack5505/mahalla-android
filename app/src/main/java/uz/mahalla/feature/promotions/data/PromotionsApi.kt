@@ -26,10 +26,12 @@ import uz.mahalla.data.network.ApiResponse
  *
  * `placeId` — uuid: `promotions/places/1` отвечает `400 TYPE_MISMATCH`.
  *
- * `GET promotions/check` и `POST promotions/places/{placeId}` не используются:
- * первый проверяет промокод, а применить его в заказе нечем — поля под код в
- * `PlaceOrderRequest` нет (issue #9); второй заводит акцию и относится к
- * бизнес-панели (эпик #16).
+ * `GET promotions/check` — проверка промокода перед оформлением (issue #180,
+ * снята со стенда); используется в чекауте «Одежды», где `promoCode` есть в
+ * теле заказа. У «Еды» такого поля нет — ручку туда не тащить.
+ *
+ * `POST promotions/places/{placeId}` не используется: заводит акцию и
+ * относится к бизнес-панели (эпик #16).
  */
 interface PromotionsApi {
 
@@ -41,6 +43,19 @@ interface PromotionsApi {
 
     @GET("promotions/places/{placeId}")
     suspend fun placePromotions(@Path("placeId") placeId: String): ApiResponse<List<PromotionDto>>
+
+    /**
+     * Проверка промокода. Все три параметра обязательны — без любого из них
+     * сервер не сможет посчитать скидку.
+     *
+     * `orderAmount` — тийины, как и все денежные поля контракта.
+     */
+    @GET("promotions/check")
+    suspend fun check(
+        @Query("code") code: String,
+        @Query("placeId") placeId: String,
+        @Query("orderAmount") orderAmount: Long,
+    ): ApiResponse<PromoCheckDto>
 }
 
 /** `PageResponsePromotion`. */
@@ -88,4 +103,17 @@ data class PromotionDto(
     @SerialName("isPlatformWide") val isPlatformWide: Boolean? = null,
     @SerialName("platformWide") val platformWide: Boolean? = null,
     @SerialName("valid") val valid: Boolean? = null,
+)
+
+/**
+ * `CheckResponse` (issue #180). `valid` — единственный источник истины о
+ * коде: молчание сервера не повод считать код принятым, и деньги здесь дороже,
+ * чем в остальном контракте акций.
+ */
+@Serializable
+data class PromoCheckDto(
+    @SerialName("valid") val valid: Boolean? = null,
+    @SerialName("discountAmount") val discountAmount: Long? = null,
+    @SerialName("finalAmount") val finalAmount: Long? = null,
+    @SerialName("promoCode") val promoCode: String? = null,
 )

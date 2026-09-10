@@ -740,6 +740,10 @@
     <string name="fashion_checkout_items">Состав заказа</string>
     <string name="fashion_checkout_empty">Корзина по этому магазину пуста.</string>
     <string name="fashion_checkout_delivery_note">Стоимость доставки магазин посчитает после оформления заказа.</string>
+    <string name="fashion_checkout_promo_label">Промокод</string>
+    <string name="fashion_checkout_promo_apply">Применить</string>
+    <string name="fashion_checkout_promo_remove">Убрать</string>
+    <string name="fashion_checkout_promo_invalid">Промокод не действует</string>
     <string name="fashion_checkout_submit">Подтвердить заказ</string>
     <string name="fashion_order_created">Заказ принят</string>
     <string name="fashion_open_orders">Мои заказы</string>

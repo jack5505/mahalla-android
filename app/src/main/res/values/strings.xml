@@ -746,6 +746,10 @@
     <string name="fashion_checkout_items">Buyurtma tarkibi</string>
     <string name="fashion_checkout_empty">Bu do\'kon bo\'yicha savat bo\'sh.</string>
     <string name="fashion_checkout_delivery_note">Yetkazib berish narxini do\'kon buyurtma rasmiylashtirilgach hisoblaydi.</string>
+    <string name="fashion_checkout_promo_label">Promo-kod</string>
+    <string name="fashion_checkout_promo_apply">Qo\'llash</string>
+    <string name="fashion_checkout_promo_remove">Olib tashlash</string>
+    <string name="fashion_checkout_promo_invalid">Promo-kod amal qilmaydi</string>
     <string name="fashion_checkout_submit">Buyurtmani tasdiqlash</string>
     <string name="fashion_order_created">Buyurtma qabul qilindi</string>
     <string name="fashion_open_orders">Buyurtmalarim</string>

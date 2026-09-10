@@ -127,16 +127,19 @@ class FakeFashionOrderRepository : FashionOrderRepository {
         val storeId: String,
         val items: List<Pair<String, Int>>,
         val form: CheckoutForm,
+        val promoCode: String?,
     )
 
     override suspend fun create(
         store: FashionCartStore,
         form: CheckoutForm,
+        promoCode: String?,
     ): ApiResult<String> {
         created += CreatedOrder(
             storeId = store.storeId,
             items = store.items.map { it.variantId to it.quantity },
             form = form,
+            promoCode = promoCode,
         )
         return createResult
     }
