@@ -15,8 +15,8 @@ import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.AppSettings
-import uz.mahalla.data.prefs.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.onboarding.data.OnboardingRepository

@@ -1,4 +1,4 @@
-package uz.mahalla.data.prefs
+package uz.mahalla.data.network
 
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
@@ -10,8 +10,8 @@ import javax.inject.Singleton
 /**
  * Сессия кончилась не по воле пользователя (issue #138).
  *
- * До этого о её смерти не знал никто: [uz.mahalla.data.network.TokenAuthenticator]
- * стирал мёртвую пару токенов и возвращал 401 наверх, а человек оставался
+ * До этого о её смерти не знал никто: [TokenAuthenticator] стирал мёртвую
+ * пару токенов и возвращал 401 наверх, а человек оставался
  * внутри приложения, где каждый экран показывал ошибку сервера и кнопку
  * «повторить», которая не могла помочь — токена-то больше нет. Событие уводит
  * его на вход, туда же, куда ведёт явный выход из профиля.

@@ -27,13 +27,13 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
 import uz.mahalla.data.network.tls.PinnedCertificateHostnameVerifier
 import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.DataStoreUserProfileStore
-import uz.mahalla.data.prefs.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher

@@ -123,7 +123,7 @@ internal fun SessionExpiryEffect(
 ) {
     LaunchedEffect(sessionExpired, navController) {
         sessionExpired.collect {
-            if (!navController.currentDestination.needsLogin()) return@collect
+            if (!navController.needsLogin()) return@collect
             navController.navigate(WelcomeRoute) {
                 // Стек чистится целиком, а не до `MainGraph`: без сессии в нём
                 // не осталось ни одного работающего экрана, включая детали,
@@ -146,26 +146,41 @@ private fun BottomNavItem.matches(destination: NavDestination?): Boolean =
 /**
  * Кого уводить на вход при смерти сессии.
  *
- * Не уводим из графа онбординга (человек как раз входит, и welcome посреди
- * ввода кода стёр бы шаг) и с двух экранов, стоящих до входа: адрес бэкенда
- * (issue #26) и обновление (issue #80) — они ведут дальше сами.
+ * Не уводим только с экранов, стоящих **до** входа, — [preLoginRoutes]:
+ * человек как раз входит, и welcome посреди ввода кода стёр бы шаг, а адрес
+ * бэкенда (issue #26) и обновление (issue #80) ведут дальше сами. PIN здесь
+ * же: и установка, и вход по нему анонимны и сами выдают новую сессию.
  *
- * Анкеты последнего шага регистрации (`RoleRoute` и формы) лежат **вне**
- * графа онбординга, потому что открываются ещё и из профиля, — их это
- * исключение не покрывает, и незаполненная анкета при смерти сессии
- * потеряется. Так и надо: отправить её всё равно нечем.
+ * Шаги онбординга после PIN (биометрия, гео) исключением не считаются: сессия
+ * там уже есть, и с мёртвой человек доигрывал бы шаги, после которых каждый
+ * запрос ответит 401. Анкеты последнего шага (`RoleRoute` и формы) — тоже:
+ * незаполненная анкета потеряется, но отправить её всё равно нечем.
  *
- * `null` — граф ещё не построен: навигировать некуда, да и ходить в сеть с
- * такого экрана было некому.
+ * Смотрим и на экран под текущим: адрес бэкенда открывается ещё и из профиля.
+ * Там событие, отброшенное как «до входа», терялось бы насовсем — следующие
+ * 401 приходят уже без сессии и событий не шлют, и человек, вернувшись
+ * «назад», застревал бы в приложении без токена. Двух уровней достаточно: с
+ * экранов до входа вглубь уходят только на такие же экраны.
+ *
+ * Граф ещё не построен — навигировать некуда, да и ходить в сеть было некому.
  */
-private fun NavDestination?.needsLogin(): Boolean {
-    val destination = this ?: return false
-    return destination.hierarchy.none { entry ->
-        entry.hasRoute(OnboardingGraph::class) ||
-            entry.hasRoute(BackendUrlRoute::class) ||
-            entry.hasRoute(UpdateRoute::class)
-    }
+private fun NavHostController.needsLogin(): Boolean {
+    val current = currentDestination ?: return false
+    val previous = previousBackStackEntry?.destination
+    return !current.isPreLogin() || (previous != null && !previous.isPreLogin())
 }
+
+private fun NavDestination.isPreLogin(): Boolean = preLoginRoutes.any { hasRoute(it) }
+
+private val preLoginRoutes = listOf(
+    BackendUrlRoute::class,
+    UpdateRoute::class,
+    WelcomeRoute::class,
+    PhoneRoute::class,
+    TelegramRoute::class,
+    OtpRoute::class,
+    PinRoute::class,
+)
 
 /**
  * Переключение таба: стек не растёт (`launchSingleTop`), состояние таба

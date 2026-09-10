@@ -17,8 +17,9 @@ import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.prefs.Session
-import uz.mahalla.data.prefs.SessionExpiry
 import uz.mahalla.data.prefs.SessionStore
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,8 +39,8 @@ import javax.inject.Singleton
  * Стёртая сессия — не только локальное дело сетевого слоя: приложение выше
  * продолжало бы показывать экраны, на которые ему больше нечем ходить. Поэтому
  * о смерти сессии сообщается наверх через [SessionExpiry], и поэтому же она
- * стирается не при любом провале refresh, а только когда сервер ответил и
- * отказал — см. `rejectsSession` (issue #138).
+ * стирается не при любом провале refresh, а только когда сервер ответил на
+ * него 401 — см. `rejectsSession` (issue #138).
  */
 @Singleton
 class TokenAuthenticator @Inject constructor(
@@ -66,11 +67,13 @@ class TokenAuthenticator @Inject constructor(
             }
 
             val refresh = runBlocking {
-                // Устройство и координаты бэкенд требует и здесь: refresh для
-                // него — это продление сессии конкретного устройства.
-                val device = deviceInfoProvider.current().toDto()
-                val location = locationProvider.current()
                 apiCall {
+                    // Устройство и координаты бэкенд требует и здесь: refresh
+                    // для него — это продление сессии конкретного устройства.
+                    // Собираются внутри `apiCall`: их сбой — это «спросить не
+                    // удалось», а не исключение наружу из `Authenticator`.
+                    val device = deviceInfoProvider.current().toDto()
+                    val location = locationProvider.current()
                     authApi.refresh(
                         RefreshTokenRequest(
                             refreshToken = session.refreshToken,
@@ -93,6 +96,18 @@ class TokenAuthenticator @Inject constructor(
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
                     sessionExpiry.notifyExpired()
+                    return@synchronized null
+                }
+                // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать
+                // экрану исходный 401 с текстом «Kirish uchun autentifikatsiya
+                // talab qilinadi» — ровно то, на что жаловались в issue #239, —
+                // хотя сессия жива и дело в сети. Исключение уходит из
+                // `authenticate` мимо повторов OkHttp и доезжает до `apiCall`
+                // как «нет сети» или «таймаут»; тело 401 закрываем сами, иначе
+                // соединение утечёт.
+                refresh.networkFailure()?.let { cause ->
+                    response.close()
+                    throw cause
                 }
                 return@synchronized null
             }
@@ -118,30 +133,40 @@ class TokenAuthenticator @Inject constructor(
     }
 
     /**
-     * Отказал ли сервер самой сессии.
+     * Отказал ли сервер самой сессии — то есть ответил на refresh **401**.
      *
-     * Стирать токены можно только когда он ответил и отказал по существу:
-     * 401/403, `success: false` в конверте, «запрос неверен» ([BAD_REQUEST],
-     * [UNPROCESSABLE]) или успешный ответ без токенов. Всё остальное — это
-     * «спросить не удалось», и сессия остаётся: обрыв связи, таймаут, 5xx,
-     * 404 у ручки и, отдельно, **429** — троттлинг говорит «зайдите позже», а
-     * не «токен мёртв». Ошибиться здесь дорого: выход на экран входа стоит
+     * Только 401, и это сверено с кодом бэкенда (jack5505/mahalla,
+     * `BankAuthService.refreshToken` и `JwtService.parseClaims`): каждый
+     * отказ «этой сессии больше нет» там — `UnauthorizedException` с кодом
+     * `TOKEN_EXPIRED`, `TOKEN_INVALID` (подпись, тип токена, refresh-токен
+     * уже заменён ротацией) или `TOKEN_HIJACK` (отпечаток устройства другой,
+     * сессия отозвана; хэш обнуляет и отзыв устройства). У остальных ответов
+     * причина не в токене:
+     *  - 403 — `GEO_*` из `geoService.requireLocation` (первая строка
+     *    refresh) или блокировка аккаунта/устройства: вход заново не поможет
+     *    ни там, ни там;
+     *  - 400 — форма нашего запроса (`VALIDATION_ERROR` на координаты): новое
+     *    обязательное поле на бэкенде разлогинило бы всех разом;
+     *  - 404 — у refresh это `user.not_found`, то есть аккаунт удалён; редкий
+     *    случай, а тот же код от неверного адреса сервера разлогинил бы всех;
+     *  - 429, 5xx, обрыв, таймаут — «спросить не удалось»;
+     *  - 2xx без токенов, `success: false` при 2xx или неразбираемое тело —
+     *    подменённый ответ (вокзальный Wi-Fi) или сломанный контракт, но не
+     *    отказ: бэкенд так на refresh не отвечает.
+     *
+     * Ошибиться в сторону «стереть» дорого: выход на экран входа стоит
      * человеку платного SMS и всей регистрации заново (issue #138).
-     *
-     * Битое тело (`Serialization`) сессию тоже не заканчивает: 200 с
-     * неразбираемым содержимым — это чаще подменённый ответ вокзального
-     * Wi-Fi, чем отказ бэкенда.
      */
-    private fun ApiResult<*>.rejectsSession(): Boolean = when (this) {
-        // Ответ пришёл, а токенов в нём нет: продлевать сессию сервер не стал.
-        is ApiResult.Success -> true
+    private fun ApiResult<*>.rejectsSession(): Boolean =
+        (this as? ApiResult.Failure)?.error == ApiError.Unauthorized
 
-        is ApiResult.Failure -> when (val apiError = error) {
-            ApiError.Unauthorized, ApiError.Forbidden, is ApiError.Business -> true
-            is ApiError.Http -> apiError.code == BAD_REQUEST || apiError.code == UNPROCESSABLE
-            else -> false
+    /** Refresh упал в сети — исключение, которое честно назовёт это экрану. */
+    private fun ApiResult<*>.networkFailure(): IOException? =
+        when ((this as? ApiResult.Failure)?.error) {
+            ApiError.Timeout -> SocketTimeoutException(REFRESH_FAILED)
+            ApiError.NoConnection -> IOException(REFRESH_FAILED)
+            else -> null
         }
-    }
 
     private fun Request.withBearer(token: String): Request = newBuilder()
         .header(HEADER_AUTHORIZATION, AuthInterceptor.bearer(token))
@@ -168,8 +193,6 @@ class TokenAuthenticator @Inject constructor(
 
         private const val HTTP_UNAUTHORIZED = 401
 
-        /** «Запрос неверен» — то есть неверен наш refresh-токен. */
-        private const val BAD_REQUEST = 400
-        private const val UNPROCESSABLE = 422
+        private const val REFRESH_FAILED = "auth/refresh did not reach the server"
     }
 }

@@ -113,9 +113,66 @@ class SessionExpiryEffectTest {
     }
 
     @Test
-    fun `a second event does not stack a second login screen`() {
+    fun `the backend address opened from the profile goes to login`() {
+        // Тот же экран, но уже после входа. Отброшенное здесь событие не
+        // повторилось бы: следующие 401 приходят без сессии и молчат, и
+        // человек, вернувшись «назад» в профиль, застрял бы без токена.
+        setContent(startDestination = MainGraph)
+        navigate(ProfileRoute)
+        navigate(BackendUrlRoute)
+
+        expire()
+
+        assertRoute<WelcomeRoute>()
+        assertEquals(1, explained)
+        assertNull(compose.runOnIdle { navController.previousBackStackEntry })
+    }
+
+    @Test
+    fun `the pin step is not interrupted`() {
+        // И установка PIN, и вход по нему анонимны и сами выдают сессию;
+        // welcome посреди ввода стёр бы шаг.
+        setContent(startDestination = OnboardingGraph)
+        navigate(PinRoute)
+
+        expire()
+
+        assertRoute<PinRoute>()
+        assertEquals(0, explained)
+    }
+
+    @Test
+    fun `the telegram login is not interrupted`() {
+        setContent(startDestination = OnboardingGraph)
+        navigate(TelegramRoute)
+
+        expire()
+
+        assertRoute<TelegramRoute>()
+        assertEquals(0, explained)
+    }
+
+    @Test
+    fun `a step after the pin goes to login`() {
+        // После PIN сессия уже есть: с мёртвой человек доигрывал бы биометрию
+        // и гео, чтобы упереться в 401 на анкете. Исключение — только экраны
+        // до входа, а не весь граф онбординга.
+        setContent(startDestination = OnboardingGraph)
+        navigate(BiometricRoute)
+
+        expire()
+
+        assertRoute<WelcomeRoute>()
+        assertEquals(1, explained)
+        assertNull(compose.runOnIdle { navController.previousBackStackEntry })
+    }
+
+    @Test
+    fun `a second event after the first one changes nothing`() {
         // Параллельные запросы упираются в 401 пачкой, и событий приезжает
-        // столько же: два экрана входа в стеке дали бы «назад» с входа на вход.
+        // столько же. Первое уже увело на welcome — экран до входа, так что
+        // второе отсекается там: ни второго welcome в стеке («назад» с входа
+        // на вход), ни второго сообщения поверх первого.
         setContent(startDestination = MainGraph)
 
         expire()
@@ -123,6 +180,7 @@ class SessionExpiryEffectTest {
 
         assertRoute<WelcomeRoute>()
         assertNull(compose.runOnIdle { navController.previousBackStackEntry })
+        assertEquals("одно сообщение на одну смерть сессии", 1, explained)
     }
 
     /** Событие + ожидание: обработчик живёт в корутине `LaunchedEffect`. */
@@ -166,10 +224,14 @@ class SessionExpiryEffectTest {
                 navigation<OnboardingGraph>(startDestination = WelcomeRoute) {
                     composable<WelcomeRoute> { Stub() }
                     composable<PhoneRoute> { Stub() }
+                    composable<TelegramRoute> { Stub() }
+                    composable<PinRoute> { Stub() }
+                    composable<BiometricRoute> { Stub() }
                 }
                 navigation<MainGraph>(startDestination = DiscoveryRoute) {
                     composable<DiscoveryRoute> { Stub() }
                     composable<WalletRoute> { Stub() }
+                    composable<ProfileRoute> { Stub() }
                 }
             }
         }

@@ -27,7 +27,7 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
-import uz.mahalla.data.prefs.SessionExpiry
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
