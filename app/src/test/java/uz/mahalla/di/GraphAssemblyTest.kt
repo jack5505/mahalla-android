@@ -27,6 +27,7 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
@@ -113,6 +114,7 @@ class GraphAssemblyTest {
             authInterceptor = AuthInterceptor(sessionStore),
             tokenAuthenticator = TokenAuthenticator(
                 sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
                 authApi = authApi,
                 deviceInfoProvider = deviceInfoProvider(context),
                 locationProvider = locationProvider(context),
