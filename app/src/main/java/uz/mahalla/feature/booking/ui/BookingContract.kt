@@ -31,6 +31,14 @@ import java.time.LocalTime
  *
  * @param isReschedule экран переносит уже существующую запись. Услуга тогда не
  * выбирается — она у переносимой записи своя, — и меняется только время.
+ * @param rescheduleLabel подпись переносимой записи из «моих записей»
+ * (issue #155). Нужна как запасное имя услуги: название из каталога может и не
+ * приехать — заведение вправе убрать услугу из списка, — а подтверждать
+ * перенос вслепую человек не должен.
+ * @param rescheduleDate и [rescheduleTime] — прежние день и время: без них
+ * экран не отвечает на вопрос, **с какого** времени переносят. Оба
+ * необязательны по контракту (`AppointmentResponse`), и показывается то, что
+ * есть.
  * @param previousCancelled удалось ли снять прежнюю запись. Значимо только
  * после успешного переноса; `false` — у человека осталось две записи, и
  * подтверждение обязано сказать об этом прямо.
@@ -47,6 +55,9 @@ data class BookingState(
     val bookFailure: ApiFailure? = null,
     val booked: Appointment? = null,
     val isReschedule: Boolean = false,
+    val rescheduleLabel: String = "",
+    val rescheduleDate: LocalDate? = null,
+    val rescheduleTime: LocalTime? = null,
     val previousCancelled: Boolean = true,
 ) : UiState {
 
