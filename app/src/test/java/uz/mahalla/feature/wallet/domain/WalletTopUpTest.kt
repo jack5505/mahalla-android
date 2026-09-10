@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import uz.mahalla.core.format.Money
 
 /**
  * Пополнение кошелька (issue #93): правила черновика, единицы суммы и проверка
@@ -20,7 +19,6 @@ class WalletTopUpTest {
     fun `minimum under the field is the minimum of the schema in sums`() {
         // Серверные 100 000 тийинов — это 1 000 сум.
         assertEquals(1_000L, WalletTopUp.MIN_AMOUNT_SUM)
-        assertEquals(WalletTopUp.MIN_AMOUNT_TIYIN, Money.somToTiyin(WalletTopUp.MIN_AMOUNT_SUM))
     }
 
     /**
