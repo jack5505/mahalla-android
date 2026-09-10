@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.analytics.AnalyticsTracker
@@ -13,7 +14,7 @@ import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.hospital.data.HospitalRepository
-import uz.mahalla.feature.hospital.domain.DoctorSchedule
+import uz.mahalla.feature.hospital.domain.DoctorSlots
 import uz.mahalla.navigation.DoctorBookingRoute
 import java.time.Clock
 import java.time.LocalDate
@@ -22,11 +23,11 @@ import javax.inject.Inject
 /**
  * Запись к врачу (issue #99): врач → день → время → жалоба → подтверждение.
  *
- * **Сетка времени считается на клиенте** — и это вынужденно: ручки свободных
- * слотов у больниц нет вовсе (см. [DoctorSchedule]). Поэтому здесь нет ни
- * запроса за слотами, ни его отмены при перелистывании дней, — но есть
- * пересчёт от текущего момента: сегодняшнее «в девять утра» в полдень
- * предлагать нельзя.
+ * **Слоты не считаются на клиенте** (issue #181): занятость врача знает
+ * только сервер, и на каждую пару «врач + день» уходит свой запрос. Здесь же
+ * он и отменяется — человек листает дни быстрее, чем отвечает сеть, и ответ
+ * на позавчерашний день, приехавший последним, показал бы чужие слоты (то же
+ * решение, что в брони, issue #97).
  */
 @HiltViewModel
 class DoctorBookingViewModel @Inject constructor(
@@ -39,19 +40,15 @@ class DoctorBookingViewModel @Inject constructor(
 ) {
 
     private val route: DoctorBookingRoute = savedStateHandle.toRoute()
+    private var slotsJob: Job? = null
 
     init {
-        val dates = DoctorSchedule.dates(clock.instant())
+        val dates = DoctorSlots.dates(clock.instant())
         // День выбран сразу: календарь без выбранного дня не отвечает на
         // вопрос, чьё время показано ниже.
         val today = dates.firstOrNull()
         updateState {
-            copy(
-                placeName = route.placeName,
-                dates = dates,
-                draft = draft.copy(date = today),
-                times = today?.let { DoctorSchedule.times(it, clock.instant()) }.orEmpty(),
-            )
+            copy(placeName = route.placeName, dates = dates, draft = draft.copy(date = today))
         }
         loadDoctors()
     }
@@ -61,8 +58,8 @@ class DoctorBookingViewModel @Inject constructor(
             is DoctorBookingEvent.DoctorSelected -> selectDoctor(event.doctorId)
             is DoctorBookingEvent.DateSelected -> selectDate(event.date)
 
-            is DoctorBookingEvent.TimeSelected -> updateState {
-                copy(draft = draft.copy(time = event.time), bookFailure = null)
+            is DoctorBookingEvent.SlotSelected -> updateState {
+                copy(draft = draft.copy(slot = event.slot), bookFailure = null)
             }
 
             // Отказ снимается на правку: он был про другой текст.
@@ -71,6 +68,7 @@ class DoctorBookingViewModel @Inject constructor(
             }
 
             DoctorBookingEvent.DoctorsRetry -> loadDoctors()
+            DoctorBookingEvent.SlotsRetry -> loadSlots()
             DoctorBookingEvent.BookClicked -> book()
             DoctorBookingEvent.MyAppointmentsClicked ->
                 emitEffect(DoctorBookingEffect.OpenMyAppointments)
@@ -91,24 +89,40 @@ class DoctorBookingViewModel @Inject constructor(
 
     private fun selectDoctor(doctorId: String) {
         if (currentState.draft.doctorId == doctorId) return
-        // Время при смене врача не сбрасывается: сетка одна на всех (занятость
-        // конкретного врача сервер не сообщает), и обнулять выбор незачем.
-        updateState { copy(draft = draft.copy(doctorId = doctorId), bookFailure = null) }
+        // Слот при смене врача сбрасывается: занятость у каждого своя, и то же
+        // время может оказаться уже занятым у нового врача.
+        updateState {
+            copy(draft = draft.copy(doctorId = doctorId, slot = null), bookFailure = null)
+        }
+        loadSlots()
+    }
+
+    private fun selectDate(date: LocalDate) {
+        if (currentState.draft.date == date) return
+        updateState { copy(draft = draft.copy(date = date, slot = null), bookFailure = null) }
+        loadSlots()
     }
 
     /**
-     * Смена дня пересчитывает сетку от текущего момента и **сбрасывает время**:
-     * `10:00` от вчерашнего дня записало бы человека не туда, а на сегодня
-     * этого времени может уже не быть в списке.
+     * Слоты на выбранную пару «врач + день».
+     *
+     * Прошлый запрос отменяется: иначе ответ на день, который человек уже
+     * пролистал, приехал бы последним и заменил бы актуальные слоты.
      */
-    private fun selectDate(date: LocalDate) {
-        if (currentState.draft.date == date) return
-        updateState {
-            copy(
-                draft = draft.copy(date = date, time = null),
-                times = DoctorSchedule.times(date, clock.instant()),
-                bookFailure = null,
-            )
+    private fun loadSlots() {
+        val state = currentState
+        val doctorId = state.draft.doctorId
+        val date = state.draft.date
+        slotsJob?.cancel()
+        if (doctorId == null || date == null) {
+            updateState { copy(slots = ScreenState.Loading) }
+            return
+        }
+
+        updateState { copy(slots = ScreenState.Loading) }
+        slotsJob = viewModelScope.launch {
+            val result = repository.slots(doctorId = doctorId, date = date)
+            updateState { copy(slots = result.toListScreenState()) }
         }
     }
 
@@ -143,7 +157,7 @@ class DoctorBookingViewModel @Inject constructor(
                                 serviceName = result.data.serviceName
                                     ?: doctor.name.takeIf { it.isNotBlank() },
                                 date = result.data.date ?: draft.date,
-                                startTime = result.data.startTime ?: draft.time,
+                                startTime = result.data.startTime ?: draft.slot?.time,
                             ),
                         )
                     }

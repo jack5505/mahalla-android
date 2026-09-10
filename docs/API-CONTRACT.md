@@ -491,8 +491,11 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181) |
+| GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -516,11 +519,15 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
 никогда — на экране «мои записи» она останется без имени врача (issue #219).
 
-Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
-`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
-свободные слоты; приложение вместо них рисует сетку времени из
-`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
-бизнес-панельные
+**Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
+`GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и
+показывает ответ сервера как есть — `DoctorSchedule`, клиентская сетка
+времени, ушла вместе со своим тестом. `startTime` записи уходит той же
+строкой, что пришла в слоте, без разбора в `LocalTime` и повторной сборки:
+лишний шаг «разобрали → собрали заново» уже один раз стоил вертикали брони
+пяти часов расхождения между UTC и Asia/Tashkent (issue #144).
+
+Ручки больниц, которые клиент по-прежнему **не** объявляет — бизнес-панельные
 `POST hospitals/places/{placeId}/doctors`,
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
