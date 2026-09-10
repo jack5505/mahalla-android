@@ -60,11 +60,16 @@ interface FreelancerApi {
     suspend fun freelancer(@Path("id") freelancerId: String): ApiResponse<FreelancerDto>
 
     /**
-     * Услуги мастера. `data` — массив `ServiceResponse`, то есть **та же
-     * схема**, что у `barber-services` (issue #97): у неё и поле называется
-     * `freelancerId`. DTO поэтому переиспользуется — у бэкенда это одна
-     * модель, и вторая её копия разъехалась бы с первой при первой же правке
-     * контракта.
+     * Услуги мастера. `data` — массив `FreelancerServiceResponse {id,
+     * freelancerId, title, description, priceAmount, durationMinutes,
+     * isActive}` (сверено по живому `/v3/api-docs` 2026-09-10).
+     *
+     * **Разбирается не той схемой.** Здесь стоит барберский [ServiceDto]
+     * (`name`, `price`) — след коллизии springdoc: пока обе ручки выглядели
+     * одной `ServiceResponse`, разница была не видна. У каждой услуги мастера
+     * будет пустое название и цена 0 — живой баг, issue #216: нужен свой
+     * `FreelancerServiceDto` и маппер. Тип здесь намеренно не тронут — правка
+     * идёт вместе с тестами и фикстурой в #216, а не «заодно».
      */
     @GET("freelancers/{id}/services")
     suspend fun services(@Path("id") freelancerId: String): ApiResponse<List<ServiceDto>>

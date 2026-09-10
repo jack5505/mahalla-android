@@ -11,8 +11,8 @@ import java.time.ZoneId
  * Услуга заведения, на которую записываются (эпик #11, issue #97).
  *
  * Приезжает из `GET /api/v1/barber-services/places/{placeId}` — схема
- * `ServiceResponse`. Поля сверены с живым стендом контрактной пробой
- * (`contract/booking.sh`): сервер шлёт `name` и `price`, а не `title` и
+ * `AppointmentServiceResponse`. Поля сверены с живым стендом контрактной
+ * пробой (`contract/booking.sh`): сервер шлёт `name` и `price`, а не `title` и
  * `priceAmount`, как считалось по схеме до пробы.
  *
  * @param priceSum цена в **сумах**. Бэкенд отдаёт `price` в тийинах (issue

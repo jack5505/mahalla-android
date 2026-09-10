@@ -40,6 +40,21 @@
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
+**Коллизия springdoc разведена** (сверено 2026-09-10). Раньше одно имя схемы
+(`BookRequest`, `ServiceResponse`, `Response`) занимали сразу несколько
+вертикалей, побеждала одна, и половина DTO в клиенте была **выведена**, а не
+прочитана (issue #76, #84, #97). Теперь имена уникальны — 255 схем, ни одного
+`BookRequest`/`ServiceResponse`/`Response` без префикса вертикали:
+`AppointmentBookRequest` / `GamingBookRequest` / `HospitalBookRequest`,
+`AppointmentServiceResponse` / `FreelancerServiceResponse`. Значит всё, что в
+клиенте помечено «имена выведены из схемы», **теперь можно проверить чтением**.
+По чтению перепроверена пока только вертикаль записи (`BookingApi`,
+`GamingApi.book`, `ReviewDto`, `FreelancerApi.services`) — где сделано,
+отмечено датой. Остальные KDoc и тесты, которые считают коллизию действующей
+(`CreateRequest` у `ProviderApi` и `POST reviews`, `OrderResponse` у еды /
+одежды / мастеров, `Response` у walk-in), не перепроверялись — сквозной
+проход вынесен в issue #235.
+
 **Страничные ответы** — один конверт `PageResponse…` на все списки:
 `content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
 `last`. Есть ли следующая страница, решает общая функция
@@ -163,28 +178,87 @@ TrackEventRequest: {
 |---|---|---|
 | GET | `barber-services/places/{placeId}` | ✅ |
 | GET | `barber-services/places/{placeId}/slots` | ✅ |
-| POST | `appointments` | ⚠️ не проверено — нужен токен |
+| POST | `appointments` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `appointments/my` | ⚠️ не проверено — нужен токен |
 | POST | `appointments/{id}/cancel` | ⚠️ не проверено — нужен токен |
 
-**`ServiceResponse` — имена были угаданы неверно.** Стенд отдаёт
+**Тело `POST appointments` сверено чтением** (2026-09-10, после развода
+коллизии): `AppointmentBookRequest {placeId, serviceId, serviceName, date,
+startTime}`, обязательные — `date`, `placeId`, `startTime`. Клиент шлёт
+`{placeId, serviceId, date, startTime}` — совпало, выведенные имена оказались
+верны. `serviceName` необязателен и не отправляется: имя услуги у сервера уже
+есть по `serviceId`, дублировать его с клиента незачем.
+
+Ответ — `AppointmentBookingResponse {id, placeId, userId, serviceId,
+serviceName, price, apptDate, startTime, endTime, status, createdAt}`,
+`status` — enum `PENDING | CONFIRMED | CANCELLED | COMPLETED | NO_SHOW`.
+
+**`AppointmentServiceResponse` — имена были угаданы неверно.** Стенд отдаёт
 `{id, name, colorHex, price, durationMinutes}`, а клиент до 2026-09-08 ждал
 `title` и `priceAmount`: у каждой услуги на экране записи пропадали название
 и цена. Исправлено вместе с этой пробой; фикстура —
 `app/src/test/resources/contract/booking/services.json`.
 
-`description` и `freelancerId` стенд не шлёт вовсе — из DTO убраны.
-`isActive`/`active` в пробе не встретились ни разу, но пара оставлена: две
-активные услуги одного заведения — не доказательство, что флага не бывает.
+`description` и `freelancerId` из DTO убраны, и теперь понятно, почему стенд их
+не шлёт: **их нет в самой схеме** (сверено 2026-09-10). Оба поля есть у
+`FreelancerServiceResponse`, то есть у другой вертикали: раньше они видны были
+здесь только из-за склейки имён. `isActive`/`active` в схеме барбершопа тоже
+нет, но пара в DTO оставлена: разбор мягкий, лишнее известное поле дешевле
+пропавшего списка услуг.
 
 Слоты подтверждены как **массив строк** вида `"09:00"` — не объекты.
 
-**Тело `POST appointments` подтверждено схемой** (2026-09-10, issue #167).
-Коллизия springdoc вокруг имени `BookRequest` рассосалась, у пути появилась
-своя `AppointmentBookRequest`: `{placeId, serviceId, serviceName, date,
-startTime}`, обязательны `placeId`, `date`, `startTime`. Выведенные имена
-`{placeId, serviceId, date, startTime}` совпали — правка `BookAppointmentRequest`
-не нужна; необязательное `serviceName` в теле клиент не шлёт.
+### Три пробела контракта (issue #154)
+
+Перепроверено по живому `/v3/api-docs` **2026-09-10** — за сутки не изменилось
+ничего, все три пункта эпика #11 по-прежнему упираются в бэкенд.
+
+**1. Своей ручки переноса записи нет.** Под `appointments` ровно пять путей:
+`POST`, `my`, `{id}` (только `GET`), `{id}/cancel`, `{id}/status`; ни
+`reschedule`, ни `PUT appointments/{id}`. Поиск по всему документу на
+`resched|transfer|move` — пусто. Поэтому перенос в приложении собран из двух
+уже сверенных ручек — `POST appointments` плюс `POST appointments/{id}/cancel`,
+**в этом порядке** (см. `BookingRepository.reschedule`). Открыто:
+
+- **даёт ли сервер создать вторую запись в том же заведении, пока висит
+  первая?** Проверить нечем: всё под `appointments` требует Bearer, а
+  `CONTRACT_REFRESH_TOKEN` в CI нет. Если не даёт — перенос сейчас отказывает
+  сообщением сервера, и порядок надо менять не наугад. Обратный порядок
+  (отмена → запись) молча терял бы запись, если слот к этому моменту ушёл, и
+  потому не выбран;
+- **нужна атомарная ручка** (`PUT appointments/{id}` или
+  `POST appointments/{id}/reschedule` с новыми `date`/`startTime`). Между двумя
+  запросами есть окно, в котором у человека две записи. Клиент закрывает его
+  как может — отмена идёт в `NonCancellable`, на экране предупреждение, — но
+  смерть процесса ровно между запросами молча оставит лишнюю запись. Закрыть
+  это может только сервер.
+
+**2. Мастера выбрать нечем.** У `AppointmentServiceResponse` нет `freelancerId`
+**в самой схеме** (см. выше), а у `barber-services/places/{placeId}/slots`
+ровно три параметра — `placeId`, `serviceId`, `date`, фильтра по сотруднику
+нет. Слоты приходят на заведение целиком. Нужно либо `freelancerId` у услуги
+плюс параметр сотрудника у слотов, либо явное «мастера в барбершопе не
+выбирают» — тогда пункт 7.1 неприменим.
+
+**3. Предоплаты у записи нет.** Ни в `AppointmentBookRequest`, ни в
+`AppointmentBookingResponse` нет `prepayment`, `paid` или суммы к оплате
+(поиск по документу на `prepa` даёт единственное совпадение `PREPARING` — и то
+статус заказа). Платежи остались подписочными:
+
+```
+/api/v1/payments/subscription
+/api/v1/payments/subscription/activate
+/api/v1/payments/transactions
+/api/v1/payments/click/callback
+/api/v1/payments/payme/callback
+```
+
+`PaymentTransaction {id, userId, amount, provider: PAYME|CLICK|UZUM|CASH,
+status: PENDING|PAID|FAILED|CANCELLED|REFUNDED, purpose, purposeId,
+externalOrderId, errorMessage, createdAt, updatedAt}` устроена обобщённо, и
+пара **`purpose` + `purposeId`** (`purpose` — свободная строка, не enum)
+выглядит тем местом, куда запись могла бы лечь. Но это догадка, не контракт:
+экран предоплаты без ответа бэкенда был бы выдумкой.
 
 **Своей ручки переноса записи у бэкенда нет** (сверено по живому
 `/v3/api-docs` 2026-09-08, эпик #11). Под `appointments` есть ровно пять
@@ -207,7 +281,9 @@ startTime}`, обязательны `placeId`, `date`, `startTime`. Выведе
 
 `price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
 отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
-(issue #149; фикстура `app/src/test/resources/contract/booking/services.json`).
+(issue #149, PR #233; фикстура
+`app/src/test/resources/contract/booking/services.json`). За подравнивание
+бороды стенд отдаёт `3000000` — 30 000 сум.
 
 ## CinemaApi ⚠️
 
@@ -256,10 +332,15 @@ startTime}`, обязательны `placeId`, `date`, `startTime`. Выведе
 Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
 ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
-**Аватар автора отзыва не сверен** (issue #60): схема `Response` в
-`/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
-разбирает поле под тремя именами — `userAvatarUrl`, `avatarUrl`, `userAvatar`.
-Молчание сервера — первая буква имени вместо фото, экран не ломается.
+**Аватара автора отзыва у сервера нет вовсе** (сверено 2026-09-10, после
+развода коллизии; раньше схема `Response` была перекрыта, issue #60/#76).
+`ReviewResponse {id, placeId, userId, rating, text, isVerified, helpfulCount,
+ownerReply, createdAt}` — ни фото, ни имени, только `userId`. Три имени
+(`userAvatarUrl`, `avatarUrl`, `userAvatar`), под которыми `ReviewDto` ищет
+поле, ни одному ничего не соответствует — как и трём именам автора. Экран не
+ломается: пустое имя подменяется словом «аноним», и в аватаре видна его первая
+буква. Но настоящего автора у отзыва на экране нет и не будет, пока бэкенд не
+скажет, чем его называть — живой баг, issue #192.
 
 ## FashionApi ⚠️
 
@@ -312,9 +393,12 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 именами — `imageUrl` (бэкенд уже использует это имя у `CartItemResponse`),
 `photoUrl`, `image`. Пока поле не приедет, строка меню рисуется без фото.
 
-## FreelancerApi ⚠️
+## FreelancerApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/freelancer/data/FreelancerApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/freelancer/data/FreelancerApi.kt` — пути
+сверены curl'ами 2026-09-04 (issue #107, таблица проб — в KDoc файла), схемы
+ответов прочитаны 2026-09-10. Под токеном (`orders/my`, создание заказа) ответы
+не проверены: `401` приходит до валидации.
 
 | Метод | Путь |
 |---|---|
@@ -324,9 +408,13 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | POST | `freelancers/{id}/orders` |
 | GET | `freelancers/orders/my` |
 
-`freelancers/{id}/services` отдаёт ту же схему `ServiceResponse` и разбирается
-тем же `ServiceDto`, что и `barber-services` — значит переехал на выверенные
-`name`/`price`. Пробой именно этой ручки это пока не подтверждено.
+**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
+(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
+title, description, priceAmount, durationMinutes, isActive}`, а клиент
+разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
+мастера будет пустое название и цена 0. До развода коллизии обе ручки
+выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
+только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
 
 ## GamingApi ⚠️ частично
 
@@ -337,16 +425,16 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, отдала `data: []` |
-| POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
+| POST | `gaming/bookings` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
 
-**Тело `POST gaming/bookings` подтверждено схемой** (2026-09-10, issue #167).
-Раньше оно было объявлено как `BookRequest` — имя делили три пути (коллизия
-springdoc), и поля были названы по ответу того же эндпоинта. Теперь у пути своя
-`GamingBookRequest`, и догадка совпала: `{zoneId, startTime, durationHours}`,
-обязательны `zoneId` и `durationHours`, `durationHours` — целое **от 1 до 24**.
-Что бэкенд с запросом сделает, всё ещё не проверено: кандидат на пробу
-`contract/gaming.sh`, как только появится токен.
+**Тело `POST gaming/bookings` сверено чтением** (2026-09-10, после развода
+коллизии): `GamingBookRequest {zoneId, startTime, durationHours}` — ровно то,
+что клиент угадал по ответу того же эндпоинта. Раньше это имя занимал
+медицинский вариант, поэтому поля считались выведенными. Обязательны `zoneId`
+и `durationHours`, `durationHours` — целое **от 1 до 24** (issue #167). Сам
+ответ под токеном всё ещё не проверен — кандидат на пробу
+`contract/gaming.sh`.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
