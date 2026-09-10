@@ -170,6 +170,33 @@ TrackEventRequest: {
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
 
+## users/me ✅ — своего `*Api.kt` ещё нет
+
+Профиль на сервере. Снято чтением живого `/v3/api-docs` 2026-09-10 (issue #237); приложение эти ручки пока **не зовёт** — issue #170. Девять KDoc в коде утверждали, что их у бэкенда нет вовсе; там, где правки касались файла, KDoc исправлен, остальные — по мере работы.
+
+| Метод | Путь |
+|---|---|
+| GET | `users/me` → `MeResponse` |
+| PUT | `users/me` ← `UpdateMeRequest` → `MeResponse` |
+
+`MeResponse`: `id`, `phone`, `fullName`, `avatarUrl`, `language` (`UZ`/`RU`), `role`, `verificationStatus` (`UNVERIFIED`/`SMS_VERIFIED`/`FULL_VERIFIED`), `accountStatus` (`ACTIVE`/`TEMP_BLOCKED`/`PERM_BLOCKED`/`SUSPENDED`/`DELETED`), `telegramLinked`, `lastLoginAt`.
+
+`role` — четырнадцать значений: `USER`, `BARBER`, `BAKER`, `SHOP_OWNER`, `FOOD_OWNER`, `GAMING_OWNER`, `MUSEUM_OWNER`, `PARK_OWNER`, `MOSQUE_OWNER`, `PHARMACY_OWNER`, `HOSPITAL_OWNER`, `CINEMA_OWNER`, `FREELANCER`, `ADMIN`. Тот же набор и в `UserInfo` — блоке `user` ответа на вход, откуда приложение и берёт роль сейчас.
+
+**`PUT` принимает ровно два поля**, и это PATCH по смыслу (так написано в самом описании ручки):
+
+```json
+{"fullName": "Yangi ism", "avatarUrl": "https://.../a.png"}
+```
+
+- поля нет или `null` — **не меняется**; пустая строка — **очищается** (`{"avatarUrl": ""}` снимает аватар);
+- `fullName` ≤ 200 символов, `avatarUrl` ≤ 500 и по маске `^$|^https?://.+` — то есть адрес из `media/upload`.
+
+**Ни `language`, ни `role` отправить нечем** (сверено 2026-09-10, issue #237):
+
+- слово `language` встречается во всей схеме **один раз** — в `MeResponse`. Ни одно тело запроса его не принимает, заголовка `Accept-Language` у API нет вовсе (единственный header-параметр во всём контракте — `X-Session-Id` у `auth/logout`). Серверный `language` клиенту недоступен на запись, поэтому язык приложения ведёт клиент (`SettingsDataStore`), а это поле **не разбирается**;
+- `role` меняет только админ через `PUT admin/users/{id}/role`. Значит по правам главный сервер, а локальный `settings.roleId` (`UserRole`) — вообще про другое: про анкету. Подробно — `docs/adr/0007-yazyk-i-rol-istochnik-istiny.md`.
+
 ## BookingApi ⚠️ частично
 
 `app/src/main/java/uz/mahalla/feature/booking/data/BookingApi.kt` — сверен пробой `contract/booking.sh` (2026-09-08), но только анонимная половина: всё под токеном требует `CONTRACT_REFRESH_TOKEN`, а его пока нет.

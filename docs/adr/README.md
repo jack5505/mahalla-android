@@ -17,3 +17,4 @@
 | [0004](0004-pin-pbkdf2-keystore.md) | PIN: PBKDF2 + AndroidKeyStore | Принято |
 | [0005](0005-samopodpisannyy-sertifikat.md) | Доверие сертификату стенда по отпечатку | Принято |
 | [0006](0006-analitika-bez-seti.md) | Аналитика без сети: событие теряется, а не копится | Принято |
+| [0007](0007-yazyk-i-rol-istochnik-istiny.md) | Язык ведёт клиент, роль ведёт сервер | Принято |

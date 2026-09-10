@@ -26,9 +26,9 @@ import uz.mahalla.feature.profile.domain.DeviceSession
  * Профиль: кто вошёл, настройки приложения, устройства с открытым входом и
  * выход из аккаунта (issue #61).
  *
- * Данные профиля читаются из [UserProfileStore] — их записал вход. Отдельного
- * `GET /users/me` у бэкенда нет, поэтому обновить имя или аватар отсюда
- * нельзя: появится эндпоинт — появится и экран редактирования.
+ * Данные профиля читаются из [UserProfileStore] — их записал вход. `GET/PUT
+ * /users/me` у бэкенда есть (контракт — `docs/API-CONTRACT.md`), но приложение
+ * их ещё не зовёт, поэтому обновить имя или аватар отсюда нельзя: issue #170.
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
