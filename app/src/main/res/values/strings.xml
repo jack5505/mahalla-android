@@ -590,6 +590,8 @@
     <string name="booking_reschedule_title">Yozuvni ko\'chirish</string>
     <string name="booking_reschedule_service_title">Xizmat</string>
     <string name="booking_reschedule_hint">Xizmat o\'zgarmaydi — faqat yangi kun va vaqtni tanlang.</string>
+    <string name="booking_reschedule_current">Hozir: %1$s</string>
+    <string name="booking_reschedule_new">Yangi: %1$s</string>
     <string name="booking_reschedule_submit">Yangi vaqtga ko\'chirish</string>
     <string name="booking_reschedule_done_title">Yozuv ko\'chirildi</string>
     <string name="booking_reschedule_done_description">Muassasa yangi vaqtni tasdiqlaydi. Eski yozuv bekor qilindi.</string>
