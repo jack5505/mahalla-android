@@ -1,5 +1,6 @@
 package uz.mahalla.feature.hospital.data
 
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.hospital.domain.Doctor
 
 /**
@@ -18,6 +19,6 @@ internal fun DoctorDto.toDomain(): Doctor? {
         specialty = specialty?.trim()?.takeIf { it.isNotEmpty() },
         bio = bio?.trim()?.takeIf { it.isNotEmpty() },
         // Отрицательная цена — не скидка, а мусор.
-        consultationPriceSum = consultationPrice?.coerceAtLeast(0) ?: 0,
+        consultationPriceSum = consultationPrice.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     )
 }

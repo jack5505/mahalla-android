@@ -60,13 +60,12 @@ class WalletViewModel @Inject constructor(
 
             WalletEvent.LoadMore -> loadMore()
 
-            // Делитель единиц бэкенда берётся из уже приехавшего баланса и
-            // фиксируется на всё время шторки: перечит по `ON_RESUME` не
-            // должен менять минимум под набранной суммой.
-            WalletEvent.TopUpClicked -> currentState.loadedWallet?.let { wallet ->
+            // Шторка открывается только поверх приехавшего баланса: без него
+            // человек не знает, сколько у него есть, и пополнять вслепую незачем.
+            WalletEvent.TopUpClicked -> currentState.loadedWallet?.let {
                 updateState {
                     copy(
-                        topUp = TopUpState(scale = wallet.amountScale),
+                        topUp = TopUpState(),
                         paymentOpenFailed = false,
                     )
                 }
@@ -108,7 +107,7 @@ class WalletViewModel @Inject constructor(
         if (topUp.isSubmitting) return
         val provider = topUp.draft.provider
         val amountSum = topUp.draft.amountSum
-        val errors = TopUpValidator.validate(topUp.draft, topUp.scale)
+        val errors = TopUpValidator.validate(topUp.draft)
         if (errors.isNotEmpty() || provider == null || amountSum == null) {
             updateTopUp { copy(showErrors = true, errors = errors) }
             return
@@ -117,7 +116,7 @@ class WalletViewModel @Inject constructor(
         updateTopUp { copy(isSubmitting = true, failure = null) }
         updateState { copy(paymentOpenFailed = false) }
         viewModelScope.launch {
-            when (val result = repository.topUp(amountSum, provider, topUp.scale)) {
+            when (val result = repository.topUp(amountSum, provider)) {
                 is ApiResult.Failure -> updateTopUp {
                     copy(isSubmitting = false, failure = result.failure)
                 }
@@ -145,7 +144,7 @@ class WalletViewModel @Inject constructor(
     /** Правка черновика: ошибки пересчитываются, прошлый отказ сервера снимается. */
     private fun TopUpState.revalidated(next: TopUpDraft): TopUpState = copy(
         draft = next,
-        errors = TopUpValidator.validate(next, scale),
+        errors = TopUpValidator.validate(next),
         failure = null,
     )
 

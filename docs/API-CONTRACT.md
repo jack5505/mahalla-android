@@ -48,6 +48,24 @@
 На неё переведены fashion, freelancer, wallet и «Мои активности»; в семи
 мапперах ещё лежит дословная копия того же правила — issue #231.
 
+**Деньги — в тийинах.** Все целые денежные поля во всех ответах и телах
+запросов (`price`, `totalAmount`, `balance`, `amount`, `monthlyPrice`,
+`totalPrice`, `consultationPrice`, `hourlyRate`, …) — **тийины**, 1 сум = 100
+тийинов. Это документировано самим бэкендом в `info.description` живого
+`/v3/api-docs` (снято 2026-09-10, issue #149):
+
+> Barcha butun sonli pul maydonlari **tiyin**da uzatiladi: 1 so'm = 100 tiyin.
+> Ko'rsatishdan oldin 100 ga bo'lish kerak: `5000000` → `50 000 so'm`. Kasr son
+> yoki so'mdagi qiymat qabul qilinmaydi.
+
+Клиент живёт в целых сумах: домен, экраны и Room хранят сумы, а пересчёт делает
+`core/format/Money` ровно один раз — в маппере DTO → домен (`tiyinToSom`) и при
+сборке тела запроса (`somToTiyin`, сейчас это только `POST wallet/top-up`).
+Дробные близнецы `balanceSom`, `amountSom`, `monthlyPriceSom`, `pricePaidSom`
+— то же число в сумах для чтения ответа глазами; клиент их **игнорирует**, а не
+выводит из них единицу, как делал раньше `WalletAmounts`. Проценты
+(`discountPercent`, `yearlyDiscountPercent`) деньгами не являются и не делятся.
+
 ---
 
 ## «Мои активности» — своего `*Api.kt` нет
@@ -132,12 +150,9 @@ startTime}`, обязательны `placeId`, `date`, `startTime`. Выведе
 `GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
 одной записи нет), `PUT appointments/{id}/status` — бизнес-панель, эпик #16.
 
-**Открытый вопрос к бэкенду: в чём измеряется `price`.** Стенд отдаёт за
-стрижку `5000000`, за подравнивание бороды `3000000`. Как сумы это
-неправдоподобно; как тийины — 50 000 и 30 000 сум, то есть обычные цены.
-Клиент сейчас считает сумами и потому нарисует «5 000 000 so'm». Заметим:
-`WalletAmounts` из точно такого же отсутствия дробного поля `*Som` делает
-обратный вывод — тийины. Наугад делитель не меняем: нужен ответ бэкенда.
+`price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
+отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
+(issue #149; фикстура `app/src/test/resources/contract/booking/services.json`).
 
 ## CinemaApi ⚠️
 
@@ -443,6 +458,9 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | GET | `wallet` |
 | GET | `wallet/transactions` |
 | POST | `wallet/top-up` |
+
+`TopUpRequest.amount` — в тийинах, минимум `100000` (1 000 сум); человек
+вводит сумы, `Money.somToTiyin` переводит в репозитории (issue #149).
 
 ---
 

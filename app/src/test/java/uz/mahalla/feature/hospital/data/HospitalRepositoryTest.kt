@@ -55,7 +55,7 @@ class HospitalRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"d-1","name":"Aliyev Bekzod","specialty":"Terapevt",
-                   "bio":"20 yillik tajriba","consultationPrice":90000}]""",
+                   "bio":"20 yillik tajriba","consultationPrice":9000000}]""",
             ),
         )
 
@@ -67,7 +67,23 @@ class HospitalRepositoryTest {
         assertEquals(1, doctors.size)
         assertEquals("Aliyev Bekzod", doctors.first().name)
         assertEquals("Terapevt", doctors.first().specialty)
+        // Бэкенд шлёт тийины: 9 000 000 — это 90 000 сум (issue #149).
         assertEquals(90_000L, doctors.first().consultationPriceSum)
+    }
+
+    /** Без пересчёта приём стоил бы «5 000 000 so'm»; молчание о цене — ноль. */
+    @Test
+    fun `consultation price is converted from tiyin and null stays unnamed`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"d-1","consultationPrice":5000000},{"id":"d-2"},
+                   {"id":"d-3","consultationPrice":150},{"id":"d-4","consultationPrice":149}]""",
+            ),
+        )
+
+        val doctors = (repository().doctors(PLACE) as ApiResult.Success).data
+
+        assertEquals(listOf(50_000L, 0L, 2L, 1L), doctors.map { it.consultationPriceSum })
     }
 
     /** Врача без `id` записывать нечем: `doctorId` обязателен в теле запроса. */
@@ -76,7 +92,7 @@ class HospitalRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"name":"Ismsiz"},{"id":"  "},
-                   {"id":"d-2","consultationPrice":-5}]""",
+                   {"id":"d-2","consultationPrice":-500}]""",
             ),
         )
 

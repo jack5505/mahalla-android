@@ -1,5 +1,7 @@
 package uz.mahalla.feature.wallet.domain
 
+import uz.mahalla.core.format.Money
+
 /**
  * Пополнение кошелька (issue #93, задача 8.2 эпика #12).
  *
@@ -35,19 +37,19 @@ enum class TopUpProvider(val apiValue: String) {
 /**
  * Суммы пополнения.
  *
- * Единицу денег бэкенда приложение не зашивает, а **выводит из ответа**
- * (issue #62, [WalletAmounts]): у баланса есть дробный близнец `balanceSom`, и
- * делитель выбирается по этой паре. Здесь тот же делитель работает в обратную
- * сторону — из сумов, которые ввёл человек, в единицы бэкенда.
- *
- * Поэтому и минимум переводится в сумы тем же делителем: серверные `100000` —
- * это 1 000 сум при тийинах и 100 000 сум при сумах, и подпись под полем
- * обязана называть то число, которое поле примет.
+ * Человек вводит сумы, бэкенд принимает тийины (issue #149,
+ * [uz.mahalla.core.format.Money]): перевод делает репозиторий при сборке
+ * тела запроса, а здесь — правила черновика в сумах. Минимум бэкенда
+ * `100000` тийинов — это 1 000 сум, и подпись под полем обязана называть
+ * именно то число, которое поле примет.
  */
 object WalletTopUp {
 
-    /** `TopUpRequest.amount.minimum` — в единицах бэкенда. */
-    const val MIN_AMOUNT_MINOR = 100_000L
+    /** `TopUpRequest.amount.minimum` в тийинах — как в схеме стенда. */
+    const val MIN_AMOUNT_TIYIN = 100_000L
+
+    /** Тот же минимум в сумах: что видит человек под полем ввода. */
+    const val MIN_AMOUNT_SUM = MIN_AMOUNT_TIYIN / Money.TIYIN_IN_SOM
 
     /**
      * Потолок на клиенте. У бэкенда его нет, и он здесь не про его правила, а
@@ -56,18 +58,6 @@ object WalletTopUp {
      * отменять уже поздно.
      */
     const val MAX_AMOUNT_SUM = 100_000_000L
-
-    /** Минимальная сумма пополнения в сумах при данном делителе. */
-    fun minAmountSum(scale: Long): Long {
-        if (scale <= 1L) return MIN_AMOUNT_MINOR
-        // Вверх: при округлении вниз подпись обещала бы сумму, которую сервер
-        // отвергнет как слишком маленькую.
-        return (MIN_AMOUNT_MINOR + scale - 1) / scale
-    }
-
-    /** Сумма в единицах бэкенда. */
-    fun toMinor(amountSum: Long, scale: Long): Long =
-        if (scale <= 1L) amountSum else amountSum * scale
 
     /**
      * Сумма из того, что набрано в поле.
@@ -114,15 +104,13 @@ object TopUpValidator {
      * Все ошибки сразу, как в остальных формах приложения (issue #84): форма
      * короткая, но замечания по одному гоняли бы человека между полем и
      * списком провайдеров.
-     *
-     * @param scale делитель из ответа кошелька — от него зависит минимум.
      */
-    fun validate(draft: TopUpDraft, scale: Long): Set<TopUpError> {
+    fun validate(draft: TopUpDraft): Set<TopUpError> {
         val errors = mutableSetOf<TopUpError>()
         val amount = draft.amountSum
         when {
             amount == null -> errors += TopUpError.AmountRequired
-            amount < WalletTopUp.minAmountSum(scale) -> errors += TopUpError.AmountTooSmall
+            amount < WalletTopUp.MIN_AMOUNT_SUM -> errors += TopUpError.AmountTooSmall
             amount > WalletTopUp.MAX_AMOUNT_SUM -> errors += TopUpError.AmountTooLarge
         }
         if (draft.provider == null) errors += TopUpError.ProviderRequired

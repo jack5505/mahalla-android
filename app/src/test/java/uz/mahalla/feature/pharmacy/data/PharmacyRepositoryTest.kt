@@ -46,7 +46,7 @@ class PharmacyRepositoryTest {
         server.enqueue(
             page(
                 """[{"id":"p-1","name":"Paratsetamol","manufacturer":"Uzpharm",
-                   "dosageForm":"tabletka","strength":"500 mg","price":12000,
+                   "dosageForm":"tabletka","strength":"500 mg","price":1200000,
                    "stockQuantity":4,"isAvailable":true,"requiresPrescription":false}]""",
             ),
         )
@@ -157,7 +157,7 @@ class PharmacyRepositoryTest {
     @Test
     fun `garbage in numbers does not hide the product`() = runTest {
         server.enqueue(
-            page("""[{"id":"p-1","name":"Paratsetamol","price":-1,"stockQuantity":-3}]"""),
+            page("""[{"id":"p-1","name":"Paratsetamol","price":-100,"stockQuantity":-3}]"""),
         )
 
         val product = (repository().products(PLACE) as ApiResult.Success).data.items.single()
@@ -166,6 +166,23 @@ class PharmacyRepositoryTest {
         assertNull(product.stockQuantity)
         // Ни цены, ни остатка, ни флага — обещать наличие не на чем.
         assertEquals(ProductStock.Unknown, product.stock)
+    }
+
+    @Test
+    fun `the price arrives in tiyin and is shown in som`() = runTest {
+        server.enqueue(
+            page(
+                """[{"id":"p-1","name":"A","price":5000000},
+                   {"id":"p-2","name":"B","price":149950},
+                   {"id":"p-3","name":"C"}]""",
+            ),
+        )
+
+        val items = (repository().products(PLACE) as ApiResult.Success).data.items
+
+        // 5 000 000 тийинов — 50 000 сум; половина сума округляется вверх;
+        // отсутствующая цена остаётся отсутствующей, а не нулём (issue #149).
+        assertEquals(listOf(50_000L, 1_500L, null), items.map { it.priceSum })
     }
 
     @Test

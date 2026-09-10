@@ -1,13 +1,14 @@
 package uz.mahalla.feature.gaming.data
 
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.parseServerSlotInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
 import uz.mahalla.feature.gaming.domain.GamingZone
-import java.time.Instant
-import java.time.format.DateTimeFormatter
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): зона **без `id`** отбрасывается —
@@ -31,7 +32,7 @@ internal fun GamingZoneDto.toDomain(placeId: String): GamingZone? {
         description = description?.takeIf { it.isNotBlank() },
         zoneType = zoneType?.takeIf { it.isNotBlank() },
         // Отрицательная цена — не «скидка», а мусор.
-        pricePerHour = pricePerHour?.takeIf { it > 0 } ?: 0,
+        pricePerHour = pricePerHour.tiyinToSom()?.takeIf { it > 0 } ?: 0,
         totalSeats = totalSeats?.takeIf { it > 0 },
         // Молчание сервера — «закрыта»: обещать бронь зоны, про которую ничего
         // не известно, хуже, чем её не обещать.
@@ -64,7 +65,7 @@ internal fun GamingBookingDto.toDomain(
         startTime = parseServerSlotInstant(startTime),
         endTime = parseServerSlotInstant(endTime),
         durationHours = durationHours?.takeIf { it > 0 },
-        totalPrice = totalPrice?.takeIf { it >= 0 },
+        totalPrice = totalPrice.tiyinToSom()?.takeIf { it >= 0 },
         status = GamingBookingStatus.fromApi(status),
     )
 }

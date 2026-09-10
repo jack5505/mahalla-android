@@ -79,8 +79,8 @@ class ActivityRepositoryTest {
             "/orders",
             """{"content":[{"id":"o-1","orderNumber":"F-2026-0042","placeId":"p-1",
                "vertical":"FOOD","status":"PREPARING","fulfillment":"DELIVERY",
-               "paymentMethod":"WALLET","itemsAmount":70000,"deliveryAmount":14000,
-               "totalAmount":84000,"createdAt":"2026-09-04T08:10:00"}],
+               "paymentMethod":"WALLET","itemsAmount":7000000,"deliveryAmount":1400000,
+               "totalAmount":8400000,"createdAt":"2026-09-04T08:10:00"}],
                "page":0,"last":true}""",
         )
 
@@ -128,7 +128,7 @@ class ActivityRepositoryTest {
             "/gaming/bookings/my",
             """{"content":[{"id":"b-1","placeId":"p-2","zoneId":"z-1",
                "startTime":"2026-09-05T13:00:00","endTime":"2026-09-05T15:00:00",
-               "durationHours":2,"totalPrice":60000,"status":"CONFIRMED",
+               "durationHours":2,"totalPrice":6000000,"status":"CONFIRMED",
                "createdAt":"2026-09-01T09:00:00"}],"last":true}""",
         )
 
@@ -215,7 +215,7 @@ class ActivityRepositoryTest {
         respond(
             "/appointments/my",
             """{"content":[{"id":"a-1","placeId":"p-3","serviceId":"s-1",
-               "serviceName":"Soch olish","price":45000,"apptDate":"2026-09-10",
+               "serviceName":"Soch olish","price":4500000,"apptDate":"2026-09-10",
                "startTime":{"hour":9,"minute":30,"second":0,"nano":0},
                "endTime":{"hour":10,"minute":0,"second":0,"nano":0},
                "status":"PENDING","createdAt":"2026-09-01T07:00:00"}],"last":true}""",
@@ -242,7 +242,7 @@ class ActivityRepositoryTest {
         respond(
             "/appointments/my",
             """{"content":[{"id":"a-1","placeId":"p-3","serviceId":"s-1",
-               "serviceName":"Soch olish","price":45000,"apptDate":"2026-09-10",
+               "serviceName":"Soch olish","price":4500000,"apptDate":"2026-09-10",
                "startTime":"09:30:00","endTime":"10:00:00",
                "status":"PENDING","createdAt":"2026-09-01T07:00:00"}],"last":true}""",
         )
@@ -349,7 +349,7 @@ class ActivityRepositoryTest {
         respond(
             "/cinema/tickets/my",
             """{"content":[{"id":"t-1","sessionId":"s-9","seatNumber":"D-12",
-               "price":35000,"qrCode":"QR","status":"ACTIVE",
+               "price":3500000,"qrCode":"QR","status":"ACTIVE",
                "createdAt":"2026-09-02T15:00:00"}],"last":true}""",
         )
 
@@ -446,6 +446,25 @@ class ActivityRepositoryTest {
         )
 
         assertEquals(listOf("o-2"), repository().feed().items.map(Activity::id))
+    }
+
+    @Test
+    fun `amounts arrive in tiyin and are shown in som in every source`() = runTest {
+        respond("/orders", """{"content":[{"id":"o-1","totalAmount":5000000}],"last":true}""")
+        respond("/gaming/bookings/my", """{"content":[{"id":"b-1","totalPrice":149950}],"last":true}""")
+        respond("/appointments/my", """{"content":[{"id":"a-1","price":49}],"last":true}""")
+        respond("/hospitals/appointments/my", """{"content":[{"id":"h-1","price":4500000}],"last":true}""")
+        respond("/cinema/tickets/my", """{"content":[{"id":"t-1"}],"last":true}""")
+
+        val amounts = repository().feed().items.associate { it.source to it.amount }
+
+        // 5 000 000 тийинов — 50 000 сум; половина сума округляется вверх;
+        // 49 тийинов — ноль; отсутствующая сумма остаётся отсутствующей.
+        assertEquals(50_000L, amounts[ActivitySource.Orders])
+        assertEquals(1_500L, amounts[ActivitySource.GamingBookings])
+        assertEquals(0L, amounts[ActivitySource.MasterAppointments])
+        assertEquals(45_000L, amounts[ActivitySource.DoctorAppointments])
+        assertNull(amounts[ActivitySource.CinemaTickets])
     }
 
     @Test

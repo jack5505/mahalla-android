@@ -5,6 +5,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -41,10 +42,10 @@ class FashionCartRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"i-1","variantId":"v-1","storeId":"s-1","productName":"Oq ko'ylak",
-                     "colorName":"Oq","size":"M","unitPrice":240000,"quantity":2,
-                     "totalPrice":480000},
+                     "colorName":"Oq","size":"M","unitPrice":24000000,"quantity":2,
+                     "totalPrice":48000000},
                    {"id":"i-2","variantId":"v-2","storeId":"s-2","productName":"Shim",
-                     "unitPrice":410000,"quantity":1}]""",
+                     "unitPrice":41000000,"quantity":1}]""",
             ),
         )
 
@@ -52,10 +53,37 @@ class FashionCartRepositoryTest {
 
         assertEquals("/fashion/cart", server.takeRequest().path)
         assertEquals(listOf("v-1", "v-2"), cart.items.map(FashionCartItem::variantId))
+        // Деньги приезжают в тийинах (issue #149): 24 000 000 → 240 000 сум.
+        assertEquals(240_000L, cart.item("v-1")?.unitPriceSum)
         assertEquals(480_000L, cart.item("v-1")?.totalSum)
         // Сервер не назвал сумму строки — считаем из цены за единицу.
         assertEquals(410_000L, cart.item("v-2")?.totalSum)
         assertEquals(2, cart.stores.size)
+    }
+
+    @Test
+    fun `prices are converted from tiyin to som once`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"variantId":"v-1","storeId":"s-1","unitPrice":5000000,"quantity":2,
+                     "totalPrice":10000000},
+                   {"variantId":"v-2","storeId":"s-1","unitPrice":149,"quantity":1,
+                     "totalPrice":150},
+                   {"variantId":"v-3","storeId":"s-1","unitPrice":5000000,"quantity":3}]""",
+            ),
+        )
+
+        val cart = (repository().cart() as ApiResult.Success).data
+
+        assertEquals(50_000L, cart.item("v-1")?.unitPriceSum)
+        assertEquals(100_000L, cart.item("v-1")?.serverTotalSum)
+        // Округление до целого сума: 149 → 1, 150 → 2.
+        assertEquals(1L, cart.item("v-2")?.unitPriceSum)
+        assertEquals(2L, cart.item("v-2")?.totalSum)
+        // Без `totalPrice` фоллбэк умножает уже сумы, а не тийины.
+        assertNull(cart.item("v-3")?.serverTotalSum)
+        assertEquals(150_000L, cart.item("v-3")?.totalSum)
+        assertEquals(250_002L, cart.totalSum)
     }
 
     @Test
