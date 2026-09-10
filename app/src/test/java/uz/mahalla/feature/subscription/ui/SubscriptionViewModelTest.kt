@@ -13,6 +13,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.role.data.RoleProfile
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.PlanAudience
@@ -87,7 +88,28 @@ class SubscriptionViewModelTest {
     fun `a customer is shown the user plans`() = runTest {
         val repository = FakeSubscriptionRepository()
 
-        viewModel(repository, role = UserRole.Customer)
+        viewModel(repository, role = UserRole.Customer, serverRole = ServerRole.User)
+
+        assertEquals(listOf(PlanAudience.User), repository.requestedAudiences)
+    }
+
+    @Test
+    fun `the server role alone is enough for the business plans`() = runTest {
+        val repository = FakeSubscriptionRepository()
+
+        // Настоящий владелец кафе, который анкету не заполнял: в профиле у
+        // него уже были «Мои заведения», а тарифы показывались покупательские
+        // (issue #244).
+        viewModel(repository, role = UserRole.Customer, serverRole = ServerRole.FoodOwner)
+
+        assertEquals(listOf(PlanAudience.Business), repository.requestedAudiences)
+    }
+
+    @Test
+    fun `an admin is shown the user plans`() = runTest {
+        val repository = FakeSubscriptionRepository()
+
+        viewModel(repository, role = UserRole.Customer, serverRole = ServerRole.Admin)
 
         assertEquals(listOf(PlanAudience.User), repository.requestedAudiences)
     }
@@ -334,9 +356,10 @@ class SubscriptionViewModelTest {
     private fun viewModel(
         repository: FakeSubscriptionRepository,
         role: UserRole = UserRole.Customer,
+        serverRole: ServerRole = ServerRole.Unknown,
     ) = SubscriptionViewModel(
         repository = repository,
-        roleRepository = FakeRoleRepository(RoleProfile(role = role)),
+        roleRepository = FakeRoleRepository(RoleProfile(role = role, serverRole = serverRole)),
     )
 
     private fun plan(trialDays: Int = 0) = SubscriptionPlan(

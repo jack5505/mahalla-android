@@ -10,7 +10,9 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
+import uz.mahalla.feature.role.domain.providesServices
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,11 +53,27 @@ interface RoleRepository {
     suspend fun saveCustomer(form: CustomerForm): Boolean
 }
 
-/** Роль и анкета покупателя вместе: экран показывает их одним состоянием. */
+/**
+ * Роль и анкета покупателя вместе: экран показывает их одним состоянием.
+ *
+ * @param role роль из анкеты — локальный выбор человека (issue #84).
+ * @param serverRole права с сервера: их приложение не выбирает и не меняет
+ * (issue #237). Лежат в [UserProfileStore] — их записал ответ на вход.
+ * [ServerRole.Unknown] — входа ещё не было либо роль приложению незнакома.
+ */
 data class RoleProfile(
     val role: UserRole? = null,
+    val serverRole: ServerRole = ServerRole.Unknown,
     val customer: CustomerForm = CustomerForm(),
-)
+) {
+
+    /**
+     * Оказывает ли человек услуги — по анкете **или** по правам на сервере
+     * (issue #244). Правило общее с «Моими заведениями» в профиле, поэтому
+     * живёт в домене: [providesServices].
+     */
+    val providesServices: Boolean get() = providesServices(role, serverRole)
+}
 
 @Singleton
 class DataStoreRoleRepository @Inject constructor(
@@ -67,6 +85,7 @@ class DataStoreRoleRepository @Inject constructor(
         combine(settings.settings, profileStore.profile) { appSettings, userProfile ->
             RoleProfile(
                 role = UserRole.fromStoredValue(appSettings.roleId),
+                serverRole = ServerRole.fromServer(userProfile.serverRole),
                 customer = CustomerForm(
                     fullName = userProfile.fullName.orEmpty(),
                     city = City.fromId(appSettings.cityId),

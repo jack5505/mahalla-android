@@ -15,6 +15,7 @@ import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.VerificationStatus
 import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
+import uz.mahalla.feature.role.domain.providesServices
 
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
@@ -58,13 +59,10 @@ data class ProfileState(
     /**
      * Показывать ли «Мои заведения» (issue #237).
      *
-     * Два условия, а не одно: анкета продавца — это заявка, а не право, и
-     * человек может её не заполнять; серверная роль — право, и владелец
-     * заведения, который анкету не заполнял, до issue #237 своего заведения в
-     * приложении не находил вовсе. Ложное «да» стоит пустого списка, ложное
-     * «нет» — спрятанного бизнеса.
+     * Правило одно на всё приложение — [providesServices]; тем же спрашивают
+     * аудиторию тарифов подписки (issue #244).
      */
-    val showMyPlaces: Boolean get() = formRole == UserRole.Provider || serverRole.isProvider
+    val showMyPlaces: Boolean get() = providesServices(formRole, serverRole)
 }
 
 /**

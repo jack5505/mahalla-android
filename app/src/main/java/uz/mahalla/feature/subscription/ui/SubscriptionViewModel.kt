@@ -10,7 +10,6 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.role.data.RoleRepository
-import uz.mahalla.feature.role.domain.UserRole
 import uz.mahalla.feature.subscription.data.SubscriptionRepository
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.Subscription
@@ -87,9 +86,9 @@ class SubscriptionViewModel @Inject constructor(
         }
         updateState { copy(isRefreshing = refreshing, actionFailure = null) }
         viewModelScope.launch {
-            // Аудитория тарифов зависит от роли: продавцу бэкенд показывает
-            // свой набор (`plans?audience=BUSINESS`), и оформляются такие
-            // тарифы отдельной ручкой.
+            // Аудитория тарифов зависит от того, оказывает ли человек услуги:
+            // такому бэкенд показывает свой набор (`plans?audience=BUSINESS`),
+            // и оформляются такие тарифы отдельной ручкой.
             val audience = audience()
             // Две независимые ручки: последовательный запрос удвоил бы время
             // до первого экрана без всякой причины.
@@ -105,13 +104,17 @@ class SubscriptionViewModel @Inject constructor(
     }
 
     /**
-     * Роль лежит локально (issue #84) и к правам на сервере отношения не
-     * имеет: бэкенд всё равно решает сам. Ошибиться здесь не страшно —
-     * покупатель, открывший заведение, просто увидит не тот набор тарифов и
-     * поправит роль в профиле.
+     * Аудитория спрашивается тем же правилом, что и «Мои заведения» в профиле
+     * (`providesServices`, issue #244): анкета продавца **или** серверная
+     * роль. По одной анкете было хуже — настоящий `FOOD_OWNER`, который её не
+     * заполнял, видел в профиле своё заведение, а здесь покупательские
+     * тарифы.
+     *
+     * Ошибиться здесь не страшно: набор тарифов ни на что не запирает —
+     * бэкенд всё равно решает сам, — и человек поправит роль в профиле.
      */
     private suspend fun audience(): PlanAudience =
-        if (roleRepository.current().role == UserRole.Provider) {
+        if (roleRepository.current().providesServices) {
             PlanAudience.Business
         } else {
             PlanAudience.User

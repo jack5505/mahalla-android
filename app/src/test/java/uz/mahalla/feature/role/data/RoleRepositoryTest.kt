@@ -20,6 +20,7 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
 import java.io.File
 
@@ -105,6 +106,40 @@ class RoleRepositoryTest {
         // заказа.
         assertEquals("", repository.current().customer.address)
         assertFalse(repository.current().customer.isEmpty)
+    }
+
+    @Test
+    fun `server role comes from the profile the login wrote`() = runTest {
+        val dataStore = newDataStore()
+        val profileStore = DataStoreUserProfileStore(dataStore)
+        profileStore.save(UserProfile(id = "u-1", serverRole = "FOOD_OWNER"))
+        val repository = DataStoreRoleRepository(SettingsDataStore(dataStore), profileStore)
+
+        val profile = repository.current()
+
+        // Анкету не заполняли — и это не мешает правам с сервера (issue #244).
+        assertNull(profile.role)
+        assertEquals(ServerRole.FoodOwner, profile.serverRole)
+        assertTrue(profile.providesServices)
+    }
+
+    @Test
+    fun `no login means no server role and no rights`() = runTest {
+        val profile = repository().current()
+
+        assertEquals(ServerRole.Unknown, profile.serverRole)
+        assertFalse(profile.providesServices)
+    }
+
+    @Test
+    fun `the provider form does not need the server`() = runTest {
+        val repository = repository()
+
+        repository.selectRole(UserRole.Provider)
+
+        val profile = repository.current()
+        assertEquals(ServerRole.Unknown, profile.serverRole)
+        assertTrue(profile.providesServices)
     }
 
     private fun repository(): DataStoreRoleRepository {
