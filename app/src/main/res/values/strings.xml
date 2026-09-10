@@ -157,6 +157,19 @@
     <string name="wallet_top_up_provider_note">To\'lov shakli brauzerda ochiladi.</string>
     <string name="wallet_top_up_started">%1$s to\'lovi yuborildi. Pul tushgach balans o\'zgaradi — bu bir necha daqiqa olishi mumkin.</string>
     <string name="wallet_top_up_started_dismiss">Tushunarli</string>
+    <!-- Hamyondan to'lovni tasdiqlash (8.3, issue #12). -->
+    <string name="payment_confirm_title">To\'lovni tasdiqlash</string>
+    <string name="payment_confirm_amount">Yechib olinadi</string>
+    <string name="payment_confirm_available">Hamyonda: %1$s</string>
+    <string name="payment_confirm_pin_hint">To\'lovni tasdiqlash uchun PIN-kodni kiriting.</string>
+    <string name="payment_confirm_preparing">Balans tekshirilmoqda…</string>
+    <string name="payment_confirm_submitting">To\'lov yuborilmoqda. Oynani yopmang.</string>
+    <string name="payment_confirm_insufficient">Hamyonda pul yetmaydi.</string>
+    <string name="payment_confirm_insufficient_missing">Hamyonda %1$s yetmaydi.</string>
+    <string name="payment_confirm_blocked">Hamyon bloklangan — to\'lov o\'tmaydi. Yordam xizmatiga murojaat qiling.</string>
+    <string name="payment_confirm_failed">To\'lovni tasdiqlash imkoni bo\'lmadi. Pul yechilmadi.</string>
+    <string name="payment_confirm_biometric_subtitle">%1$s to\'lovini tasdiqlang</string>
+    <string name="payment_confirm_biometric_negative">PIN-kod bilan</string>
     <string name="profile_title">Profil</string>
     <string name="profile_language">Til</string>
     <string name="profile_theme">Mavzu</string>

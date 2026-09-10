@@ -151,6 +151,19 @@
     <string name="wallet_top_up_provider_note">Форма оплаты откроется в браузере.</string>
     <string name="wallet_top_up_started">Платёж на %1$s отправлен. Баланс изменится, когда деньги дойдут, — это может занять несколько минут.</string>
     <string name="wallet_top_up_started_dismiss">Понятно</string>
+    <!-- Подтверждение оплаты из кошелька (8.3, issue #12). -->
+    <string name="payment_confirm_title">Подтверждение оплаты</string>
+    <string name="payment_confirm_amount">К списанию</string>
+    <string name="payment_confirm_available">На кошельке: %1$s</string>
+    <string name="payment_confirm_pin_hint">Введите PIN-код, чтобы подтвердить оплату.</string>
+    <string name="payment_confirm_preparing">Проверяем баланс…</string>
+    <string name="payment_confirm_submitting">Отправляем платёж. Не закрывайте окно.</string>
+    <string name="payment_confirm_insufficient">На кошельке не хватает денег.</string>
+    <string name="payment_confirm_insufficient_missing">На кошельке не хватает %1$s.</string>
+    <string name="payment_confirm_blocked">Кошелёк заблокирован — оплата не пройдёт. Обратитесь в поддержку.</string>
+    <string name="payment_confirm_failed">Подтвердить оплату не удалось. Деньги не списаны.</string>
+    <string name="payment_confirm_biometric_subtitle">Подтвердите оплату %1$s</string>
+    <string name="payment_confirm_biometric_negative">Ввести PIN</string>
     <string name="profile_title">Профиль</string>
     <string name="profile_language">Язык</string>
     <string name="profile_theme">Тема</string>
