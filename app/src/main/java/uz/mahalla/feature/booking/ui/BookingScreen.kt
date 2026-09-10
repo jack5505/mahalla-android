@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
@@ -190,7 +191,15 @@ private fun ServicesBlock(
 }
 
 /**
- * Услуга при переносе — не выбор, а напоминание: меняется только время.
+ * Что переносят: подпись записи и её прежнее время — не выбор, а напоминание.
+ *
+ * Название берётся из каталога, а если его нет — из подписи, приехавшей
+ * маршрутом (issue #155): заведение вправе убрать услугу из списка, а каталог
+ * — не ответить, и тогда без подписи человек подтверждал бы перенос, не видя,
+ * что переносит. Порядок именно такой: подпись — это имя услуги на момент
+ * записи, а в каталоге оно живое, и заголовок сменится на него, как только
+ * каталог ответит. Прежние день и время приезжают только маршрутом: своего
+ * экрана у одной записи нет.
  *
  * Отказ каталога услуг здесь не показывается и повтора не предлагает: перенос
  * от него не зависит — id услуги приехал маршрутом, и слоты по нему сервер
@@ -203,19 +212,33 @@ private fun RescheduledServiceBlock(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
         val service = state.selectedService
+        val title = service?.title?.takeIf { it.isNotBlank() }
+            ?: state.rescheduleLabel.takeIf { it.isNotBlank() }
+            ?: service?.let { stringResource(R.string.booking_service_unnamed) }
+        val current = state.rescheduledWhenText()
         when {
-            service != null -> MahallaCard {
-                Text(
-                    text = service.title.takeIf { it.isNotBlank() }
-                        ?: stringResource(R.string.booking_service_unnamed),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                service.note()?.let { note ->
+            title != null || current != null -> MahallaCard {
+                title?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                service?.note()?.let { note ->
                     Text(
                         text = note,
                         style = MaterialTheme.typography.bodyMedium,
                         color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+                // «Сейчас: 06.09.2026, 10:40» — над выбором нового дня, иначе
+                // экран не отвечает, с какого времени переносят.
+                current?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                        color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
             }
@@ -229,6 +252,26 @@ private fun RescheduledServiceBlock(
             color = LocalMahallaColors.current.fgMuted,
         )
     }
+}
+
+/**
+ * Прежнее время записи одной строкой. День без времени и время без дня — оба
+ * случая законны (в `AppointmentResponse` поля необязательные), и молчать
+ * из-за одного из них нельзя; нет ни того ни другого — строки нет вовсе.
+ */
+@Composable
+private fun BookingState.rescheduledWhenText(): String? {
+    val day = rescheduleDate?.let(DateTimeFormatters::date)
+    val time = rescheduleTime?.let(DateTimeFormatters::time)
+    val value = when {
+        day != null && time != null ->
+            stringResource(R.string.booking_summary_when, day, time)
+
+        day != null -> day
+        time != null -> time
+        else -> return null
+    }
+    return stringResource(R.string.booking_reschedule_current, value)
 }
 
 /** Цена и длительность одной строкой: вместе они и отвечают «сколько это». */
@@ -357,20 +400,34 @@ private fun SummaryBlock(
         // собранным (см. `BookingState.canBook`).
         if (date != null && time != null) {
             MahallaCard {
-                service?.let {
+                // Название той же цепочкой, что и в карточке переноса: каталог,
+                // а если он молчит — подпись, приехавшая маршрутом (issue #155).
+                // Карточка прямо над кнопкой обязана называть услугу не реже,
+                // чем всё остальное на экране.
+                val title = service?.title?.takeIf { it.isNotBlank() }
+                    ?: state.rescheduleLabel.takeIf { it.isNotBlank() }
+                    ?: service?.let { stringResource(R.string.booking_service_unnamed) }
+                title?.let {
                     Text(
-                        text = it.title.takeIf { title -> title.isNotBlank() }
-                            ?: stringResource(R.string.booking_service_unnamed),
+                        text = it,
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+                val whenText = stringResource(
+                    R.string.booking_summary_when,
+                    DateTimeFormatters.date(date),
+                    DateTimeFormatters.time(time),
+                )
                 Text(
-                    text = stringResource(
-                        R.string.booking_summary_when,
-                        DateTimeFormatters.date(date),
-                        DateTimeFormatters.time(time),
-                    ),
+                    // При переносе на экране два времени одного формата, и
+                    // «сейчас» подписано выше — новое обязано быть подписано
+                    // тоже, иначе их различает только порядок на экране.
+                    text = if (state.isReschedule) {
+                        stringResource(R.string.booking_reschedule_new, whenText)
+                    } else {
+                        whenText
+                    },
                     style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -557,10 +614,39 @@ private fun BookingReschedulePreview() {
                     listOf(BarberService(id = "s-1", title = "Soch olish", priceSum = 60_000)),
                 ),
                 selectedServiceId = "s-1",
+                rescheduleLabel = "Soch olish",
+                rescheduleDate = LocalDate.of(2026, 9, 6),
+                rescheduleTime = LocalTime.of(10, 40),
                 dates = listOf(LocalDate.of(2026, 9, 4), LocalDate.of(2026, 9, 5)),
                 selectedDate = LocalDate.of(2026, 9, 5),
                 slots = ScreenState.Content(listOf(LocalTime.of(10, 0), LocalTime.of(11, 20))),
                 selectedTime = LocalTime.of(11, 20),
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+/**
+ * Каталог услуг не ответил: и название, и прежнее время на экране остались —
+ * они приехали маршрутом, а не из `barber-services` (issue #155).
+ */
+@ThemeLanguagePreviews
+@Composable
+private fun BookingRescheduleWithoutCatalogPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        BookingContent(
+            state = BookingState(
+                isReschedule = true,
+                services = ScreenState.Error(ApiFailure(ApiError.NoConnection)),
+                selectedServiceId = "s-1",
+                rescheduleLabel = "Soch olish",
+                rescheduleDate = LocalDate.of(2026, 9, 6),
+                rescheduleTime = LocalTime.of(10, 40),
+                dates = listOf(LocalDate.of(2026, 9, 4), LocalDate.of(2026, 9, 5)),
+                selectedDate = LocalDate.of(2026, 9, 5),
+                slots = ScreenState.Content(listOf(LocalTime.of(10, 0), LocalTime.of(11, 20))),
             ),
             onEvent = {},
             onBack = {},

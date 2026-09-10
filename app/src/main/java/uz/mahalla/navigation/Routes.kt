@@ -279,6 +279,16 @@ data object GamingBookingsRoute
  * Не `null`, а пустая строка: типизированные маршруты кладут аргументы в
  * `Bundle`, и необязательная строка потребовала бы своего `NavType` (то же
  * решение, что у [placeName]).
+ * @param rescheduleLabel чем переносимая запись подписана в «моих записях»
+ * (`Appointment.serviceName`). Едет маршрутом, потому что название услуги на
+ * экране иначе взять негде, кроме каталога, — а он мог не ответить или уже не
+ * содержать эту услугу (issue #155), и тогда перенос подтверждают, не видя, что
+ * переносят.
+ * @param rescheduleDate и [rescheduleTime] — прежние день и время записи в
+ * формате ISO-8601 (`2026-09-06`, `10:40`), пусто — сервер их не назвал (в
+ * `AppointmentResponse` оба поля необязательные). Именно ISO, а не готовая
+ * строка «06.09.2026, 10:40»: аргументы маршрута переживают и смерть процесса,
+ * и смену языка, а формат — дело экрана.
  */
 @Serializable
 data class BookingRoute(
@@ -286,6 +296,9 @@ data class BookingRoute(
     val placeName: String = "",
     val serviceId: String = "",
     val rescheduleId: String = "",
+    val rescheduleLabel: String = "",
+    val rescheduleDate: String = "",
+    val rescheduleTime: String = "",
 )
 
 /**
