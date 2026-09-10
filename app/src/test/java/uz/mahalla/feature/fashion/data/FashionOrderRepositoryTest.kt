@@ -116,10 +116,10 @@ class FashionOrderRepositoryTest {
                 """{"content":[
                      {"id":"o-1","orderNumber":"CL-42","placeId":"$STORE","vertical":"CLOTHING",
                       "status":"ACCEPTED","fulfillment":"DELIVERY","paymentMethod":"WALLET",
-                      "itemsAmount":480000,"deliveryAmount":20000,"totalAmount":500000,
+                      "itemsAmount":48000000,"deliveryAmount":2000000,"totalAmount":50000000,
                       "createdAt":"2026-09-05T10:00:00",
                       "items":[{"itemType":"VARIANT","itemId":"v-1","itemName":"Oq ko'ylak",
-                                "quantity":2,"unitPrice":240000,"totalPrice":480000}]},
+                                "quantity":2,"unitPrice":24000000,"totalPrice":48000000}]},
                      {"orderNumber":"CL-43"}],
                    "page":0,"totalPages":2,"last":false}""",
             ),
@@ -137,6 +137,7 @@ class FashionOrderRepositoryTest {
         assertEquals("o-1", order.id)
         assertEquals("CL-42", order.number)
         assertEquals(OrderStatus.Confirmed, order.status)
+        // Суммы приезжают в тийинах (issue #149): 50 000 000 → 500 000 сум.
         assertEquals(500_000L, order.totals.totalSum)
         assertEquals("Oq ko'ylak", order.lines.single().name)
         // Jackson отдаёт `LocalDateTime` без зоны — иначе дата пуста у всех.

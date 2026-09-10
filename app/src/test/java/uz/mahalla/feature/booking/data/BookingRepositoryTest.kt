@@ -57,10 +57,11 @@ class BookingRepositoryTest {
     fun `services are requested by place and parsed out of the envelope`() = runTest {
         server.enqueue(
             envelope(
-                // Имена полей — как на стенде: name и price, не title и
-                // priceAmount (фикстура contract/booking/services.json).
+                // Имена полей и цена — как на стенде: name и price, не title и
+                // priceAmount, price в тийинах (фикстура
+                // contract/booking/services.json, issue #149).
                 """[{"id":"s-1","name":"Soch olish","colorHex":null,
-                   "price":60000,"durationMinutes":40,"isActive":true}]""",
+                   "price":5000000,"durationMinutes":40,"isActive":true}]""",
             ),
         )
 
@@ -70,10 +71,26 @@ class BookingRepositoryTest {
         val service = services.single()
         assertEquals("s-1", service.id)
         assertEquals("Soch olish", service.title)
-        assertEquals(60_000L, service.priceSum)
+        // 5 000 000 тийинов — это 50 000 сум, а не «5 000 000 so'm» за стрижку.
+        assertEquals(50_000L, service.priceSum)
         assertEquals(40, service.durationMinutes)
         // Описания услуги бэкенд не отдаёт — экрану его взять неоткуда.
         assertNull(service.description)
+    }
+
+    /** Цена без пересчёта была бы в сто раз больше; мусор в поле — не цена. */
+    @Test
+    fun `service price is converted from tiyin once and garbage becomes zero`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"s-1","price":150},{"id":"s-2","price":149},
+                   {"id":"s-3"},{"id":"s-4","price":-300000}]""",
+            ),
+        )
+
+        val services = (repository().services(PLACE) as ApiResult.Success).data
+
+        assertEquals(listOf(2L, 1L, 0L, 0L), services.map { it.priceSum })
     }
 
     @Test
@@ -238,7 +255,7 @@ class BookingRepositoryTest {
             envelope(
                 """{"content":[
                    {"id":"a-1","placeId":"$PLACE","serviceId":"$SERVICE",
-                    "serviceName":"Soch olish","price":60000,"apptDate":"2026-09-05",
+                    "serviceName":"Soch olish","price":5000000,"apptDate":"2026-09-05",
                     "startTime":"10:30:00","status":"CONFIRMED",
                     "createdAt":"2026-09-04T12:00:00"},
                    {"serviceName":"Yozuvsiz"},
@@ -255,7 +272,8 @@ class BookingRepositoryTest {
         assertEquals(listOf("a-1", "a-3"), page.items.map(Appointment::id))
         val first = page.items.first()
         assertEquals("Soch olish", first.serviceName)
-        assertEquals(60_000L, first.priceSum)
+        // Цена записи — тоже тийины, пересчёт один и тот же (issue #149).
+        assertEquals(50_000L, first.priceSum)
         assertEquals(LocalDate.of(2026, 9, 5), first.date)
         assertEquals(AppointmentStatus.Confirmed, first.status)
         // Jackson отдаёт `LocalDateTime` без зоны — иначе дата пуста у всех.

@@ -6,8 +6,8 @@ import java.time.Instant
  * Кошелёк пользователя (`WalletResponse`, issue #62).
  *
  * Все суммы — целые сумы, как и везде в приложении ([uz.mahalla.core.format.MoneyFormatter]):
- * пересчёт из младших единиц бэкенда делает [WalletAmounts] на границе данных,
- * дальше по коду единица одна.
+ * пересчёт из тийинов бэкенда делает [uz.mahalla.core.format.Money] на
+ * границе данных (issue #149), дальше по коду единица одна.
  *
  * @param balanceSum основной баланс.
  * @param bonusSum бонусы — отдельный кошелёк бэкенда, их нельзя вывести.
@@ -16,11 +16,6 @@ import java.time.Instant
  * к кошельку.
  * @param availableSum сколько можно потратить прямо сейчас. Именно это число
  * checkout сравнивает с суммой заказа.
- * @param amountScale делитель, которым суммы этого ответа переведены в сумы
- * ([WalletAmounts.scaleOf]). Он остаётся в домене ради пополнения (issue #93):
- * `amount` в `POST wallet/top-up` уходит в единицах бэкенда, и переводить
- * сумы обратно надо тем же делителем, который вывела эта же выдача, — иначе
- * экран показывал бы одну единицу, а платёж уходил в другой.
  */
 data class Wallet(
     val balanceSum: Long = 0,
@@ -29,7 +24,6 @@ data class Wallet(
     val availableSum: Long = 0,
     val currency: String? = null,
     val status: WalletStatus = WalletStatus.Unknown,
-    val amountScale: Long = WalletAmounts.TIYIN_IN_SOM,
 )
 
 /**

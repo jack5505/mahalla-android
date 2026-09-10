@@ -4,40 +4,23 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uz.mahalla.core.format.Money
 
 /**
  * Пополнение кошелька (issue #93): правила черновика, единицы суммы и проверка
  * ссылки на форму оплаты.
  *
- * Главное здесь — единицы. Бэкенд принимает `amount` в своих единицах с
- * минимумом `100000`, а человек вводит сумы; делитель выводится из выдачи
- * баланса ([WalletAmounts]), и ошибка в сто раз означала бы списание в сто раз
- * больше задуманного.
+ * Главное здесь — единицы. Бэкенд принимает `amount` в тийинах с минимумом
+ * `100000`, а человек вводит сумы (issue #149); ошибка в сто раз означала бы
+ * списание в сто раз больше задуманного.
  */
 class WalletTopUpTest {
 
     @Test
-    fun `minimum is named in sums by the scale of the response`() {
-        // Тийины: серверные 100 000 — это 1 000 сум.
-        assertEquals(1_000L, WalletTopUp.minAmountSum(WalletAmounts.TIYIN_IN_SOM))
-        // Сумы: минимум ровно тот, что в схеме.
-        assertEquals(100_000L, WalletTopUp.minAmountSum(1L))
-    }
-
-    /**
-     * Округление вверх: при округлении вниз подпись обещала бы сумму, которую
-     * сервер отвергнет как слишком маленькую.
-     */
-    @Test
-    fun `minimum is rounded up`() {
-        assertEquals(33_334L, WalletTopUp.minAmountSum(3L))
-        assertTrue(WalletTopUp.toMinor(WalletTopUp.minAmountSum(3L), 3L) >= WalletTopUp.MIN_AMOUNT_MINOR)
-    }
-
-    @Test
-    fun `amount is sent in the units of the backend`() {
-        assertEquals(25_000_000L, WalletTopUp.toMinor(250_000L, WalletAmounts.TIYIN_IN_SOM))
-        assertEquals(250_000L, WalletTopUp.toMinor(250_000L, 1L))
+    fun `minimum under the field is the minimum of the schema in sums`() {
+        // Серверные 100 000 тийинов — это 1 000 сум.
+        assertEquals(1_000L, WalletTopUp.MIN_AMOUNT_SUM)
+        assertEquals(WalletTopUp.MIN_AMOUNT_TIYIN, Money.somToTiyin(WalletTopUp.MIN_AMOUNT_SUM))
     }
 
     /**
@@ -62,7 +45,7 @@ class WalletTopUpTest {
 
     @Test
     fun `all reasons are reported at once`() {
-        val errors = TopUpValidator.validate(TopUpDraft(), WalletAmounts.TIYIN_IN_SOM)
+        val errors = TopUpValidator.validate(TopUpDraft())
 
         assertEquals(setOf(TopUpError.AmountRequired, TopUpError.ProviderRequired), errors)
     }
@@ -73,12 +56,12 @@ class WalletTopUpTest {
 
         assertEquals(
             setOf(TopUpError.AmountTooSmall),
-            TopUpValidator.validate(draft, WalletAmounts.TIYIN_IN_SOM),
+            TopUpValidator.validate(draft),
         )
-        // При другом делителе та же сумма — уже отказ по другому порогу.
+        // Ровно минимум проходит: подпись под полем обещает именно его.
         assertEquals(
-            setOf(TopUpError.AmountTooSmall),
-            TopUpValidator.validate(draft.copy(amountText = "99999"), 1L),
+            emptySet<TopUpError>(),
+            TopUpValidator.validate(draft.copy(amountText = "1000")),
         )
     }
 
@@ -92,7 +75,7 @@ class WalletTopUpTest {
 
         assertEquals(
             setOf(TopUpError.AmountTooLarge),
-            TopUpValidator.validate(draft, WalletAmounts.TIYIN_IN_SOM),
+            TopUpValidator.validate(draft),
         )
     }
 
@@ -100,7 +83,7 @@ class WalletTopUpTest {
     fun `filled draft passes`() {
         val draft = TopUpDraft(amountText = "250 000", provider = TopUpProvider.Uzum)
 
-        assertTrue(TopUpValidator.validate(draft, WalletAmounts.TIYIN_IN_SOM).isEmpty())
+        assertTrue(TopUpValidator.validate(draft).isEmpty())
         assertEquals(250_000L, draft.amountSum)
     }
 

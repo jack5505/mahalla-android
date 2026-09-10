@@ -1,6 +1,7 @@
 package uz.mahalla.feature.freelancer.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
@@ -15,6 +16,9 @@ import uz.mahalla.feature.freelancer.domain.FreelancerPage
  *
  * Всё остальное мастера не прячет: без имени он получит подпись от экрана, без
  * специальности, ставки и рейтинга покажется без них.
+ *
+ * `hourlyRate` и `priceAmount` заказа приходят в **тийинах**; в домен они
+ * уходят сумами через `Money.tiyinToSom` (issue #149).
  */
 internal fun FreelancerDto.toDomain(): Freelancer? {
     val freelancerId = id?.takeIf { it.isNotBlank() } ?: return null
@@ -26,7 +30,7 @@ internal fun FreelancerDto.toDomain(): Freelancer? {
         city = city?.trim()?.takeIf { it.isNotEmpty() },
         phone = phone?.trim()?.takeIf { it.isNotEmpty() },
         // Отрицательная ставка — не скидка, а мусор.
-        hourlyRateSum = hourlyRate?.coerceAtLeast(0) ?: 0,
+        hourlyRateSum = hourlyRate.tiyinToSom()?.coerceAtLeast(0) ?: 0,
         experienceYears = experienceYears?.takeIf { it > 0 },
         // Молчание сервера — «мастер берёт заказы»: спрятать кнопку из-за
         // отсутствующего поля хуже, чем показать её и получить честный отказ.
@@ -69,7 +73,7 @@ private fun FreelancerOrderDto.order(orderId: String) = FreelancerOrder(
     freelancerId = freelancerId?.takeIf { it.isNotBlank() },
     serviceId = serviceId?.takeIf { it.isNotBlank() },
     serviceTitle = serviceTitle?.trim()?.takeIf { it.isNotEmpty() },
-    priceSum = priceAmount?.coerceAtLeast(0) ?: 0,
+    priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     status = FreelancerOrderStatus.fromApi(status),
     scheduledAt = parseServerInstant(scheduledAt),
     address = address?.trim()?.takeIf { it.isNotEmpty() },

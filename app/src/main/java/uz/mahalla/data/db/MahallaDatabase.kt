@@ -29,6 +29,7 @@ import uz.mahalla.data.db.entity.PlaceEntity
     ],
     // v2 — эпик 4: в кэш мест добавлены адрес, координаты, фото и контакты.
     // v3 — эпик 5: строка черновика корзины ключуется позицией + модификаторами.
+    // v4 — issue #149: суммы в кэше переведены из тийинов в сумы.
     version = MahallaDatabase.VERSION,
     exportSchema = true,
 )
@@ -42,6 +43,6 @@ abstract class MahallaDatabase : RoomDatabase() {
         const val NAME = "mahalla.db"
 
         /** Текущая версия схемы. Константа, чтобы тест миграций сверялся с ней. */
-        const val VERSION = 3
+        const val VERSION = 4
     }
 }

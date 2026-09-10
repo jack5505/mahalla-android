@@ -5,6 +5,7 @@ import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.core.format.parseServerSlotInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.activity.domain.Activity
 import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
@@ -33,6 +34,9 @@ import java.time.LocalTime
  * необязательно: активность без даты, без суммы и без статуса остаётся в
  * списке. Пропасть она не должна ни при каких обстоятельствах — за ней стоят
  * потраченные деньги, и «заказ исчез» страшнее «заказ без даты».
+ *
+ * Суммы всех пяти источников приходят в тийинах, пересчёт `Money.tiyinToSom`
+ * (issue #149).
  */
 
 /**
@@ -52,7 +56,7 @@ internal fun OrderViewDto.toActivity(): Activity? {
         kind = orderKind,
         status = ActivityStatus.ofOrder(status),
         occurredAt = parseServerInstant(createdAt),
-        amount = totalAmount,
+        amount = totalAmount.tiyinToSom(),
         // Номер заказа — то, что человек называет в поддержке. Названия
         // заведения в `OrderView` нет вовсе, только `placeId`.
         note = orderNumber?.takeIf { it.isNotBlank() },
@@ -86,7 +90,7 @@ internal fun GamingBookingDto.toActivity(): Activity? {
         kind = ActivityKind.GamingBooking,
         status = ActivityStatus.ofBooking(status),
         occurredAt = parseServerSlotInstant(startTime),
-        amount = totalPrice,
+        amount = totalPrice.tiyinToSom(),
         // Длительность — единственное, что бэкенд сообщает о брони словами.
         // Подпись («2 ч») собирает экран: строка с числом должна быть
         // локализуемой, а в данных ей делать нечего.
@@ -111,7 +115,7 @@ internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
         },
         status = ActivityStatus.ofAppointment(status),
         occurredAt = appointmentAt() ?: parseServerInstant(createdAt),
-        amount = price,
+        amount = price.tiyinToSom(),
         // Название услуги — единственное человекочитаемое поле в ответе, и
         // оно же самое полезное: «Soch olish» говорит больше, чем «Запись».
         note = serviceName?.takeIf { it.isNotBlank() },
@@ -150,7 +154,7 @@ internal fun CinemaTicketDto.toActivity(): Activity? {
         kind = ActivityKind.CinemaTicket,
         status = ActivityStatus.ofTicket(status),
         occurredAt = parseServerInstant(createdAt),
-        amount = price,
+        amount = price.tiyinToSom(),
         // Место в зале: то, что человек ищет в билете в первую очередь.
         note = seatNumber?.takeIf { it.isNotBlank() },
         target = ActivityTarget.None,
