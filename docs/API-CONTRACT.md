@@ -40,7 +40,105 @@
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
+**Страничные ответы** — один конверт `PageResponse…` на все списки:
+`content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
+`last`. Есть ли следующая страница, решает общая функция
+`core/paging/hasMorePages` (issue #142): приоритет у `last`, без него —
+`page`/`totalPages`, при полном молчании сервера догрузка останавливается.
+На неё переведены fashion, freelancer, wallet и «Мои активности»; в семи
+мапперах ещё лежит дословная копия того же правила — issue #231.
+
+**Деньги — в тийинах.** Все целые денежные поля во всех ответах и телах
+запросов (`price`, `totalAmount`, `balance`, `amount`, `monthlyPrice`,
+`totalPrice`, `consultationPrice`, `hourlyRate`, …) — **тийины**, 1 сум = 100
+тийинов. Это документировано самим бэкендом в `info.description` живого
+`/v3/api-docs` (снято 2026-09-10, issue #149):
+
+> Barcha butun sonli pul maydonlari **tiyin**da uzatiladi: 1 so'm = 100 tiyin.
+> Ko'rsatishdan oldin 100 ga bo'lish kerak: `5000000` → `50 000 so'm`. Kasr son
+> yoki so'mdagi qiymat qabul qilinmaydi.
+
+Клиент живёт в целых сумах: домен, экраны и Room хранят сумы, а пересчёт делает
+`core/format/Money` ровно один раз — в маппере DTO → домен (`tiyinToSom`) и при
+сборке тела запроса (`somToTiyin`, сейчас это только `POST wallet/top-up`).
+Дробные близнецы `balanceSom`, `amountSom`, `monthlyPriceSom`, `pricePaidSom`
+— то же число в сумах для чтения ответа глазами; клиент их **игнорирует**, а не
+выводит из них единицу, как делал раньше `WalletAmounts`. Проценты
+(`discountPercent`, `yearlyDiscountPercent`) деньгами не являются и не делятся.
+
 ---
+
+## «Мои активности» — своего `*Api.kt` нет
+
+`feature/activity/` (issue #73) не объявляет ни одной ручки и ни одного DTO:
+пять источников читаются интерфейсами вертикалей, которым принадлежат.
+Ходить в них мимо этих интерфейсов не надо — копия контракта уже разошлась с
+оригиналом один раз (issue #142).
+
+| Источник | Через что | Путь |
+|---|---|---|
+| Заказы всех вертикалей | `FashionApi.myOrders(vertical = null)` | `GET orders` |
+| Брони игровых зон | `GamingApi.myBookings` | `GET gaming/bookings/my` |
+| Записи к мастеру | `BookingApi.myAppointments` | `GET appointments/my` |
+| Записи к врачу | `HospitalApi.myAppointments` | `GET hospitals/appointments/my` |
+| Билеты в кино | `CinemaApi.myTickets` | `GET cinema/tickets/my` |
+
+---
+
+## AnalyticsApi ⚠️ частично
+
+`app/src/main/java/uz/mahalla/data/network/analytics/AnalyticsApi.kt` — путь,
+схема запроса и требование токена сверены со стендом 2026-09-10 (`/v3/api-docs`
++ curl'ы, issue #169); успешный ответ под токеном — нет, `CONTRACT_REFRESH_TOKEN`
+всё ещё не задан.
+
+| Метод | Путь | |
+|---|---|---|
+| POST | `analytics/track` | ✅ путь и схема есть, `401` без токена; тело успеха не проверено |
+
+```json
+TrackEventRequest: {
+  "placeId": "uuid",       // обязателен
+  "eventType": "VIEW",     // обязателен, закрытое перечисление
+  "lat": 41.31, "lng": 69.24,
+  "metadata": {}           // свободный объект
+}
+```
+
+`eventType` — ровно девять значений: `VIEW`, `LIKE`, `SAVE`, `SHARE`, `CALL`,
+`NAVIGATE`, `BOOK`, `ORDER`, `REVIEW`. Ответ — `ApiResponseVoid`, то есть
+конверт без полезной нагрузки.
+
+**Это счётчик взаимодействий с заведением, а не продуктовая аналитика.**
+Из-за обязательного `placeId` и закрытого перечисления отправить нечем:
+открытие экрана без заведения (профиль, кошелёк, «мои активности»), поисковый
+запрос и отказ бэкенда. Своего вида события под них клиент выдумать не может —
+нужна ручка на стороне бэкенда (issue #226). Поэтому `BOOK` и
+`ORDER` в приложении шлются на все вертикали сразу, а различает их
+`metadata.vertical` (`food`, `fashion`, `queue`, `booking`, `hospital`,
+`gaming`, `cinema`) — **содержимое `metadata` не сверено**: схема объявляет его
+свободным объектом, но что бэкенд с ним делает, из схемы не следует.
+
+Три факта, из которых следует устройство отправки в клиенте:
+
+- **токен обязателен.** Аноним с гео-заголовками получает
+  `401 UNAUTHORIZED` (`{"success":false,"error":{"code":"UNAUTHORIZED"}}`),
+  без гео-заголовков — `403 GEO_PERMISSION_REQUIRED`, то есть гео проверяется
+  раньше. Каталог смотрят и до входа, поэтому без сессии клиент запрос **не
+  делает**: он заведомо окажется отказом.
+- **батчинга нет.** Под `analytics` у бэкенда ровно два пути: этот `track` и
+  `places/{placeId}/dashboard` (бизнес-панель, эпик #16, клиентом не
+  используется). Одно событие — один запрос.
+- **поля времени события в запросе нет.** Момент события — это момент, когда
+  запрос доехал до сервера. Отсюда решение не копить события в офлайне:
+  `docs/adr/0006-analitika-bez-seti.md`.
+
+`lat`/`lng` в теле объявлены, но клиент их **не заполняет**: координаты уже
+уходят в `X-Geo-Lat`/`X-Geo-Lng`. **Это допущение**, а не проверенный факт:
+общее правило «координаты не дублировать» выше написано про query-параметры, а
+берёт ли бэкенд гео события из заголовков — из схемы не следует. Не берёт —
+события приедут без координат, и гео-половина дашборда заведения останется
+пустой, причём молча. Открытый вопрос к бэкенду, issue #226.
 
 ## AuthApi ✅
 
@@ -81,6 +179,13 @@
 
 Слоты подтверждены как **массив строк** вида `"09:00"` — не объекты.
 
+**Тело `POST appointments` подтверждено схемой** (2026-09-10, issue #167).
+Коллизия springdoc вокруг имени `BookRequest` рассосалась, у пути появилась
+своя `AppointmentBookRequest`: `{placeId, serviceId, serviceName, date,
+startTime}`, обязательны `placeId`, `date`, `startTime`. Выведенные имена
+`{placeId, serviceId, date, startTime}` совпали — правка `BookAppointmentRequest`
+не нужна; необязательное `serviceName` в теле клиент не шлёт.
+
 **Своей ручки переноса записи у бэкенда нет** (сверено по живому
 `/v3/api-docs` 2026-09-08, эпик #11). Под `appointments` есть ровно пять
 путей: сам `POST`, `my`, `{id}`, `{id}/cancel` и `{id}/status`; ни
@@ -100,12 +205,9 @@
 `GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
 одной записи нет), `PUT appointments/{id}/status` — бизнес-панель, эпик #16.
 
-**Открытый вопрос к бэкенду: в чём измеряется `price`.** Стенд отдаёт за
-стрижку `5000000`, за подравнивание бороды `3000000`. Как сумы это
-неправдоподобно; как тийины — 50 000 и 30 000 сум, то есть обычные цены.
-Клиент сейчас считает сумами и потому нарисует «5 000 000 so'm». Заметим:
-`WalletAmounts` из точно такого же отсутствия дробного поля `*Som` делает
-обратный вывод — тийины. Наугад делитель не меняем: нужен ответ бэкенда.
+`price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
+отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
+(issue #149; фикстура `app/src/test/resources/contract/booking/services.json`).
 
 ## CinemaApi ⚠️
 
@@ -121,16 +223,38 @@
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты.
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`.
 
 | Метод | Путь |
 |---|---|
 | GET | `places/nearby` |
+| GET | `places/map-bounds` |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
+снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
+запрос):
+
+| Параметр | Обязателен | Смысл |
+|---|---|---|
+| `minLat`, `minLng` | да | юго-западный угол, `double` |
+| `maxLat`, `maxLng` | да | северо-восточный угол, `double` |
+| `category` | нет | одно значение перечисления (`FOOD`, `PHARMACY`, …) |
+
+Ответ — `ApiResponse<List<PlaceSummary>>`, тот же DTO, что у `nearby`, включая
+`distanceMeters`: расстояние сервер считает по заголовкам `X-Geo-*`, а не по
+прямоугольнику, поэтому оно совпадает с расстоянием в списке. Пагинации нет —
+область целиком одним списком. Вывернутый прямоугольник (`min > max`) отвечает
+`200` с пустым `data`, а не ошибкой, — на клиенте область проверяется до
+запроса (`MapBounds.isValid`), иначе пустая карта читалась бы как «рядом
+ничего нет».
+
+Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
+ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
 **Аватар автора отзыва не сверен** (issue #60): схема `Response` в
 `/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
@@ -154,6 +278,23 @@
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+
+`GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
+отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
+перекрыто коллизией springdoc. Параметр `vertical` необязателен: с ним
+приезжают заказы одной вертикали (одежда), без него — **всех**
+(`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
+активности» (issue #73) — см. раздел о них в начале файла.
+
+**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
+оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
+#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
+fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
+`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
+(состав берётся из серверной корзины `fashion/cart*`), зато есть
+`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
+`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
+пути больше нет.
 
 ## FoodApi ✅
 
@@ -199,28 +340,66 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
 
-**Тело `POST gaming/bookings` не подтверждено.** В схеме оно объявлено как
-`BookRequest`, а на это имя ссылаются три пути (коллизия springdoc), уцелел
-медицинский вариант. Поля названы по ответу того же эндпоинта — `{zoneId,
-startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh`, как только
-появится токен.
+**Тело `POST gaming/bookings` подтверждено схемой** (2026-09-10, issue #167).
+Раньше оно было объявлено как `BookRequest` — имя делили три пути (коллизия
+springdoc), и поля были названы по ответу того же эндпоинта. Теперь у пути своя
+`GamingBookRequest`, и догадка совпала: `{zoneId, startTime, durationHours}`,
+обязательны `zoneId` и `durationHours`, `durationHours` — целое **от 1 до 24**.
+Что бэкенд с запросом сделает, всё ещё не проверено: кандидат на пробу
+`contract/gaming.sh`, как только появится токен.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
 
-`startTime` уходит зоне-менее в UTC (`2026-09-05T13:00:00`) — согласовано с
-`parseServerInstant`, который читает зоне-менее время сервера как UTC.
+`startTime` уходит зоне-менее в **местном ташкентском** времени
+(`2026-09-05T13:00:00` = 13:00 по часам заведения) и читается обратно так же —
+`parseServerSlotInstant`. Раньше здесь был UTC; переехали в issue #144, потому
+что запись к мастеру (`apptDate` + `startTime`) местная по построению, и две
+трактовки на один список «Моих активностей» расходились на пять часов.
+Трактовка не подтверждена стендом: **это первое, что надо проверить**, когда
+появится токен, — заодно с телом `POST gaming/bookings`. Отметки события
+(`createdAt` и прочие) по-прежнему читаются как UTC (`parseServerInstant`).
 
-## HospitalApi ⚠️
+## HospitalApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — пути и схемы сверены с живым `/v3/api-docs` (2026-09-10, issue #167); поведение под токеном не проверялось — нужен `CONTRACT_REFRESH_TOKEN`.
 
-| Метод | Путь |
-|---|---|
-| GET | `hospitals/places/{placeId}/doctors` |
-| POST | `hospitals/appointments` |
-| GET | `hospitals/appointments/my` |
-| POST | `appointments/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
+| GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
+
+**Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
+`hospital-controller` не было и клиент слал отмену в общую
+`POST appointments/{id}/cancel`. В схеме от 2026-09-09 своя отмена есть, и
+заодно рассосалась коллизия springdoc, из-за которой обе вертикали выглядели
+одной сущностью: у больниц теперь свои `HospitalBookRequest` и
+`HospitalAppointmentResponse` (`{id, doctorId, apptDate, startTime, complaint,
+status, createdAt}`), у брони — `AppointmentBookRequest` и
+`AppointmentBookingResponse` (`{id, placeId, userId, serviceId, serviceName,
+price, apptDate, startTime, endTime, status, createdAt}`). Записи разные —
+значит, общая ручка чужую отменить не может.
+
+Живой пробой это не доказать: `401` приходит до маршрутизации, оба пути
+отвечают им одинаково (проверено `curl` 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
+не задан. Как только токен появится — контрактная проба вертикали, по образцу
+`contract/booking.sh`.
+
+Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
+общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
+теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
+никогда — на экране «мои записи» она останется без имени врача (issue #219).
+
+Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
+`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
+свободные слоты; приложение вместо них рисует сетку времени из
+`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
+бизнес-панельные
+`POST hospitals/places/{placeId}/doctors`,
+`PUT hospitals/places/{placeId}/doctors/{id}` и
+`PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
 ## MediaApi ✅
 
@@ -334,6 +513,9 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 | GET | `wallet` |
 | GET | `wallet/transactions` |
 | POST | `wallet/top-up` |
+
+`TopUpRequest.amount` — в тийинах, минимум `100000` (1 000 сум); человек
+вводит сумы, `Money.somToTiyin` переводит в репозитории (issue #149).
 
 ---
 

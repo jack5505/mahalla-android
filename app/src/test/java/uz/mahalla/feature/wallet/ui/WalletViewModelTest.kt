@@ -18,7 +18,6 @@ import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpOrder
 import uz.mahalla.feature.wallet.domain.TopUpProvider
 import uz.mahalla.feature.wallet.domain.Wallet
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
@@ -198,25 +197,21 @@ class WalletViewModelTest {
 
     // --- Пополнение (issue #93) ---
 
-    /**
-     * Делитель единиц бэкенда берётся из уже приехавшего баланса: без него
-     * неизвестно ни сколько отправлять, ни какой минимум обещать.
-     */
+    /** Шторка открывается поверх приехавшего баланса и обещает минимум в сумах. */
     @Test
-    fun `top up sheet takes the scale from the loaded balance`() = runTest {
+    fun `top up sheet opens over a loaded balance with the minimum in sums`() = runTest {
         val repository = FakeWalletRepository(
-            Wallet(balanceSum = 500_000, availableSum = 500_000, amountScale = 1L),
+            Wallet(balanceSum = 500_000, availableSum = 500_000),
         )
         val viewModel = WalletViewModel(repository)
 
         viewModel.onEvent(WalletEvent.TopUpClicked)
 
         val topUp = requireNotNull(viewModel.state.value.topUp)
-        assertEquals(1L, topUp.scale)
-        assertEquals(100_000L, topUp.minAmountSum)
+        assertEquals(1_000L, topUp.minAmountSum)
     }
 
-    /** Пока баланс не приехал, пополнять нечего: делителя нет. */
+    /** Пока баланс не приехал, пополнять нечего. */
     @Test
     fun `top up is not offered without a balance`() = runTest {
         val repository = FakeWalletRepository()
@@ -271,10 +266,9 @@ class WalletViewModelTest {
         viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
         viewModel.onEvent(WalletEvent.TopUpSubmitted)
 
-        // Сумма уходит в сумах, вместе с делителем: перевод в единицы
-        // бэкенда — дело репозитория.
+        // Сумма уходит в сумах: перевод в тийины — дело репозитория.
         assertEquals(
-            listOf(Triple(250_000L, TopUpProvider.Payme, WalletAmounts.TIYIN_IN_SOM)),
+            listOf(250_000L to TopUpProvider.Payme),
             repository.topUpRequests,
         )
         // Эффекты складываются в буферизованный канал, поэтому первый уже там.

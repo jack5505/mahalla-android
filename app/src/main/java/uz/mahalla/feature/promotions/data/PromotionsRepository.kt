@@ -1,6 +1,7 @@
 package uz.mahalla.feature.promotions.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
@@ -77,6 +78,9 @@ internal fun PromotionPageDto.toDomain(): PromotionPage {
  *
  * Всё остальное акцию не прячет: незнакомый вид, мусор вместо процента и
  * битые даты — не повод скрыть от человека скидку, которую завело заведение.
+ *
+ * `discountAmount` и `minOrderAmount` приходят в тийинах, пересчёт
+ * `Money.tiyinToSom` (issue #149); `discountPercent` — процент, не деньги.
  */
 internal fun PromotionDto.toDomain(): Promotion? {
     val promotionId = id?.takeIf(String::isNotBlank) ?: return null
@@ -92,8 +96,8 @@ internal fun PromotionDto.toDomain(): Promotion? {
         // Процент вне 1..100 — ошибка сервера: «скидка 0 %» и «скидка 1000 %»
         // одинаково нечего показывать.
         discountPercent = discountPercent?.takeIf { it in PERCENT_RANGE },
-        discountAmount = discountAmount?.takeIf { it > 0 },
-        minOrderAmount = minOrderAmount?.takeIf { it > 0 },
+        discountAmount = discountAmount.tiyinToSom()?.takeIf { it > 0 },
+        minOrderAmount = minOrderAmount.tiyinToSom()?.takeIf { it > 0 },
         promoCode = promoCode?.takeIf(String::isNotBlank),
         startsAt = parseServerInstant(startedAt),
         endsAt = parseServerInstant(endedAt),

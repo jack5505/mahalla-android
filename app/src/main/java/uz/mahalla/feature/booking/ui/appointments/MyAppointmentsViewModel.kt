@@ -27,15 +27,11 @@ sealed interface MyAppointmentsEffect : UiEffect {
      * Перенос: экран уходит выбирать новое время на экран записи — там уже
      * есть и календарь, и слоты, и правило «прошедший слот не предлагать».
      *
-     * Ids едут наружу, а не только `appointmentId`: заведение и услугу
-     * запрашивает `POST appointments`, а взять их больше негде — своего экрана
-     * у одной записи нет, и `GET appointments/{id}` приложение не использует.
+     * Наружу едет вся [RescheduleTarget], а не только `appointmentId`: взять
+     * её там больше негде — своего экрана у одной записи нет, и
+     * `GET appointments/{id}` приложение не использует.
      */
-    data class OpenReschedule(
-        val appointmentId: String,
-        val placeId: String,
-        val serviceId: String,
-    ) : MyAppointmentsEffect
+    data class OpenReschedule(val target: RescheduleTarget) : MyAppointmentsEffect
 }
 
 /**
@@ -127,9 +123,16 @@ class MyAppointmentsViewModel @Inject constructor(
         val appointment = appointmentOrNull(appointmentId)?.takeIf { it.canReschedule } ?: return
         emitEffect(
             MyAppointmentsEffect.OpenReschedule(
-                appointmentId = appointment.id,
-                placeId = appointment.placeId.orEmpty(),
-                serviceId = appointment.serviceId.orEmpty(),
+                RescheduleTarget(
+                    appointmentId = appointment.id,
+                    placeId = appointment.placeId.orEmpty(),
+                    serviceId = appointment.serviceId.orEmpty(),
+                    // Подпись и прежнее время — то, что человек видел в строке,
+                    // по которой нажал «перенести» (issue #155).
+                    serviceName = appointment.serviceName.orEmpty(),
+                    date = appointment.date,
+                    startTime = appointment.startTime,
+                ),
             ),
         )
     }

@@ -3,6 +3,7 @@ package uz.mahalla.feature.booking.data
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
@@ -25,7 +26,7 @@ internal fun ServiceDto.toDomain(): BarberService? {
         title = name?.takeIf { it.isNotBlank() }.orEmpty(),
         // description бэкенд не отдаёт — остаётся пустым (см. ServiceDto).
         // Отрицательная цена — не скидка, а мусор.
-        priceSum = price?.coerceAtLeast(0) ?: 0,
+        priceSum = price.tiyinToSom()?.coerceAtLeast(0) ?: 0,
         durationMinutes = durationMinutes?.takeIf { it > 0 },
         // Молчание сервера — «услуга оказывается»: спрятать её из-за
         // отсутствующего флага хуже, чем показать лишнюю.
@@ -61,7 +62,7 @@ private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
     placeId = placeId?.takeIf { it.isNotBlank() },
     serviceId = serviceId?.takeIf { it.isNotBlank() },
     serviceName = serviceName?.takeIf { it.isNotBlank() },
-    priceSum = price?.coerceAtLeast(0) ?: 0,
+    priceSum = price.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     date = parseServerLocalDate(apptDate),
     startTime = parseServerLocalTime(startTime),
     endTime = parseServerLocalTime(endTime),

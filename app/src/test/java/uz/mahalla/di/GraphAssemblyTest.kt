@@ -44,7 +44,9 @@ import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
 import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
+import uz.mahalla.feature.activity.data.DefaultActivityRepository
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
+import uz.mahalla.feature.fashion.data.di.FashionDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
@@ -499,6 +501,31 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultGamingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * «Мои активности» (issue #73) — пять источников, и **ни одного своего
+     * `Api`** (issue #142): фича собирается из интерфейсов вертикалей. Тест
+     * это и проверяет: все пять живут на **основном** Retrofit, а значит
+     * получают Bearer, без которого каждая из пяти ручек отвечает `401`.
+     */
+    @Test
+    fun `activities assemble on the apis of their own verticals`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        assertNotNull(
+            DefaultActivityRepository(
+                fashionApi = FashionDataModule.provideFashionApi(retrofit),
+                gamingApi = GamingDataModule.provideGamingApi(retrofit),
+                bookingApi = BookingDataModule.provideBookingApi(retrofit),
+                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
+            ),
+        )
     }
 
     @Test

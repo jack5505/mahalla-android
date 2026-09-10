@@ -69,32 +69,21 @@ interface BookingApi {
 }
 
 /**
- * Тело `POST /api/v1/appointments` — **самое рискованное место этой задачи**.
+ * Тело `POST /api/v1/appointments` — схема `AppointmentBookRequest`.
  *
- * В `/v3/api-docs` оно объявлено как `BookRequest`, а это имя перекрыто
- * коллизией springdoc: на него ссылаются **три** пути (`appointments`,
- * `gaming/bookings`, `hospitals/appointments`), и показан один набор полей —
- * `{doctorId, date, startTime, complaint}`, то есть заведомо больничный
- * вариант. Групповых документов (`/v3/api-docs/{group}`), где коллизии бы не
- * было, у стенда нет: `swagger-config` отдаёт единственный `url`. Живым
- * запросом форму тела тоже не проверить — `401` приходит **до** валидации
- * (проверено и на пустом теле, и на заполненном).
+ * Имена полей здесь были **выведены**, а не прочитаны: в схеме 2026-09-04 тело
+ * называлось `BookRequest`, и это имя перекрывала коллизия springdoc — на него
+ * ссылались три пути (`appointments`, `gaming/bookings`,
+ * `hospitals/appointments`), а показан был больничный набор
+ * `{doctorId, date, startTime, complaint}`.
  *
- * Поэтому имена выведены, а не прочитаны, — как для отзывов (issue #76) и
- * заявки заведения (issue #84):
- *
- * - `serviceId` и `placeId` — из ответа того же эндпоинта
- *   (`AppointmentResponse`); `serviceId` здесь занимает место `doctorId`
- *   больничного варианта.
- * - `date` и `startTime` — из самой `BookRequest`: это ровно те два поля,
- *   которые у всех трёх склеенных запросов общие, поэтому шанс, что они
- *   называются так же и у записи к мастеру, наибольший. Обратите внимание:
- *   в **ответе** день называется `apptDate` — имена запроса и ответа у этого
- *   бэкенда расходятся не впервые.
- *
- * Проверять это надо первым делом под токеном. Не совпадёт — бэкенд ответит
- * `VALIDATION_ERROR`, и текст сервера будет виден прямо на экране (issue #34),
- * а чинится расхождение здесь, в одном месте.
+ * В схеме 2026-09-09 коллизии нет, и собственная `AppointmentBookRequest`
+ * **подтверждает догадку** (сверено 2026-09-10, issue #167):
+ * `{placeId, serviceId, serviceName, date, startTime}`, обязательны `placeId`,
+ * `date`, `startTime`. Лишнее здесь только необязательное `serviceName` —
+ * клиент его не шлёт, услугу задаёт `serviceId`. Обратите внимание: в
+ * **ответе** день называется `apptDate` — имена запроса и ответа у этого
+ * бэкенда расходятся не впервые.
  */
 @Serializable
 data class BookAppointmentRequest(
@@ -132,6 +121,7 @@ data class ServiceDto(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
     @SerialName("colorHex") val colorHex: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     @SerialName("durationMinutes") val durationMinutes: Int? = null,
     @SerialName("isActive") val isActive: Boolean? = null,
@@ -139,8 +129,14 @@ data class ServiceDto(
 )
 
 /**
- * `AppointmentResponse`. Имя в схеме встречается один раз — коллизии здесь
- * нет, поля прочитаны как есть.
+ * `AppointmentBookingResponse` (в схеме 2026-09-04 — `AppointmentResponse`):
+ * поля прочитаны как есть, коллизии имён у ответа не было ни разу.
+ *
+ * Этими же DTO разбираются ответы больниц, хотя схема у них своя,
+ * `HospitalAppointmentResponse` (issue #167): общих полей хватает на всё, что
+ * показывает экран, а `doctorId` и `complaint` больничной записи здесь не
+ * объявлены и теряются — из-за чего запись к врачу остаётся без имени врача
+ * (issue #219).
  *
  * [startTime] и [endTime] типизированы как [JsonElement] по той же причине,
  * что `counterTime` талона очереди (issue #96): springdoc описывает
@@ -155,6 +151,7 @@ data class AppointmentDto(
     @SerialName("userId") val userId: String? = null,
     @SerialName("serviceId") val serviceId: String? = null,
     @SerialName("serviceName") val serviceName: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     /** `yyyy-MM-dd`. */
     @SerialName("apptDate") val apptDate: String? = null,
@@ -165,7 +162,13 @@ data class AppointmentDto(
     @SerialName("createdAt") val createdAt: String? = null,
 )
 
-/** `PageResponseAppointmentResponse`. */
+/**
+ * Страница записей. Схема у каждой вертикали своя —
+ * `PageResponseAppointmentBookingResponse` у брони,
+ * `PageResponseHospitalAppointmentResponse` у больниц (issue #167), — но
+ * обёртка страницы у них одна и та же, а содержимое разбирается
+ * [AppointmentDto].
+ */
 @Serializable
 data class AppointmentPageDto(
     @SerialName("content") val content: List<AppointmentDto> = emptyList(),

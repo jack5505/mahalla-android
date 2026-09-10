@@ -42,18 +42,18 @@ interface GamingApi {
     /**
      * Забронировать зону. Требует Bearer (`401 UNAUTHORIZED` без токена).
      *
-     * **Форма тела не подтверждена контрактом.** В схеме тело объявлено как
-     * `BookRequest`, а это имя перекрыто коллизией springdoc: на него
-     * ссылаются три пути (`/hospitals/appointments`, `/appointments` и этот),
-     * и уцелел медицинский вариант (`{doctorId, date, startTime, complaint}`)
-     * — тело записи к врачу, а не брони зоны. Живым запросом форму тоже не
-     * снять: `401` приходит **до** валидации (проверено и на пустом теле, и
-     * на заполненном).
+     * **Форма тела подтверждена схемой** (2026-09-10, issue #167). Раньше тело
+     * звалось `BookRequest` и было перекрыто коллизией springdoc: на имя
+     * ссылались три пути (`/hospitals/appointments`, `/appointments` и этот),
+     * а уцелел медицинский вариант, поэтому поля здесь были названы по ответу
+     * того же эндпоинта (`GamingBooking`) — как для отзывов (issue #76) и
+     * заявки продавца (issue #84).
      *
-     * Поэтому поля названы так же, как в ответе того же эндпоинта
-     * (`GamingBooking`: `zoneId`, `startTime`, `durationHours`) — то же
-     * решение, что принято для отзывов (issue #76) и заявки продавца
-     * (issue #84). **Это первое, что надо проверить руками под токеном.**
+     * В схеме 2026-09-09 коллизии нет, у пути своя `GamingBookRequest`, и
+     * догадка совпала: `{zoneId, startTime, durationHours}`, обязательны
+     * `zoneId` и `durationHours`, `durationHours` — целое от 1 до 24.
+     * Что бэкенд сделает с запросом, по-прежнему не проверено: `401` приходит
+     * до валидации, а токена в CI нет.
      */
     @POST("gaming/bookings")
     suspend fun book(@Body body: CreateGamingBookingRequest): ApiResponse<GamingBookingDto>
@@ -73,11 +73,15 @@ interface GamingApi {
 /**
  * Тело брони (см. предупреждение о коллизии в [GamingApi.book]).
  *
- * [startTime] уходит **местным** временем без зоны (`2026-09-05T18:30:00`):
- * так его отдаёт сам бэкенд в ответах (Jackson сериализует `LocalDateTime`
- * без зоны — правило `parseServerInstant`), и так его примет `LocalDateTime`
- * на той стороне. Строка со смещением на поле `LocalDateTime` разобралась бы
- * не везде, а зона в Узбекистане одна.
+ * [startTime] уходит **местным ташкентским** временем без зоны
+ * (`2026-09-05T18:30:00` = 18:30 по часам заведения): так его отдаёт сам
+ * бэкенд в ответах (Jackson сериализует `LocalDateTime` без зоны), и так его
+ * примет `LocalDateTime` на той стороне. Строка со смещением на поле
+ * `LocalDateTime` разобралась бы не везде, а зона в Узбекистане одна.
+ *
+ * Зону выбирает `gamingRequestTime`, читает обратно
+ * `parseServerSlotInstant` — одна трактовка на отправку и на чтение
+ * (issue #144), менять её можно только в обеих сразу.
  */
 @Serializable
 data class CreateGamingBookingRequest(
@@ -115,7 +119,11 @@ data class GamingBookingDto(
     @SerialName("zoneId") val zoneId: String? = null,
     @SerialName("placeId") val placeId: String? = null,
     @SerialName("userId") val userId: String? = null,
-    /** ISO-8601; Jackson отдаёт и без зоны — разбирает `parseServerInstant`. */
+    /**
+     * ISO-8601; Jackson отдаёт и без зоны. Это **время слота**, а не отметка
+     * сервера, поэтому зоне-менее строка читается как местное ташкентское —
+     * `parseServerSlotInstant`, а не `parseServerInstant` (issue #144).
+     */
     @SerialName("startTime") val startTime: String? = null,
     @SerialName("endTime") val endTime: String? = null,
     @SerialName("durationHours") val durationHours: Int? = null,

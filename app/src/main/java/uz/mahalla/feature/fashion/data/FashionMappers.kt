@@ -1,5 +1,6 @@
 package uz.mahalla.feature.fashion.data
 
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.fashion.domain.FashionCart
 import uz.mahalla.feature.fashion.domain.FashionCartItem
 import uz.mahalla.feature.fashion.domain.FashionCartRules
@@ -20,6 +21,10 @@ import uz.mahalla.feature.fashion.domain.ProductVariant
  * Флаги «новинка» и «хит» принимаются под двумя именами: Jackson сериализует
  * `boolean isNew` то как `isNew`, то как `new` (то же правило, что у
  * `isAvailable` в меню и `isRead` в уведомлениях).
+ *
+ * Все цены (`basePrice`, `salePrice`, `price` варианта, `unitPrice` и
+ * `totalPrice` строки корзины) приходят в **тийинах**; в домен они уходят
+ * сумами через `Money.tiyinToSom` (issue #149), и пересчёт делается только здесь.
  */
 
 fun FashionCategoryDto.toDomain(): FashionCategory? {
@@ -50,8 +55,8 @@ fun ProductSummaryDto.toDomain(): FashionProduct? {
         brand = brand?.takeIf(String::isNotBlank),
         gender = ProductGender.fromApi(gender),
         // Отрицательная цена — ошибка сервера, а не подарок.
-        basePriceSum = (basePrice ?: 0).coerceAtLeast(0),
-        salePriceSum = salePrice?.coerceAtLeast(0),
+        basePriceSum = (basePrice.tiyinToSom() ?: 0).coerceAtLeast(0),
+        salePriceSum = salePrice.tiyinToSom()?.coerceAtLeast(0),
         ratingAvg = ratingAvg ?: 0.0,
         ratingCount = (ratingCount ?: 0).coerceAtLeast(0),
         isNew = isNew ?: new ?: false,
@@ -79,8 +84,8 @@ fun ProductDetailDto.toDomain(): FashionProductDetail? {
         careInstructions = careInstructions?.takeIf(String::isNotBlank),
         sizeGuide = sizeGuide?.takeIf(String::isNotBlank),
         gender = ProductGender.fromApi(gender),
-        basePriceSum = (basePrice ?: 0).coerceAtLeast(0),
-        salePriceSum = salePrice?.coerceAtLeast(0),
+        basePriceSum = (basePrice.tiyinToSom() ?: 0).coerceAtLeast(0),
+        salePriceSum = salePrice.tiyinToSom()?.coerceAtLeast(0),
         ratingAvg = ratingAvg ?: 0.0,
         ratingCount = (ratingCount ?: 0).coerceAtLeast(0),
         isNew = isNew ?: new ?: false,
@@ -97,7 +102,7 @@ fun VariantDto.toDomain(fallbackColor: String): ProductVariant? {
         size = size?.takeIf(String::isNotBlank).orEmpty(),
         colorHex = colorHex?.takeIf(String::isNotBlank),
         sku = sku?.takeIf(String::isNotBlank),
-        priceSum = (price ?: 0).coerceAtLeast(0),
+        priceSum = (price.tiyinToSom() ?: 0).coerceAtLeast(0),
         // Отрицательный остаток — «нет»: единственное осмысленное чтение.
         stockQuantity = stockQuantity?.coerceAtLeast(0),
         isAvailable = isAvailable ?: available ?: true,
@@ -121,11 +126,11 @@ fun CartItemDto.toDomain(): FashionCartItem? {
         productName = productName.orEmpty(),
         colorName = colorName?.takeIf(String::isNotBlank),
         size = size?.takeIf(String::isNotBlank),
-        unitPriceSum = (unitPrice ?: 0).coerceAtLeast(0),
+        unitPriceSum = (unitPrice.tiyinToSom() ?: 0).coerceAtLeast(0),
         // Нулевое или отрицательное количество строки не бывает: сервер
         // удаляет такую строку сам, а показать «0 шт.» значит показать
         // бесплатную покупку.
         quantity = FashionCartRules.normalize(quantity ?: 1),
-        serverTotalSum = totalPrice?.takeIf { it >= 0 },
+        serverTotalSum = totalPrice.tiyinToSom()?.takeIf { it >= 0 },
     )
 }
