@@ -496,8 +496,9 @@ class AuthRepositoryTest {
 
         repository().verifyCode("otp-1", "123456")
 
-        // Другого источника у профиля нет: `GET /users/me` бэкенд не отдаёт
-        // (issue #61), поэтому имя и номер сохраняет сам вход.
+        // Другого источника у профиля пока нет: `GET /users/me` у бэкенда есть,
+        // но приложение его не зовёт (issue #170), поэтому имя и номер
+        // сохраняет сам вход.
         assertEquals(
             UserProfile(
                 id = "u-1",
@@ -507,6 +508,44 @@ class AuthRepositoryTest {
             ),
             userProfileStore.current(),
         )
+    }
+
+    @Test
+    fun `login stores the server role and account statuses`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567","role":"FOOD_OWNER",
+                           "verificationStatus":"FULL_VERIFIED","accountStatus":"TEMP_BLOCKED"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        // До issue #237 эти три поля разбирались и молча выбрасывались:
+        // владелец заведения ничем не отличался от покупателя, а блокировка
+        // выглядела сломанным приложением.
+        val profile = userProfileStore.current()
+        assertEquals("FOOD_OWNER", profile.serverRole)
+        assertEquals("FULL_VERIFIED", profile.verificationStatus)
+        assertEquals("TEMP_BLOCKED", profile.accountStatus)
+    }
+
+    @Test
+    fun `login without role does not keep the role of the previous user`() = runTest {
+        userProfileStore.save(UserProfile(id = "u-0", serverRole = "FOOD_OWNER"))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        // Чужие права в профиле — это лишние строки в меню у того, у кого их
+        // нет: поле, которого в ответе нет, стирается вместе с остальными.
+        assertNull(userProfileStore.current().serverRole)
     }
 
     @Test

@@ -187,6 +187,14 @@
     <string name="profile_device_status_pin_required">Нужен PIN</string>
     <string name="profile_device_status_pending_pin">PIN не задан</string>
 
+    <!-- Проверка и блокировка аккаунта на сервере (issue #237) -->
+    <string name="profile_verification_unverified">Номер не подтверждён</string>
+    <string name="profile_verification_full">Аккаунт полностью подтверждён</string>
+    <string name="profile_account_temp_blocked">Аккаунт временно заблокирован</string>
+    <string name="profile_account_perm_blocked">Аккаунт заблокирован</string>
+    <string name="profile_account_suspended">Аккаунт приостановлен</string>
+    <string name="profile_account_deleted">Аккаунт удалён</string>
+
     <!-- Центр уведомлений (issue #81) -->
     <string name="notifications_title">Уведомления</string>
     <string name="notifications_mark_all_read">Отметить все прочитанными</string>
