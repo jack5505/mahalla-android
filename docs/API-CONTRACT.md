@@ -183,16 +183,38 @@ startTime}`, обязательны `placeId`, `date`, `startTime`. Выведе
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты.
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`.
 
 | Метод | Путь |
 |---|---|
 | GET | `places/nearby` |
+| GET | `places/map-bounds` |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
+снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
+запрос):
+
+| Параметр | Обязателен | Смысл |
+|---|---|---|
+| `minLat`, `minLng` | да | юго-западный угол, `double` |
+| `maxLat`, `maxLng` | да | северо-восточный угол, `double` |
+| `category` | нет | одно значение перечисления (`FOOD`, `PHARMACY`, …) |
+
+Ответ — `ApiResponse<List<PlaceSummary>>`, тот же DTO, что у `nearby`, включая
+`distanceMeters`: расстояние сервер считает по заголовкам `X-Geo-*`, а не по
+прямоугольнику, поэтому оно совпадает с расстоянием в списке. Пагинации нет —
+область целиком одним списком. Вывернутый прямоугольник (`min > max`) отвечает
+`200` с пустым `data`, а не ошибкой, — на клиенте область проверяется до
+запроса (`MapBounds.isValid`), иначе пустая карта читалась бы как «рядом
+ничего нет».
+
+Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
+ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
 **Аватар автора отзыва не сверен** (issue #60): схема `Response` в
 `/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
