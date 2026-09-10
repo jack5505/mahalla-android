@@ -139,6 +139,7 @@ data class ServiceDto(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
     @SerialName("colorHex") val colorHex: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     @SerialName("durationMinutes") val durationMinutes: Int? = null,
     @SerialName("isActive") val isActive: Boolean? = null,
@@ -178,6 +179,7 @@ data class AppointmentDto(
     @SerialName("userId") val userId: String? = null,
     @SerialName("serviceId") val serviceId: String? = null,
     @SerialName("serviceName") val serviceName: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
     @SerialName("price") val price: Long? = null,
     /** `yyyy-MM-dd`. */
     @SerialName("apptDate") val apptDate: String? = null,

@@ -57,7 +57,8 @@ class MahallaMigrationsTest {
             db.execSQL(CREATE_ORDERS)
             db.execSQL(CREATE_CART_DRAFT_ITEMS_V1)
             db.execSQL(
-                "INSERT INTO `cart_draft_items` VALUES ('place-1', 'lagman', 'Lagman', 32000, 2)",
+                // До v4 в `priceSum` лежали тийины под именем сумов (issue #149).
+                "INSERT INTO `cart_draft_items` VALUES ('place-1', 'lagman', 'Lagman', 3200000, 2)",
             )
             db.execSQL(
                 "INSERT INTO `places` VALUES ('place-1', 'Osh markazi', 'FOOD', 4.6, 250, 1, 1700000000)",
@@ -101,7 +102,7 @@ class MahallaMigrationsTest {
             db.execSQL(CREATE_ORDERS)
             db.execSQL(CREATE_CART_DRAFT_ITEMS_V1)
             db.execSQL(
-                "INSERT INTO `cart_draft_items` VALUES ('place-2', 'somsa', 'Somsa', 12000, 3)",
+                "INSERT INTO `cart_draft_items` VALUES ('place-2', 'somsa', 'Somsa', 1200000, 3)",
             )
             db.execSQL(
                 """
@@ -113,7 +114,7 @@ class MahallaMigrationsTest {
                 """.trimIndent(),
             )
             db.execSQL(
-                "INSERT INTO `orders` VALUES ('order-1', 'place-2', 'Non uyi', 'DELIVERING', 45000, 1700000100)",
+                "INSERT INTO `orders` VALUES ('order-1', 'place-2', 'Non uyi', 'DELIVERING', 4500000, 1700000100)",
             )
         }
 
@@ -122,6 +123,7 @@ class MahallaMigrationsTest {
             val line = database.cartDraftDao().items("place-2").single()
             assertEquals("somsa", line.lineId)
             assertEquals(3, line.quantity)
+            assertEquals(12_000L, line.priceSum)
 
             val place = database.placeDao().byId("place-2")
             assertEquals(17, place?.reviewCount)
@@ -130,7 +132,9 @@ class MahallaMigrationsTest {
             assertEquals("+998901112233", place?.phone)
             assertEquals(true, place?.isRecommended)
 
-            assertEquals("DELIVERING", database.orderDao().byId("order-1")?.status)
+            val order = database.orderDao().byId("order-1")
+            assertEquals("DELIVERING", order?.status)
+            assertEquals(45_000L, order?.totalSum)
         } finally {
             database.close()
         }
@@ -148,7 +152,7 @@ class MahallaMigrationsTest {
             db.execSQL(CREATE_ORDERS)
             db.execSQL(CREATE_CART_DRAFT_ITEMS_V1)
             db.execSQL(
-                "INSERT INTO `cart_draft_items` VALUES ('place-3', 'plov', 'Plov', 40000, 1)",
+                "INSERT INTO `cart_draft_items` VALUES ('place-3', 'plov', 'Plov', 4000000, 1)",
             )
         }
 
@@ -169,6 +173,38 @@ class MahallaMigrationsTest {
             val lines = dao.items("place-3")
             assertEquals(1, lines.size)
             assertEquals(2, lines.single().quantity)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * v3 хранила тийины под именем сумов (issue #149): корзина и кэш заказа
+     * делятся на сто, половина округляется вверх, а схема остаётся прежней.
+     */
+    @Test
+    fun `cached sums are converted from tiyin on upgrade from version 3`() = runTest {
+        createLegacyDatabase(version = 3) { db ->
+            db.execSQL(CREATE_PLACES_V2)
+            db.execSQL(CREATE_PLACES_CATEGORY_INDEX)
+            db.execSQL(CREATE_ORDERS)
+            db.execSQL(CREATE_CART_DRAFT_ITEMS_V3)
+            db.execSQL(
+                "INSERT INTO `cart_draft_items` VALUES " +
+                    "('place-5', 'osh', 'osh', 'Osh', 3000000, 2, 'Osh markazi', 1500050, '', '')",
+            )
+            db.execSQL(
+                "INSERT INTO `orders` VALUES ('order-5', 'place-5', 'Osh markazi', 'PAID', 7500049, 1700000200)",
+            )
+        }
+
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val line = database.cartDraftDao().items("place-5").single()
+            assertEquals(30_000L, line.priceSum)
+            assertEquals(15_001L, line.deliverySum)
+            assertEquals(2, line.quantity)
+            assertEquals(75_000L, database.orderDao().byId("order-5")?.totalSum)
         } finally {
             database.close()
         }
@@ -260,5 +296,12 @@ class MahallaMigrationsTest {
             "CREATE TABLE IF NOT EXISTS `cart_draft_items` (`placeId` TEXT NOT NULL, " +
                 "`productId` TEXT NOT NULL, `name` TEXT NOT NULL, `priceSum` INTEGER NOT NULL, " +
                 "`quantity` INTEGER NOT NULL, PRIMARY KEY(`placeId`, `productId`))"
+
+        const val CREATE_CART_DRAFT_ITEMS_V3 =
+            "CREATE TABLE IF NOT EXISTS `cart_draft_items` (`placeId` TEXT NOT NULL, " +
+                "`lineId` TEXT NOT NULL, `productId` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                "`priceSum` INTEGER NOT NULL, `quantity` INTEGER NOT NULL, `placeName` TEXT NOT NULL, " +
+                "`deliverySum` INTEGER NOT NULL, `optionIds` TEXT NOT NULL, `optionsLabel` TEXT NOT NULL, " +
+                "PRIMARY KEY(`placeId`, `lineId`))"
     }
 }

@@ -52,7 +52,7 @@ class FreelancerRepositoryTest {
         server.enqueue(
             envelope(
                 """{"content":[{"id":"f-1","name":"Aziz Karimov","profession":"Santexnik",
-                   "city":"Toshkent","phone":"+998901234567","hourlyRate":80000,
+                   "city":"Toshkent","phone":"+998901234567","hourlyRate":8000000,
                    "experienceYears":7,"isAvailable":true,"ratingAvg":4.8,"ratingCount":12}],
                    "page":0,"totalPages":3,"last":false}""",
             ),
@@ -69,6 +69,7 @@ class FreelancerRepositoryTest {
         val freelancer = page.items.first()
         assertEquals("Aziz Karimov", freelancer.name)
         assertEquals("Santexnik", freelancer.profession)
+        // Ставка приезжает в тийинах (issue #149): 8 000 000 → 80 000 сум.
         assertEquals(80_000L, freelancer.hourlyRateSum)
         assertEquals(7, freelancer.experienceYears)
         assertEquals(12, freelancer.ratingCount)
@@ -87,6 +88,21 @@ class FreelancerRepositoryTest {
         repository().freelancers(profession = "   ")
 
         assertEquals("/freelancers?page=0&size=20", server.takeRequest().path)
+    }
+
+    @Test
+    fun `hourly rate is converted from tiyin to som once`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"f-1","hourlyRate":5000000},{"id":"f-2","hourlyRate":150},
+                   {"id":"f-3","hourlyRate":149},{"id":"f-4"}]}""",
+            ),
+        )
+
+        val items = (repository().freelancers() as ApiResult.Success).data.items
+
+        // 5 000 000 тийинов — это 50 000 сум, а не пять миллионов за час.
+        assertEquals(listOf(50_000L, 2L, 1L, 0L), items.map { it.hourlyRateSum })
     }
 
     /** Пустой каталог — это ответ стенда сегодня, и он не ошибка. */
@@ -211,7 +227,7 @@ class FreelancerRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
-                   "description":"Almashtirish","priceAmount":150000,
+                   "description":"Almashtirish","priceAmount":15000000,
                    "durationMinutes":60,"isActive":true},
                    {"id":"s-2","title":"Eski","isActive":false},
                    {"id":"s-4","title":"Eski ham","active":false},
@@ -365,7 +381,7 @@ class FreelancerRepositoryTest {
     fun `my orders are paged and parsed`() = runTest {
         server.enqueue(
             envelope(
-                """{"content":[{"id":"o-1","serviceTitle":"Kran","priceAmount":150000,
+                """{"content":[{"id":"o-1","serviceTitle":"Kran","priceAmount":15000000,
                    "status":"ACCEPTED","scheduledAt":"2026-09-06T10:30:00",
                    "address":"Chilonzor 7","createdAt":"2026-09-04T09:00:00Z"},
                    {"serviceTitle":"Idsiz"}],"page":1,"totalPages":2,"last":true}""",
@@ -379,12 +395,28 @@ class FreelancerRepositoryTest {
         assertEquals(listOf("o-1"), page.items.map { it.id })
         val order = page.items.first()
         assertEquals(FreelancerOrderStatus.Accepted, order.status)
+        // `priceAmount` в тийинах (issue #149): 15 000 000 → 150 000 сум.
         assertEquals(150_000L, order.priceSum)
         assertEquals("Chilonzor 7", order.address)
         // Jackson отдаёт `LocalDateTime` без зоны — иначе время пусто у всех.
         assertEquals(Instant.parse("2026-09-06T10:30:00Z"), order.scheduledAt)
         assertEquals(Instant.parse("2026-09-04T09:00:00Z"), order.createdAt)
         assertFalse(page.hasMore)
+    }
+
+    @Test
+    fun `order price is converted from tiyin to som once`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"o-1","priceAmount":5000000},{"id":"o-2","priceAmount":150},
+                   {"id":"o-3","priceAmount":149},{"id":"o-4"}]}""",
+            ),
+        )
+
+        val items = (repository().myOrders() as ApiResult.Success).data.items
+
+        // 5 000 000 тийинов — это 50 000 сум; без цены — ноль, а не падение.
+        assertEquals(listOf(50_000L, 2L, 1L, 0L), items.map { it.priceSum })
     }
 
     /** Незнакомый статус заказ не прячет: его меняет мастер из своего кабинета. */
