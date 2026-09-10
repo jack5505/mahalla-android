@@ -12,7 +12,6 @@ import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
-import uz.mahalla.feature.role.domain.providesServices
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -70,9 +69,13 @@ data class RoleProfile(
     /**
      * Оказывает ли человек услуги — по анкете **или** по правам на сервере
      * (issue #244). Правило общее с «Моими заведениями» в профиле, поэтому
-     * живёт в домене: [providesServices].
+     * живёт в домене:
+     * [uz.mahalla.feature.role.domain.providesServices]. Одноимённое
+     * свойство — не рекурсия: у `Boolean` нет `invoke`, и вызов уходит на
+     * функцию домена.
      */
-    val providesServices: Boolean get() = providesServices(role, serverRole)
+    val providesServices: Boolean
+        get() = uz.mahalla.feature.role.domain.providesServices(role, serverRole)
 }
 
 @Singleton

@@ -132,6 +132,23 @@ class RoleRepositoryTest {
     }
 
     @Test
+    fun `the customer form does not take away the rights of the server`() = runTest {
+        val dataStore = newDataStore()
+        val profileStore = DataStoreUserProfileStore(dataStore)
+        profileStore.save(UserProfile(id = "u-1", serverRole = "FOOD_OWNER"))
+        val repository = DataStoreRoleRepository(SettingsDataStore(dataStore), profileStore)
+
+        // Владелец кафе сам заказывает еду и заполняет анкету покупателя —
+        // права на сервере от этого не пропадают (issue #244).
+        repository.saveCustomer(CustomerForm(fullName = "Jahongir", city = City.TASHKENT))
+
+        val profile = repository.current()
+        assertEquals(UserRole.Customer, profile.role)
+        assertEquals(ServerRole.FoodOwner, profile.serverRole)
+        assertTrue(profile.providesServices)
+    }
+
+    @Test
     fun `the provider form does not need the server`() = runTest {
         val repository = repository()
 

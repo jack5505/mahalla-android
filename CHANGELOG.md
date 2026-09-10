@@ -6772,9 +6772,11 @@ serverRole)` (`feature/role/domain/ProvidesServices.kt`); её зовут и
 неоткуда не пришлось, `DataStoreRoleRepository` уже держал `UserProfileStore`
 ради имени из анкеты.
 
-Остальные читатели `RoleRepository` проверены и не тронуты:
-`FreelancerProfileViewModel`, `CheckoutViewModel` и `FashionCheckoutViewModel`
-берут из профиля только `customer.address`, роль им не нужна вовсе.
+Остальные читатели `RoleRepository` проверены и не тронуты. Три оформления
+заказа (`FreelancerProfileViewModel`, `CheckoutViewModel`,
+`FashionCheckoutViewModel`) берут из профиля только `customer.address` — роль
+им не нужна вовсе; `RoleViewModel`, `CustomerFormViewModel` и
+`ProviderFormViewModel` — это сама анкета, там `role` и значит анкету.
 
 **Осталось.** Локальная анкета переживает вход под другим номером (issue
 #243), так что «продавец» может достаться чужому аккаунту и показать ему
