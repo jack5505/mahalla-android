@@ -130,6 +130,13 @@ Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёстки
 
 Слоты подтверждены как **массив строк** вида `"09:00"` — не объекты.
 
+**Тело `POST appointments` подтверждено схемой** (2026-09-10, issue #167).
+Коллизия springdoc вокруг имени `BookRequest` рассосалась, у пути появилась
+своя `AppointmentBookRequest`: `{placeId, serviceId, serviceName, date,
+startTime}`, обязательны `placeId`, `date`, `startTime`. Выведенные имена
+`{placeId, serviceId, date, startTime}` совпали — правка `BookAppointmentRequest`
+не нужна; необязательное `serviceName` в теле клиент не шлёт.
+
 **Своей ручки переноса записи у бэкенда нет** (сверено по живому
 `/v3/api-docs` 2026-09-08, эпик #11). Под `appointments` есть ровно пять
 путей: сам `POST`, `my`, `{id}`, `{id}/cancel` и `{id}/status`; ни
@@ -172,16 +179,38 @@ Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёстки
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты.
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`.
 
 | Метод | Путь |
 |---|---|
 | GET | `places/nearby` |
+| GET | `places/map-bounds` |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
+снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
+запрос):
+
+| Параметр | Обязателен | Смысл |
+|---|---|---|
+| `minLat`, `minLng` | да | юго-западный угол, `double` |
+| `maxLat`, `maxLng` | да | северо-восточный угол, `double` |
+| `category` | нет | одно значение перечисления (`FOOD`, `PHARMACY`, …) |
+
+Ответ — `ApiResponse<List<PlaceSummary>>`, тот же DTO, что у `nearby`, включая
+`distanceMeters`: расстояние сервер считает по заголовкам `X-Geo-*`, а не по
+прямоугольнику, поэтому оно совпадает с расстоянием в списке. Пагинации нет —
+область целиком одним списком. Вывернутый прямоугольник (`min > max`) отвечает
+`200` с пустым `data`, а не ошибкой, — на клиенте область проверяется до
+запроса (`MapBounds.isValid`), иначе пустая карта читалась бы как «рядом
+ничего нет».
+
+Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
+ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
 **Аватар автора отзыва не сверен** (issue #60): схема `Response` в
 `/v3/api-docs` перекрыта коллизией springdoc (issue #76), поэтому `ReviewDto`
@@ -209,6 +238,16 @@ Jackson с `JavaTimeModule` отдаёт строку `"09:30:00"`. Жёстки
 `GET orders` — общая ручка `order-controller`, а не «фэшн»-специфичная: здесь
 она вызывается с `vertical`, в «Моих активностях» — без него, чтобы получить
 заказы всех вертикалей разом (см. раздел ActivityApi).
+
+**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
+оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
+#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
+fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
+`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
+(состав берётся из серверной корзины `fashion/cart*`), зато есть
+`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
+`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
+пути больше нет.
 
 ## FoodApi ✅
 
@@ -254,11 +293,13 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | POST | `gaming/bookings` | ⚠️ путь есть (`401`), тело не проверено |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена — см. ActivityApi |
 
-**Тело `POST gaming/bookings` не подтверждено.** В схеме оно объявлено как
-`BookRequest`, а на это имя ссылаются три пути (коллизия springdoc), уцелел
-медицинский вариант. Поля названы по ответу того же эндпоинта — `{zoneId,
-startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh`, как только
-появится токен.
+**Тело `POST gaming/bookings` подтверждено схемой** (2026-09-10, issue #167).
+Раньше оно было объявлено как `BookRequest` — имя делили три пути (коллизия
+springdoc), и поля были названы по ответу того же эндпоинта. Теперь у пути своя
+`GamingBookRequest`, и догадка совпала: `{zoneId, startTime, durationHours}`,
+обязательны `zoneId` и `durationHours`, `durationHours` — целое **от 1 до 24**.
+Что бэкенд с запросом сделает, всё ещё не проверено: кандидат на пробу
+`contract/gaming.sh`, как только появится токен.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
@@ -266,16 +307,46 @@ startTime, durationHours}`. Кандидат на пробу `contract/gaming.sh
 `startTime` уходит зоне-менее в UTC (`2026-09-05T13:00:00`) — согласовано с
 `parseServerInstant`, который читает зоне-менее время сервера как UTC.
 
-## HospitalApi ⚠️
+## HospitalApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/hospital/data/HospitalApi.kt` — пути и схемы сверены с живым `/v3/api-docs` (2026-09-10, issue #167); поведение под токеном не проверялось — нужен `CONTRACT_REFRESH_TOKEN`.
 
-| Метод | Путь |
-|---|---|
-| GET | `hospitals/places/{placeId}/doctors` |
-| POST | `hospitals/appointments` |
-| GET | `hospitals/appointments/my` |
-| POST | `appointments/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
+| GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
+
+**Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
+`hospital-controller` не было и клиент слал отмену в общую
+`POST appointments/{id}/cancel`. В схеме от 2026-09-09 своя отмена есть, и
+заодно рассосалась коллизия springdoc, из-за которой обе вертикали выглядели
+одной сущностью: у больниц теперь свои `HospitalBookRequest` и
+`HospitalAppointmentResponse` (`{id, doctorId, apptDate, startTime, complaint,
+status, createdAt}`), у брони — `AppointmentBookRequest` и
+`AppointmentBookingResponse` (`{id, placeId, userId, serviceId, serviceName,
+price, apptDate, startTime, endTime, status, createdAt}`). Записи разные —
+значит, общая ручка чужую отменить не может.
+
+Живой пробой это не доказать: `401` приходит до маршрутизации, оба пути
+отвечают им одинаково (проверено `curl` 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
+не задан. Как только токен появится — контрактная проба вертикали, по образцу
+`contract/booking.sh`.
+
+Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
+общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
+теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
+никогда — на экране «мои записи» она останется без имени врача (issue #219).
+
+Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
+`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
+свободные слоты; приложение вместо них рисует сетку времени из
+`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
+бизнес-панельные
+`POST hospitals/places/{placeId}/doctors`,
+`PUT hospitals/places/{placeId}/doctors/{id}` и
+`PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
 `hospitals/appointments/my` читает ещё и ActivityApi — см. его раздел.
 

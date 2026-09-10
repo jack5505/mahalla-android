@@ -582,6 +582,8 @@
     <string name="booking_reschedule_title">Перенос записи</string>
     <string name="booking_reschedule_service_title">Услуга</string>
     <string name="booking_reschedule_hint">Услуга остаётся та же — выберите новый день и время.</string>
+    <string name="booking_reschedule_current">Сейчас: %1$s</string>
+    <string name="booking_reschedule_new">Новое: %1$s</string>
     <string name="booking_reschedule_submit">Перенести на новое время</string>
     <string name="booking_reschedule_done_title">Запись перенесена</string>
     <string name="booking_reschedule_done_description">Заведение подтвердит новое время. Прежняя запись отменена.</string>

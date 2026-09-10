@@ -10,6 +10,7 @@ import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
+import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceFilterEngine
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -39,6 +40,18 @@ data class PlacePage(
 interface CatalogRepository {
 
     suspend fun places(filters: DiscoveryFilters, page: Int = 0): ApiResult<PlacePage>
+
+    /**
+     * Места в видимой области карты (issue #168).
+     *
+     * Без кэша и без страниц: кэш Room — срез радиуса вокруг человека, и
+     * подставлять его вместо области, на которую человек только что посмотрел,
+     * значит показать маркеры не там, где он смотрит.
+     */
+    suspend fun placesInBounds(
+        bounds: GeoBounds,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+    ): ApiResult<List<Place>>
 
     suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails>
 
@@ -127,6 +140,28 @@ class DefaultCatalogRepository @Inject constructor(
             }
 
             is ApiResult.Failure -> cachedPage(filters, page, response.failure)
+        }
+    }
+
+    /**
+     * Ответ по области не фильтруется повторно и не сортируется по расстоянию:
+     * на карте маркеры не в списке, порядок им ни о чём не говорит, а вырезать
+     * из кадра валидную выдачу локальным фильтром — дыры в тех местах, где
+     * заведение видно глазом.
+     */
+    override suspend fun placesInBounds(
+        bounds: GeoBounds,
+        filters: DiscoveryFilters,
+    ): ApiResult<List<Place>> {
+        val location = location()
+        return apiCall {
+            api.mapBounds(
+                minLatitude = bounds.minLatitude,
+                minLongitude = bounds.minLongitude,
+                maxLatitude = bounds.maxLatitude,
+                maxLongitude = bounds.maxLongitude,
+                category = filters.apiCategory(),
+            ).payload().map { it.toDomain(location) }
         }
     }
 
