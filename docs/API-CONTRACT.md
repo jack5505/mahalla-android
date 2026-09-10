@@ -40,6 +40,31 @@
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
+**Страничные ответы** — один конверт `PageResponse…` на все списки:
+`content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
+`last`. Есть ли следующая страница, решает общая функция
+`core/paging/hasMorePages` (issue #142): приоритет у `last`, без него —
+`page`/`totalPages`, при полном молчании сервера догрузка останавливается.
+На неё переведены fashion, freelancer, wallet и «Мои активности»; в семи
+мапперах ещё лежит дословная копия того же правила — issue #231.
+
+---
+
+## «Мои активности» — своего `*Api.kt` нет
+
+`feature/activity/` (issue #73) не объявляет ни одной ручки и ни одного DTO:
+пять источников читаются интерфейсами вертикалей, которым принадлежат.
+Ходить в них мимо этих интерфейсов не надо — копия контракта уже разошлась с
+оригиналом один раз (issue #142).
+
+| Источник | Через что | Путь |
+|---|---|---|
+| Заказы всех вертикалей | `FashionApi.myOrders(vertical = null)` | `GET orders` |
+| Брони игровых зон | `GamingApi.myBookings` | `GET gaming/bookings/my` |
+| Записи к мастеру | `BookingApi.myAppointments` | `GET appointments/my` |
+| Записи к врачу | `HospitalApi.myAppointments` | `GET hospitals/appointments/my` |
+| Билеты в кино | `CinemaApi.myTickets` | `GET cinema/tickets/my` |
+
 ---
 
 ## AuthApi ✅
@@ -184,6 +209,13 @@ startTime}`, обязательны `placeId`, `date`, `startTime`. Выведе
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
 
+`GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
+отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
+перекрыто коллизией springdoc. Параметр `vertical` необязателен: с ним
+приезжают заказы одной вертикали (одежда), без него — **всех**
+(`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
+активности» (issue #73) — см. раздел о них в начале файла.
+
 **Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
 оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
 #221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
@@ -249,8 +281,14 @@ springdoc), и поля были названы по ответу того же 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.
 
-`startTime` уходит зоне-менее в UTC (`2026-09-05T13:00:00`) — согласовано с
-`parseServerInstant`, который читает зоне-менее время сервера как UTC.
+`startTime` уходит зоне-менее в **местном ташкентском** времени
+(`2026-09-05T13:00:00` = 13:00 по часам заведения) и читается обратно так же —
+`parseServerSlotInstant`. Раньше здесь был UTC; переехали в issue #144, потому
+что запись к мастеру (`apptDate` + `startTime`) местная по построению, и две
+трактовки на один список «Моих активностей» расходились на пять часов.
+Трактовка не подтверждена стендом: **это первое, что надо проверить**, когда
+появится токен, — заодно с телом `POST gaming/bookings`. Отметки события
+(`createdAt` и прочие) по-прежнему читаются как UTC (`parseServerInstant`).
 
 ## HospitalApi ⚠️ частично
 

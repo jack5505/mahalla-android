@@ -101,13 +101,17 @@ interface FashionApi {
     suspend fun createOrder(@Body body: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
 
     /**
-     * Свои заказы одежды. `fashion/orders/my` отдаёт то же самое, но в
-     * перекрытой коллизией схеме — поэтому идём в общий список с фильтром по
-     * вертикали.
+     * Свои заказы. `fashion/orders/my` отдаёт то же самое, но в перекрытой
+     * коллизией схеме — поэтому идём в общий список с фильтром по вертикали.
+     *
+     * [vertical] нулевой — фильтра нет, и приезжают заказы **всех**
+     * вертикалей (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`): так их
+     * читают «Мои активности» (issue #73). Retrofit нулевой `@Query` в URL не
+     * ставит вовсе, так что для одежды запрос не меняется.
      */
     @GET("orders")
     suspend fun myOrders(
-        @Query("vertical") vertical: String,
+        @Query("vertical") vertical: String?,
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<OrderPageDto>

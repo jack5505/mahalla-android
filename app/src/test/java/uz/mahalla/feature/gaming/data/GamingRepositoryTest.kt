@@ -127,15 +127,17 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """{"id":"b-1","zoneId":"z-1","placeId":"p-1",
-                    "startTime":"2026-09-04T13:00:00","endTime":"2026-09-04T15:00:00",
+                    "startTime":"2026-09-04T18:00:00","endTime":"2026-09-04T20:00:00",
                     "durationHours":2,"totalPrice":70000,"status":"CONFIRMED"}""",
             ),
         )
 
+        // 18:00 по часам в Ташкенте — то, что человек выбрал в сетке слотов.
+        val slot = Instant.parse("2026-09-04T13:00:00Z")
         val result = repository().book(
             GamingBookingDraft(
                 zoneId = "z-1",
-                startTime = Instant.parse("2026-09-04T13:00:00Z"),
+                startTime = slot,
                 durationHours = 2,
             ),
             zoneName = "PlayStation 5",
@@ -144,9 +146,10 @@ class GamingRepositoryTest {
         val request = server.takeRequest()
         assertEquals("/gaming/bookings", request.path)
         assertEquals("POST", request.method)
-        // Время уходит без зоны — так же, как бэкенд отдаёт его сам.
+        // Время уходит без зоны — так же, как бэкенд отдаёт его сам, — и в
+        // местных часах заведения: выбрано 18:00, ушло «18:00» (issue #144).
         assertEquals(
-            """{"zoneId":"z-1","startTime":"2026-09-04T13:00:00","durationHours":2}""",
+            """{"zoneId":"z-1","startTime":"2026-09-04T18:00:00","durationHours":2}""",
             request.body.readUtf8(),
         )
 
@@ -155,7 +158,8 @@ class GamingRepositoryTest {
         assertEquals(GamingBookingStatus.Confirmed, booking.status)
         assertEquals(2, booking.durationHours)
         assertEquals(70_000L, booking.totalPrice)
-        assertEquals(Instant.parse("2026-09-04T13:00:00Z"), booking.startTime)
+        // Что ушло, то и вернулось: отправка и чтение слота в одной зоне.
+        assertEquals(slot, booking.startTime)
         // Имя зоны в ответе не приходит: его знает только экран зон.
         assertEquals("PlayStation 5", booking.zoneName)
     }
@@ -258,8 +262,9 @@ class GamingRepositoryTest {
         assertEquals("/gaming/bookings/my?page=0&size=20", request.path)
         assertTrue(page.hasMore)
         assertEquals(GamingBookingStatus.Active, page.items.single().status)
-        // Дата без зоны разбирается общим `parseServerInstant`.
-        assertEquals(Instant.parse("2026-09-04T13:00:00Z"), page.items.single().startTime)
+        // Время слота без зоны — местное ташкентское (`parseServerSlotInstant`,
+        // issue #144): 13:00 на стене, то есть 08:00 UTC.
+        assertEquals(Instant.parse("2026-09-04T08:00:00Z"), page.items.single().startTime)
     }
 
     @Test

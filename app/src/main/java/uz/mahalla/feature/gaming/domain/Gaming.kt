@@ -92,7 +92,8 @@ enum class GamingBookingStatus(val apiValue: String) {
  * выбрал, а в «моих бронях» остаётся пустым: подтягивать зоны каждого
  * заведения ради подписи значило бы сделать N запросов на экран.
  * @param startTime и [endTime] — `date-time`; Jackson отдаёт их и без зоны,
- * разбирает общий `parseServerInstant`.
+ * и такая строка означает местное ташкентское время слота, а не UTC —
+ * разбирает `parseServerSlotInstant` (issue #144).
  */
 data class GamingBooking(
     val id: String,
