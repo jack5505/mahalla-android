@@ -108,7 +108,7 @@ object DoctorSchedule {
  * раньше времени» стоит человеку отказа сервера вместо подсказки на экране.
  *
  * @param complaint жалоба — **необязательное** поле контракта
- * (`BookRequest.complaint`, обязательны только `doctorId`, `date`,
+ * (`HospitalBookRequest.complaint`, обязательны только `doctorId`, `date`,
  * `startTime`). Записаться, не объясняя причины, — нормальный случай.
  */
 @Immutable

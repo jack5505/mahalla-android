@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -348,6 +349,108 @@ class BookingViewModelTest {
             assertTrue(viewModel.state.value.canBook)
         }
 
+    /**
+     * Что и с какого времени переносят (issue #155): подпись записи и её
+     * прежние день и время видно на экране, даже если каталог услуг молчит.
+     */
+    @Test
+    fun `the label and the old time of the record travel with the route`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Failure(ApiError.NoConnection)
+
+            val viewModel = viewModel(
+                serviceId = "s-1",
+                rescheduleId = "a-1",
+                rescheduleLabel = "Soch olish",
+                rescheduleDate = "2026-09-06",
+                rescheduleTime = "10:40",
+            )
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertEquals("Soch olish", state.rescheduleLabel)
+            assertEquals(LocalDate.of(2026, 9, 6), state.rescheduleDate)
+            assertEquals(LocalTime.of(10, 40), state.rescheduleTime)
+        }
+
+    /**
+     * Сервер день и время назвать не обязан (`AppointmentResponse`), а битое
+     * значение маршрут переживает смерть процесса — экран из-за подписи над
+     * календарём падать не вправе.
+     */
+    @Test
+    fun `an unparsable old time is read as absent, not as a crash`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel(
+                serviceId = "s-1",
+                rescheduleId = "a-1",
+                rescheduleDate = "kecha",
+                rescheduleTime = "",
+            )
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertTrue(state.isReschedule)
+            assertNull(state.rescheduleDate)
+            assertNull(state.rescheduleTime)
+        }
+
+    /**
+     * Подтверждение называет услугу и тогда, когда сервер её не назвал, а
+     * каталог не ответил: подпись приехала маршрутом.
+     */
+    @Test
+    fun `the confirmation falls back to the label of the route`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Failure(ApiError.NoConnection)
+
+            val viewModel = rescheduleAndConfirm(rescheduleLabel = OLD_NAME)
+
+            assertEquals(OLD_NAME, viewModel.state.value.booked?.serviceName)
+        }
+
+    /**
+     * А когда каталог ответил — имя берётся из него: подпись маршрута
+     * называет услугу такой, какой она была на момент записи, и заведение
+     * могло с тех пор её переименовать.
+     */
+    @Test
+    fun `the catalogue name wins over the label of the route`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+
+            val viewModel = rescheduleAndConfirm(rescheduleLabel = OLD_NAME)
+
+            val state = viewModel.state.value
+            assertEquals("Soch olish", state.selectedService?.title)
+            assertEquals("Soch olish", state.booked?.serviceName)
+            // Подпись при этом не теряется: экран рисует по ней услугу, пока
+            // (и если) каталог не ответил.
+            assertEquals(OLD_NAME, state.rescheduleLabel)
+        }
+
+    /** Перенос до подтверждения включительно: сервер имени услуги не назвал. */
+    private fun TestScope.rescheduleAndConfirm(rescheduleLabel: String): BookingViewModel {
+        repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+        repository.rescheduleResult = ApiResult.Success(
+            Rescheduled(
+                appointment = Appointment(id = "a-2", status = AppointmentStatus.Pending),
+                previousCancelled = true,
+            ),
+        )
+
+        val viewModel = viewModel(
+            serviceId = "s-1",
+            rescheduleId = "a-1",
+            rescheduleLabel = rescheduleLabel,
+        )
+        runCurrent()
+        viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+        viewModel.onEvent(BookingEvent.BookClicked)
+        runCurrent()
+        return viewModel
+    }
+
     @Test
     fun `confirming a reschedule carries the old appointment and the new slot`() =
         runTest(mainDispatcherRule.dispatcher) {
@@ -498,6 +601,9 @@ class BookingViewModelTest {
     private fun viewModel(
         serviceId: String = "",
         rescheduleId: String = "",
+        rescheduleLabel: String = "",
+        rescheduleDate: String = "",
+        rescheduleTime: String = "",
     ) = BookingViewModel(
         repository = repository,
         analytics = analytics,
@@ -508,6 +614,9 @@ class BookingViewModelTest {
                 "placeName" to "Barber House",
                 "serviceId" to serviceId,
                 "rescheduleId" to rescheduleId,
+                "rescheduleLabel" to rescheduleLabel,
+                "rescheduleDate" to rescheduleDate,
+                "rescheduleTime" to rescheduleTime,
             ),
         ),
     )
@@ -516,5 +625,12 @@ class BookingViewModelTest {
         /** 09:00 UTC = 14:00 в Ташкенте, 4 сентября. */
         val NOW: Instant = Instant.parse("2026-09-04T09:00:00Z")
         val TODAY: LocalDate = LocalDate.of(2026, 9, 4)
+
+        /**
+         * Подпись записи **не совпадает** с названием услуги в каталоге:
+         * одинаковые строки не отличили бы один источник от другого, и
+         * перевёрнутый приоритет остался бы зелёным.
+         */
+        const val OLD_NAME = "Eski nom"
     }
 }

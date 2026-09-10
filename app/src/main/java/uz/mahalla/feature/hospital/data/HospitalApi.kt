@@ -26,10 +26,13 @@ import uz.mahalla.feature.booking.data.AppointmentPageDto
  * заголовок, который читающей ручке не мешает, — а «голый» `@RefreshClient`
  * сломал бы запись. Поэтому API целиком собирается на **основном** Retrofit.
  *
- * Ответы записи — те же `AppointmentResponse` и
- * `PageResponseAppointmentResponse`, что у брони (issue #97), поэтому DTO
- * переиспользуются: у бэкенда это буквально одна модель, и вторая её копия
- * разъехалась бы с первой при первой же правке контракта.
+ * Ответы записи разбираются теми же DTO, что у брони (issue #97), но **не
+ * потому, что модель одна**: в схеме от 2026-09-09 у больниц свой
+ * `HospitalAppointmentResponse`, у брони — `AppointmentBookingResponse`
+ * (issue #167). Общего в них хватает на всё, что показывает экран
+ * (`id`, `apptDate`, `startTime`, `status`, `createdAt`), поэтому DTO пока
+ * один; `doctorId` и `complaint` больничного ответа в него не входят и
+ * теряются (issue #219).
  */
 interface HospitalApi {
 
@@ -49,25 +52,38 @@ interface HospitalApi {
     ): ApiResponse<AppointmentPageDto>
 
     /**
-     * Отмена. **Своей отмены у `hospitals` нет** — в контроллере всего четыре
-     * пути, — поэтому берётся общая ручка записи. Она объявлена над той же
-     * схемой `AppointmentResponse`, что и запись к врачу, то есть на бэкенде
-     * это одна сущность; проверить это под токеном в CI нечем (`401` приходит
-     * до маршрутизации), и расхождение попадёт в отчёт отдельным риском.
+     * Отмена записи к врачу — **своей ручкой больниц** (issue #167).
+     *
+     * До 2026-09-09 её здесь не было: в `hospital-controller` было четыре пути,
+     * и отмена уходила в общую `POST appointments/{id}/cancel`. В схеме от
+     * 2026-09-09 путь `POST /api/v1/hospitals/appointments/{id}/cancel` есть, и
+     * заодно рассосалась коллизия springdoc, из-за которой обе вертикали
+     * выглядели одной сущностью: у больниц теперь `HospitalAppointmentResponse`
+     * (`{id, doctorId, apptDate, startTime, complaint, status, createdAt}`), у
+     * брони — `AppointmentBookingResponse` (`{id, placeId, userId, serviceId,
+     * serviceName, price, apptDate, startTime, endTime, status, createdAt}`).
+     * Разные схемы у создания и у чтения — значит, и записи разные, а общая
+     * ручка чужую отменить не сможет.
+     *
+     * Живой пробой это не доказать: `401` приходит до маршрутизации (оба пути
+     * отвечают им одинаково, проверено 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
+     * в CI не задан. Ответ разбирается тем же [AppointmentDto] — общих полей
+     * хватает, а лишние `kotlinx.serialization` игнорирует.
      */
-    @POST("appointments/{id}/cancel")
+    @POST("hospitals/appointments/{id}/cancel")
     suspend fun cancel(@Path("id") appointmentId: String): ApiResponse<AppointmentDto>
 }
 
 /**
- * Тело `POST /api/v1/hospitals/appointments` — схема `BookRequest`.
+ * Тело `POST /api/v1/hospitals/appointments` — схема `HospitalBookRequest`.
  *
- * Имя `BookRequest` в `/v3/api-docs` перекрыто коллизией springdoc (на него
- * ссылаются `appointments`, `gaming/bookings` и `hospitals/appointments`), но
- * здесь это **не мешает**: показанный набор полей —
- * `{doctorId, date, startTime, complaint}` — и есть больничный, то есть
- * коллизию «выиграл» как раз этот путь. Обязательны `doctorId`, `date`,
- * `startTime`; `complaint` — `@Size(max = 1000)`.
+ * В схеме 2026-09-04 она называлась `BookRequest` и была перекрыта коллизией
+ * springdoc (на имя ссылались `appointments`, `gaming/bookings` и
+ * `hospitals/appointments`); коллизию «выиграл» как раз больничный путь, и
+ * поля брались оттуда. В схеме 2026-09-09 коллизии больше нет, и собственная
+ * `HospitalBookRequest` подтверждает тот же набор:
+ * `{doctorId, date, startTime, complaint}`, обязательны `doctorId`, `date`,
+ * `startTime`, у `complaint` — `maxLength: 1000`.
  *
  * [startTime] уходит строкой `HH:mm:ss`, хотя springdoc описывает `LocalTime`
  * объектом `{hour, minute, second, nano}`: так его читает Jackson с

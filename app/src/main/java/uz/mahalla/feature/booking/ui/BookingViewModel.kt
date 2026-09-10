@@ -34,7 +34,10 @@ import javax.inject.Inject
  *
  * Тот же экран **переносит** запись, если маршрут назвал `rescheduleId`
  * (эпик #11): услуга тогда приезжает готовой, выбирают только день и слот, а
- * подтверждение уходит в `reschedule` вместо `book`.
+ * подтверждение уходит в `reschedule` вместо `book`. Вместе с ней маршрутом
+ * едут подпись переносимой записи и её прежние день и время (issue #155):
+ * взять их здесь больше негде — в каталоге услуги может уже не быть, а
+ * `GET appointments/{id}` приложение не использует.
  */
 @HiltViewModel
 class BookingViewModel @Inject constructor(
@@ -62,6 +65,9 @@ class BookingViewModel @Inject constructor(
                 selectedDate = dates.firstOrNull(),
                 selectedServiceId = preselected,
                 isReschedule = rescheduleId.isNotEmpty(),
+                rescheduleLabel = route.rescheduleLabel.trim(),
+                rescheduleDate = parseDate(route.rescheduleDate),
+                rescheduleTime = parseTime(route.rescheduleTime),
             )
         }
         loadServices()
@@ -213,7 +219,8 @@ class BookingViewModel @Inject constructor(
                         previousCancelled = previousCancelled,
                         booked = result.data.copy(
                             serviceName = result.data.serviceName
-                                ?: selectedService?.title?.takeIf { it.isNotBlank() },
+                                ?: selectedService?.title?.takeIf { it.isNotBlank() }
+                                ?: rescheduleLabel.takeIf { it.isNotBlank() },
                             date = result.data.date ?: date,
                             startTime = result.data.startTime ?: time,
                         ),
@@ -228,4 +235,20 @@ class BookingViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Прежние день и время переносимой записи (issue #155). Разбор мягкий:
+     * аргументы маршрута переживают смерть процесса и приходят строками, а
+     * упасть из-за подписи над календарём экран не вправе — перенос от неё не
+     * зависит.
+     */
+    private fun parseDate(value: String): LocalDate? =
+        value.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { LocalDate.parse(it) }.getOrNull()
+        }
+
+    private fun parseTime(value: String): LocalTime? =
+        value.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { LocalTime.parse(it) }.getOrNull()
+        }
 }
