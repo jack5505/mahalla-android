@@ -525,13 +525,15 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
-## MediaApi ✅
+## MediaApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась).
+`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — `POST` сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась). `GET`/`DELETE` (issue #185) объявлены **по схеме из этого же issue и `MediaFile` из `POST`**, живым запросом на стенд не перепроверены — сверить при первом расхождении.
 
 | Метод | Путь |
 |---|---|
 | POST | `media/upload` |
+| GET | `media/entity/{entityId}` |
+| DELETE | `media/{id}` |
 
 `multipart/form-data`, часть называется **`file`**; `entityType` и `entityId` —
 необязательные query-параметры. Ответ — `MediaFile` (`id`, `url`,
@@ -545,8 +547,12 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 проверяется на клиенте до отправки (`MediaUploadLimits`), а картинка
 сжимается.
 
-`GET media/entity/{entityId}` и `DELETE media/{id}` у бэкенда есть, но клиентом
-**не объявлены**: показывать и редактировать загруженное пока нечем.
+`GET media/entity/{entityId}` отдаёт `List<MediaFile>` той же схемы (плюс
+`createdAt`, клиентом не используется); файл без `url` в списке пропускается,
+а не роняет всю галерею. `DELETE media/{id}` отвечает пустым конвертом
+(`ensureSuccess`); прав на удаление в схеме нет — экран показывает кнопку
+только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
+любой другой) отвечает текстом, а не молчанием.
 
 ## NotificationsApi ⚠️
 

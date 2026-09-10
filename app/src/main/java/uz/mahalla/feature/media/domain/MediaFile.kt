@@ -15,6 +15,10 @@ import java.util.Locale
  * загрузку неудачной.
  * @param url адрес файла. **Единственное обязательное поле**: ради него
  * загрузка и делается, и ответ без него — отказ, а не «успех без результата».
+ * @param ownerId кто загрузил (issue #185). По нему, а не по факту наличия
+ * файла в списке, экран решает, можно ли предложить удаление: чужой файл
+ * `DELETE media/{id}` всё равно отклонит, но кнопка, которая всегда отвечает
+ * отказом, — обещание впустую.
  */
 data class MediaFile(
     val id: String,
@@ -23,6 +27,7 @@ data class MediaFile(
     val type: MediaType = MediaType.Image,
     val sizeBytes: Long = 0,
     val originalName: String? = null,
+    val ownerId: String? = null,
 )
 
 /** `MediaFile.type` бэкенда. Незнакомое значение файл не прячет. */

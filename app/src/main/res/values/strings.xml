@@ -371,6 +371,9 @@
     <string name="place_review_delete">Sharhni o\'chirish</string>
     <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
     <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
+    <string name="place_gallery_delete">Suratni o\'chirish</string>
+    <string name="place_gallery_delete_title">Suratni o\'chirasizmi?</string>
+    <string name="place_gallery_delete_text">Surat serverdan butunlay o\'chiriladi — buni ortga qaytarib bo\'lmaydi.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>

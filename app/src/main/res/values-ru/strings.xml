@@ -365,6 +365,9 @@
     <string name="place_review_delete">Удалить отзыв</string>
     <string name="place_review_delete_title">Удалить отзыв?</string>
     <string name="place_review_delete_text">Ваша оценка и текст исчезнут с карточки места.</string>
+    <string name="place_gallery_delete">Удалить фото</string>
+    <string name="place_gallery_delete_title">Удалить фото?</string>
+    <string name="place_gallery_delete_text">Фото будет удалено с сервера навсегда — это нельзя отменить.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>

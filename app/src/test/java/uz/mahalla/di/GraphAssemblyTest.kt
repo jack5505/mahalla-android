@@ -186,6 +186,10 @@ class GraphAssemblyTest {
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
                     locationProvider = locationProvider(context),
+                    media = DefaultMediaRepository(
+                        api = MediaDataModule.provideMediaApi(retrofit),
+                        compressor = AndroidImageCompressor(context),
+                    ),
                     clock = AppModule.provideClock(),
                 ),
             )
