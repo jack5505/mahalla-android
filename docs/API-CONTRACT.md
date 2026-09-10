@@ -38,6 +38,15 @@
 
 **Авторизация.** `Authorization: Bearer <access>` вешает `AuthInterceptor`.
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
+Сессию заканчивает **только 401 на refresh** — стираются токены, приложение
+уходит на экран входа (issue #138, #239). Так бэкенд отвечает на каждый
+случай мёртвой сессии (`BankAuthService.refreshToken`, `JwtService`):
+`TOKEN_EXPIRED`, `TOKEN_INVALID` (подпись, тип, токен уже заменён ротацией),
+`TOKEN_HIJACK` (другой отпечаток `deviceId|platform|osVersion` — сессия
+отозвана). Всё прочее токены **не** стирает: 403 (`GEO_*`, блокировка),
+400 (форма запроса), 429, 404, 5xx, обрыв, таймаут, 2xx без токенов,
+`success: false` при 2xx, неразбираемое тело. Сроки по `application.yml`
+бэкенда (`jwt.*-expiry-seconds`): access — 15 минут, refresh — 30 дней.
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
 **Коллизия springdoc разведена** (сверено 2026-09-10). Раньше одно имя схемы
