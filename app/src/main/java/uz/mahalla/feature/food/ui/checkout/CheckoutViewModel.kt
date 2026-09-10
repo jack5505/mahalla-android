@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
@@ -32,6 +35,7 @@ class CheckoutViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    private val analytics: AnalyticsTracker,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
 
@@ -155,6 +159,9 @@ class CheckoutViewModel @Inject constructor(
 
                 is ApiResult.Success -> {
                     updateState { copy(isSubmitting = false) }
+                    analytics.track(
+                        AnalyticsEvents.ordered(placeId, AnalyticsVertical.Food),
+                    )
                     emitEffect(CheckoutEffect.OrderCreated(result.data))
                 }
             }

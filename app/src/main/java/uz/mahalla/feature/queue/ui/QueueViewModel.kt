@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.prefs.UserProfileStore
@@ -31,6 +34,7 @@ import javax.inject.Inject
 class QueueViewModel @Inject constructor(
     private val repository: WalkInRepository,
     private val profileStore: UserProfileStore,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<QueueState, QueueEvent, QueueEffect>(QueueState()) {
@@ -110,13 +114,20 @@ class QueueViewModel @Inject constructor(
                     copy(isSubmitting = false, submitFailure = result.failure)
                 }
 
-                is ApiResult.Success -> updateState {
-                    copy(
-                        isSubmitting = false,
-                        ticket = result.data,
-                        // Только что с сервера — числа очереди свежие по
-                        // определению.
-                        queueInfoIsCurrent = result.data.showsQueueInfo(clock.instant()),
+                is ApiResult.Success -> {
+                    updateState {
+                        copy(
+                            isSubmitting = false,
+                            ticket = result.data,
+                            // Только что с сервера — числа очереди свежие по
+                            // определению.
+                            queueInfoIsCurrent = result.data.showsQueueInfo(clock.instant()),
+                        )
+                    }
+                    // Талон — это `BOOK`: своего вида события у очереди у
+                    // бэкенда нет, различает вертикаль только `metadata`.
+                    analytics.track(
+                        AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Queue),
                     )
                 }
             }

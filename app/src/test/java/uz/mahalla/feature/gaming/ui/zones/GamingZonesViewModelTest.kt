@@ -17,11 +17,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingError
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeGamingRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.gamingZone
@@ -292,8 +295,42 @@ class GamingZonesViewModelTest {
         assertNull(viewModel.state.value.confirmed)
     }
 
+    @Test
+    fun `a confirmed booking is a BOOK of the gaming vertical`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(GamingZonesEvent.ZoneClicked("z-1"))
+
+            viewModel.onEvent(GamingZonesEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(
+                listOf(AnalyticsEvents.booked("p-1", AnalyticsVertical.Gaming)),
+                analytics.events,
+            )
+        }
+
+    @Test
+    fun `a refused booking is not counted`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.bookResult = ApiResult.Failure(ApiError.Business("ZONE_BUSY"))
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(GamingZonesEvent.ZoneClicked("z-1"))
+
+            viewModel.onEvent(GamingZonesEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(emptyList<Any>(), analytics.events)
+        }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = GamingZonesViewModel(
         repository = repository,
+        analytics = analytics,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         savedStateHandle = SavedStateHandle(
             mapOf("placeId" to "p-1", "placeName" to "Cyber Arena"),

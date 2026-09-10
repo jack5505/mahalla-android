@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
@@ -28,6 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class DoctorBookingViewModel @Inject constructor(
     private val repository: HospitalRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<DoctorBookingState, DoctorBookingEvent, DoctorBookingEffect>(
@@ -128,18 +132,23 @@ class DoctorBookingViewModel @Inject constructor(
                     copy(isBooking = false, bookFailure = result.failure)
                 }
 
-                is ApiResult.Success -> updateState {
-                    copy(
-                        isBooking = false,
-                        booked = result.data.copy(
-                            // Кого именно сервер назовёт в `serviceName`, из
-                            // контракта не следует, а подтверждение без имени
-                            // не отвечает на вопрос, к кому записались.
-                            serviceName = result.data.serviceName
-                                ?: doctor.name.takeIf { it.isNotBlank() },
-                            date = result.data.date ?: draft.date,
-                            startTime = result.data.startTime ?: draft.time,
-                        ),
+                is ApiResult.Success -> {
+                    updateState {
+                        copy(
+                            isBooking = false,
+                            booked = result.data.copy(
+                                // Кого именно сервер назовёт в `serviceName`,
+                                // из контракта не следует, а подтверждение без
+                                // имени не отвечает на вопрос, к кому записались.
+                                serviceName = result.data.serviceName
+                                    ?: doctor.name.takeIf { it.isNotBlank() },
+                                date = result.data.date ?: draft.date,
+                                startTime = result.data.startTime ?: draft.time,
+                            ),
+                        )
+                    }
+                    analytics.track(
+                        AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Hospital),
                     )
                 }
             }

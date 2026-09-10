@@ -6,6 +6,9 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.dataOrNull
 import uz.mahalla.core.result.map
@@ -36,6 +39,7 @@ import javax.inject.Inject
 @HiltViewModel
 class BookingViewModel @Inject constructor(
     private val repository: BookingRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<BookingState, BookingEvent, BookingEffect>(BookingState()) {
@@ -202,16 +206,24 @@ class BookingViewModel @Inject constructor(
                 copy(isBooking = false, bookFailure = result.failure)
             }
 
-            is ApiResult.Success -> updateState {
-                copy(
-                    isBooking = false,
-                    previousCancelled = previousCancelled,
-                    booked = result.data.copy(
-                        serviceName = result.data.serviceName
-                            ?: selectedService?.title?.takeIf { it.isNotBlank() },
-                        date = result.data.date ?: date,
-                        startTime = result.data.startTime ?: time,
-                    ),
+            is ApiResult.Success -> {
+                updateState {
+                    copy(
+                        isBooking = false,
+                        previousCancelled = previousCancelled,
+                        booked = result.data.copy(
+                            serviceName = result.data.serviceName
+                                ?: selectedService?.title?.takeIf { it.isNotBlank() },
+                            date = result.data.date ?: date,
+                            startTime = result.data.startTime ?: time,
+                        ),
+                    )
+                }
+                // Перенос отправляет `BOOK` тоже: с точки зрения заведения это
+                // новая запись, и она действительно создана — `reschedule`
+                // именно так и устроен (`BookingRepository.reschedule`).
+                analytics.track(
+                    AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Booking),
                 )
             }
         }
