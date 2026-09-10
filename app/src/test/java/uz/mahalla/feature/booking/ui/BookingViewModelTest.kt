@@ -595,10 +595,45 @@ class BookingViewModelTest {
             assertEquals(emptyList<Any>(), analytics.events)
         }
 
+    @Test
+    fun `a reschedule without a place in the route takes the place from the server`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Из «Моих записей» маршрут приходит с пустым `placeId`
+            // (`Appointment.placeId` nullable). Без запасного варианта событие
+            // отбросил бы репозиторий, и переносы в панель не попадали бы.
+            repository.servicesResult = ApiResult.Success(listOf(service("s-1")))
+            repository.defaultSlots = ApiResult.Success(listOf(LocalTime.of(16, 0)))
+            repository.rescheduleResult = ApiResult.Success(
+                Rescheduled(
+                    appointment = Appointment(
+                        id = "a-2",
+                        placeId = "p-9",
+                        serviceId = "s-1",
+                        date = TODAY,
+                        startTime = LocalTime.of(16, 0),
+                        status = AppointmentStatus.Pending,
+                    ),
+                    previousCancelled = true,
+                ),
+            )
+            val viewModel = viewModel(placeId = "", serviceId = "s-1", rescheduleId = "a-1")
+            runCurrent()
+            viewModel.onEvent(BookingEvent.TimeSelected(LocalTime.of(16, 0)))
+
+            viewModel.onEvent(BookingEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(
+                listOf(AnalyticsEvents.booked("p-9", AnalyticsVertical.Booking)),
+                analytics.events,
+            )
+        }
+
     /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
     private val analytics = FakeAnalyticsTracker()
 
     private fun viewModel(
+        placeId: String = "p-1",
         serviceId: String = "",
         rescheduleId: String = "",
         rescheduleLabel: String = "",
@@ -610,7 +645,7 @@ class BookingViewModelTest {
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         savedStateHandle = SavedStateHandle(
             mapOf(
-                "placeId" to "p-1",
+                "placeId" to placeId,
                 "placeName" to "Barber House",
                 "serviceId" to serviceId,
                 "rescheduleId" to rescheduleId,

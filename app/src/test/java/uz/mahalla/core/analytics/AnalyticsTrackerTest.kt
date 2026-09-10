@@ -2,6 +2,7 @@ package uz.mahalla.core.analytics
 
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -24,6 +25,7 @@ import uz.mahalla.testutil.FakeAnalyticsRepository
  * дошло бы до него, ушло бы в `Thread.uncaughtExceptionHandler`, то есть в
  * падение приложения. Здесь он ловушка — тесты требуют, чтобы он молчал.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class AnalyticsTrackerTest {
 
     private val repository = FakeAnalyticsRepository()

@@ -59,7 +59,9 @@ class AnalyticsRepositoryTest {
         // Именно `VIEW`: перечисление на бэкенде закрыто, имя из Kotlin он не
         // примет.
         assertEquals("VIEW", body.getValue("eventType").jsonPrimitive.content)
-        // Координаты уже уходят заголовками — дублировать их запрещено.
+        // Координаты не заполняются — расчёт на `X-Geo-*` (допущение, issue
+        // #226). Полей в `TrackEventRequest` сейчас нет, так что это защита от
+        // того, чтобы их завели и заполнили молча, а не проверка текущего кода.
         assertFalse("lat" in body)
         assertFalse("lng" in body)
         // Пустая карта не отправляется: `metadata: {}` ничего не сообщает.

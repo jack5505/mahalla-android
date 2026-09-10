@@ -126,6 +126,8 @@ class QueueViewModel @Inject constructor(
                     }
                     // Талон — это `BOOK`: своего вида события у очереди у
                     // бэкенда нет, различает вертикаль только `metadata`.
+                    // Уходит и на `PENDING`: талон создан, а решение мастера —
+                    // отдельный шаг без своего события (issue #228, п. 4).
                     analytics.track(
                         AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Queue),
                     )

@@ -48,7 +48,11 @@ enum class AnalyticsEventType(val serverName: String) {
     /** Нажали «Маршрут» на карточке. */
     Navigate("NAVIGATE"),
 
-    /** Запись/бронь/талон/билет состоялись — сервер подтвердил. */
+    /**
+     * Запись/бронь/талон/билет созданы — сервер принял запрос. Талон в
+     * очереди уходит и со статусом `PENDING`: он создан, а примет ли его
+     * мастер — следующий шаг, у которого своего вида события нет.
+     */
     Book("BOOK"),
 
     /** Заказ создан — сервер подтвердил. */
@@ -106,7 +110,7 @@ object AnalyticsEvents {
     fun reviewSubmitted(placeId: String): AnalyticsEvent =
         AnalyticsEvent(type = AnalyticsEventType.Review, placeId = placeId)
 
-    /** Запись, бронь, талон или билет подтверждены сервером. */
+    /** Запись, бронь, талон или билет приняты сервером ([AnalyticsEventType.Book]). */
     fun booked(placeId: String, vertical: AnalyticsVertical): AnalyticsEvent =
         AnalyticsEvent(
             type = AnalyticsEventType.Book,

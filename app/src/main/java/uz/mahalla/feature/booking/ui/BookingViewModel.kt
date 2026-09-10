@@ -229,8 +229,15 @@ class BookingViewModel @Inject constructor(
                 // Перенос отправляет `BOOK` тоже: с точки зрения заведения это
                 // новая запись, и она действительно создана — `reschedule`
                 // именно так и устроен (`BookingRepository.reschedule`).
+                // Из «Моих записей» маршрут приходит с пустым `placeId`
+                // (`Appointment.placeId` там nullable) — тогда заведение
+                // берётся из ответа сервера, иначе событие отбросил бы
+                // репозиторий, и переносы в панель не попадали бы.
                 analytics.track(
-                    AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Booking),
+                    AnalyticsEvents.booked(
+                        placeId = route.placeId.ifBlank { result.data.placeId.orEmpty() },
+                        vertical = AnalyticsVertical.Booking,
+                    ),
                 )
             }
         }
