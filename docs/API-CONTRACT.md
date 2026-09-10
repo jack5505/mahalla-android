@@ -413,6 +413,15 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 `FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
 пути больше нет.
 
+**`promoCode` подключён (issue #180)**, не дожидаясь остального ремонта из
+#221: поле добавлено в общий `PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`),
+`FoodOrderRepository` его не заполняет, значит у «Еды» оно по-прежнему не
+уходит на сервер. `storeId`/`items`/`deliveryLat`/`deliveryLng` — по-прежнему
+расхождение, описанное выше, и это отдельная задача (#221), не эта.
+Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда автором
+задачи) — независимо в этом прогоне не перепроверялась: под Bearer `401`
+приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
 ## FoodApi ✅
 
 `app/src/main/java/uz/mahalla/feature/food/data/FoodApi.kt` — сверен: issue #9, второй круг.
@@ -585,6 +594,15 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 |---|---|
 | GET | `promotions/platform` |
 | GET | `promotions/places/{placeId}` |
+| GET | `promotions/check` |
+
+`promotions/check?code=&placeId=&orderAmount=` (все три параметра обязательны)
+→ `CheckResponse {valid, discountAmount, finalAmount, promoCode}` — контракт
+из issue #180 (снят со стенда автором задачи), в этом прогоне независимо не
+перепроверен: анонимна ли ручка, как и остальные две у `PromotionsApi`, тоже
+не проверено. `discountAmount`/`finalAmount`/`orderAmount` — тийины, как и
+весь денежный контракт (issue #149). Используется в чекауте «Одежды» — см.
+`FashionCheckoutViewModel`.
 
 ## WalkInApi ⚠️
 

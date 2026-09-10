@@ -10,6 +10,7 @@ import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 
 /**
  * Оформление заказа одежды (issue #108).
@@ -40,6 +41,15 @@ data class FashionCheckoutState(
     val isSubmitting: Boolean = false,
     val submitError: ApiFailure? = null,
     val orderCreated: Boolean = false,
+    /** Что набрано в поле кода — до нажатия «Применить». */
+    val promoCodeInput: String = "",
+    val promoChecking: Boolean = false,
+    /** Последний **успешно применённый** код: null, пока ничего не применили. */
+    val appliedPromo: PromoCheckResult? = null,
+    /** `valid: false` в ответе сервера — код показан, но не применён. */
+    val promoInvalid: Boolean = false,
+    /** Сеть/бизнес-отказ на саму проверку — не то же самое, что `valid: false`. */
+    val promoCheckFailure: ApiFailure? = null,
 ) : UiState {
 
     val isEmpty: Boolean get() = items.isEmpty()
@@ -63,6 +73,9 @@ sealed interface FashionCheckoutEvent : UiEvent {
     data object SubmitClicked : FashionCheckoutEvent
     data object TopUpClicked : FashionCheckoutEvent
     data object OrdersClicked : FashionCheckoutEvent
+    data class PromoCodeChanged(val code: String) : FashionCheckoutEvent
+    data object PromoCodeApplyClicked : FashionCheckoutEvent
+    data object PromoCodeRemoveClicked : FashionCheckoutEvent
 }
 
 sealed interface FashionCheckoutEffect : UiEffect {

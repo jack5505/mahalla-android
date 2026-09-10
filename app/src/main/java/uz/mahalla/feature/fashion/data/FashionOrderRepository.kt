@@ -34,8 +34,15 @@ interface FashionOrderRepository {
      * Оформить заказ по магазину. Возвращается только идентификатор: ответ
      * `POST fashion/orders` описан перекрытой схемой, и читать из него что-то
      * кроме id — гадание.
+     *
+     * [promoCode] — проверенный код (issue #180, `GET promotions/check`);
+     * `null`, если код не применяли или отказ пришёл до подтверждения.
      */
-    suspend fun create(store: FashionCartStore, form: CheckoutForm): ApiResult<String>
+    suspend fun create(
+        store: FashionCartStore,
+        form: CheckoutForm,
+        promoCode: String? = null,
+    ): ApiResult<String>
 
     suspend fun myOrders(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<FashionOrderPage>
 
@@ -67,6 +74,7 @@ class DefaultFashionOrderRepository @Inject constructor(
     override suspend fun create(
         store: FashionCartStore,
         form: CheckoutForm,
+        promoCode: String?,
     ): ApiResult<String> {
         // Пустой заказ до сети не доходит: 400 сказал бы то же самое, но
         // платой были бы запрос и спиннер.
@@ -82,6 +90,7 @@ class DefaultFashionOrderRepository @Inject constructor(
                     fulfillment = form.method.apiValue,
                     paymentMethod = form.payment.apiValue,
                     deliveryAddress = form.addressOrNull(),
+                    promoCode = promoCode?.trim()?.takeIf(String::isNotEmpty),
                 ),
             ).payload()
         }

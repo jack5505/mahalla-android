@@ -40,6 +40,7 @@ import uz.mahalla.feature.food.domain.CartTotals
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -156,6 +157,8 @@ private fun CheckoutForm(
         color = colors.fgMuted,
     )
 
+    PromoCodeSection(state = state, onEvent = onEvent)
+
     SectionHeader(title = stringResource(R.string.checkout_method))
     MahallaSegmentedControl(
         options = listOf(
@@ -245,6 +248,75 @@ private fun CheckoutForm(
             onClick = { onEvent(FashionCheckoutEvent.SubmitClicked) },
             state = ButtonState(enabled = !state.isSubmitting, loading = state.isSubmitting),
         )
+    }
+}
+
+/**
+ * Промокод чекаута «Одежды» (issue #180). `valid: false` не блокирует
+ * заказ — код просто показан как неподходящий, оформление остаётся доступным
+ * без него.
+ */
+@Composable
+private fun PromoCodeSection(
+    state: FashionCheckoutState,
+    onEvent: (FashionCheckoutEvent) -> Unit,
+) {
+    val applied = state.appliedPromo?.takeIf(PromoCheckResult::valid)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MahallaTextField(
+                value = state.promoCodeInput,
+                onValueChange = { onEvent(FashionCheckoutEvent.PromoCodeChanged(it)) },
+                label = stringResource(R.string.fashion_checkout_promo_label),
+                modifier = Modifier.weight(1f),
+                enabled = applied == null && !state.orderCreated && !state.promoChecking,
+                errorText = if (state.promoInvalid) {
+                    stringResource(R.string.fashion_checkout_promo_invalid)
+                } else {
+                    null
+                },
+            )
+            MahallaButton(
+                text = stringResource(
+                    if (applied != null) {
+                        R.string.fashion_checkout_promo_remove
+                    } else {
+                        R.string.fashion_checkout_promo_apply
+                    },
+                ),
+                onClick = {
+                    onEvent(
+                        if (applied != null) {
+                            FashionCheckoutEvent.PromoCodeRemoveClicked
+                        } else {
+                            FashionCheckoutEvent.PromoCodeApplyClicked
+                        },
+                    )
+                },
+                variant = if (applied != null) {
+                    MahallaButtonVariant.Secondary
+                } else {
+                    MahallaButtonVariant.Primary
+                },
+                state = ButtonState(
+                    enabled = (applied != null || state.promoCodeInput.isNotBlank()) && !state.orderCreated,
+                    loading = state.promoChecking,
+                ),
+                fillWidth = false,
+            )
+        }
+        applied?.let {
+            Text(
+                text = stringResource(R.string.promo_discount_amount, priceText(it.discountAmount)),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+        state.promoCheckFailure?.let { FashionFailure(failure = it) }
     }
 }
 

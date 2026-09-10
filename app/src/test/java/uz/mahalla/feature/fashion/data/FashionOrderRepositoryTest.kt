@@ -72,6 +72,33 @@ class FashionOrderRepositoryTest {
     }
 
     @Test
+    fun `a checked promo code is sent in the order body`() = runTest {
+        server.enqueue(envelope("""{"id":"o-1"}"""))
+
+        repository().create(
+            store = store(item("v-1")),
+            form = CheckoutForm(method = DeliveryMethod.Pickup, payment = PaymentMethod.Wallet),
+            promoCode = "OSH20",
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body.contains(""""promoCode":"OSH20""""))
+    }
+
+    @Test
+    fun `no promo code means no promoCode field in the body`() = runTest {
+        server.enqueue(envelope("""{"id":"o-1"}"""))
+
+        repository().create(
+            store = store(item("v-1")),
+            form = CheckoutForm(method = DeliveryMethod.Pickup, payment = PaymentMethod.Wallet),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body.contains("promoCode"))
+    }
+
+    @Test
     fun `pickup order carries no address`() = runTest {
         server.enqueue(envelope("""{"id":"o-1"}"""))
 

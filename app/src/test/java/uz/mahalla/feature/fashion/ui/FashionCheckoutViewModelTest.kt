@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +21,7 @@ import uz.mahalla.feature.fashion.ui.checkout.FashionCheckoutViewModel
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.role.data.RoleProfile
 import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.feature.wallet.domain.Wallet
@@ -27,6 +29,7 @@ import uz.mahalla.navigation.FashionArgs
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeFashionCartRepository
 import uz.mahalla.testutil.FakeFashionOrderRepository
+import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeRoleRepository
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -45,6 +48,7 @@ class FashionCheckoutViewModelTest {
     private val orderRepository = FakeFashionOrderRepository()
     private val walletRepository = FakeWalletRepository()
     private val roleRepository = FakeRoleRepository()
+    private val promotionsRepository = FakePromotionsRepository()
 
     @Test
     fun `only the lines of this store are ordered`() = runTest {
@@ -77,6 +81,7 @@ class FashionCheckoutViewModelTest {
             roleRepository = FakeRoleRepository(
                 RoleProfile(customer = CustomerForm(address = "Amir Temur 1")),
             ),
+            promotionsRepository = promotionsRepository,
             analytics = analytics,
             savedStateHandle = handle(),
         )
@@ -231,6 +236,84 @@ class FashionCheckoutViewModelTest {
         assertEquals(emptyList<Any>(), analytics.events)
     }
 
+    @Test
+    fun `a valid promo code lowers the total and is sent with the order`() = runTest {
+        cartRepository.cartResult = ApiResult.Success(
+            FashionCart(listOf(item("v-1", quantity = 2))),
+        )
+        promotionsRepository.check = ApiResult.Success(
+            PromoCheckResult(code = "OSH20", valid = true, discountAmount = 50_000),
+        )
+        val viewModel = viewModel()
+        viewModel.onEvent(FashionCheckoutEvent.AddressChanged("Amir Temur 1"))
+
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeChanged("osh20"))
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeApplyClicked)
+
+        // Проверяют по полной цене строк, без ещё не применённой скидки.
+        assertEquals(listOf(Triple("osh20", STORE, 300_000L)), promotionsRepository.requestedChecks)
+        assertEquals(250_000L, viewModel.state.value.totals.totalSum)
+
+        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+
+        assertEquals("OSH20", orderRepository.created.single().promoCode)
+    }
+
+    @Test
+    fun `an invalid code is shown but does not block the order`() = runTest {
+        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+        promotionsRepository.check = ApiResult.Success(
+            PromoCheckResult(code = "EXPIRED", valid = false),
+        )
+        val viewModel = viewModel()
+        viewModel.onEvent(FashionCheckoutEvent.AddressChanged("Amir Temur 1"))
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeChanged("EXPIRED"))
+
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeApplyClicked)
+
+        assertTrue(viewModel.state.value.promoInvalid)
+        assertEquals(150_000L, viewModel.state.value.totals.totalSum)
+
+        // Заказ оформляется без кода — отказ не блокирует оформление.
+        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+        assertNull(orderRepository.created.single().promoCode)
+        assertTrue(viewModel.state.value.orderCreated)
+    }
+
+    @Test
+    fun `removing an applied code returns the total and stops sending it`() = runTest {
+        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+        promotionsRepository.check = ApiResult.Success(
+            PromoCheckResult(code = "OSH20", valid = true, discountAmount = 50_000),
+        )
+        val viewModel = viewModel()
+        viewModel.onEvent(FashionCheckoutEvent.AddressChanged("Amir Temur 1"))
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeChanged("OSH20"))
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeApplyClicked)
+        assertEquals(100_000L, viewModel.state.value.totals.totalSum)
+
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeRemoveClicked)
+
+        assertEquals("", viewModel.state.value.promoCodeInput)
+        assertEquals(150_000L, viewModel.state.value.totals.totalSum)
+
+        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+        assertNull(orderRepository.created.single().promoCode)
+    }
+
+    @Test
+    fun `a network failure on the check is shown and does not apply a discount`() = runTest {
+        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+        promotionsRepository.check = ApiResult.Failure(ApiError.Timeout)
+        val viewModel = viewModel()
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeChanged("OSH20"))
+
+        viewModel.onEvent(FashionCheckoutEvent.PromoCodeApplyClicked)
+
+        assertEquals(ApiError.Timeout, viewModel.state.value.promoCheckFailure?.error)
+        assertEquals(150_000L, viewModel.state.value.totals.totalSum)
+    }
+
     /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
     private val analytics = FakeAnalyticsTracker()
 
@@ -239,6 +322,7 @@ class FashionCheckoutViewModelTest {
         orderRepository = orderRepository,
         walletRepository = walletRepository,
         roleRepository = roleRepository,
+        promotionsRepository = promotionsRepository,
         analytics = analytics,
         savedStateHandle = handle(),
     )
