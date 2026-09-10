@@ -63,9 +63,14 @@
 прочитана (issue #76, #84, #97). Теперь имена уникальны — 255 схем, ни одного
 `BookRequest`/`ServiceResponse`/`Response` без префикса вертикали:
 `AppointmentBookRequest` / `GamingBookRequest` / `HospitalBookRequest`,
-`AppointmentServiceResponse` / `FreelancerServiceResponse`. Значит **любое
-«имена выведены из схемы» ниже теперь можно проверить чтением** — где это
-уже сделано, отмечено датой.
+`AppointmentServiceResponse` / `FreelancerServiceResponse`. Значит всё, что в
+клиенте помечено «имена выведены из схемы», **теперь можно проверить чтением**.
+По чтению перепроверена пока только вертикаль записи (`BookingApi`,
+`GamingApi.book`, `ReviewDto`, `FreelancerApi.services`) — где сделано,
+отмечено датой. Остальные KDoc и тесты, которые считают коллизию действующей
+(`CreateRequest` у `ProviderApi` и `POST reviews`, `OrderResponse` у еды /
+одежды / мастеров, `Response` у walk-in), не перепроверялись — сквозной
+проход вынесен в issue #235.
 
 **Страничные ответы** — один конверт `PageResponse…` на все списки:
 `content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
@@ -366,8 +371,9 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 **Тело `POST gaming/bookings` сверено чтением** (2026-09-10, после развода
 коллизии): `GamingBookRequest {zoneId, startTime, durationHours}` — ровно то,
 что клиент угадал по ответу того же эндпоинта. Раньше это имя занимал
-медицинский вариант, поэтому поля считались выведенными. Сам ответ под токеном
-всё ещё не проверен — кандидат на пробу `contract/gaming.sh`.
+медицинский вариант, поэтому поля считались выведенными. Обязательны `zoneId` и `durationHours`, `durationHours` — целое от 1 до 24 (issue #167).
+Сам ответ под токеном всё ещё не проверен — кандидат на пробу
+`contract/gaming.sh`.
 
 Отмены брони у бэкенда нет: в `gaming-controller` пять путей, `cancel` среди
 них не значится, а в общем `orders` для `GAMING` только `GET`.

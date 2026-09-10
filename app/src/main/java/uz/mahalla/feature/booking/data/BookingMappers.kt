@@ -23,7 +23,8 @@ internal fun ServiceDto.toDomain(): BarberService? {
     return BarberService(
         id = serviceId,
         title = name?.takeIf { it.isNotBlank() }.orEmpty(),
-        // description бэкенд не отдаёт — остаётся пустым (см. ServiceDto).
+        // description в AppointmentServiceResponse нет (сверено 2026-09-10,
+        // см. ServiceDto) — остаётся пустым.
         // Отрицательная цена — не скидка, а мусор.
         priceSum = price?.coerceAtLeast(0) ?: 0,
         durationMinutes = durationMinutes?.takeIf { it > 0 },

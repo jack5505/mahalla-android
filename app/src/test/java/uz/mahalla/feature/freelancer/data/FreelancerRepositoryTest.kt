@@ -198,19 +198,24 @@ class FreelancerRepositoryTest {
     }
 
     /**
-     * Услуги мастера приезжают той же схемой `ServiceResponse`, что и у
-     * `barber-services` (issue #97) — DTO переиспользуется. Выключенные не
-     * показываются: заказать их нельзя.
+     * Фикстура — `FreelancerServiceResponse`, как в живой схеме 2026-09-10:
+     * `title`, `priceAmount`, `description`, `freelancerId`, `isActive`. Это
+     * **не** схема барбершопа (`name`/`price`), хотя разбирает ответ пока
+     * барберский `ServiceDto` — issue #216, см. следующий тест.
+     *
+     * Выключенные не показываются: заказать их нельзя. Услуга без `id`
+     * отбрасывается. Флаг принимается и как `isActive`, и как `active`.
      */
     @Test
     fun `services drop the inactive ones`() = runTest {
         server.enqueue(
             envelope(
-                // ServiceResponse — та же схема, что у barber-services, где
-                // имена сверены пробой: name/price, не title/priceAmount.
-                """[{"id":"s-1","name":"Kran","price":150000,"durationMinutes":60,
-                   "isActive":true},{"id":"s-2","name":"Eski","active":false},
-                   {"name":"Idsiz"},{"id":"s-3","name":"Bayroqsiz"}]""",
+                """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
+                   "description":"Almashtirish","priceAmount":150000,
+                   "durationMinutes":60,"isActive":true},
+                   {"id":"s-2","title":"Eski","isActive":false},
+                   {"id":"s-4","title":"Eski ham","active":false},
+                   {"title":"Idsiz"},{"id":"s-3","title":"Bayroqsiz"}]""",
             ),
         )
 
@@ -219,8 +224,31 @@ class FreelancerRepositoryTest {
         assertEquals("/freelancers/f-1/services", server.takeRequest().path)
         // Молчание сервера о флаге — «услуга оказывается».
         assertEquals(listOf("s-1", "s-3"), services.map { it.id })
-        assertEquals(150_000L, services.first().priceSum)
         assertEquals(60, services.first().durationMinutes)
+    }
+
+    /**
+     * Живой баг issue #216, закреплённый тестом, чтобы он был виден в CI, а не
+     * только в тексте issue: `title` и `priceAmount` мастера барберский
+     * `ServiceDto` не читает, поэтому на экране — пустое название и цена 0.
+     *
+     * Когда появится свой `FreelancerServiceDto`, ожидания здесь должны стать
+     * `"Kran"` и `150_000L`, и этот тест обязан покраснеть — в этом его
+     * назначение.
+     */
+    @Test
+    fun `services are parsed with the barber schema - bug 216`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
+                   "priceAmount":150000,"durationMinutes":60,"isActive":true}]""",
+            ),
+        )
+
+        val service = (repository().services("f-1") as ApiResult.Success).data.single()
+
+        assertEquals("", service.title)
+        assertEquals(0L, service.priceSum)
     }
 
     @Test
