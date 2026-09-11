@@ -350,6 +350,7 @@
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
+    <string name="place_review_owner_reply_label">Ответ заведения</string>
     <!-- Оставить отзыв (issue #76) -->
     <string name="place_reviews_empty">Отзывов пока нет. Будьте первым.</string>
     <string name="place_review_add">Оставить отзыв</string>

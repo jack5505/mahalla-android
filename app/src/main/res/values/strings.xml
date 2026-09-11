@@ -356,6 +356,7 @@
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
+    <string name="place_review_owner_reply_label">Muassasa javobi</string>
     <!-- Sharh qoldirish (issue #76) -->
     <string name="place_reviews_empty">Hozircha sharhlar yo\'q. Birinchi bo\'ling.</string>
     <string name="place_review_add">Sharh qoldirish</string>

@@ -120,32 +120,31 @@ data class PlaceDocumentDto(
 /**
  * Отзыв — `ReviewResponse {id, placeId, userId, rating, text, isVerified,
  * helpfulCount, ownerReply, createdAt}` (сверено по живому `/v3/api-docs`
- * 2026-09-10; раньше имя было перекрыто коллизией `Response`, и поля
- * приходилось выводить). **Ни имени автора, ни аватара в схеме нет** — ни под
- * одним из имён, что перечислены в `@JsonNames` ниже. Аннотации оставлены:
- * разбор мягкий, лишнее известное имя ничего не стоит. Но искать «настоящее»
- * имя автора больше не надо — его нет; экран подставляет «аноним»
- * (issue #192).
+ * 2026-09-10; раньше имя было перекрыто коллизией `Response`). **Ни имени
+ * автора, ни аватара в схеме нет вовсе** — ни под одним именем. Раньше
+ * `ReviewDto` гадал три имени под `@JsonNames`, ни одно не совпадало, и
+ * молчаливый дефолт («» / `null`) выглядел как случайно пропавшее поле —
+ * на деле поля не было никогда (issue #192). Гадать больше не пытаемся: экран
+ * показывает отзыв без имени автора вместо пустой строки.
  *
  * @param userId автор отзыва. По нему и только по нему приложение отличает
  * свой отзыв от чужого (issue #76): отдельного флага «это ваш отзыв» бэкенд не
  * отдаёт. Поле не пришло — своего отзыва не видно, и кнопку удаления показать
  * некому.
- * @param ownerReply ответ владельца заведения (issue #188). `null` — ответа
- * ещё нет.
+ * @param ownerReply ответ заведения на отзыв. Поле в схеме есть, но раньше
+ * не разбиралось вовсе — молча терялось (issue #192). `null` — ответа ещё нет.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ReviewDto(
     @SerialName("id") val id: String,
     @JsonNames("authorId", "createdBy") @SerialName("userId") val userId: String? = null,
-    @JsonNames("author", "authorName") @SerialName("userName") val author: String = "",
     @SerialName("rating") val rating: Int = 0,
     @JsonNames("comment") @SerialName("text") val text: String = "",
+    @SerialName("isVerified") val isVerified: Boolean = false,
+    @SerialName("ownerReply") val ownerReply: String? = null,
+    @SerialName("helpfulCount") val helpfulCount: Int = 0,
     @SerialName("createdAt") val createdAt: String? = null,
-    /** Аватара в `ReviewResponse` нет (сверено 2026-09-10); имена — мягкий запас (issue #60, #192). */
-    @JsonNames("avatarUrl", "userAvatar") @SerialName("userAvatarUrl")
-    val avatarUrl: String? = null,
     @SerialName("ownerReply") val ownerReply: String? = null,
 )
 

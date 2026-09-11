@@ -331,7 +331,7 @@ class CatalogRepositoryTest {
         assertEquals("Eng mazali osh", details.description)
         assertEquals("+998901234567", details.contacts.phone)
         assertEquals(listOf("r-1"), details.reviews.map { it.id })
-        assertEquals("Ali", details.reviews.single().author)
+        assertEquals("Rahmat!", details.reviews.single().ownerReply)
         assertFalse(details.fromCache)
         assertEquals("/places/p-1", server.takeRequest().path)
         assertTrue(server.takeRequest().path.orEmpty().startsWith("/reviews/places/p-1"))
@@ -744,8 +744,9 @@ class CatalogRepositoryTest {
         """
 
         const val REVIEWS_BODY = """
-            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1","userName":"Ali",
-             "rating":5,"text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
+            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1",
+             "rating":5,"text":"Zo'r","ownerReply":"Rahmat!",
+             "createdAt":"2026-08-25T10:15:30Z"}],
              "page":0,"totalPages":1,"totalElements":1,"last":true}}
         """
 

@@ -810,7 +810,6 @@ class PlaceDetailsViewModelTest {
 
     private fun review(id: String, authorId: String? = null, ownerReply: String? = null) = Review(
         id = id,
-        author = "Ali",
         rating = 5,
         text = "Zo'r",
         createdAt = Instant.parse("2026-08-25T10:15:30Z"),

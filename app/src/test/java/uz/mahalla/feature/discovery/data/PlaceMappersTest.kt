@@ -124,22 +124,47 @@ class PlaceMappersTest {
     }
 
     /**
-     * Имя поля с аватаром не сверено (issue #60): схема `Response` перекрыта
-     * коллизией springdoc, поэтому DTO разбирает три вероятных имени. Опечатка
-     * в любом из них тихо оставила бы всех авторов без фотографий, а заметить
-     * это можно было бы только на живом стенде.
+     * Реальный `ReviewResponse` (issue #192): коллизия `Response` разведена,
+     * `userName`/`userAvatarUrl` в схеме нет вовсе — ни под каким именем.
+     * Раньше `ReviewDto` гадал три алиаса, ни один не совпадал, и дефолт
+     * («»/`null`) молча выглядел так, будто поле просто иногда пустое.
      */
     @Test
-    fun `review avatar is read under all three names and a blank one is no avatar`() {
+    fun `real ReviewResponse has no author or avatar field, but does have owner reply`() {
         val json = NetworkFactory.json()
-        fun avatar(body: String): String? =
-            json.decodeFromString<ReviewDto>(body).toDomain().avatarUrl
+        val body = """
+            {
+              "id": "r-1",
+              "placeId": "p-1",
+              "userId": "u-1",
+              "rating": 5,
+              "text": "Zo'r joy",
+              "isVerified": true,
+              "helpfulCount": 3,
+              "ownerReply": "Rahmat!",
+              "createdAt": "2026-08-25T10:15:30Z"
+            }
+        """.trimIndent()
 
-        assertEquals("a.jpg", avatar("""{"id":"r","userAvatarUrl":"a.jpg"}"""))
-        assertEquals("b.jpg", avatar("""{"id":"r","avatarUrl":"b.jpg"}"""))
-        assertEquals("c.jpg", avatar("""{"id":"r","userAvatar":"c.jpg"}"""))
-        assertNull(avatar("""{"id":"r","userAvatarUrl":"  "}"""))
-        assertNull(avatar("""{"id":"r"}"""))
+        val dto = json.decodeFromString<ReviewDto>(body)
+
+        assertEquals("u-1", dto.userId)
+        assertTrue(dto.isVerified)
+        assertEquals(3, dto.helpfulCount)
+        assertEquals("Rahmat!", dto.ownerReply)
+
+        val review = dto.toDomain()
+        assertEquals("Rahmat!", review.ownerReply)
+    }
+
+    @Test
+    fun `a review without an owner reply maps to null, not a blank string`() {
+        val dto = NetworkFactory.json().decodeFromString<ReviewDto>(
+            """{"id":"r-2","userId":"u-2","rating":4,"text":"Yaxshi"}""",
+        )
+
+        assertNull(dto.ownerReply)
+        assertNull(dto.toDomain().ownerReply)
     }
 
     @Test
