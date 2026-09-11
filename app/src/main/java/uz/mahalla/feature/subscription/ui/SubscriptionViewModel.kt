@@ -2,12 +2,12 @@ package uz.mahalla.feature.subscription.ui
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.role.domain.UserRole
@@ -32,21 +32,22 @@ class SubscriptionViewModel @Inject constructor(
     private val roleRepository: RoleRepository,
 ) : MviViewModel<SubscriptionState, SubscriptionEvent, SubscriptionEffect>(SubscriptionState()) {
 
+    private var loadJob: Job? = null
+
     init {
         load()
     }
 
     override fun onEvent(event: SubscriptionEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние. Действие в полёте — тем более: его ответ
-            // сам обновит подписку.
-            SubscriptionEvent.ScreenResumed ->
-                if (!currentState.plans.isLoading && !currentState.isRefreshing &&
-                    !currentState.isBusy
-                ) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209). Действие в
+            // полёте — тем более повод не перезапрашивать: его ответ сам
+            // обновит подписку.
+            SubscriptionEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true || currentState.isBusy },
+                load = { load(showLoading = false) },
+            )
 
             SubscriptionEvent.Refreshed -> load(showLoading = false, refreshing = true)
             SubscriptionEvent.Retry -> load()
@@ -86,7 +87,7 @@ class SubscriptionViewModel @Inject constructor(
             updateState { copy(plans = ScreenState.Loading, current = ScreenState.Loading) }
         }
         updateState { copy(isRefreshing = refreshing, actionFailure = null) }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             // Аудитория тарифов зависит от роли: продавцу бэкенд показывает
             // свой набор (`plans?audience=BUSINESS`), и оформляются такие
             // тарифы отдельной ручкой.

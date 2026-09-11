@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toScreenState
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.feature.wallet.domain.TopUpDraft
@@ -33,6 +32,7 @@ class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
 ) : MviViewModel<WalletState, WalletEvent, WalletEffect>(WalletState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -43,12 +43,12 @@ class WalletViewModel @Inject constructor(
     override fun onEvent(event: WalletEvent) {
         when (event) {
             // Возврат на экран: заказ мог быть оплачен, пока приложение было в
-            // фоне. Пока идёт загрузка, перезапрашивать нечего — ответ приедет
-            // на уже сменившееся состояние.
-            WalletEvent.ScreenResumed ->
-                if (!currentState.wallet.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // фоне. Защита от дубля (первый resume, два resume подряд) —
+            // общая, см. MviViewModel.onScreenResumed (issue #145, #209).
+            WalletEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             WalletEvent.Refreshed -> load(showLoading = false, refreshing = true)
 
@@ -160,7 +160,7 @@ class WalletViewModel @Inject constructor(
         if (showLoading) updateState { copy(wallet = ScreenState.Loading) }
         if (refreshing) updateState { copy(isRefreshing = true) }
         resetHistory(showLoading = showLoading)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             // Баланс и история — две независимые ручки: последовательный
             // запрос удвоил бы время до первого экрана без всякой причины.
             val balance = async { repository.wallet() }

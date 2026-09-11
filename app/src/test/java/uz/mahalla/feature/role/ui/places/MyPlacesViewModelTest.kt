@@ -74,6 +74,10 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
         val viewModel = MyPlacesViewModel(repository)
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyPlacesEvent.ScreenResumed)
+        assertEquals(listOf(0), repository.requestedPages)
+
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
 

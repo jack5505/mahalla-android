@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.freelancer.data.FreelancerRepository
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
@@ -27,6 +26,7 @@ class MyFreelancerOrdersViewModel @Inject constructor(
     MyFreelancerOrdersState(),
 ) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -36,13 +36,12 @@ class MyFreelancerOrdersViewModel @Inject constructor(
 
     override fun onEvent(event: MyFreelancerOrdersEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            MyFreelancerOrdersEvent.ScreenResumed -> {
-                if (!currentState.orders.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
-            }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            MyFreelancerOrdersEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             MyFreelancerOrdersEvent.Refreshed -> load(showLoading = false, refreshing = true)
             MyFreelancerOrdersEvent.Retry -> load()
@@ -61,7 +60,7 @@ class MyFreelancerOrdersViewModel @Inject constructor(
                 loadMoreFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myOrders(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

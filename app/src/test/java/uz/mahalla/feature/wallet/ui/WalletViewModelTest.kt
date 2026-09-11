@@ -171,6 +171,10 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository()
         val viewModel = WalletViewModel(repository)
 
+        // Первый resume — это открытие экрана, баланс уже запросил `init`.
+        viewModel.onEvent(WalletEvent.ScreenResumed)
+        assertEquals(1, repository.walletCount)
+
         repository.wallet = ApiResult.Success(Wallet(balanceSum = 1, availableSum = 1))
         viewModel.onEvent(WalletEvent.ScreenResumed)
 
@@ -296,6 +300,10 @@ class WalletViewModelTest {
         viewModel.onEvent(WalletEvent.TopUpSubmitted)
 
         assertEquals(0L, (viewModel.state.value.wallet as ScreenState.Content).data.availableSum)
+
+        // Первый resume — это открытие экрана, баланс уже запросил `init`.
+        viewModel.onEvent(WalletEvent.ScreenResumed)
+        assertEquals(1, repository.walletCount)
 
         repository.wallet = ApiResult.Success(Wallet(balanceSum = 250_000, availableSum = 250_000))
         viewModel.onEvent(WalletEvent.ScreenResumed)

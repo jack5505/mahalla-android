@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.role.data.ProviderRepository
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
@@ -26,6 +25,7 @@ class MyPlacesViewModel @Inject constructor(
     private val repository: ProviderRepository,
 ) : MviViewModel<MyPlacesState, MyPlacesEvent, MyPlacesEffect>(MyPlacesState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -35,12 +35,12 @@ class MyPlacesViewModel @Inject constructor(
 
     override fun onEvent(event: MyPlacesEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            MyPlacesEvent.ScreenResumed ->
-                if (!currentState.places.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            MyPlacesEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             MyPlacesEvent.Refreshed -> load(showLoading = false, refreshing = true)
             MyPlacesEvent.Retry -> load()
@@ -66,7 +66,7 @@ class MyPlacesViewModel @Inject constructor(
                 actionFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myPlaces(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

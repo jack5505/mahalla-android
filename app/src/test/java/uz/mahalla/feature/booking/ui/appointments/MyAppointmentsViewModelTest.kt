@@ -90,6 +90,10 @@ class MyAppointmentsViewModelTest {
         repository.defaultPage = page(listOf(appointment("a-1", LocalDate.of(2026, 9, 5))))
         val viewModel = viewModel()
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyAppointmentsEvent.ScreenResumed)
+        assertEquals(listOf(0), repository.requestedPages)
+
         repository.defaultPage = page(
             listOf(
                 appointment("a-1", LocalDate.of(2026, 9, 5), AppointmentStatus.Confirmed),

@@ -40,6 +40,14 @@ abstract class MviViewModel<S : UiState, E : UiEvent, F : UiEffect>(
 
     protected val currentState: S get() = mutableState.value
 
+    /**
+     * Экран уже был на переднем плане. Нужен, чтобы отличить **возврат** на
+     * экран от его открытия — см. [onScreenResumed]. Живёт здесь, а не в
+     * композабле: композабл пересоздаётся при каждом уходе с таба, а
+     * ViewModel держится за запись бэкстека.
+     */
+    private var resumedOnce = false
+
     /** Единственная точка входа для UI. */
     abstract fun onEvent(event: E)
 
@@ -49,5 +57,31 @@ abstract class MviViewModel<S : UiState, E : UiEvent, F : UiEffect>(
 
     protected fun emitEffect(effect: F) {
         effectChannel.trySend(effect)
+    }
+
+    /**
+     * Общая защита от дубля загрузки на `ScreenResumed` (issue #145, #209).
+     *
+     * **Первый resume пропускается.** `LifecycleEventEffect(ON_RESUME)`
+     * срабатывает на первой же композиции, то есть сразу после того, как
+     * экран запросил загрузку в `init` — это не возврат на экран, а его
+     * открытие. Проверки `isLoading`/`isRefreshing` для этого мало: они
+     * отсекают дубль только пока стартовая загрузка в полёте, а успела та
+     * дойти до конца — экран открывался бы двумя одинаковыми загрузками.
+     *
+     * **Второй резюм подряд тоже не должен грузить заново.** Диалог поверх
+     * экрана или быстрый уход в фон и обратно дают два resume, пока первый
+     * (уже "возвратный") ответ ещё не пришёл. [isLoadInFlight] обязан
+     * проверять именно job запущенной этим resume загрузки, а не
+     * `isLoading`/`isRefreshing`: такая загрузка идёт молча и эти флаги не
+     * поднимает.
+     */
+    protected fun onScreenResumed(isLoadInFlight: () -> Boolean = { false }, load: () -> Unit) {
+        if (!resumedOnce) {
+            resumedOnce = true
+            return
+        }
+        if (isLoadInFlight()) return
+        load()
     }
 }

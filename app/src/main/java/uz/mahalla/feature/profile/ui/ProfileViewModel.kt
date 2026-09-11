@@ -11,7 +11,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
@@ -43,6 +42,8 @@ class ProfileViewModel @Inject constructor(
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
     private var avatarJob: Job? = null
+
+    private var sessionsJob: Job? = null
 
     init {
         updateState { copy(httpInspectorAvailable = httpInspector.isAvailable) }
@@ -80,13 +81,16 @@ class ProfileViewModel @Inject constructor(
             }
 
             // Возврат на экран: вход с другого устройства мог случиться, пока
-            // приложение было в фоне. Пока список грузится или идёт запрос по
-            // строке, перезапрашивать нечего — иначе ответ приедет на уже
-            // сменившееся состояние.
-            ProfileEvent.ScreenResumed ->
-                if (currentState.pendingSessionId == null && !currentState.sessions.isLoading) {
-                    loadSessions(showLoading = false)
-                }
+            // приложение было в фоне. Защита от дубля (первый resume, два
+            // resume подряд) — общая, см. MviViewModel.onScreenResumed (issue
+            // #145, #209); запрос по строке — тем более повод не грузить
+            // список заново, иначе ответ приедет на уже сменившееся состояние.
+            ProfileEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = {
+                    currentState.pendingSessionId != null || sessionsJob?.isActive == true
+                },
+                load = { loadSessions(showLoading = false) },
+            )
 
             ProfileEvent.SessionsRetryRequested -> loadSessions()
 
@@ -190,7 +194,7 @@ class ProfileViewModel @Inject constructor(
      * показанных устройств он не нужен: список бы мигал на каждом возврате.
      */
     private fun loadSessions(showLoading: Boolean = true) {
-        viewModelScope.launch {
+        sessionsJob = viewModelScope.launch {
             if (showLoading) updateState { copy(sessions = ScreenState.Loading) }
             val result = sessionsRepository.sessions()
             updateState { copy(sessions = result.toListScreenState()) }
