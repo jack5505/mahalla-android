@@ -139,7 +139,13 @@ class ActivityViewModel @Inject constructor(
                         // Причину берём у любого источника: при полном отказе
                         // она у всех одна и та же (401, таймаут, нет сети).
                         feed.isTotalFailure -> ScreenState.Error(feed.failures.values.first())
-                        feed.items.isEmpty() -> ScreenState.Empty
+                        // Пусто, но курсор не пуст — это не «вы ещё ничего не
+                        // заказывали», а недогруженная страница (issue #203):
+                        // например, первая страница целиком ушла в записи с
+                        // неразбираемой датой. `Content(emptyList())` ниже
+                        // отправит [drain] за следующей страницей — в отличие
+                        // от `Empty`, у которого нет ни хвоста, ни догрузки.
+                        feed.items.isEmpty() && !feed.hasMore -> ScreenState.Empty
                         else -> ScreenState.Content(feed.items)
                     },
                     // При полном отказе разделы не отмечаются: экран уже
@@ -255,7 +261,20 @@ class ActivityViewModel @Inject constructor(
                 page < MAX_DRAIN_PAGES
             if (!goOn) break
         }
-        updateState { copy(isLoadingMore = false) }
+        updateState {
+            copy(
+                isLoadingMore = false,
+                // Курсор кончился, а активностей за все страницы так и не
+                // нашлось — это не «пусто в этой вкладке» (issue #143, там
+                // список в целом не пуст), а настоящее «вы ещё ничего не
+                // заказывали» (issue #203).
+                items = if (!hasMore && items.dataOrNull()?.isEmpty() == true) {
+                    ScreenState.Empty
+                } else {
+                    items
+                },
+            )
+        }
     }
 
     /**

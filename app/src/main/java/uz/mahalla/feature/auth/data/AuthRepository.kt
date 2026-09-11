@@ -22,6 +22,7 @@ import uz.mahalla.data.network.auth.UserDto
 import uz.mahalla.data.network.auth.VerifyOtpRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.network.payload
+import uz.mahalla.data.prefs.FormOwnership
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.prefs.UserProfile
@@ -119,6 +120,7 @@ class DefaultAuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
     private val userProfileStore: UserProfileStore,
+    private val formOwnership: FormOwnership,
     private val pinStorage: PinStorage,
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
@@ -223,8 +225,7 @@ class DefaultAuthRepository @Inject constructor(
                 val session = result.data.tokens.toSession(sessionId = result.data.sessionId)
                 if (session != null) {
                     pendingServerPin = null
-                    sessionStore.save(session)
-                    saveProfile(result.data.user)
+                    signIn(session, result.data.user)
                     return ApiResult.Success(VerificationResult.Authorized(login))
                 }
 
@@ -321,8 +322,7 @@ class DefaultAuthRepository @Inject constructor(
 
         val session = tokens.toSession(sessionId = sessionId)
             ?: return ApiResult.Failure(ApiError.Serialization)
-        sessionStore.save(session)
-        saveProfile(user)
+        signIn(session, user)
         pendingServerPin = null
         return ApiResult.Success(LoginResult(isNewUser = user?.fullName.isNullOrBlank()))
     }
@@ -374,6 +374,24 @@ class DefaultAuthRepository @Inject constructor(
         runCatchingCancellable { sessionStore.clear() }.reportSwallowed("auth.clearSession")
         runCatchingCancellable { userProfileStore.clear() }.reportSwallowed("auth.clearProfile")
         runCatchingCancellable { pinStorage.clear() }.reportSwallowed("auth.clearPin")
+    }
+
+    /**
+     * Вход состоялся: сессия и профиль того, кого назвал сервер. Сюда
+     * сходятся все пути входа — SMS, оба PIN-шага и Telegram.
+     *
+     * Анкета сверяется первой (issue #243): с записью сессии приложение уже
+     * считается вошедшим, и умри процесс между двумя записями — следующий
+     * запуск открыл бы его с чужим адресом доставки, а второй сверки не будет.
+     * Ответ без `user` аккаунт не называет, и прежняя анкета считается чужой.
+     */
+    private suspend fun signIn(session: Session, user: UserDto?) {
+        // Уборка по дороге, как и в [clearLocalIdentity]: недоступный файл
+        // настроек не должен ронять вход.
+        runCatchingCancellable { formOwnership.claimFor(user?.id) }
+            .reportSwallowed("auth.claimForm")
+        sessionStore.save(session)
+        saveProfile(user)
     }
 
     /**
@@ -495,8 +513,7 @@ class DefaultAuthRepository @Inject constructor(
             refreshExpiresIn = response.refreshExpiresIn,
         ).toSession(sessionId = null) ?: return ApiResult.Failure(ApiError.Serialization)
 
-        sessionStore.save(session)
-        saveProfile(response.user)
+        signIn(session, response.user)
         return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
     }
 
@@ -543,6 +560,8 @@ class DefaultAuthRepository @Inject constructor(
         }
         sessionStore.clear()
         // Имя и номер прошлого пользователя после выхода не показываем.
+        // Анкету не трогаем: через выход идёт и «забыли PIN», а чужому она
+        // не достанется и так — её отдаёт только вход (issue #243).
         userProfileStore.clear()
         // Незавершённый вход тоже сбрасываем: `sessionId` от прошлой попытки
         // после выхода не значит ничего.

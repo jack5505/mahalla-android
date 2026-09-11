@@ -19,7 +19,9 @@ import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
 import java.time.Instant
@@ -44,6 +46,11 @@ class CatalogRepositoryTest {
     private val location = object : RequestLocationProvider {
         override suspend fun current() = DeviceLocation(latitude = 41.3111, longitude = 69.2797)
     }
+
+    // Галерея места (issue #185) ходит через отдельный сервис, а не через
+    // `CatalogApi` — фейк, чтобы не enqueue'ить лишний ответ в тестах, которые
+    // её не проверяют.
+    private val media = FakeMediaRepository()
 
     @Before
     fun setUp() {
@@ -330,10 +337,46 @@ class CatalogRepositoryTest {
         assertEquals("Eng mazali osh", details.description)
         assertEquals("+998901234567", details.contacts.phone)
         assertEquals(listOf("r-1"), details.reviews.map { it.id })
-        assertEquals("Ali", details.reviews.single().author)
+        assertEquals("Rahmat!", details.reviews.single().ownerReply)
         assertFalse(details.fromCache)
         assertEquals("/places/p-1", server.takeRequest().path)
         assertTrue(server.takeRequest().path.orEmpty().startsWith("/reviews/places/p-1"))
+    }
+
+    @Test
+    fun `the gallery comes from media entity, not just the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Success(
+            listOf(MediaFile(id = "m-1", url = "real.jpg", ownerId = "u-9")),
+        )
+
+        val result = repository().placeDetails("p-1")
+
+        val photos = (result as ApiResult.Success).data.photos
+        assertEquals(listOf("real.jpg"), photos.map { it.url })
+        assertEquals(listOf("p-1"), media.requestedEntities)
+    }
+
+    @Test
+    fun `an empty gallery response falls back to the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(listOf("cover.jpg"), (result as ApiResult.Success).data.photos.map { it.url })
+    }
+
+    @Test
+    fun `deleting a media file delegates to the media service`() = runTest {
+        media.deleteResult = ApiResult.Success(Unit)
+
+        val result = repository().deleteMediaFile("m-1")
+
+        assertEquals(listOf("m-1"), media.deletedIds)
+        assertTrue(result is ApiResult.Success)
     }
 
     @Test
@@ -515,7 +558,7 @@ class CatalogRepositoryTest {
                 NetworkFactory.converterFactory(NetworkFactory.json()),
             )
             .create(CatalogApi::class.java)
-        return DefaultCatalogRepository(api, dao, location, clock)
+        return DefaultCatalogRepository(api, dao, location, media, clock)
     }
 
     private fun entity(
@@ -594,8 +637,9 @@ class CatalogRepositoryTest {
         """
 
         const val REVIEWS_BODY = """
-            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1","userName":"Ali",
-             "rating":5,"text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
+            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1",
+             "rating":5,"text":"Zo'r","ownerReply":"Rahmat!",
+             "createdAt":"2026-08-25T10:15:30Z"}],
              "page":0,"totalPages":1,"totalElements":1,"last":true}}
         """
 
