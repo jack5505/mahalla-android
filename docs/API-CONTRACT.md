@@ -447,13 +447,16 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | POST | `freelancers/{id}/orders` |
 | GET | `freelancers/orders/my` |
 
-**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
-(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
-title, description, priceAmount, durationMinutes, isActive}`, а клиент
-разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
-мастера будет пустое название и цена 0. До развода коллизии обе ручки
-выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
-только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
+**`freelancers/{id}/services` отдавала не ту схему, которой её разбирали**
+(сверено 2026-09-10, issue #216, исправлено). Здесь `FreelancerServiceResponse
+{id, freelancerId, title, description, priceAmount, durationMinutes,
+isActive}`, а клиент до исправления разбирал ответ барберским `ServiceDto`
+(`name`, `price`) — у каждой услуги мастера было пустое название и цена 0. До
+развода коллизии обе ручки выглядели как одна схема `ServiceResponse`, отсюда
+и ошибка; не всплыла она на стенде только потому, что каталог мастеров там
+пуст. Теперь ответ разбирает свой `FreelancerServiceDto`
+(`FreelancerApi.kt`), домен — общий `BarberService` барбершопа: набор полей на
+экране один и тот же, а `freelancerId` уже известен вызывающей стороне.
 
 ## GamingApi ⚠️ частично
 
