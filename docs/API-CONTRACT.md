@@ -439,21 +439,69 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 ответов прочитаны 2026-09-10. Под токеном (`orders/my`, создание заказа) ответы
 не проверены: `401` приходит до валидации.
 
-| Метод | Путь |
-|---|---|
-| GET | `freelancers` |
-| GET | `freelancers/{id}` |
-| GET | `freelancers/{id}/services` |
-| POST | `freelancers/{id}/orders` |
-| GET | `freelancers/orders/my` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `freelancers` | ✅ анонимна, сегодня двое мастеров |
+| GET | `freelancers/{id}` | ✅ `404 NOT_FOUND` на неизвестного, `id` — uuid |
+| GET | `freelancers/{id}/services` | ✅ анонимна, поля сверены живым ответом |
+| POST | `freelancers/{id}/orders` | ⚠️ путь есть (`401`), тело не проверено |
+| GET | `freelancers/orders/my` | ⚠️ путь есть (`401`), схема не проверена |
+| GET | `freelancers/me` | ⚠️ путь есть (`401`), «нет анкеты» не проверено |
+| POST | `freelancers/me` | ⚠️ путь есть (`401`), тело не проверено |
+| POST | `freelancers/me/services` | ⚠️ путь есть (`401`), тело не проверено |
+| PUT | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| DELETE | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| PUT | `freelancers/me/toggle-availability` | ⚠️ путь есть (`401`) |
 
-**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
-(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
-title, description, priceAmount, durationMinutes, isActive}`, а клиент
-разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
-мастера будет пустое название и цена 0. До развода коллизии обе ручки
-выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
-только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
+**Услуги мастера — это `FreelancerServiceResponse`, а не `ServiceResponse`
+барбершопа** (issue #71, схема перечитана 2026-09-10). До этого они
+разбирались `ServiceDto` (`name`/`price`) «по той же схеме», и у каждой услуги
+мастера пропадали название и цена. Исправлено своим `FreelancerServiceDto`.
+Живой ответ 2026-09-09:
+
+```json
+{"id":"a2000000-…","freelancerId":"a1000000-…","title":"Landing page tayyorlash",
+ "description":"Responsive landing sahifa","priceAmount":250000000,
+ "durationMinutes":4320,"isActive":true}
+```
+
+**Тело `POST freelancers/me` (`FreelancerCreateRequest`)** прочитано по схеме
+как есть — на это имя ссылается ровно один путь, коллизии springdoc нет:
+обязательны `name` (≤200) и `profession` (≤100), необязательны `bio` (≤2000),
+`city` (≤100), `phone` (≤20), `hourlyRate` и `experienceYears` (`int32`, ≥0).
+Ручка одна на создание и правку (`upsert`), поэтому приложение шлёт анкету
+целиком и не открывает форму, пока не прочитает сохранённое.
+
+**Тело `POST`/`PUT freelancers/me/services` (`ServiceRequest`) не
+подтверждено:** имя схемы делят три пути, третий — чужой
+(`POST barber-services/places/{placeId}`), то есть возможна та же коллизия, из-за
+которой разъехались поля `ServiceResponse`. Поля взяты как показаны — `title`
+(≤200), `priceAmount` (`int64`, ≥0), `description` (≤2000), `durationMinutes`
+(`int32`, ≥0) — и закреплены тестом `FreelancerRepositoryTest`.
+
+**Что значит `404` на `GET freelancers/me`** — «анкеты ещё нет»: проверить под
+токеном было нечем, приложение считает так (`myProfile()` отдаёт `null`), и так
+же трактует успешный конверт с пустой `data`. Отказ **с кодом** остаётся
+отказом.
+
+**Можно ли очистить необязательное поле анкеты — неизвестно.** В `Json` проекта
+`explicitNulls = false`, поэтому стёртые `bio`/`city`/`phone`/`hourlyRate`/
+`experienceYears` уходят не как `null`, а отсутствующими ключами. Затрёт ли их
+сервер или поймёт как «не менять» (обычное поведение upsert) — из схемы не
+следует. Во втором случае мастер, стерший «О себе», сохранит анкету без ошибки,
+а после перечитывания текст вернётся в поле. Проверять на живом аккаунте вместе
+с телом запроса.
+
+**Отдаёт ли `GET freelancers/{id}/services` выключенные услуги — неизвестно.**
+Ручка анонимная, то есть сервер вправе отсеивать `isActive: false` сам. Кабинет
+мастера (issue #71) на всякий случай их не фильтрует и помечает бейджем «услуга
+выключена»; если сервер их не отдаёт, мастер просто никогда этой пометки не
+увидит. Отдельной ручки «мои услуги» в контроллере нет.
+
+**Кабинет заказов мастера не подключён:** `GET freelancers/me/orders` и
+`PUT freelancers/orders/{orderId}/status` в приложении не используются — это
+бизнес-панель (эпик #16). Из-за этого выставленную услугу можно заказать, но
+принять заказ мастеру из приложения нечем.
 
 ## GamingApi ⚠️ частично
 

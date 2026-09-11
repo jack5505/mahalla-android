@@ -81,7 +81,7 @@ gh issue list --state open   # 47 открытых issue
 | **Кино** | афиша → фильм и сеансы → покупка → «мои билеты» | `cinema/movies`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `…/cancel` | #106 |
 | **Аптека** | витрина товаров с наличием — **только просмотр** | `pharmacy/places/{id}/products` | #100 (заказа нет и у бэкенда) |
 | **Одежда** (FASHION) | каталог → товар (цвет/размер) → **серверная** корзина → checkout → «мои заказы» | `fashion/categories`, `fashion/stores/{id}/catalog`, `fashion/products/{id}`, `fashion/cart*`, `fashion/orders` | #108 |
-| **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my` | #107 |
+| **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы»; отдельно в профиле — кабинет мастера «Мои услуги» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my`, `freelancers/me`, `freelancers/me/services*`, `freelancers/me/toggle-availability` | #107, кабинет — #71 |
 
 Мастер живёт в двух местах, и это не ошибка: плитка «Мастера» на главной — это
 категория `BARBER` в каталоге заведений (`SearchRoute`), то есть барбершопы, а
@@ -116,7 +116,7 @@ gh issue list --state open   # 47 открытых issue
 
 ---
 
-## 3. Написано, но в `main` этого нет: 13 открытых PR
+## 3. Написано, но в `main` этого нет: открытые PR
 
 Прежде чем брать что-либо из раздела 4 — проверь, нет ли этого здесь.
 
@@ -130,7 +130,6 @@ gh issue list --state open   # 47 открытых issue
 | #156 | Оплата из кошелька: подтверждение, идемпотентность, отказы | #12 |
 | #120 | Серверный PIN и app-lock: смена PIN, биометрия, `session/check` | #102 |
 | #78 | Соцфункции: лайк, «Избранное», комментарии | #105 |
-| #72 | Формы заказа и выставления услуги | #71 |
 | #41 | Чистый `lintDebug` (устарел: lint вернулся в CI отдельным PR #132) | #39 |
 | #38 | Тест цикла `HELLO.md` | #37 |
 
@@ -194,7 +193,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 | Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | не подключены: поля промокода в checkout нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI), стоимость доставки не запрашивается |
 | «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `freelancers/me/orders`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
 | Медиа | `GET media/entity/{id}`, `DELETE media/{id}` | загрузка есть, чтения по сущности и удаления нет |
-| Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `PUT freelancers/orders/{id}/status` | «стать исполнителем» не начато |
+| Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `PUT freelancers/orders/{id}/status` | issue #71 — экран «Мои услуги» готов; не подключены только входящие заказы мастера (`freelancers/me/orders`, `PUT freelancers/orders/{id}/status`) — эпик #16 |
 | Бизнес-панель | `analytics/places/{id}/dashboard`, `places/{id}/staff*`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163 |
 | Админка | `admin/*`, `auth/admin/users/{id}/block` | вне скоупа этого приложения |
 | Одиночки | `GET places` (постраничный список без гео), `POST p/request` (алиас запроса кода) | не нужны: каталог берётся `nearby`/`search`, код — `auth/send-otp` |
@@ -217,7 +216,6 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 Без issue (мелко или ждёт продукта):
 
-- **Кабинет мастера** (`freelancers/me`).
 - **`promotions/check` и `food/delivery-fee`** — промокода и стоимости
   доставки в чеке нет.
 - **Сверка вёрстки с дизайн-репозиторием**: `DESIGN_REPO_PAT` не задан,
