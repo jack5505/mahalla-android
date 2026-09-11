@@ -28,6 +28,7 @@ import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.place.domain.PlaceEditDraft
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.testutil.FakeAnalyticsTracker
@@ -434,6 +435,216 @@ class PlaceDetailsViewModelTest {
         assertTrue(viewModel.state.value.details is ScreenState.Content)
     }
 
+    // --- Владелец: правка карточки и ответ на отзыв (issue #188) ---
+
+    @Test
+    fun `the owner is the account whose id matches ownerId`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+
+        assertTrue(viewModel().state.value.isOwner)
+    }
+
+    @Test
+    fun `a stranger is not offered owner tools`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = "u-2"))
+
+        val state = viewModel().state.value
+        assertFalse(state.isOwner)
+        assertFalse(state.canEditPlace)
+    }
+
+    @Test
+    fun `a place without a known owner offers nothing either`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = null))
+
+        assertFalse(viewModel().state.value.isOwner)
+    }
+
+    @Test
+    fun `editing is not offered on a cached card`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID).copy(fromCache = true))
+
+        assertFalse(viewModel().state.value.canEditPlace)
+    }
+
+    @Test
+    fun `the edit form opens filled with the current card`() = runTest {
+        repository.details = ApiResult.Success(
+            details(ownerId = USER_ID, phone = "+998901234567"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+
+        val draft = viewModel.state.value.editForm!!.draft
+        assertEquals("Osh markazi", draft.name)
+        assertEquals("Eng mazali osh", draft.description)
+        assertEquals("+998901234567", draft.phone)
+    }
+
+    @Test
+    fun `a blank address does not borrow the city shown on the card`() = runTest {
+        // `contacts.address` — для витрины: при пустом адресе она показывает
+        // город вместо него (issue #188). Форма правки не должна унаследовать
+        // эту подмену — иначе пустой адрес улетел бы на сервер текстом города.
+        repository.details = ApiResult.Success(
+            details(ownerId = USER_ID, address = null, contactsAddress = "Toshkent", city = "Toshkent"),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+
+        assertEquals("", viewModel.state.value.editForm!!.draft.address)
+    }
+
+    @Test
+    fun `the edited draft is sent as it was filled in`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+        viewModel.onEvent(PlaceDetailsEvent.EditNameChanged("Yangi nom"))
+        viewModel.onEvent(PlaceDetailsEvent.EditSubmitted)
+
+        assertEquals(PLACE_ID, repository.updatedPlaces.single().first)
+        assertEquals("Yangi nom", repository.updatedPlaces.single().second.name)
+    }
+
+    @Test
+    fun `a saved edit closes the form and re-asks the server for the card`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+        val viewModel = viewModel()
+        val requestsBefore = repository.detailsRequests
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+        viewModel.onEvent(PlaceDetailsEvent.EditNameChanged("Yangi nom"))
+        viewModel.onEvent(PlaceDetailsEvent.EditSubmitted)
+
+        assertNull(viewModel.state.value.editForm)
+        assertEquals(requestsBefore + 1, repository.detailsRequests)
+    }
+
+    @Test
+    fun `a rejected edit keeps the draft and shows the answer of the server`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+        repository.updatePlaceResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+        viewModel.onEvent(PlaceDetailsEvent.EditNameChanged("Yangi nom"))
+        viewModel.onEvent(PlaceDetailsEvent.EditSubmitted)
+
+        val form = viewModel.state.value.editForm!!
+        assertEquals(ApiError.Forbidden, form.failure?.error)
+        assertEquals("Yangi nom", form.draft.name)
+        assertFalse(form.submitting)
+    }
+
+    @Test
+    fun `an empty name is never sent even if the event arrives`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+        viewModel.onEvent(PlaceDetailsEvent.EditNameChanged("   "))
+        viewModel.onEvent(PlaceDetailsEvent.EditSubmitted)
+
+        assertTrue(repository.updatedPlaces.isEmpty())
+        assertNotNull("форма остаётся открытой", viewModel.state.value.editForm)
+    }
+
+    @Test
+    fun `dismissing the edit form sends nothing`() = runTest {
+        repository.details = ApiResult.Success(details(ownerId = USER_ID))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.EditPlaceClicked)
+        viewModel.onEvent(PlaceDetailsEvent.EditFormDismissed)
+
+        assertNull(viewModel.state.value.editForm)
+        assertTrue(repository.updatedPlaces.isEmpty())
+    }
+
+    @Test
+    fun `the reply form opens empty for a review without an answer yet`() = runTest {
+        val target = review("r-1")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+
+        assertEquals("", viewModel.state.value.reviewReplyForm?.text)
+    }
+
+    @Test
+    fun `the reply form opens with the reply already sent`() = runTest {
+        val target = review("r-1", ownerReply = "Rahmat!")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+
+        assertEquals("Rahmat!", viewModel.state.value.reviewReplyForm?.text)
+    }
+
+    @Test
+    fun `the reply is sent for the review it was opened on`() = runTest {
+        val target = review("r-1")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyTextChanged("Rahmat!"))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplySubmitted)
+
+        assertEquals("r-1" to "Rahmat!", repository.repliedReviews.single())
+    }
+
+    @Test
+    fun `a sent reply closes the form and re-asks the server for the card`() = runTest {
+        val target = review("r-1")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        val viewModel = viewModel()
+        val requestsBefore = repository.detailsRequests
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyTextChanged("Rahmat!"))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplySubmitted)
+
+        assertNull(viewModel.state.value.reviewReplyForm)
+        assertEquals(requestsBefore + 1, repository.detailsRequests)
+    }
+
+    @Test
+    fun `a rejected reply keeps the text and shows the answer of the server`() = runTest {
+        val target = review("r-1")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        repository.replyToReviewResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyTextChanged("Rahmat!"))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplySubmitted)
+
+        val form = viewModel.state.value.reviewReplyForm!!
+        assertEquals(ApiError.Forbidden, form.failure?.error)
+        assertEquals("Rahmat!", form.text)
+        assertFalse(form.submitting)
+    }
+
+    @Test
+    fun `an empty reply is never sent even if the event arrives`() = runTest {
+        val target = review("r-1")
+        repository.details = ApiResult.Success(details(ownerId = USER_ID, reviews = listOf(target)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplyClicked(target))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewReplySubmitted)
+
+        assertTrue(repository.repliedReviews.isEmpty())
+        assertNotNull("форма остаётся открытой", viewModel.state.value.reviewReplyForm)
+    }
+
     // --- Акции заведения (issue #104) ---
 
     @Test
@@ -577,24 +788,33 @@ class PlaceDetailsViewModelTest {
         point: GeoPoint? = null,
         capabilities: PlaceCapabilities = PlaceCapabilities(),
         reviews: List<Review> = emptyList(),
+        ownerId: String? = null,
+        address: String? = null,
+        // По умолчанию совпадает с `address`: витрина показывает город вместо
+        // пустого адреса (issue #188), но по умолчанию тестам этот подлог не
+        // нужен — только тому единственному тесту, который его проверяет.
+        contactsAddress: String? = address,
+        city: String? = null,
     ) = PlaceDetails(
-        place = place(PLACE_ID, name = "Osh markazi", isOpenNow = isOpenNow, point = point),
+        place = place(PLACE_ID, name = "Osh markazi", isOpenNow = isOpenNow, point = point, address = address),
         description = "Eng mazali osh",
         hours = hours,
-        contacts = PlaceContacts(phone = phone),
+        contacts = PlaceContacts(phone = phone, address = contactsAddress, city = city),
         capabilities = capabilities,
         reviews = reviews,
+        ownerId = ownerId,
     )
 
     private fun workingDay(day: DayOfWeek) =
         OpeningHours(day, LocalTime.of(9, 0), LocalTime.of(18, 0))
 
-    private fun review(id: String, authorId: String? = null) = Review(
+    private fun review(id: String, authorId: String? = null, ownerReply: String? = null) = Review(
         id = id,
         rating = 5,
         text = "Zo'r",
         createdAt = Instant.parse("2026-08-25T10:15:30Z"),
         authorId = authorId,
+        ownerReply = ownerReply,
     )
 
     /**

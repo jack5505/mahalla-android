@@ -16,6 +16,7 @@ import uz.mahalla.feature.discovery.data.CatalogRepository
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.place.domain.PlaceEditDraft
 import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.navigation.PlaceRoute
@@ -96,6 +97,52 @@ class PlaceDetailsViewModel @Inject constructor(
             }
 
             PlaceDetailsEvent.ReviewDeleteConfirmed -> deleteReview()
+
+            PlaceDetailsEvent.EditPlaceClicked -> onEditPlaceClicked()
+            PlaceDetailsEvent.EditFormDismissed -> updateState { copy(editForm = null) }
+
+            is PlaceDetailsEvent.EditNameChanged -> updateEditForm {
+                copy(draft = draft.withName(event.value), failure = null)
+            }
+
+            is PlaceDetailsEvent.EditDescriptionChanged -> updateEditForm {
+                copy(draft = draft.withDescription(event.value), failure = null)
+            }
+
+            is PlaceDetailsEvent.EditAddressChanged -> updateEditForm {
+                copy(draft = draft.withAddress(event.value), failure = null)
+            }
+
+            is PlaceDetailsEvent.EditCityChanged -> updateEditForm {
+                copy(draft = draft.withCity(event.value), failure = null)
+            }
+
+            is PlaceDetailsEvent.EditPhoneChanged -> updateEditForm {
+                copy(draft = draft.withPhone(event.value), failure = null)
+            }
+
+            is PlaceDetailsEvent.EditWebsiteChanged -> updateEditForm {
+                copy(draft = draft.withWebsite(event.value), failure = null)
+            }
+
+            PlaceDetailsEvent.EditSubmitted -> submitEdit()
+
+            is PlaceDetailsEvent.ReviewReplyClicked -> updateState {
+                copy(
+                    reviewReplyForm = ReviewReplyFormState(
+                        review = event.review,
+                        text = event.review.ownerReply.orEmpty(),
+                    ),
+                )
+            }
+
+            PlaceDetailsEvent.ReviewReplyDismissed -> updateState { copy(reviewReplyForm = null) }
+
+            is PlaceDetailsEvent.ReviewReplyTextChanged -> updateState {
+                copy(reviewReplyForm = reviewReplyForm?.copy(text = event.text, failure = null))
+            }
+
+            PlaceDetailsEvent.ReviewReplySubmitted -> submitReviewReply()
         }
     }
 
@@ -185,6 +232,76 @@ class PlaceDetailsViewModel @Inject constructor(
 
     private fun updateForm(transform: ReviewFormState.() -> ReviewFormState) {
         updateState { copy(reviewForm = reviewForm?.transform()) }
+    }
+
+    /** Форма открывается заполненной текущей карточкой — правится, а не пишется заново. */
+    private fun onEditPlaceClicked() {
+        val details = currentState.data ?: return
+        updateState {
+            copy(
+                editForm = PlaceEditFormState(
+                    draft = PlaceEditDraft(
+                        name = details.place.name,
+                        description = details.description.orEmpty(),
+                        // Не `contacts.address`: то поле — для витрины и при
+                        // пустом адресе подменяется городом (issue #188),
+                        // а форме правки нужен настоящий адрес, иначе пустой
+                        // адрес переехал бы в поле города дубликатом.
+                        address = details.place.address.orEmpty(),
+                        city = details.contacts.city.orEmpty(),
+                        phone = details.contacts.phone.orEmpty(),
+                        website = details.contacts.website.orEmpty(),
+                        latitude = details.place.point?.latitude,
+                        longitude = details.place.point?.longitude,
+                    ),
+                ),
+            )
+        }
+    }
+
+    private fun updateEditForm(transform: PlaceEditFormState.() -> PlaceEditFormState) {
+        updateState { copy(editForm = editForm?.transform()) }
+    }
+
+    private fun submitEdit() {
+        val form = currentState.editForm ?: return
+        if (!form.canSubmit) return
+
+        updateState { copy(editForm = form.copy(submitting = true, failure = null)) }
+        viewModelScope.launch {
+            when (val result = repository.updatePlace(placeId, form.draft)) {
+                is ApiResult.Failure -> updateState {
+                    copy(editForm = form.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> {
+                    updateState { copy(editForm = null) }
+                    // Правку принял бэкенд — карточка перечитывается, а не
+                    // собирается из черновика: он не знает всего, что сервер
+                    // мог посчитать сам (например, статус модерации).
+                    load(silent = true)
+                }
+            }
+        }
+    }
+
+    private fun submitReviewReply() {
+        val form = currentState.reviewReplyForm ?: return
+        if (!form.canSubmit) return
+
+        updateState { copy(reviewReplyForm = form.copy(submitting = true, failure = null)) }
+        viewModelScope.launch {
+            when (val result = repository.replyToReview(form.review.id, form.trimmedText)) {
+                is ApiResult.Failure -> updateState {
+                    copy(reviewReplyForm = form.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> {
+                    updateState { copy(reviewReplyForm = null) }
+                    load(silent = true)
+                }
+            }
+        }
     }
 
     private fun PlaceDetailsState.withSchedule(details: PlaceDetails): PlaceDetailsState {

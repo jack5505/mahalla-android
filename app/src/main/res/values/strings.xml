@@ -372,6 +372,25 @@
     <string name="place_review_delete">Sharhni o\'chirish</string>
     <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
     <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
+    <!-- Joy kartochkasini tahrirlash va sharhga javob (issue #188) -->
+    <string name="place_edit_action">Joyni tahrirlash</string>
+    <string name="place_edit_title">Joy ma\'lumotlarini tahrirlash</string>
+    <string name="place_edit_name_label">Nomi</string>
+    <string name="place_edit_name_invalid">Nomi bo\'sh bo\'lmasin va juda uzun bo\'lmasin.</string>
+    <string name="place_edit_description_label">Tavsif</string>
+    <string name="place_edit_address_label">Manzil</string>
+    <string name="place_edit_city_label">Shahar</string>
+    <string name="place_edit_phone_label">Telefon</string>
+    <string name="place_edit_website_label">Veb-sayt</string>
+    <string name="place_edit_website_invalid">Veb-sayt manzili noto\'g\'ri.</string>
+    <string name="place_edit_text_too_long">Juda uzun — qisqartiring.</string>
+    <string name="place_edit_submit">Saqlash</string>
+    <string name="place_review_reply_action">Javob berish</string>
+    <string name="place_review_reply_edit_action">Javobni tahrirlash</string>
+    <string name="place_review_reply_title">Sharhga javob</string>
+    <string name="place_review_reply_label">Javobingiz</string>
+    <string name="place_review_reply_submit">Yuborish</string>
+    <string name="place_review_owner_reply_title">Muassasa javobi</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>

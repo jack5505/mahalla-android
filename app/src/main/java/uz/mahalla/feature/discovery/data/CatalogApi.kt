@@ -9,6 +9,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
@@ -36,7 +37,14 @@ data class PlaceSummaryDto(
     @SerialName("logoUrl") val logoUrl: String? = null,
 )
 
-/** Карточка места (`PlaceDetail`). Расписания бэкенд пока не отдаёт. */
+/**
+ * Карточка места (`PlaceDetail`). Расписания бэкенд пока не отдаёт.
+ *
+ * @param ownerId владелец заведения (сверено по живому `/v3/api-docs`
+ * 2026-09-10, issue #188). Единственный способ узнать на этом экране, что
+ * место — своё: сравнить с id вошедшего аккаунта. Своего флага «это моё
+ * заведение» бэкенд не отдаёт.
+ */
 @Serializable
 data class PlaceDetailDto(
     @SerialName("id") val id: String,
@@ -54,7 +62,40 @@ data class PlaceDetailDto(
     @SerialName("ratingCount") val ratingCount: Int = 0,
     @SerialName("logoUrl") val logoUrl: String? = null,
     @SerialName("coverUrl") val coverUrl: String? = null,
+    @SerialName("ownerId") val ownerId: String? = null,
 )
+
+/**
+ * Тело `PUT places/{id}` (`UpdateRequest`, сверено по живому `/v3/api-docs`
+ * 2026-09-10, issue #188): все поля необязательные, коллизии имени с другой
+ * вертикалью нет (issue #154 развёл `CreateRequest`, `UpdateRequest` в схеме
+ * один). Клиент (`CatalogRepository.updatePlace`) не полагается на то, что
+ * значит отсутствующее поле, — он всегда отправляет то, что реально в форме,
+ * включая координаты (экран их не редактирует, но форма открывается уже
+ * заполненной картой) и пустые строки очищенных полей.
+ */
+@Serializable
+data class UpdatePlaceRequest(
+    @SerialName("name") val name: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("address") val address: String? = null,
+    @SerialName("city") val city: String? = null,
+    @SerialName("phone") val phone: String? = null,
+    @SerialName("website") val website: String? = null,
+    @SerialName("lat") val lat: Double? = null,
+    @SerialName("lng") val lng: Double? = null,
+)
+
+/**
+ * Тело `POST reviews/{id}/reply`: в схеме объявлено как безымянная карта
+ * (`additionalProperties: string`), имени поля нет вовсе. Ключ выведен из
+ * ответа `ReviewResponse`, где то же поле называется `ownerReply` (issue
+ * #188) — тот же приём, что уже применён для `ProviderApi.CreatePlaceRequest`
+ * и `CatalogApi.CreateReviewRequest`. Живым запросом не проверить: ручка
+ * требует Bearer, `CONTRACT_REFRESH_TOKEN` в CI нет.
+ */
+@Serializable
+data class ReviewReplyRequest(@SerialName("ownerReply") val ownerReply: String)
 
 /**
  * Документ поискового индекса (`PlaceDocument`) — ответ `GET /search`.
@@ -91,7 +132,7 @@ data class PlaceDocumentDto(
  * отдаёт. Поле не пришло — своего отзыва не видно, и кнопку удаления показать
  * некому.
  * @param ownerReply ответ заведения на отзыв. Поле в схеме есть, но раньше
- * не разбиралось вовсе — молча терялось (issue #192).
+ * не разбиралось вовсе — молча терялось (issue #192). `null` — ответа ещё нет.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -104,6 +145,7 @@ data class ReviewDto(
     @SerialName("ownerReply") val ownerReply: String? = null,
     @SerialName("helpfulCount") val helpfulCount: Int = 0,
     @SerialName("createdAt") val createdAt: String? = null,
+    @SerialName("ownerReply") val ownerReply: String? = null,
 )
 
 /**
@@ -193,6 +235,18 @@ interface CatalogApi {
     @GET("places/{id}")
     suspend fun place(@Path("id") id: String): ApiResponse<PlaceDetailDto>
 
+    /**
+     * Правка карточки места (issue #188), доступна владельцу. Ответ —
+     * актуальная карточка, но экран перезапрашивает её отдельным `place(id)`
+     * (тот же приём, что у отправки отзыва): так экран получает те же поля,
+     * что и при обычном открытии, а не второй маршрут разбора DTO.
+     */
+    @PUT("places/{id}")
+    suspend fun updatePlace(
+        @Path("id") id: String,
+        @Body body: UpdatePlaceRequest,
+    ): ApiResponse<PlaceDetailDto>
+
     @GET("reviews/places/{placeId}")
     suspend fun reviews(
         @Path("placeId") placeId: String,
@@ -214,6 +268,17 @@ interface CatalogApi {
     /** Удалить свой отзыв. Чей он — решает бэкенд по токену. */
     @DELETE("reviews/{id}")
     suspend fun deleteReview(@Path("id") id: String): ApiResponse<JsonElement>
+
+    /**
+     * Ответ владельца заведения на отзыв (issue #188). Доступ проверяет
+     * бэкенд по токену — своё заведение или нет, клиент только не показывает
+     * кнопку, которая гарантированно ответит отказом.
+     */
+    @POST("reviews/{id}/reply")
+    suspend fun replyToReview(
+        @Path("id") id: String,
+        @Body body: ReviewReplyRequest,
+    ): ApiResponse<JsonElement>
 
     companion object {
         /**

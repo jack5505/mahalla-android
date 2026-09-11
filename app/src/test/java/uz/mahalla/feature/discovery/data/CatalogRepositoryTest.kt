@@ -19,6 +19,7 @@ import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.place.domain.PlaceEditDraft
 import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
@@ -507,6 +508,147 @@ class CatalogRepositoryTest {
         assertEquals("u-1", (result as ApiResult.Success).data.reviews.single().authorId)
     }
 
+    @Test
+    fun `the owner id of the card reaches the domain`() = runTest {
+        server.enqueue(json(DETAILS_BODY_WITH_OWNER))
+        server.enqueue(json(REVIEWS_BODY))
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals("u-owner", (result as ApiResult.Success).data.ownerId)
+    }
+
+    @Test
+    fun `an owner reply on a review reaches the domain`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY_WITH_REPLY))
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals("Rahmat!", (result as ApiResult.Success).data.reviews.single().ownerReply)
+    }
+
+    // --- Правка карточки места владельцем (issue #188) ---
+
+    @Test
+    fun `an edit goes to PUT places by id with the filled fields`() = runTest {
+        server.enqueue(json(DETAILS_BODY_WITH_OWNER))
+
+        val result = repository().updatePlace(
+            "p-1",
+            PlaceEditDraft(name = "Yangi nom", phone = "+998901234567"),
+        )
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/places/p-1", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, body.contains("\"name\":\"Yangi nom\""))
+        assertTrue(body, body.contains("\"phone\":\"+998901234567\""))
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `an empty optional field is sent as an explicit clear, not omitted`() = runTest {
+        // Если бэкенд трактует отсутствующее поле как «оставь как было» (как
+        // `walkin/accept` из PR #161), пропущенный ключ потерял бы осознанную
+        // очистку человеком — молча, без ошибки на экране.
+        server.enqueue(json(DETAILS_BODY_WITH_OWNER))
+
+        repository().updatePlace("p-1", PlaceEditDraft(name = "Osh markazi", website = ""))
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, body.contains("\"website\":\"\""))
+    }
+
+    @Test
+    fun `coordinates are sent even though the form does not edit the pin`() = runTest {
+        server.enqueue(json(DETAILS_BODY_WITH_OWNER))
+
+        repository().updatePlace(
+            "p-1",
+            PlaceEditDraft(name = "Osh markazi", latitude = 41.31, longitude = 69.28),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, body.contains("\"lat\":41.31"))
+        assertTrue(body, body.contains("\"lng\":69.28"))
+    }
+
+    @Test
+    fun `a website is normalized before it is sent`() = runTest {
+        server.enqueue(json(DETAILS_BODY_WITH_OWNER))
+
+        repository().updatePlace(
+            "p-1",
+            PlaceEditDraft(name = "Osh markazi", website = "oshmarkazi.uz"),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, body.contains("\"website\":\"https://oshmarkazi.uz\""))
+    }
+
+    @Test
+    fun `an unnamed draft never reaches the network`() = runTest {
+        val result = repository().updatePlace("p-1", PlaceEditDraft(name = "  "))
+
+        assertEquals(
+            ApiError.Business(PlaceEditDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `an edit rejected by the backend carries the message of the server`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(PLACE_FORBIDDEN_BODY),
+        )
+
+        val result = repository().updatePlace("p-1", PlaceEditDraft(name = "Osh markazi"))
+
+        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+    }
+
+    // --- Ответ владельца на отзыв (issue #188) ---
+
+    @Test
+    fun `a reply goes to POST reviews id reply with the owner key`() = runTest {
+        server.enqueue(json(ENVELOPE_OK_BODY))
+
+        val result = repository().replyToReview("r-1", "  Rahmat!  ")
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/reviews/r-1/reply", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, body.contains("\"ownerReply\":\"Rahmat!\""))
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `an empty reply never reaches the network`() = runTest {
+        val result = repository().replyToReview("r-1", "   ")
+
+        assertEquals(
+            ApiError.Business(PlaceEditDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `replying to someone else place is reported, not swallowed`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val result = repository().replyToReview("r-1", "Rahmat!")
+
+        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+    }
+
     private fun repository(): DefaultCatalogRepository {
         val api = NetworkFactory
             .retrofit(
@@ -593,11 +735,30 @@ class CatalogRepositoryTest {
              "coverUrl":"cover.jpg"}}
         """
 
+        /** Тот же ответ, но с `ownerId` — issue #188. */
+        const val DETAILS_BODY_WITH_OWNER = """
+            {"success":true,"data":{"id":"p-1","name":"Osh markazi","category":"FOOD",
+             "description":"Eng mazali osh","address":"Amir Temur 1","lat":41.31,"lng":69.28,
+             "phone":"+998901234567","isAvailable":true,"ratingAvg":4.6,"ratingCount":42,
+             "coverUrl":"cover.jpg","ownerId":"u-owner"}}
+        """
+
         const val REVIEWS_BODY = """
             {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1",
              "rating":5,"text":"Zo'r","ownerReply":"Rahmat!",
              "createdAt":"2026-08-25T10:15:30Z"}],
              "page":0,"totalPages":1,"totalElements":1,"last":true}}
+        """
+
+        /** Тот же отзыв, но с ответом владельца (issue #188). */
+        const val REVIEWS_BODY_WITH_REPLY = """
+            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1","userName":"Ali",
+             "rating":5,"text":"Zo'r","createdAt":"2026-08-25T10:15:30Z","ownerReply":"Rahmat!"}],
+             "page":0,"totalPages":1,"totalElements":1,"last":true}}
+        """
+
+        const val PLACE_FORBIDDEN_BODY = """
+            {"success":false,"error":{"code":"FORBIDDEN","message":"Bu joy sizniki emas"}}
         """
 
         /** Конверт без полезной нагрузки: так отвечают `POST`/`DELETE` отзыва. */
