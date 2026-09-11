@@ -31,14 +31,27 @@ import uz.mahalla.feature.booking.data.AppointmentPageDto
  * `HospitalAppointmentResponse`, у брони — `AppointmentBookingResponse`
  * (issue #167). Общего в них хватает на всё, что показывает экран
  * (`id`, `apptDate`, `startTime`, `status`, `createdAt`), поэтому DTO пока
- * один; `doctorId` и `complaint` больничного ответа в него не входят и
- * теряются (issue #219).
+ * один; `doctorId` теперь в нём объявлен (issue #219), а `complaint` по
+ * прежнему не входит и теряется — экран его нигде не показывает.
  */
 interface HospitalApi {
 
     /** Врачи заведения. `data` — массив `DoctorResponse`. */
     @GET("hospitals/places/{placeId}/doctors")
     suspend fun doctors(@Path("placeId") placeId: String): ApiResponse<List<DoctorDto>>
+
+    /**
+     * Один врач по id. Путь и схема ответа (`ApiResponseDoctorResponse` →
+     * `DoctorResponse`, те же поля, что у [doctors]) сверены живым
+     * `/v3/api-docs` 2026-09-11.
+     *
+     * Нужен ровно для одного случая: у записи к врачу в «моих записях»
+     * (`HospitalAppointmentResponse`) есть `doctorId`, но нет ни имени врача,
+     * ни `placeId`, чтобы получить его через [doctors] — единственный способ
+     * подписать карточку врачом, а не заглушкой «Врач не указан» (issue #219).
+     */
+    @GET("hospitals/doctors/{id}")
+    suspend fun doctor(@Path("id") id: String): ApiResponse<DoctorDto>
 
     /** Записаться к врачу. Требует Bearer. */
     @POST("hospitals/appointments")

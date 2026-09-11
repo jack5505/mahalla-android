@@ -205,6 +205,76 @@ class HospitalRepositoryTest {
         assertTrue(page.hasMore)
     }
 
+    /**
+     * `HospitalAppointmentResponse` не называет врача — только `doctorId`
+     * (issue #219). Без имени карточка в «моих записях» осталась бы с
+     * заглушкой «Врач не указан», хотя записанный доктор известен.
+     */
+    @Test
+    fun `appointment without a service name is enriched with the doctor's name`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR","apptDate":"2026-09-05",
+                   "status":"CONFIRMED"}],"last":true}""",
+            ),
+        )
+        server.enqueue(envelope("""{"id":"$DOCTOR","name":"Aliyev Bekzod"}"""))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        server.takeRequest()
+        val doctorRequest = server.takeRequest()
+        assertEquals("GET", doctorRequest.method)
+        assertEquals("/hospitals/doctors/$DOCTOR", doctorRequest.path)
+        assertEquals("Aliyev Bekzod", page.items.single().serviceName)
+    }
+
+    /** Имя уже есть — второй запрос был бы лишней задержкой без надобности. */
+    @Test
+    fun `appointment with a service name is not enriched again`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR",
+                   "serviceName":"Soch olish"}],"last":true}""",
+            ),
+        )
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertEquals("Soch olish", page.items.single().serviceName)
+        assertEquals(1, server.requestCount)
+    }
+
+    /** Провал одного докторского запроса не должен ронять список записей. */
+    @Test
+    fun `failed doctor lookup keeps the placeholder instead of failing the list`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR"}],"last":true}""",
+            ),
+        )
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertNull(page.items.single().serviceName)
+    }
+
+    /**
+     * Ответ на отмену не называет врача (та же схема, что у списка), поэтому
+     * уже известное имя переносится с записи-аргумента, а не пропадает.
+     */
+    @Test
+    fun `cancel keeps the already known doctor name`() = runTest {
+        server.enqueue(envelope("""{"id":"a-1","status":"CANCELLED"}"""))
+
+        val result = repository().cancel(
+            Appointment(id = "a-1", serviceName = "Aliyev Bekzod"),
+        )
+
+        assertEquals("Aliyev Bekzod", (result as ApiResult.Success).data.serviceName)
+    }
+
     @Test
     fun `appointment without id is dropped from the list`() = runTest {
         server.enqueue(

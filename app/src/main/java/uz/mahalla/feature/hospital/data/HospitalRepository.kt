@@ -1,9 +1,13 @@
 package uz.mahalla.feature.hospital.data
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import uz.mahalla.core.format.toServerTime
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.core.result.dataOrNull
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
@@ -97,9 +101,43 @@ class DefaultHospitalRepository @Inject constructor(
         }.map(AppointmentDto::toCreated)
     }
 
+    /**
+     * `HospitalAppointmentResponse` не называет врача — только `doctorId`
+     * (issue #219). Имя дотягивается отдельным запросом на карточку без него;
+     * провал одного запроса не портит остальные и не превращает удачный
+     * список в ошибку — карточка просто останется с плейсхолдером экрана,
+     * тот же принцип мягкого разбора, что у самих DTO.
+     */
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> =
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
             .map(AppointmentPageDto::toDomain)
+            .let { result ->
+                when (result) {
+                    is ApiResult.Failure -> result
+                    is ApiResult.Success ->
+                        ApiResult.Success(result.data.copy(items = withDoctorNames(result.data.items)))
+                }
+            }
+
+    private suspend fun withDoctorNames(items: List<Appointment>): List<Appointment> {
+        if (items.none(::needsDoctorName)) return items
+        return coroutineScope {
+            items.map { appointment ->
+                async { if (needsDoctorName(appointment)) appointment.withDoctorName() else appointment }
+            }.awaitAll()
+        }
+    }
+
+    private fun needsDoctorName(appointment: Appointment): Boolean =
+        appointment.serviceName.isNullOrBlank() && !appointment.doctorId.isNullOrBlank()
+
+    private suspend fun Appointment.withDoctorName(): Appointment {
+        val id = doctorId ?: return this
+        val name = apiCall { api.doctor(id).payload() }.dataOrNull()
+            ?.name?.trim()?.takeIf(String::isNotEmpty)
+            ?: return this
+        return copy(serviceName = name)
+    }
 
     /**
      * Ответ на отмену — та же запись, но обязательным его разбор не считаем:
@@ -107,6 +145,12 @@ class DefaultHospitalRepository @Inject constructor(
      * годного тела не окажется, состояние выводится из факта отмены — иначе
      * удачная отмена выглядела бы как «отменить не удалось» (та же грабля, что
      * у заказов еды, issue #9, и у талона очереди, issue #96).
+     *
+     * Имя врача заново запросом не дотягивается: `serviceName` из ответа на
+     * отмену будет тем же отсутствующим полем, что и всегда у больничной
+     * схемы (issue #219). Оно переносится с записи, пришедшей в аргументе, —
+     * там оно уже дотянуто [myAppointments] — иначе карточка после отмены
+     * откатилась бы на заглушку «Врач не указан».
      */
     override suspend fun cancel(appointment: Appointment): ApiResult<Appointment> {
         if (appointment.id.isBlank()) {
@@ -120,7 +164,12 @@ class DefaultHospitalRepository @Inject constructor(
             response.ensureSuccess()
             response.data
         }.map { dto ->
-            dto?.toDomain() ?: appointment.copy(status = AppointmentStatus.Cancelled)
+            val cancelled = dto?.toDomain() ?: appointment.copy(status = AppointmentStatus.Cancelled)
+            if (cancelled.serviceName.isNullOrBlank() && !appointment.serviceName.isNullOrBlank()) {
+                cancelled.copy(serviceName = appointment.serviceName)
+            } else {
+                cancelled
+            }
         }
     }
 }
