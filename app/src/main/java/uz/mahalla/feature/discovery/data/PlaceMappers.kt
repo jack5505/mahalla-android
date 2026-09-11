@@ -104,12 +104,11 @@ fun PlaceDetailDto.toDetails(
 
 fun ReviewDto.toDomain(): Review = Review(
     id = id,
-    author = author,
     rating = rating,
     text = text,
     createdAt = parseServerInstant(createdAt),
     authorId = userId?.takeIf(String::isNotBlank),
-    avatarUrl = avatarUrl?.takeIf(String::isNotBlank),
+    ownerReply = ownerReply?.takeIf(String::isNotBlank),
 )
 
 fun Place.toEntity(
