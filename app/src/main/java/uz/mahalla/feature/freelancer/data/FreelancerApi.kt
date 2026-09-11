@@ -37,10 +37,14 @@ import uz.mahalla.data.network.ApiResponse
  * `@RefreshClient` сломал бы заказ. Поэтому API целиком собирается на
  * **основном** Retrofit.
  *
- * Чего здесь по-прежнему нет: входящие заказы мастера
- * (`GET freelancers/me/orders`) и смена их статуса
- * (`PUT freelancers/orders/{orderId}/status`) — это бизнес-панель, эпик #16.
- * Выставить услугу без них можно, а принимать заказы — уже другая история.
+ * Входящие заказы мастера (`GET freelancers/me/orders`) и смена их статуса
+ * (`PUT freelancers/orders/{orderId}/status`, issue #190) — черновик:
+ * `CONTRACT_REFRESH_TOKEN` не был задан ни на момент issue, ни в прогоне,
+ * который это писал, так что ни путь, ни тело смены статуса живым запросом
+ * не проверены. Путь и схема ответа выведены из уже подтверждённой
+ * `freelancers/orders/my` — тот же `PageResponseOrderResponse`, только с
+ * другой стороны сделки; тело смены статуса — из `OrderResponse.status`.
+ * Подробности — `docs/API-CONTRACT.md`.
  */
 interface FreelancerApi {
 
@@ -90,6 +94,32 @@ interface FreelancerApi {
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<FreelancerOrderPageDto>
+
+    /**
+     * Входящие заказы мастера (issue #190) — та же сущность, что [myOrders],
+     * но с другой стороны сделки: то, что клиенты заказали у **этого**
+     * мастера, а не то, что он сам заказал. Схема ответа не проверена живым
+     * запросом (`docs/API-CONTRACT.md`), но путь и `PageResponseOrderResponse`
+     * взяты из уже подтверждённой `freelancers/orders/my`.
+     */
+    @GET("freelancers/me/orders")
+    suspend fun incomingOrders(
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+    ): ApiResponse<FreelancerOrderPageDto>
+
+    /**
+     * Принять, отклонить или отметить выполненным входящий заказ (issue
+     * #190). Тело и ответ не проверены живым запросом: `401` приходит до
+     * валидации тела, как и у [createOrder]. `status` — то же перечисление,
+     * что уже подтверждено для `OrderResponse.status`
+     * ([uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus]).
+     */
+    @PUT("freelancers/orders/{orderId}/status")
+    suspend fun updateOrderStatus(
+        @Path("orderId") orderId: String,
+        @Body body: UpdateFreelancerOrderStatusRequest,
+    ): ApiResponse<FreelancerOrderDto>
 
     // --- Кабинет мастера (issue #71). Всё требует Bearer. ---
 
@@ -317,4 +347,15 @@ data class FreelancerOrderPageDto(
     @SerialName("totalPages") val totalPages: Int? = null,
     @SerialName("first") val first: Boolean? = null,
     @SerialName("last") val last: Boolean? = null,
+)
+
+/**
+ * Тело `PUT freelancers/orders/{orderId}/status` (issue #190) — не
+ * подтверждено живым запросом: `401` приходит до валидации тела, как и у
+ * [CreateFreelancerOrderRequest]. Единственное разумное поле — то же
+ * перечисление, что уже подтверждено для `OrderResponse.status`.
+ */
+@Serializable
+data class UpdateFreelancerOrderStatusRequest(
+    @SerialName("status") val status: String,
 )
