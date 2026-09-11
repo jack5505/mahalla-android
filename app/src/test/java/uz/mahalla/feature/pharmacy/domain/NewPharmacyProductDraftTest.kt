@@ -31,7 +31,7 @@ class NewPharmacyProductDraftTest {
     }
 
     @Test
-    fun `garbage in the price field is an error, not a silent zero`() {
+    fun `no digits at all is an error, not a silent zero`() {
         assertNull(NewPharmacyProductDraft(priceText = "abc").priceSum)
         assertNull(NewPharmacyProductDraft(priceText = "").priceSum)
         assertEquals(0L, NewPharmacyProductDraft(priceText = "0").priceSum)
@@ -39,11 +39,18 @@ class NewPharmacyProductDraftTest {
     }
 
     @Test
-    fun `a negative price parses but is not a valid one, as the schema minimum says`() {
+    fun `digits are picked out of the string, same as the wallet top-up amount`() {
+        // Пасте формата `MoneyFormatter` («12 000») — обычный ввод, а не мусор
+        // (тот же приём, что у `WalletTopUp.parseAmount`).
+        assertEquals(12_000L, NewPharmacyProductDraft(priceText = "12 000").priceSum)
+        assertEquals(12_000L, NewPharmacyProductDraft(priceText = "12,000 so'm").priceSum)
+    }
+
+    @Test
+    fun `a stray minus does not make the price negative — it is filtered out, not parsed`() {
         val draft = NewPharmacyProductDraft(name = "A", priceText = "-1")
-        assertEquals(-1L, draft.priceSum)
-        assertFalse(draft.isPriceValid)
-        assertFalse(draft.canSubmit)
+        assertEquals(1L, draft.priceSum)
+        assertTrue(draft.isPriceValid)
     }
 
     @Test
@@ -62,9 +69,6 @@ class NewPharmacyProductDraftTest {
         val garbage = NewPharmacyProductDraft(name = "A", priceText = "1000", stockText = "abc")
         assertFalse(garbage.isStockValid)
         assertFalse(garbage.canSubmit)
-
-        val negative = NewPharmacyProductDraft(name = "A", priceText = "1000", stockText = "-3")
-        assertFalse(negative.isStockValid)
 
         val valid = NewPharmacyProductDraft(name = "A", priceText = "1000", stockText = "5")
         assertTrue(valid.isStockValid)

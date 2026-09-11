@@ -280,17 +280,26 @@ private fun ProductCard(
             )
         }
 
-        // «Осталось 2» — повод поспешить; «осталось 340» — складская сводка,
-        // поэтому покупателю число называется только когда товар кончается.
-        // Владельцу (issue #252) остаток нужен всегда — это его склад, а не
-        // повод поторопиться.
-        if (product.showsStockQuantity || (isOwner && product.stockQuantity != null)) {
+        // «Осталось 2» — повод поспешить; покупателю число называется только
+        // когда товар кончается, иначе витрина читалась бы как складская
+        // сводка (issue #94/#100).
+        if (product.showsStockQuantity) {
             val left = product.stockQuantity ?: 0
             Text(
                 text = pluralStringResource(R.plurals.pharmacy_stock_left, left, left),
                 modifier = Modifier.padding(top = Spacing.item),
                 style = MaterialTheme.typography.bodySmall.merge(TabularNums),
-                color = if (product.showsStockQuantity) colors.warning else colors.fgMuted,
+                color = colors.warning,
+            )
+        } else if (isOwner && product.stockQuantity != null) {
+            // Владельцу (issue #252) остаток нужен всегда — это его склад, а
+            // не повод поторопиться, поэтому нейтральная подпись, а не
+            // строка «осталось N», рассчитанная на срочность у покупателя.
+            Text(
+                text = stringResource(R.string.pharmacy_stock_owner_count, product.stockQuantity),
+                modifier = Modifier.padding(top = Spacing.item),
+                style = MaterialTheme.typography.bodySmall.merge(TabularNums),
+                color = colors.fgMuted,
             )
         }
 

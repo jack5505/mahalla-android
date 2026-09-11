@@ -894,6 +894,8 @@
     <string name="pharmacy_stock_edit_title">Qoldiqni yangilash</string>
     <string name="pharmacy_stock_edit_label">Qoldiq</string>
     <string name="pharmacy_stock_edit_submit">Saqlash</string>
+    <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
+    <string name="pharmacy_stock_owner_count">Qoldiq: %1$d</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">O\'yin zonalari</string>
     <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>

@@ -48,6 +48,8 @@ class PharmacyViewModel @Inject constructor(
 
     private var searchJob: Job? = null
     private var loadMoreJob: Job? = null
+    private var createJob: Job? = null
+    private var stockJob: Job? = null
     private var loadedPage = 0
 
     init {
@@ -68,7 +70,12 @@ class PharmacyViewModel @Inject constructor(
             PharmacyEvent.LoadMore -> loadMore()
 
             PharmacyEvent.AddProductClicked -> onAddProductClicked()
-            PharmacyEvent.CreateFormDismissed -> updateState { copy(createForm = null) }
+            PharmacyEvent.CreateFormDismissed -> {
+                // Отменяет и незавершённый запрос: иначе его поздний ответ
+                // застал бы уже другую, вновь открытую форму (issue #252).
+                createJob?.cancel()
+                updateState { copy(createForm = null) }
+            }
             is PharmacyEvent.CreateNameChanged -> updateCreateDraft { withName(event.value) }
             is PharmacyEvent.CreateManufacturerChanged ->
                 updateCreateDraft { withManufacturer(event.value) }
@@ -84,7 +91,13 @@ class PharmacyViewModel @Inject constructor(
             PharmacyEvent.CreateSubmitted -> submitCreate()
 
             is PharmacyEvent.StockEditClicked -> onStockEditClicked(event.product)
-            PharmacyEvent.StockFormDismissed -> updateState { copy(stockForm = null) }
+            PharmacyEvent.StockFormDismissed -> {
+                // Та же причина, что у CreateFormDismissed: без отмены поздний
+                // ответ по прежнему товару закрыл бы форму, уже открытую для
+                // другого.
+                stockJob?.cancel()
+                updateState { copy(stockForm = null) }
+            }
             is PharmacyEvent.StockQuantityChanged -> updateState {
                 copy(stockForm = stockForm?.copy(quantityText = event.value, failure = null))
             }
@@ -199,6 +212,7 @@ class PharmacyViewModel @Inject constructor(
     /** Кнопка скрыта не-владельцу самим экраном — проверка здесь на всякий случай. */
     private fun onAddProductClicked() {
         if (!currentState.isOwner) return
+        createJob?.cancel()
         updateState { copy(createForm = NewProductFormState()) }
     }
 
@@ -229,7 +243,7 @@ class PharmacyViewModel @Inject constructor(
         }
 
         updateState { copy(createForm = form.copy(submitting = true, failure = null)) }
-        viewModelScope.launch {
+        createJob = viewModelScope.launch {
             when (val result = repository.createProduct(route.placeId, form.draft)) {
                 is ApiResult.Failure -> updateState {
                     copy(createForm = createForm?.copy(submitting = false, failure = result.failure))
@@ -246,6 +260,7 @@ class PharmacyViewModel @Inject constructor(
     /** Только владелец/менеджер и только среди уже показанных товаров. */
     private fun onStockEditClicked(product: PharmacyProduct) {
         if (!currentState.isOwner) return
+        stockJob?.cancel()
         updateState {
             copy(
                 stockForm = StockEditFormState(
@@ -271,7 +286,7 @@ class PharmacyViewModel @Inject constructor(
         }
 
         updateState { copy(stockForm = form.copy(submitting = true, failure = null)) }
-        viewModelScope.launch {
+        stockJob = viewModelScope.launch {
             when (val result = repository.updateStock(route.placeId, form.productId, quantity)) {
                 is ApiResult.Failure -> updateState {
                     copy(stockForm = stockForm?.copy(submitting = false, failure = result.failure))

@@ -6,9 +6,12 @@ import androidx.compose.runtime.Immutable
  * Черновик нового товара витрины (issue #252, `PharmacyCreateRequest`).
  *
  * Обязательны только [name] (≤ 300 символов в схеме) и цена — остальное схема
- * не ограничивает. `priceText`/`stockText` — сырой ввод, как у пополнения
- * кошелька ([uz.mahalla.feature.wallet.domain.TopUpDraft]): битая цифра
- * обязана стать ошибкой поля, а не молча обнулиться.
+ * не ограничивает. `priceText`/`stockText` разбираются тем же приёмом, что и
+ * сумма пополнения кошелька (`WalletTopUp.parseAmount`): цифры выбираются из
+ * строки, а не парсятся как есть, — иначе `MoneyFormatter`-форматированное или
+ * вставленное значение с пробелом между разрядами превращалось бы в ошибку
+ * поля вместо того, чтобы разобраться. Минус вместе с прочим мусором
+ * отфильтровывается, так что поле физически не может стать отрицательным.
  */
 @Immutable
 data class NewPharmacyProductDraft(
@@ -21,20 +24,21 @@ data class NewPharmacyProductDraft(
     val stockText: String = "",
     val requiresPrescription: Boolean = false,
 ) {
-    /** `null`, если поле пустое или в нём не только цифры. */
-    val priceSum: Long? get() = priceText.trim().takeIf(String::isNotEmpty)?.toLongOrNull()
+    /** `null`, если в поле нет ни одной цифры. */
+    val priceSum: Long? get() = priceText.filter(Char::isDigit).takeIf(String::isNotEmpty)
+        ?.toLongOrNull()
 
     /**
      * Остаток необязателен: пустое поле — «не считали на складе», а не ноль,
      * который читался бы как «закончилось».
      */
-    val stockQuantity: Int? get() =
-        stockText.trim().takeIf(String::isNotEmpty)?.toIntOrNull()?.takeIf { it >= 0 }
+    val stockQuantity: Int? get() = stockText.filter(Char::isDigit).takeIf(String::isNotEmpty)
+        ?.toIntOrNull()
 
     val isNameValid: Boolean
         get() = name.trim().let { it.isNotEmpty() && it.length <= MAX_NAME_LENGTH }
 
-    val isPriceValid: Boolean get() = priceSum?.let { it >= 0 } == true
+    val isPriceValid: Boolean get() = priceSum != null
 
     val isStockValid: Boolean get() = stockText.isBlank() || stockQuantity != null
 
