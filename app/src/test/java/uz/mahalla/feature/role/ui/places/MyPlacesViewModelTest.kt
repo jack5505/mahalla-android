@@ -219,6 +219,34 @@ class MyPlacesViewModelTest {
         assertTrue(repository.toggled.isEmpty())
     }
 
+    @Test
+    fun `the owner opens staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Owner)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertEquals(MyPlacesEffect.OpenStaff("p-1"), viewModel.effects.first())
+    }
+
+    @Test
+    fun `a manager cannot open staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Manager)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
     private fun page(
         items: List<MyPlace>,
         hasMore: Boolean = false,

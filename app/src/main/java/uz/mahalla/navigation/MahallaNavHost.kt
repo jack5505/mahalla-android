@@ -54,6 +54,7 @@ import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
+import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
@@ -394,8 +395,18 @@ fun MahallaNavHost(
                 // продавца, что и из «Моей анкеты». Возврат из неё приведёт
                 // назад в список, где заявка уже будет видна.
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
+                // «Сотрудники» (issue #189) — доступно только владельцу,
+                // экран сам не покажет действие сотруднику или заявке на
+                // модерации.
+                onManageStaff = { placeId -> navController.navigate(PlaceStaffRoute(placeId)) },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // «Сотрудники» заведения (issue #189) — открывается со своей карточки
+        // в «Моих заведениях», возврат ведёт туда же.
+        composable<PlaceStaffRoute> {
+            PlaceStaffScreen(onBack = { navController.navigateUp() })
         }
 
         // Подписка (issue #103) — вне обоих графов, как «мои заведения»:

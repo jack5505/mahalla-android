@@ -43,6 +43,7 @@ sealed interface MyPlacesEvent : UiEvent {
     data class PlaceClicked(val placeId: String) : MyPlacesEvent
     data class AvailabilityToggled(val placeId: String) : MyPlacesEvent
     data object RegisterPlaceRequested : MyPlacesEvent
+    data class ManageStaffClicked(val placeId: String) : MyPlacesEvent
 }
 
 sealed interface MyPlacesEffect : UiEffect {
@@ -51,4 +52,7 @@ sealed interface MyPlacesEffect : UiEffect {
 
     /** Пустой список ведёт туда, где заведение регистрируют (issue #84). */
     data object OpenProviderForm : MyPlacesEffect
+
+    /** «Сотрудники» (issue #189) — доступно только владельцу. */
+    data class OpenStaff(val placeId: String) : MyPlacesEffect
 }
