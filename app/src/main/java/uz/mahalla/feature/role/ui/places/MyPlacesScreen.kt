@@ -65,6 +65,7 @@ import uz.mahalla.ui.theme.Spacing
 fun MyPlacesScreen(
     onPlaceClick: (String) -> Unit,
     onRegisterPlace: () -> Unit,
+    onManageStaff: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyPlacesViewModel = hiltViewModel(),
@@ -76,6 +77,7 @@ fun MyPlacesScreen(
             when (effect) {
                 is MyPlacesEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 MyPlacesEffect.OpenProviderForm -> onRegisterPlace()
+                is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
             }
         }
     }
@@ -296,6 +298,19 @@ private fun MyPlaceCard(
                 // второй переворот флага, и результат зависел бы от порядка
                 // ответов.
                 enabled = enabled && !pending,
+            )
+        }
+
+        // Только владельцу (issue #189): менеджеру и сотруднику бэкенд эти
+        // действия не даст, а кнопка, которая всегда отвечает отказом,
+        // читается как сломанная.
+        if (place.canManageStaff) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_staff_action),
+                onClick = { onEvent(MyPlacesEvent.ManageStaffClicked(place.id)) },
+                variant = MahallaButtonVariant.Ghost,
+                fillWidth = false,
+                modifier = Modifier.padding(top = Spacing.item),
             )
         }
     }

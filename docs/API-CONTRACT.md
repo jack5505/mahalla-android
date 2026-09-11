@@ -605,6 +605,32 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
 
+## PlaceStaffApi ✅
+
+`app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/staff` |
+| POST | `places/{placeId}/staff` |
+| PUT | `places/{placeId}/staff/{staffUserId}` |
+| DELETE | `places/{placeId}/staff/{staffUserId}` |
+
+`role` — закрытое перечисление **`STAFF`/`MANAGER`/`OWNER`**, то же самое, что
+уже приезжает в `Mine.role` у «моих заведений» (`ProviderApi.myPlaces`,
+issue #94) — второй домен-тип под тот же смысл не заводился, клиент
+переиспользует `PlaceStaffRole`. Схемы `PlaceStaffResponse`, `AddRequest`,
+`PlaceStaffChangeRoleRequest` в `/v3/api-docs` встречаются по одному разу,
+коллизии springdoc здесь нет.
+
+`PUT`/`DELETE` адресуют сотрудника по `{staffUserId}` — это `userId`, а не
+`id` записи `PlaceStaffResponse`; клиент `id` записи в домен не переводит,
+им всё равно нечего было бы делать. Найти пользователя по телефону схема не
+даёт (поиска по `users` нет) — ID в форму добавления вводится вручную.
+
+`geoExempt` (`boolean`, необязательный и в запросе, и в ответе) разобран
+DTO→домен, но в интерфейсе не показан: задача его не требовала.
+
 ## SubscriptionsApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/subscription/data/SubscriptionsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.

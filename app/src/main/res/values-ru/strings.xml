@@ -533,6 +533,24 @@
     <string name="my_places_status_suspended_hint">Заведение приостановлено. Причину подскажет поддержка.</string>
     <string name="my_places_role_manager">Вы здесь менеджер</string>
     <string name="my_places_role_staff">Вы здесь сотрудник: настройки меняет владелец</string>
+    <string name="my_places_staff_action">Сотрудники</string>
+
+    <!-- Сотрудники заведения (issue #189) -->
+    <string name="place_staff_title">Сотрудники</string>
+    <string name="place_staff_empty_title">Сотрудников нет</string>
+    <string name="place_staff_empty_description">Добавьте первого сотрудника по ID.</string>
+    <string name="place_staff_add">Добавить сотрудника</string>
+    <string name="place_staff_user_id_label">ID пользователя (UUID)</string>
+    <string name="place_staff_user_id_supporting">Идентификатор человек должен показать сам из своего профиля — поиска по номеру телефона нет.</string>
+    <string name="place_staff_user_id_error">Введите в формате UUID</string>
+    <string name="place_staff_role_label">Роль</string>
+    <string name="place_staff_role_owner">Владелец</string>
+    <string name="place_staff_role_manager">Менеджер</string>
+    <string name="place_staff_role_staff">Сотрудник</string>
+    <string name="place_staff_role_unknown">Неизвестная роль</string>
+    <string name="place_staff_add_submit">Добавить</string>
+    <string name="place_staff_remove_title">Удалить сотрудника?</string>
+    <string name="place_staff_remove_message">Сотрудник с ID %1$s будет удалён из заведения. Это действие нельзя отменить.</string>
 
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Продолжить</string>

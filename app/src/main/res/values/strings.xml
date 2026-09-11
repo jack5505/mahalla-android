@@ -539,6 +539,24 @@
     <string name="my_places_status_suspended_hint">Muassasa to\'xtatilgan. Sababini bilish uchun qo\'llab-quvvatlashga murojaat qiling.</string>
     <string name="my_places_role_manager">Siz bu yerda menejersiz</string>
     <string name="my_places_role_staff">Siz bu yerda xodimsiz: sozlamalarni egasi o\'zgartiradi</string>
+    <string name="my_places_staff_action">Xodimlar</string>
+
+    <!-- Сотрудники заведения (issue #189) -->
+    <string name="place_staff_title">Xodimlar</string>
+    <string name="place_staff_empty_title">Xodimlar yo\'q</string>
+    <string name="place_staff_empty_description">Birinchi xodimni ID bo\'yicha qo\'shing.</string>
+    <string name="place_staff_add">Xodim qo\'shish</string>
+    <string name="place_staff_user_id_label">Foydalanuvchi ID (UUID)</string>
+    <string name="place_staff_user_id_supporting">Odam identifikatorni o\'z profilidan ko\'rsatishi kerak — telefon raqami bo\'yicha qidiruv yo\'q.</string>
+    <string name="place_staff_user_id_error">UUID formatida kiriting</string>
+    <string name="place_staff_role_label">Rol</string>
+    <string name="place_staff_role_owner">Egasi</string>
+    <string name="place_staff_role_manager">Menejer</string>
+    <string name="place_staff_role_staff">Xodim</string>
+    <string name="place_staff_role_unknown">Noma\'lum rol</string>
+    <string name="place_staff_add_submit">Qo\'shish</string>
+    <string name="place_staff_remove_title">Xodim o\'chirilsinmi?</string>
+    <string name="place_staff_remove_message">%1$s ID\'li xodim muassasadan o\'chiriladi. Bu amalni ortga qaytarib bo\'lmaydi.</string>
 
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Davom etish</string>
