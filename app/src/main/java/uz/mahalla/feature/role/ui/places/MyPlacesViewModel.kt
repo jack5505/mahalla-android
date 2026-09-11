@@ -49,6 +49,7 @@ class MyPlacesViewModel @Inject constructor(
             is MyPlacesEvent.AvailabilityToggled -> toggleAvailability(event.placeId)
             MyPlacesEvent.RegisterPlaceRequested ->
                 emitEffect(MyPlacesEffect.OpenProviderForm)
+            is MyPlacesEvent.ManageProductsClicked -> manageProducts(event.placeId)
         }
     }
 
@@ -196,4 +197,14 @@ class MyPlacesViewModel @Inject constructor(
 
     private fun placeOrNull(placeId: String): MyPlace? =
         (currentState.places as? ScreenState.Content)?.data?.firstOrNull { it.id == placeId }
+
+    /**
+     * Экран сам не рисует кнопку тому, кому нельзя (issue #252) — проверка
+     * здесь на случай, если событие всё-таки придёт.
+     */
+    private fun manageProducts(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManageProducts) return
+        emitEffect(MyPlacesEffect.OpenPharmacyManagement(place.id, place.name))
+    }
 }

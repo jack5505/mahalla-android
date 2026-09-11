@@ -53,6 +53,19 @@ data class MyPlace(
      */
     val canToggleAvailability: Boolean
         get() = status == PlaceModerationStatus.Active && staffRole != PlaceStaffRole.Staff
+
+    /**
+     * Управлять товарами витрины аптеки (issue #252) — тот же круг людей, что
+     * и у [canToggleAvailability], и по той же причине: рядовой сотрудник не
+     * должен получать кнопку, которая гарантированно откажет, а заявка на
+     * модерации ещё не значится в каталоге, куда товар было бы негде
+     * показать. Пока это единственная вертикаль с формой создания на клиенте
+     * (issue #252) — другие категории сюда не добавляются по аналогии.
+     */
+    val canManageProducts: Boolean
+        get() = category == PlaceCategory.Pharmacy &&
+            status == PlaceModerationStatus.Active &&
+            staffRole != PlaceStaffRole.Staff
 }
 
 /**

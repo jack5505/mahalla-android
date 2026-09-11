@@ -395,6 +395,14 @@ fun MahallaNavHost(
                 // назад в список, где заявка уже будет видна.
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
                 onBack = { navController.navigateUp() },
+                // Витрина аптеки в режиме владельца (issue #252): та же
+                // витрина, что открыта покупателю с карточки места, только
+                // с уже подтверждённым `isOwner` — товар аптеки своего
+                // `ownerId` не отдаёт, а «Мои заведения» уже сверились по
+                // `places/my`.
+                onManageProducts = { placeId, placeName ->
+                    navController.navigate(PharmacyRoute(placeId, placeName, isOwner = true))
+                },
             )
         }
 

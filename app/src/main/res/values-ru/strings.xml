@@ -524,6 +524,8 @@
     <string name="my_places_unnamed">Заведение без названия</string>
     <string name="my_places_available">Открыто сейчас</string>
     <string name="my_places_available_description">Если выключить, в каталоге заведение будет закрытым.</string>
+    <!-- Управление витриной аптеки (issue #252). -->
+    <string name="my_places_manage_products">Управлять товарами</string>
     <string name="my_places_status_pending">На модерации</string>
     <string name="my_places_status_active">Активно</string>
     <string name="my_places_status_suspended">Приостановлено</string>
@@ -865,6 +867,25 @@
     <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
     <string name="pharmacy_not_found_title">Ничего не нашлось</string>
     <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
+    <!-- Бизнес-панель аптеки (issue #252): владелец добавляет товар и правит остаток. -->
+    <string name="pharmacy_add_product">Добавить товар</string>
+    <string name="pharmacy_new_product_title">Новый товар</string>
+    <string name="pharmacy_field_name">Название</string>
+    <string name="pharmacy_field_name_invalid">Введите название (до 300 символов)</string>
+    <string name="pharmacy_field_manufacturer">Производитель</string>
+    <string name="pharmacy_field_dosage_form">Форма выпуска</string>
+    <string name="pharmacy_field_strength">Дозировка</string>
+    <string name="pharmacy_field_description">Описание</string>
+    <string name="pharmacy_field_price">Цена, сум</string>
+    <string name="pharmacy_field_price_invalid">Введите цену</string>
+    <string name="pharmacy_field_stock">Остаток (необязательно)</string>
+    <string name="pharmacy_field_stock_invalid">Введите целое число</string>
+    <string name="pharmacy_field_prescription">Требуется рецепт</string>
+    <string name="pharmacy_create_submit">Добавить</string>
+    <string name="pharmacy_edit_stock_action">Изменить остаток</string>
+    <string name="pharmacy_stock_edit_title">Обновить остаток</string>
+    <string name="pharmacy_stock_edit_label">Остаток</string>
+    <string name="pharmacy_stock_edit_submit">Сохранить</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">Игровые зоны</string>
     <string name="gaming_zones_empty_title">Зон пока нет</string>
