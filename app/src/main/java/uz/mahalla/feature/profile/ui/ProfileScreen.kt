@@ -106,6 +106,10 @@ import java.time.Instant
  * Строка видна всем: мастером человек становится прямо на этом экране, а до
  * анкеты исполнителя другого пути в приложении нет. Роль продавца здесь ни при
  * чём — она про заведение, а мастер работает сам.
+ * @param onOpenMyFreelancerIncomingOrders открыть входящие заказы мастера
+ * (issue #190): принять, отклонить или отметить выполненным. Строка видна
+ * всем по той же причине, что и [onOpenMyServices] — мастером человек
+ * становится сам, права продавца здесь ни при чём.
  * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
  * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
  * таба у вертикали нет.
@@ -124,6 +128,7 @@ fun ProfileScreen(
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
     onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -167,6 +172,7 @@ fun ProfileScreen(
         onOpenMyTickets = onOpenMyTickets,
         onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
         onOpenMyServices = onOpenMyServices,
+        onOpenMyFreelancerIncomingOrders = onOpenMyFreelancerIncomingOrders,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
@@ -189,6 +195,7 @@ fun ProfileContentScreen(
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
     onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -287,6 +294,15 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_services_title),
                 subtitle = stringResource(R.string.my_services_profile_subtitle),
                 onClick = onOpenMyServices,
+            )
+
+            // Входящие заказы мастера (issue #190) — третья сторона той же
+            // вертикали: принять или отклонить то, что клиент уже заказал.
+            // Строка всем по той же причине, что у «Моих услуг».
+            MahallaListItem(
+                title = stringResource(R.string.freelancer_incoming_orders_title),
+                subtitle = stringResource(R.string.freelancer_incoming_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerIncomingOrders,
             )
 
             // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
@@ -799,6 +815,7 @@ private fun ProfilePreview() {
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
             onOpenMyServices = {},
+            onOpenMyFreelancerIncomingOrders = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyTickets = {},
             onOpenMyFashionOrders = {},

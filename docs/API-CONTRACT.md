@@ -452,6 +452,8 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | PUT | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
 | DELETE | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
 | PUT | `freelancers/me/toggle-availability` | ⚠️ путь есть (`401`) |
+| GET | `freelancers/me/orders` | ⚠️ путь есть (`401`), схема — та же `PageResponseOrderResponse` (issue #190) |
+| PUT | `freelancers/orders/{orderId}/status` | ⚠️ путь есть (`401`), тело `{status}` — то же перечисление, что `OrderResponse.status` (issue #190) |
 
 **Услуги мастера — это `FreelancerServiceResponse`, а не `ServiceResponse`
 барбершопа** (issue #71, схема перечитана 2026-09-10). До этого они
@@ -498,10 +500,17 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 выключена»; если сервер их не отдаёт, мастер просто никогда этой пометки не
 увидит. Отдельной ручки «мои услуги» в контроллере нет.
 
-**Кабинет заказов мастера не подключён:** `GET freelancers/me/orders` и
-`PUT freelancers/orders/{orderId}/status` в приложении не используются — это
-бизнес-панель (эпик #16). Из-за этого выставленную услугу можно заказать, но
-принять заказ мастеру из приложения нечем.
+**Входящие заказы мастера подключены черновиком (issue #190):**
+`GET freelancers/me/orders` и `PUT freelancers/orders/{orderId}/status`
+используются экраном «Входящие заказы» (`ui/orders/MyFreelancerIncomingOrders*`),
+но **ни путь, ни тело не проверены живым запросом**: `CONTRACT_REFRESH_TOKEN`
+не был задан ни на момент issue, ни в прогоне, который это писал. Схема ответа
+`incomingOrders` — та же `PageResponseOrderResponse`, что у `orders/my`, тело
+`{status}` смены статуса выведено из `OrderResponse.status`. Значения статуса
+не расширены: переиспользован тот же `FreelancerOrderStatus`, что уже
+подтверждён для `OrderResponse` (`PENDING`, `ACCEPTED`, `REJECTED`,
+`COMPLETED`) — своего перечисления для смены статуса мастером в схеме не
+описано, шлём те же значения.
 
 ## GamingApi ⚠️ частично
 
