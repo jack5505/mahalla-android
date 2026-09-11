@@ -49,6 +49,19 @@ class FakeFreelancerRepository : FreelancerRepository {
 
     val requestedMyOrderPages = mutableListOf<Int>()
 
+    /** Входящие заказы (issue #190): ответ на страницу, иначе [defaultIncomingOrderPage]. */
+    val incomingOrderPages: MutableMap<Int, ApiResult<FreelancerOrderPage>> = mutableMapOf()
+
+    var defaultIncomingOrderPage: ApiResult<FreelancerOrderPage> =
+        ApiResult.Success(FreelancerOrderPage())
+
+    val requestedIncomingOrderPages = mutableListOf<Int>()
+
+    var updateOrderStatusResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Пары «id заказа + новый статус», по порядку запросов. */
+    val orderStatusChanges = mutableListOf<Pair<String, FreelancerOrderStatus>>()
+
     override suspend fun freelancers(
         profession: String?,
         page: Int,
@@ -89,6 +102,19 @@ class FakeFreelancerRepository : FreelancerRepository {
     override suspend fun myOrders(page: Int, size: Int): ApiResult<FreelancerOrderPage> {
         requestedMyOrderPages += page
         return myOrderPages[page] ?: defaultMyOrderPage
+    }
+
+    override suspend fun incomingOrders(page: Int, size: Int): ApiResult<FreelancerOrderPage> {
+        requestedIncomingOrderPages += page
+        return incomingOrderPages[page] ?: defaultIncomingOrderPage
+    }
+
+    override suspend fun updateOrderStatus(
+        orderId: String,
+        status: FreelancerOrderStatus,
+    ): ApiResult<Unit> {
+        orderStatusChanges += orderId to status
+        return updateOrderStatusResult
     }
 
     // --- Кабинет мастера (issue #71) ---
