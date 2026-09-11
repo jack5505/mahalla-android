@@ -25,9 +25,9 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
-import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreButton
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaErrorDetails
@@ -190,7 +190,11 @@ private fun LazyListScope.activityItems(
             // ViewModel сама (issue #143).
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(state = state, onEvent = onEvent)
+                    LoadMoreButton(
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(ActivityEvent.LoadMore) },
+                    )
                 }
             }
         }
@@ -305,53 +309,6 @@ private fun InlineFailure(
             fillWidth = false,
         )
     }
-}
-
-/**
- * Хвост списка: кнопка «показать ещё» и причина, если страница не приехала.
- *
- * Догрузка **по нажатию**, а не сама по достижению конца списка (issue #151).
- * Автотриггер здесь висел на курсоре [ActivityState.nextPages] — и курсор
- * сдвигается после каждой удачной страницы, то есть эффект перезапускался сам,
- * пока хвост оставался в композиции. Остановить это могла только вёрстка:
- * список должен был перерасти экран и вытеснить хвост за нижнюю границу. У
- * человека с парой активностей он не перерастает никогда, поэтому открытие
- * таба выкачивало **все** страницы **всех пяти** источников пятикратными
- * запросами подряд.
- *
- * Кнопка вместо крутилки заодно убирает случай «крутится навсегда»: пока
- * страница в полёте, она показывает спиннер внутри себя ([ButtonState.Loading]
- * — видима, но не нажимается), а не подменяется им.
- *
- * Пустая вкладка — единственное исключение: кнопка там тоже показана (под
- * пустым состоянием), но ждать нажатия нельзя — человек читает «активных нет»
- * как ответ и уходит, хотя активное лежит страницей ниже. Её страницы доливает
- * ViewModel, с потолком и с остановкой на первой же непустой (issue #143).
- */
-@Composable
-private fun LoadMoreItem(
-    state: ActivityState,
-    onEvent: (ActivityEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            message = failure.userMessage(),
-            failure = failure,
-            onRetry = { onEvent(ActivityEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    MahallaButton(
-        text = stringResource(R.string.activity_load_more),
-        onClick = { onEvent(ActivityEvent.LoadMore) },
-        modifier = modifier.padding(vertical = Spacing.item),
-        variant = MahallaButtonVariant.Secondary,
-        state = if (state.isLoadingMore) ButtonState.Loading else ButtonState.Default,
-    )
 }
 
 private fun ActivityFilter.labelRes(): Int = when (this) {

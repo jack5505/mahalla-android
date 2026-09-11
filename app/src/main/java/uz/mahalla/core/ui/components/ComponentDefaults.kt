@@ -95,6 +95,9 @@ object MahallaComponentDefaults {
     val skeletonLineHeight: Dp = 12.dp
     val borderWidth: Dp = 1.dp
 
+    /** Спиннер в хвосте списка (`LoadMoreAuto`) — крупнее, чем внутри кнопки. */
+    val loadMoreIndicatorSize: Dp = 24.dp
+
     /**
      * Все цели нажатия кита — для теста доступности. Любой новый интерактивный
      * компонент добавляется сюда же, иначе его никто не проверит.
