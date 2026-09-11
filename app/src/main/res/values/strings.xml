@@ -534,6 +534,8 @@
     <string name="my_places_unnamed">Nomsiz muassasa</string>
     <string name="my_places_available">Hozir ochiq</string>
     <string name="my_places_available_description">O\'chirilsa, muassasa katalogda yopiq ko\'rinadi.</string>
+    <!-- Управление витриной аптеки (issue #252). -->
+    <string name="my_places_manage_products">Tovarlarni boshqarish</string>
     <string name="my_places_status_pending">Moderatsiyada</string>
     <string name="my_places_status_active">Faol</string>
     <string name="my_places_status_suspended">To\'xtatilgan</string>
@@ -895,6 +897,27 @@
     <string name="pharmacy_empty_description">Bu dorixona hali dorilarini qo\'shmagan.</string>
     <string name="pharmacy_not_found_title">Topilmadi</string>
     <string name="pharmacy_not_found_description">«%1$s» bo\'yicha hech narsa topilmadi. Nomini boshqacha yozib ko\'ring.</string>
+    <!-- Бизнес-панель аптеки (issue #252): владелец добавляет товар и правит остаток. -->
+    <string name="pharmacy_add_product">Tovar qo\'shish</string>
+    <string name="pharmacy_new_product_title">Yangi tovar</string>
+    <string name="pharmacy_field_name">Nomi</string>
+    <string name="pharmacy_field_name_invalid">Nomini kiriting (300 belgigacha)</string>
+    <string name="pharmacy_field_manufacturer">Ishlab chiqaruvchi</string>
+    <string name="pharmacy_field_dosage_form">Chiqarilish shakli</string>
+    <string name="pharmacy_field_strength">Dozasi</string>
+    <string name="pharmacy_field_description">Tavsif</string>
+    <string name="pharmacy_field_price">Narxi, so\'m</string>
+    <string name="pharmacy_field_price_invalid">Narxni kiriting</string>
+    <string name="pharmacy_field_stock">Qoldiq (ixtiyoriy)</string>
+    <string name="pharmacy_field_stock_invalid">Butun son kiriting</string>
+    <string name="pharmacy_field_prescription">Retsept talab qilinadi</string>
+    <string name="pharmacy_create_submit">Qo\'shish</string>
+    <string name="pharmacy_edit_stock_action">Qoldiqni tahrirlash</string>
+    <string name="pharmacy_stock_edit_title">Qoldiqni yangilash</string>
+    <string name="pharmacy_stock_edit_label">Qoldiq</string>
+    <string name="pharmacy_stock_edit_submit">Saqlash</string>
+    <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
+    <string name="pharmacy_stock_owner_count">Qoldiq: %1$d</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">O\'yin zonalari</string>
     <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>

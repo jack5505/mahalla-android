@@ -568,13 +568,41 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | PUT | `notifications/read-all` |
 | PUT | `notifications/{id}/read` |
 
-## PharmacyApi ⚠️
+## PharmacyApi ✅
 
-`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt`. `GET
+products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ НЕ СВЕРЕН» здесь стояла
+по ошибке — сам путь в KDoc файла отмечен как проверенный, файл её не
+повторял). `POST products` и `PUT products/{id}/stock` (issue #252, владелец
+правит витрину) сверены схемой `/v3/api-docs` 2026-09-11, но не живым
+запросом — обе требуют Bearer владельца заведения, а `CONTRACT_REFRESH_TOKEN`
+в песочнице не задан.
 
 | Метод | Путь |
 |---|---|
 | GET | `pharmacy/places/{placeId}/products` |
+| POST | `pharmacy/places/{placeId}/products` |
+| PUT | `pharmacy/places/{placeId}/products/{id}/stock` |
+
+**`POST products`** — тело `PharmacyCreateRequest`, имя в `/v3/api-docs`
+коллизией springdoc не перекрыто (встречается только в этом контроллере).
+Обязательны `name` (≤ 300) и `price` (тийины, issue #149); `manufacturer`,
+`description`, `dosageForm`, `strength`, `stockQuantity`,
+`requiresPrescription` необязательны и без ограничения длины в схеме. Ответ —
+`ProductResponse`, клиент его не использует: список товаров перечитывается
+отдельным запросом (тот же приём, что у `PUT places/{id}` выше).
+
+**`PUT products/{id}/stock`** — тело в схеме объявлено безымянной картой
+(`additionalProperties: integer`), тот же случай, что `walkin/accept`/
+`walkin/decline` в PR #161 и `reviews/{id}/reply` в issue #188. Имени ключа
+схема не называет — выведено из соседних схем того же контроллера: и
+`ProductResponse`, и `PharmacyCreateRequest` называют это поле
+`stockQuantity`. Отправляется как `{"stockQuantity": N}`. **Не проверено
+живым запросом** (нужен Bearer владельца заведения, которого в песочнице
+нет) — если бэкенд ждёт другой ключ, тело уйдёт с полем, которого он не
+узнает, и обновление молча не подействует, а не ответит ошибкой; при
+расхождении смотреть сюда в первую очередь и подтвердить настоящим curl'ом
+до релиза.
 
 ## SessionsApi ⚠️
 

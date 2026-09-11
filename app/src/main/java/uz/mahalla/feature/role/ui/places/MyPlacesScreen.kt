@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -68,6 +69,7 @@ fun MyPlacesScreen(
     onManageStaff: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onManageProducts: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: MyPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -77,6 +79,8 @@ fun MyPlacesScreen(
             when (effect) {
                 is MyPlacesEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 MyPlacesEffect.OpenProviderForm -> onRegisterPlace()
+                is MyPlacesEffect.OpenPharmacyManagement ->
+                    onManageProducts(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
             }
         }
@@ -301,6 +305,19 @@ private fun MyPlaceCard(
             )
         }
 
+        // Витрина аптеки (issue #252) — единственная вертикаль с формой
+        // создания на клиенте сегодня, поэтому кнопка условна на категории, а
+        // не общая для всех «своих заведений».
+        if (place.canManageProducts) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_manage_products),
+                onClick = { onEvent(MyPlacesEvent.ManageProductsClicked(place.id)) },
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Secondary,
+                icon = Icons.Outlined.Sell,
+            )
+        }
+
         // Только владельцу (issue #189): менеджеру и сотруднику бэкенд эти
         // действия не даст, а кнопка, которая всегда отвечает отказом,
         // читается как сломанная.
@@ -451,6 +468,15 @@ private fun MyPlacesScreenPreview() {
                             status = PlaceModerationStatus.Pending,
                             address = "Yunusobod, 4-daha",
                             staffRole = PlaceStaffRole.Manager,
+                        ),
+                        MyPlace(
+                            id = "p-3",
+                            name = "Dori-Darmon",
+                            category = PlaceCategory.Pharmacy,
+                            status = PlaceModerationStatus.Active,
+                            address = "Mirzo Ulug'bek, 8-uy",
+                            isAvailable = true,
+                            staffRole = PlaceStaffRole.Owner,
                         ),
                     ),
                 ),

@@ -434,7 +434,7 @@ class RoutesSerializationTest {
         // маршрутом (issue #100).
         val descriptor = serializer<PharmacyRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "isOwner"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 
