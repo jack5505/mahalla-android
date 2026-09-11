@@ -762,6 +762,16 @@
     <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
     <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
     <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
+
+    <!-- Входящие заказы мастера (issue #190) -->
+    <string name="freelancer_incoming_orders_title">Kiruvchi buyurtmalar</string>
+    <string name="freelancer_incoming_orders_profile_subtitle">Mijozlarning sizga bergan buyurtmalari</string>
+    <string name="freelancer_incoming_orders_empty_title">Hozircha buyurtma yo\'q</string>
+    <string name="freelancer_incoming_orders_empty_description">Mijoz xizmatingizni buyurtma qilganda shu yerda ko\'rinadi.</string>
+    <string name="freelancer_incoming_order_accept">Qabul qilish</string>
+    <string name="freelancer_incoming_order_reject">Rad etish</string>
+    <string name="freelancer_incoming_order_complete">Bajarildi deb belgilash</string>
+
     <!-- Вертикаль «Одежда» (issue #108) -->
     <string name="category_fashion">Kiyim</string>
     <string name="place_action_shop">Do\'kon</string>

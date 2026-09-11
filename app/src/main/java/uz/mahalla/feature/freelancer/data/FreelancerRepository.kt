@@ -11,6 +11,7 @@ import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderDraft
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
+import uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus
 import uz.mahalla.feature.freelancer.domain.FreelancerPage
 import uz.mahalla.feature.freelancer.domain.FreelancerProfileForm
 import uz.mahalla.feature.freelancer.domain.FreelancerProfileFormValidator
@@ -70,6 +71,24 @@ interface FreelancerRepository {
         size: Int = PAGE_SIZE,
     ): ApiResult<FreelancerOrderPage>
 
+    /**
+     * Входящие заказы мастера (issue #190) — то, что клиенты заказали у
+     * **этого** мастера, а не то, что он сам заказал ([myOrders]).
+     */
+    suspend fun incomingOrders(
+        page: Int = 0,
+        size: Int = PAGE_SIZE,
+    ): ApiResult<FreelancerOrderPage>
+
+    /**
+     * Сменить статус входящего заказа — принять, отклонить или отметить
+     * выполненным. Возвращает `Unit`, хотя сервер отвечает заказом: ответ
+     * **без `id`** был бы неотличим от отказа, а показывать ошибку после
+     * удачной смены статуса нельзя (то же правило, что у [saveMyService]).
+     * Источник правды один — перечитанный список входящих заказов.
+     */
+    suspend fun updateOrderStatus(orderId: String, status: FreelancerOrderStatus): ApiResult<Unit>
+
     // --- Кабинет мастера (issue #71) ---
 
     /**
@@ -118,6 +137,9 @@ interface FreelancerRepository {
 
         /** Код отказа, когда сохранять нечего ещё до запроса (issue #71). */
         const val INVALID_FORM_CODE = "FREELANCER_FORM_INVALID"
+
+        /** Код отказа, когда менять статус нечего ещё до запроса (issue #190). */
+        const val INVALID_ORDER_ID_CODE = "FREELANCER_ORDER_ID_INVALID"
 
         /** Столько же по умолчанию берёт и сам бэкенд. */
         const val PAGE_SIZE = 20
@@ -213,6 +235,34 @@ class DefaultFreelancerRepository @Inject constructor(
     override suspend fun myOrders(page: Int, size: Int): ApiResult<FreelancerOrderPage> =
         apiCall { api.myOrders(page = page.coerceAtLeast(0), size = size).payload() }
             .map(FreelancerOrderPageDto::toDomain)
+
+    override suspend fun incomingOrders(page: Int, size: Int): ApiResult<FreelancerOrderPage> =
+        apiCall { api.incomingOrders(page = page.coerceAtLeast(0), size = size).payload() }
+            .map(FreelancerOrderPageDto::toDomain)
+
+    /**
+     * Незнакомый `orderId` в сеть не уходит: сервер ответил бы тем же отказом,
+     * но платой были бы запрос и молчание экрана на время его выполнения.
+     *
+     * Ответ **не разбирается как заказ**: без `id` он был бы неотличим от
+     * отказа, хотя статус на сервере уже сменился (тот же риск, что у
+     * [saveMyService], если парсить ответ строго). Источник правды —
+     * перечитанный [incomingOrders], который вызывает сама ViewModel.
+     */
+    override suspend fun updateOrderStatus(
+        orderId: String,
+        status: FreelancerOrderStatus,
+    ): ApiResult<Unit> {
+        if (orderId.isBlank()) {
+            return ApiResult.Failure(ApiError.Business(FreelancerRepository.INVALID_ORDER_ID_CODE))
+        }
+        return apiCall {
+            api.updateOrderStatus(
+                orderId = orderId,
+                body = UpdateFreelancerOrderStatusRequest(status.apiValue),
+            ).ensureSuccess()
+        }
+    }
 
     /**
      * Своя анкета. «Анкеты ещё нет» — это ответ, а не отказ: экран тогда

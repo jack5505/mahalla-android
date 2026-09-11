@@ -756,6 +756,16 @@
     <string name="my_freelancer_orders_profile_subtitle">Заказы услуг у мастеров и их состояние</string>
     <string name="my_freelancer_orders_empty_title">Заказов нет</string>
     <string name="my_freelancer_orders_empty_description">Заказать услугу можно с карточки мастера.</string>
+
+    <!-- Входящие заказы мастера (issue #190) -->
+    <string name="freelancer_incoming_orders_title">Входящие заказы</string>
+    <string name="freelancer_incoming_orders_profile_subtitle">Заказы, которые вам присылают клиенты</string>
+    <string name="freelancer_incoming_orders_empty_title">Заказов пока нет</string>
+    <string name="freelancer_incoming_orders_empty_description">Здесь появится заказ, когда клиент закажет вашу услугу.</string>
+    <string name="freelancer_incoming_order_accept">Принять</string>
+    <string name="freelancer_incoming_order_reject">Отклонить</string>
+    <string name="freelancer_incoming_order_complete">Отметить выполненным</string>
+
     <!-- Вертикаль «Одежда» (issue #108) -->
     <string name="category_fashion">Одежда</string>
     <string name="place_action_shop">Магазин</string>
