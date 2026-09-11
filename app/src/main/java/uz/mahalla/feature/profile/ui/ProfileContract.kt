@@ -65,6 +65,15 @@ data class ProfileState(
      * «нет» — спрятанного бизнеса.
      */
     val showMyPlaces: Boolean get() = formRole == UserRole.Provider || serverRole.isProvider
+
+    /**
+     * Показывать ли «Кабинет мастера» (issue #190).
+     *
+     * То же условие, что у [showMyPlaces] и по той же причине: анкета мастера
+     * — не серверное право, а кабинет нужен и тому, кто пока не завёл анкету
+     * (экран сам предложит её заполнить).
+     */
+    val showFreelancerCabinet: Boolean get() = showMyPlaces
 }
 
 /**

@@ -719,6 +719,59 @@
     <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
     <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
     <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
+
+    <!-- Кабинет мастера (issue #190) -->
+    <string name="freelancer_cabinet_profile_entry">Usta kabineti</string>
+    <string name="freelancer_cabinet_profile_subtitle">Anketa, xizmatlar va buyurtmalarni boshqarish</string>
+    <string name="freelancer_cabinet_title">Usta kabineti</string>
+    <string name="freelancer_cabinet_become_title">Siz hali usta emassiz</string>
+    <string name="freelancer_cabinet_become_description">Anketani to\'ldiring — mijozlar sizni ustalar katalogida topadi.</string>
+    <string name="freelancer_cabinet_become_action">Anketani to\'ldirish</string>
+    <string name="freelancer_cabinet_edit_action">Anketani tahrirlash</string>
+    <string name="freelancer_cabinet_available_title">Buyurtma qabul qilaman</string>
+    <string name="freelancer_cabinet_available_description">O\'chirilganda mijozlar sizga yangi buyurtma yubora olmaydi.</string>
+    <string name="freelancer_cabinet_services_title">Xizmatlarim</string>
+    <string name="freelancer_cabinet_services_empty">Xizmatlar hali qo\'shilmagan</string>
+    <string name="freelancer_cabinet_service_add">Xizmat qo\'shish</string>
+    <string name="freelancer_cabinet_service_edit">Tahrirlash</string>
+    <string name="freelancer_cabinet_service_delete">O\'chirish</string>
+    <string name="freelancer_cabinet_service_delete_title">Xizmatni o\'chirish</string>
+    <string name="freelancer_cabinet_service_delete_message">«%1$s» o\'chiriladi. Buni bekor qilib bo\'lmaydi.</string>
+    <string name="freelancer_cabinet_service_inactive">O\'chirilgan</string>
+    <string name="freelancer_cabinet_orders_title">Kiruvchi buyurtmalar</string>
+    <string name="freelancer_cabinet_orders_empty">Hozircha buyurtma yo\'q</string>
+    <string name="freelancer_cabinet_order_accept">Qabul qilish</string>
+    <string name="freelancer_cabinet_order_reject">Rad etish</string>
+    <string name="freelancer_cabinet_order_complete">Bajarildi deb belgilash</string>
+
+    <string name="freelancer_service_form_add_title">Yangi xizmat</string>
+    <string name="freelancer_service_form_edit_title">Xizmatni tahrirlash</string>
+    <string name="freelancer_service_field_title">Xizmat nomi</string>
+    <string name="freelancer_service_field_title_hint">Masalan: kran almashtirish</string>
+    <string name="freelancer_service_field_description">Tavsif (majburiy emas)</string>
+    <string name="freelancer_service_field_price">Narxi, so\'m</string>
+    <string name="freelancer_service_field_duration">Davomiyligi, daqiqa</string>
+    <string name="freelancer_service_field_active">Faol</string>
+    <string name="freelancer_service_field_active_description">O\'chirilgan xizmat katalogda ko\'rinmaydi.</string>
+    <string name="freelancer_service_error_title_required">Xizmat nomini kiriting</string>
+    <string name="freelancer_service_error_price_required">Narxni kiriting</string>
+    <string name="freelancer_service_error_duration_required">Davomiylikni kiriting</string>
+    <string name="freelancer_service_submit_add">Qo\'shish</string>
+    <string name="freelancer_service_submit_save">Saqlash</string>
+
+    <string name="freelancer_anketa_title">Usta anketasi</string>
+    <string name="freelancer_anketa_subtitle">Ma\'lumotlaringizni mijozlar katalogda ko\'radi.</string>
+    <string name="freelancer_anketa_field_name">Ismingiz</string>
+    <string name="freelancer_anketa_field_profession">Mutaxassislik</string>
+    <string name="freelancer_anketa_field_profession_hint">Masalan: santexnik</string>
+    <string name="freelancer_anketa_field_bio">O\'zingiz haqingizda (majburiy emas)</string>
+    <string name="freelancer_anketa_field_city">Shahar (majburiy emas)</string>
+    <string name="freelancer_anketa_field_phone">Telefon (majburiy emas)</string>
+    <string name="freelancer_anketa_field_hourly_rate">Soatlik narx, so\'m (majburiy emas)</string>
+    <string name="freelancer_anketa_field_experience">Tajriba, yil (majburiy emas)</string>
+    <string name="freelancer_anketa_error_profession_required">Mutaxassislikni kiriting</string>
+    <string name="freelancer_anketa_submit">Saqlash</string>
+
     <!-- Вертикаль «Одежда» (issue #108) -->
     <string name="category_fashion">Kiyim</string>
     <string name="place_action_shop">Do\'kon</string>

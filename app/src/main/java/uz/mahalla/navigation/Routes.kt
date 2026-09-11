@@ -375,6 +375,25 @@ data class FreelancerRoute(
 @Serializable
 data object MyFreelancerOrdersRoute
 
+/**
+ * Кабинет мастера (issue #190, эпик #16): анкета, переключатель доступности,
+ * свои услуги, входящие заказы. Вне обоих графов, как «мои заведения»:
+ * открывается строкой из профиля, возврат ведёт туда же.
+ *
+ * Без анкеты экран сам показывает «стать мастером» — маршрут один и на
+ * пустой кабинет, и на заполненный.
+ */
+@Serializable
+data object FreelancerCabinetRoute
+
+/**
+ * Анкета мастера (issue #190): создать или поправить профиль в кабинете.
+ * Аргументов нет — своя анкета читается тем же `GET freelancers/me`, которым
+ * уже пользуется [FreelancerCabinetRoute].
+ */
+@Serializable
+data object FreelancerAnketaRoute
+
 // --- Вертикаль «Больницы» (эпик #11, issue #99) ---
 
 /**

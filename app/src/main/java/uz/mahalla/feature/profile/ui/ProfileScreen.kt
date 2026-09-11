@@ -102,6 +102,10 @@ import java.time.Instant
  * (issue #107). Тоже отдельная строка и по той же причине: заказы у
  * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
  * являются.
+ * @param onOpenFreelancerCabinet открыть кабинет мастера (issue #190):
+ * анкета, свои услуги, входящие заказы. Строка видна тому же кругу, что и
+ * «Мои заведения» ([ProfileState.showFreelancerCabinet]) — мастер оказывает
+ * услуги сам, а не через заведение.
  * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
  * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
  * таба у вертикали нет.
@@ -119,6 +123,7 @@ fun ProfileScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenFreelancerCabinet: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -161,6 +166,7 @@ fun ProfileScreen(
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
         onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
+        onOpenFreelancerCabinet = onOpenFreelancerCabinet,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
@@ -182,6 +188,7 @@ fun ProfileContentScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenFreelancerCabinet: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -272,6 +279,17 @@ fun ProfileContentScreen(
                 subtitle = stringResource(R.string.my_freelancer_orders_profile_subtitle),
                 onClick = onOpenMyFreelancerOrders,
             )
+
+            // Кабинет мастера (issue #190) — тому, кто оказывает услуги сам:
+            // покупателю показывать пустой кабинет незачем (то же правило,
+            // что у «Моих заведений», issue #237).
+            if (state.showFreelancerCabinet) {
+                MahallaListItem(
+                    title = stringResource(R.string.freelancer_cabinet_profile_entry),
+                    subtitle = stringResource(R.string.freelancer_cabinet_profile_subtitle),
+                    onClick = onOpenFreelancerCabinet,
+                )
+            }
 
             // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
             // и посмотреть его больше негде.
@@ -782,6 +800,7 @@ private fun ProfilePreview() {
             onOpenGamingBookings = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
+            onOpenFreelancerCabinet = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyTickets = {},
             onOpenMyFashionOrders = {},

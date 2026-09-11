@@ -28,6 +28,8 @@ import uz.mahalla.feature.food.ui.cart.CartScreen
 import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
+import uz.mahalla.feature.freelancer.ui.cabinet.FreelancerAnketaScreen
+import uz.mahalla.feature.freelancer.ui.cabinet.FreelancerCabinetScreen
 import uz.mahalla.feature.freelancer.ui.catalog.FreelancersScreen
 import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerOrdersScreen
 import uz.mahalla.feature.freelancer.ui.profile.FreelancerProfileScreen
@@ -295,6 +297,13 @@ fun MahallaNavHost(
                     // фрилансера может любой, своего таба у этого нет.
                     onOpenMyFreelancerOrders = {
                         navController.navigate(MyFreelancerOrdersRoute)
+                    },
+                    // Кабинет мастера (issue #190): анкета, услуги и входящие
+                    // заказы — тому, кто оказывает услуги сам, а не через
+                    // заведение. Условие видимости то же, что у «моих
+                    // заведений» (issue #237).
+                    onOpenFreelancerCabinet = {
+                        navController.navigate(FreelancerCabinetRoute)
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
                     onOpenSubscription = { navController.navigate(SubscriptionRoute) },
@@ -640,6 +649,24 @@ fun MahallaNavHost(
 
         composable<MyFreelancerOrdersRoute> {
             MyFreelancerOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Кабинет мастера (issue #190) — вне обоих графов, как «мои
+        // заведения»: открывается строкой из профиля, возврат ведёт туда же.
+        composable<FreelancerCabinetRoute> {
+            FreelancerCabinetScreen(
+                onOpenAnketaForm = { navController.navigate(FreelancerAnketaRoute) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<FreelancerAnketaRoute> {
+            FreelancerAnketaScreen(
+                // Анкета принята — кабинет сам перечитает профиль при
+                // возврате (issue #190), второй экран подтверждения не нужен.
+                onSubmitted = { navController.navigateUp() },
+                onBack = { navController.navigateUp() },
+            )
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки

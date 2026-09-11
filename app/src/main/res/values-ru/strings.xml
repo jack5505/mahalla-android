@@ -713,6 +713,59 @@
     <string name="my_freelancer_orders_profile_subtitle">Заказы услуг у мастеров и их состояние</string>
     <string name="my_freelancer_orders_empty_title">Заказов нет</string>
     <string name="my_freelancer_orders_empty_description">Заказать услугу можно с карточки мастера.</string>
+
+    <!-- Кабинет мастера (issue #190) -->
+    <string name="freelancer_cabinet_profile_entry">Кабинет мастера</string>
+    <string name="freelancer_cabinet_profile_subtitle">Анкета, услуги и заказы</string>
+    <string name="freelancer_cabinet_title">Кабинет мастера</string>
+    <string name="freelancer_cabinet_become_title">Вы ещё не мастер</string>
+    <string name="freelancer_cabinet_become_description">Заполните анкету — клиенты найдут вас в каталоге мастеров.</string>
+    <string name="freelancer_cabinet_become_action">Заполнить анкету</string>
+    <string name="freelancer_cabinet_edit_action">Редактировать анкету</string>
+    <string name="freelancer_cabinet_available_title">Принимаю заказы</string>
+    <string name="freelancer_cabinet_available_description">Пока выключено, клиенты не смогут отправить вам новый заказ.</string>
+    <string name="freelancer_cabinet_services_title">Мои услуги</string>
+    <string name="freelancer_cabinet_services_empty">Услуги ещё не добавлены</string>
+    <string name="freelancer_cabinet_service_add">Добавить услугу</string>
+    <string name="freelancer_cabinet_service_edit">Изменить</string>
+    <string name="freelancer_cabinet_service_delete">Удалить</string>
+    <string name="freelancer_cabinet_service_delete_title">Удалить услугу</string>
+    <string name="freelancer_cabinet_service_delete_message">«%1$s» будет удалена. Это нельзя отменить.</string>
+    <string name="freelancer_cabinet_service_inactive">Выключена</string>
+    <string name="freelancer_cabinet_orders_title">Входящие заказы</string>
+    <string name="freelancer_cabinet_orders_empty">Заказов пока нет</string>
+    <string name="freelancer_cabinet_order_accept">Принять</string>
+    <string name="freelancer_cabinet_order_reject">Отклонить</string>
+    <string name="freelancer_cabinet_order_complete">Отметить выполненным</string>
+
+    <string name="freelancer_service_form_add_title">Новая услуга</string>
+    <string name="freelancer_service_form_edit_title">Изменить услугу</string>
+    <string name="freelancer_service_field_title">Название услуги</string>
+    <string name="freelancer_service_field_title_hint">Например: замена крана</string>
+    <string name="freelancer_service_field_description">Описание (необязательно)</string>
+    <string name="freelancer_service_field_price">Цена, сум</string>
+    <string name="freelancer_service_field_duration">Длительность, минут</string>
+    <string name="freelancer_service_field_active">Активна</string>
+    <string name="freelancer_service_field_active_description">Выключенная услуга не видна в каталоге.</string>
+    <string name="freelancer_service_error_title_required">Укажите название услуги</string>
+    <string name="freelancer_service_error_price_required">Укажите цену</string>
+    <string name="freelancer_service_error_duration_required">Укажите длительность</string>
+    <string name="freelancer_service_submit_add">Добавить</string>
+    <string name="freelancer_service_submit_save">Сохранить</string>
+
+    <string name="freelancer_anketa_title">Анкета мастера</string>
+    <string name="freelancer_anketa_subtitle">Эти данные увидят клиенты в каталоге.</string>
+    <string name="freelancer_anketa_field_name">Ваше имя</string>
+    <string name="freelancer_anketa_field_profession">Специальность</string>
+    <string name="freelancer_anketa_field_profession_hint">Например: сантехник</string>
+    <string name="freelancer_anketa_field_bio">О себе (необязательно)</string>
+    <string name="freelancer_anketa_field_city">Город (необязательно)</string>
+    <string name="freelancer_anketa_field_phone">Телефон (необязательно)</string>
+    <string name="freelancer_anketa_field_hourly_rate">Цена за час, сум (необязательно)</string>
+    <string name="freelancer_anketa_field_experience">Опыт, лет (необязательно)</string>
+    <string name="freelancer_anketa_error_profession_required">Укажите специальность</string>
+    <string name="freelancer_anketa_submit">Сохранить</string>
+
     <!-- Вертикаль «Одежда» (issue #108) -->
     <string name="category_fashion">Одежда</string>
     <string name="place_action_shop">Магазин</string>

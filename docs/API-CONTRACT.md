@@ -452,6 +452,37 @@ title, description, priceAmount, durationMinutes, isActive}`, а клиент
 выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
 только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
 
+## FreelancerCabinetApi ⚠️ не сверен
+
+`app/src/main/java/uz/mahalla/feature/freelancer/data/FreelancerCabinetApi.kt`
+(issue #190, эпик #16) — кабинет самого мастера. **Ни один путь и ни одно
+тело не проверены живым запросом**: `CONTRACT_REFRESH_TOKEN` не был задан ни
+на момент issue, ни в прогоне, который это писал. Пути — из таблицы
+эндпоинтов issue #190; тела запроса выведены из уже подтверждённых схем
+ответа тех же сущностей (`ProfileResponse`, `FreelancerServiceResponse`,
+`OrderResponse`) — тем же способом, каким раньше собирались `CreatePlaceRequest`
+и `CreateFreelancerOrderRequest`, когда `401` приходил до валидации тела.
+
+| Метод | Путь | |
+|---|---|---|
+| GET | `freelancers/me` | ⚠️ риск: `404` или `200` с пустым `data` — не следует из схемы, обработаны оба |
+| POST | `freelancers/me` | ⚠️ тело `FreelancerCreateRequest` угадано по `ProfileResponse` |
+| GET | `freelancers/me/orders` | ⚠️ путь есть, схема — та же `PageResponseOrderResponse` |
+| GET | `freelancers/{id}/services` | ⚠️ тот же путь каталога, но свой `FreelancerServiceDto` — не путать с багом issue #216 у `FreelancerApi.services` |
+| POST/PUT | `.../me/services(/{id})` | ⚠️ тело `ServiceRequest` угадано по `FreelancerServiceResponse` |
+| DELETE | `freelancers/me/services/{id}` | ⚠️ путь есть, тело ответа не проверено |
+| PUT | `freelancers/me/toggle-availability` | ⚠️ без тела — в отличие от `places/{id}/availability`, у мастера нет `lat`/`lng` в схеме |
+| PUT | `freelancers/orders/{orderId}/status` | ⚠️ тело `{status}` — то же перечисление, что `OrderResponse.status` |
+
+**Значения статуса заказа не расширены** (issue #190): переиспользован тот же
+`FreelancerOrderStatus`, что уже подтверждён для `OrderResponse` (`PENDING`,
+`ACCEPTED`, `REJECTED`, `COMPLETED`) — своего перечисления для смены статуса
+мастером в схеме не описано, шлём те же значения.
+
+Первое, что стоит проверить на стенде: реальный ответ `GET freelancers/me` без
+анкеты (`404` vs `200` с пустым `data`) — от этого зависит, можно ли вообще
+убрать одну из двух веток в `DefaultFreelancerCabinetRepository.me()`.
+
 ## GamingApi ⚠️ частично
 
 `app/src/main/java/uz/mahalla/feature/gaming/data/GamingApi.kt` — пути сверены
