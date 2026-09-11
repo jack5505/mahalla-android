@@ -3,6 +3,7 @@ package uz.mahalla.feature.place.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -546,14 +547,17 @@ private fun ReviewCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Имени автора у бэкенда нет вовсе, ни под каким полем (issue
+            // #192) — показываем «мой отзыв» либо честно «гость», а не
+            // угаданное и всегда пустое имя.
             val author = if (isMine) {
                 stringResource(R.string.place_review_mine)
             } else {
-                review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
+                stringResource(R.string.place_review_anonymous)
             }
             // Имя автора стоит той же строкой — аватар только рисуется,
             // TalkBack не должен читать его дважды.
-            MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
+            MahallaAvatar(url = null, name = author, contentDescription = null)
             Text(
                 text = author,
                 modifier = Modifier.weight(1f),
@@ -589,6 +593,31 @@ private fun ReviewCard(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Start,
         )
+        // Ответ заведения был в схеме и раньше, но не разбирался (issue #192).
+        review.ownerReply?.let { reply ->
+            Column(
+                modifier = Modifier
+                    .padding(top = Spacing.item / 2)
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                    )
+                    .padding(Spacing.item),
+            ) {
+                Text(
+                    text = stringResource(R.string.place_review_owner_reply_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = reply,
+                    modifier = Modifier.padding(top = Spacing.item / 4),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
