@@ -5,6 +5,9 @@
     <string name="screen_skeleton_note">Экран будет свёрстан по макету на следующем этапе.</string>
     <string name="action_back">Назад</string>
     <string name="currency_uzs">сум</string>
+    <!-- Склейка двух частей строки (заголовок и уточнение, дата и время…) —
+         общий ресурс, а не символ в коде каждого экрана (issue #212). -->
+    <string name="text_joined_with_dot">%1$s · %2$s</string>
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Рядом</string>
