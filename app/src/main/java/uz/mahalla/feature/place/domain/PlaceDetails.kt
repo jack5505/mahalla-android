@@ -28,11 +28,18 @@ data class OpeningHours(
         get() = !isDayOff && !isAroundTheClock && closesAt!! < opensAt!!
 }
 
+/**
+ * @param city отдельно от [address]: тот при пустом адресе показывает город
+ * вместо него (см. `PlaceDetailDto.toDetails`), а форма правки места (issue
+ * #188) должна отправить обратно настоящее значение поля, а не подмену для
+ * витрины.
+ */
 @Immutable
 data class PlaceContacts(
     val phone: String? = null,
     val website: String? = null,
     val address: String? = null,
+    val city: String? = null,
 )
 
 /** Что можно сделать в этом месте (эпик 4.4, кнопки действий). */
@@ -156,6 +163,8 @@ data class PlaceCapabilities(
  * @param authorId id автора с сервера. Единственный признак, по которому свой
  * отзыв отличается от чужого (issue #76) — «мой» это факт про аккаунт, а не
  * про отзыв, поэтому сравнение живёт в состоянии экрана, а не здесь.
+ * @param ownerReply ответ владельца заведения (issue #188). `null` — ответа
+ * нет, а не «нет отзыва на ответ»: это два разных отсутствия.
  */
 @Immutable
 data class Review(
@@ -167,6 +176,7 @@ data class Review(
     val authorId: String? = null,
     /** Аватар автора (issue #60); `null` — рисуется первая буква имени. */
     val avatarUrl: String? = null,
+    val ownerReply: String? = null,
 )
 
 /**
@@ -177,6 +187,10 @@ data class Review(
  * [fromCache] отмечает данные, поднятые из Room после сетевой ошибки: экран
  * показывает их, но подписывает — иначе устаревшие часы работы выглядят как
  * актуальные.
+ *
+ * @param ownerId владелец заведения (issue #188). Кэш его не хранит — из
+ * офлайн-карточки владельческие действия не предлагаются: подтвердить
+ * личность без сети нечем.
  */
 @Immutable
 data class PlaceDetails(
@@ -188,6 +202,7 @@ data class PlaceDetails(
     val capabilities: PlaceCapabilities = PlaceCapabilities(),
     val reviews: List<Review> = emptyList(),
     val fromCache: Boolean = false,
+    val ownerId: String? = null,
 ) {
     val actions: List<PlaceAction> get() = PlaceActions.resolve(capabilities, contacts, place)
 }

@@ -90,6 +90,7 @@ fun PlaceDetailDto.toDetails(
     from: DeviceLocation? = null,
 ): PlaceDetails = PlaceDetails(
     place = toDomain(from),
+    ownerId = ownerId?.takeIf(String::isNotBlank),
     capabilities = PlaceCapabilities.of(PlaceCategory.fromApi(category)),
     description = description?.takeIf(String::isNotBlank),
     // Обложка первой: логотип это иконка, а не фотография заведения.
@@ -98,6 +99,7 @@ fun PlaceDetailDto.toDetails(
         phone = phone?.takeIf(String::isNotBlank),
         website = website?.takeIf(String::isNotBlank),
         address = address?.takeIf(String::isNotBlank) ?: city?.takeIf(String::isNotBlank),
+        city = city?.takeIf(String::isNotBlank),
     ),
     reviews = reviews,
 )
@@ -110,6 +112,7 @@ fun ReviewDto.toDomain(): Review = Review(
     createdAt = parseServerInstant(createdAt),
     authorId = userId?.takeIf(String::isNotBlank),
     avatarUrl = avatarUrl?.takeIf(String::isNotBlank),
+    ownerReply = ownerReply?.takeIf(String::isNotBlank),
 )
 
 fun Place.toEntity(

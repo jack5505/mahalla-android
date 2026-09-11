@@ -12,6 +12,7 @@ import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.place.domain.PlaceEditDraft
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
 import kotlinx.coroutines.CompletableDeferred
@@ -55,6 +56,8 @@ class FakeCatalogRepository : CatalogRepository {
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
     var addReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var deleteReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var updatePlaceResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var replyToReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
 
@@ -72,6 +75,12 @@ class FakeCatalogRepository : CatalogRepository {
     /** Черновики отправленных отзывов — тест проверяет, что уехало на сервер. */
     val addedReviews: MutableList<Pair<String, ReviewDraft>> = mutableListOf()
     val deletedReviews: MutableList<String> = mutableListOf()
+
+    /** Черновики правки места (issue #188) — что именно уехало на `PUT places/{id}`. */
+    val updatedPlaces: MutableList<Pair<String, PlaceEditDraft>> = mutableListOf()
+
+    /** Ответы на отзывы (issue #188): id отзыва + текст ответа. */
+    val repliedReviews: MutableList<Pair<String, String>> = mutableListOf()
 
     /** Сколько раз запрашивалась карточка: перезапрос после отзыва — часть контракта. */
     var detailsRequests: Int = 0
@@ -115,6 +124,16 @@ class FakeCatalogRepository : CatalogRepository {
     override suspend fun deleteReview(reviewId: String): ApiResult<Unit> {
         deletedReviews += reviewId
         return deleteReviewResult
+    }
+
+    override suspend fun updatePlace(placeId: String, draft: PlaceEditDraft): ApiResult<Unit> {
+        updatedPlaces += placeId to draft
+        return updatePlaceResult
+    }
+
+    override suspend fun replyToReview(reviewId: String, reply: String): ApiResult<Unit> {
+        repliedReviews += reviewId to reply
+        return replyToReviewResult
     }
 }
 

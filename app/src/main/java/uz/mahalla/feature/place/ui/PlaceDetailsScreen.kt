@@ -19,12 +19,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.ConfirmationNumber
 import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material.icons.outlined.MedicalServices
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.RateReview
+import androidx.compose.material.icons.automirrored.outlined.Reply
 import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Storefront
@@ -182,6 +184,14 @@ fun PlaceDetailsContent(
         ReviewFormSheet(form = form, onEvent = onEvent)
     }
 
+    state.editForm?.let { form ->
+        PlaceEditSheet(form = form, onEvent = onEvent)
+    }
+
+    state.reviewReplyForm?.let { form ->
+        ReviewReplySheet(form = form, onEvent = onEvent)
+    }
+
     state.reviewPendingDelete?.let {
         MahallaDialog(
             title = stringResource(R.string.place_review_delete_title),
@@ -224,6 +234,20 @@ private fun DetailsList(
 
         if (details.actions.isNotEmpty()) {
             item(key = "actions") { Actions(actions = details.actions, onEvent = onEvent) }
+        }
+
+        // Правка карточки места владельцем (issue #188) — рядом с действиями
+        // вертикали, а не в отдельном разделе: одно и то же заведение, один
+        // и тот же экран.
+        if (state.canEditPlace) {
+            item(key = "owner-edit") {
+                MahallaButton(
+                    text = stringResource(R.string.place_edit_action),
+                    onClick = { onEvent(PlaceDetailsEvent.EditPlaceClicked) },
+                    variant = MahallaButtonVariant.Secondary,
+                    icon = Icons.Outlined.Edit,
+                )
+            }
         }
 
         promotions(promotions = state.promotions)
@@ -505,6 +529,9 @@ private fun LazyListScope.reviews(
             isMine = state.isMine(review),
             deleting = state.deletingReview,
             onDelete = { onEvent(PlaceDetailsEvent.ReviewDeleteRequested(review)) },
+            // Отвечает только владелец заведения — не автор отзыва.
+            isOwner = state.isOwner,
+            onReply = { onEvent(PlaceDetailsEvent.ReviewReplyClicked(review)) },
         )
     }
     if (state.hasHiddenReviews) {
@@ -540,6 +567,8 @@ private fun ReviewCard(
     isMine: Boolean = false,
     deleting: Boolean = false,
     onDelete: () -> Unit = {},
+    isOwner: Boolean = false,
+    onReply: () -> Unit = {},
 ) {
     MahallaCard(modifier = modifier) {
         Row(
@@ -589,6 +618,46 @@ private fun ReviewCard(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Start,
         )
+
+        // Ответ владельца (issue #188): свой блок внутри карточки отзыва —
+        // это ответ именно на этот отзыв, а не отдельная запись в списке.
+        if (review.ownerReply != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.item),
+            ) {
+                Text(
+                    text = stringResource(R.string.place_review_owner_reply_title),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
+                Text(
+                    text = review.ownerReply,
+                    modifier = Modifier.padding(top = Spacing.item / 2),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+
+        // Отвечает только владелец заведения. Ответ можно переписать: форма
+        // открывается с уже отправленным текстом, а не только пустой.
+        if (isOwner) {
+            MahallaButton(
+                text = stringResource(
+                    if (review.ownerReply == null) {
+                        R.string.place_review_reply_action
+                    } else {
+                        R.string.place_review_reply_edit_action
+                    },
+                ),
+                onClick = onReply,
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Ghost,
+                icon = Icons.AutoMirrored.Outlined.Reply,
+            )
+        }
     }
 }
 
@@ -649,6 +718,136 @@ private fun ReviewFormSheet(
         if (!form.draft.isRated) {
             ButtonCaption(text = stringResource(R.string.place_review_rating_required))
         }
+    }
+}
+
+/**
+ * Правка карточки места (issue #188): та же форма для всех полей, точка на
+ * карте не редактируется — координаты уходят вместе с остальным без изменений.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaceEditSheet(
+    form: PlaceEditFormState,
+    onEvent: (PlaceDetailsEvent) -> Unit,
+) {
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PlaceDetailsEvent.EditFormDismissed) },
+        title = stringResource(R.string.place_edit_title),
+    ) {
+        MahallaTextField(
+            value = form.draft.name,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditNameChanged(it)) },
+            label = stringResource(R.string.place_edit_name_label),
+            errorText = if (!form.draft.isNameValid) {
+                stringResource(R.string.place_edit_name_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = form.draft.description,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditDescriptionChanged(it)) },
+            label = stringResource(R.string.place_edit_description_label),
+            errorText = if (!form.draft.isDescriptionValid) {
+                stringResource(R.string.place_edit_text_too_long)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        MahallaTextField(
+            value = form.draft.address,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditAddressChanged(it)) },
+            label = stringResource(R.string.place_edit_address_label),
+            errorText = if (!form.draft.isAddressValid) {
+                stringResource(R.string.place_edit_text_too_long)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = form.draft.city,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditCityChanged(it)) },
+            label = stringResource(R.string.place_edit_city_label),
+            errorText = if (!form.draft.isCityValid) {
+                stringResource(R.string.place_edit_text_too_long)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = form.draft.phone,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditPhoneChanged(it)) },
+            label = stringResource(R.string.place_edit_phone_label),
+            errorText = if (!form.draft.isPhoneValid) {
+                stringResource(R.string.place_edit_text_too_long)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = form.draft.website,
+            onValueChange = { onEvent(PlaceDetailsEvent.EditWebsiteChanged(it)) },
+            label = stringResource(R.string.place_edit_website_label),
+            errorText = if (!form.draft.isWebsiteValid) {
+                stringResource(R.string.place_edit_website_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        form.failure?.let { failure -> ReviewFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.place_edit_submit),
+            onClick = { onEvent(PlaceDetailsEvent.EditSubmitted) },
+            state = ButtonState(enabled = form.draft.canSubmit, loading = form.submitting),
+        )
+    }
+}
+
+/**
+ * Ответ владельца на отзыв (issue #188): одна шторка на весь текст, без
+ * оценки — оценивает клиент, а не заведение.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReviewReplySheet(
+    form: ReviewReplyFormState,
+    onEvent: (PlaceDetailsEvent) -> Unit,
+) {
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PlaceDetailsEvent.ReviewReplyDismissed) },
+        title = stringResource(R.string.place_review_reply_title),
+    ) {
+        MahallaTextField(
+            value = form.text,
+            onValueChange = { onEvent(PlaceDetailsEvent.ReviewReplyTextChanged(it)) },
+            label = stringResource(R.string.place_review_reply_label),
+            supportingText = stringResource(
+                R.string.place_review_text_counter,
+                form.trimmedText.length,
+                ReviewReplyFormState.MAX_LENGTH,
+            ),
+            errorText = if (form.trimmedText.length > ReviewReplyFormState.MAX_LENGTH) {
+                stringResource(R.string.place_review_text_too_long, ReviewReplyFormState.MAX_LENGTH)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        form.failure?.let { failure -> ReviewFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.place_review_reply_submit),
+            onClick = { onEvent(PlaceDetailsEvent.ReviewReplySubmitted) },
+            state = ButtonState(enabled = form.canSubmit, loading = form.submitting),
+        )
     }
 }
 

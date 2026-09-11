@@ -14,8 +14,10 @@ import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceFilterEngine
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.place.domain.PlaceEditDraft
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.feature.role.domain.WebsiteLink
 import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -62,6 +64,12 @@ interface CatalogRepository {
 
     /** Удалить свой отзыв. Чей он — проверяет бэкенд по токену. */
     suspend fun deleteReview(reviewId: String): ApiResult<Unit>
+
+    /** Правка карточки места владельцем (issue #188). */
+    suspend fun updatePlace(placeId: String, draft: PlaceEditDraft): ApiResult<Unit>
+
+    /** Ответ владельца заведения на отзыв (issue #188). */
+    suspend fun replyToReview(reviewId: String, reply: String): ApiResult<Unit>
 }
 
 /**
@@ -215,6 +223,53 @@ class DefaultCatalogRepository @Inject constructor(
         apiCall { api.deleteReview(reviewId).ensureSuccess() }
 
     /**
+     * Уходит полный черновик, а не только тронутые поля, и ровно теми
+     * значениями, что в форме, — даже пустой строкой. `UpdateRequest`
+     * необязательный, но схема не говорит, что бэкенд делает с полем, которого
+     * в теле нет: если отсутствие трактуется как «оставь как было» (как у
+     * `walkin/accept` в PR #161), то поле, отправленное `null`/пропущенное,
+     * стёрло бы человеку явную очистку — он увидел бы пустое поле в форме, а
+     * старое значение осталось бы на сервере молча, без ошибки. Отправка того,
+     * что реально в черновике, снимает эту двузначность: не тронул — приедет
+     * то же значение, что было на карточке (форма открывается им же
+     * заполненная); очистил — приедет пустая строка.
+     */
+    override suspend fun updatePlace(placeId: String, draft: PlaceEditDraft): ApiResult<Unit> {
+        if (!draft.canSubmit) {
+            return ApiResult.Failure(ApiError.Business(PlaceEditDraft.INVALID_CODE))
+        }
+        val trimmed = draft.trimmed()
+        return apiCall {
+            api.updatePlace(
+                placeId,
+                UpdatePlaceRequest(
+                    name = trimmed.name,
+                    description = trimmed.description,
+                    address = trimmed.address,
+                    city = trimmed.city,
+                    phone = trimmed.phone,
+                    // Пустой сайт — тоже осознанная очистка, а не «не заполнено»:
+                    // WebsiteLink.sanitize("") дал бы null и потерял бы её.
+                    website = trimmed.website.takeIf(String::isNotEmpty)
+                        ?.let(WebsiteLink::sanitize)
+                        ?: trimmed.website,
+                    lat = draft.latitude,
+                    lng = draft.longitude,
+                ),
+            ).ensureSuccess()
+        }
+    }
+
+    /** Ключ тела выведен из ответа (`ReviewResponse.ownerReply`) — см. `ReviewReplyRequest`. */
+    override suspend fun replyToReview(reviewId: String, reply: String): ApiResult<Unit> {
+        val trimmed = reply.trim()
+        if (trimmed.isEmpty() || trimmed.length > REVIEW_REPLY_MAX_LENGTH) {
+            return ApiResult.Failure(ApiError.Business(PlaceEditDraft.INVALID_CODE))
+        }
+        return apiCall { api.replyToReview(reviewId, ReviewReplyRequest(trimmed)).ensureSuccess() }
+    }
+
+    /**
      * Координаты обязательны для `places/nearby` и нужны, чтобы посчитать
      * расстояние в ответе поиска. [RequestLocationProvider] отдаёт настоящую
      * позицию, а без разрешения — центр выбранного города: пустой экран из-за
@@ -275,5 +330,8 @@ class DefaultCatalogRepository @Inject constructor(
 
         /** Неделю назад расстояния и часы работы уже ничего не значат. */
         const val CACHE_TTL_SECONDS = 7L * 24 * 60 * 60
+
+        /** Тот же предел, что у текста самого отзыва (issue #76, `ReviewDraft`). */
+        const val REVIEW_REPLY_MAX_LENGTH = 2000
     }
 }

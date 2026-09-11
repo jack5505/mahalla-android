@@ -365,6 +365,25 @@
     <string name="place_review_delete">Удалить отзыв</string>
     <string name="place_review_delete_title">Удалить отзыв?</string>
     <string name="place_review_delete_text">Ваша оценка и текст исчезнут с карточки места.</string>
+    <!-- Правка карточки места и ответ на отзыв (issue #188) -->
+    <string name="place_edit_action">Редактировать заведение</string>
+    <string name="place_edit_title">Редактирование заведения</string>
+    <string name="place_edit_name_label">Название</string>
+    <string name="place_edit_name_invalid">Название не должно быть пустым или слишком длинным.</string>
+    <string name="place_edit_description_label">Описание</string>
+    <string name="place_edit_address_label">Адрес</string>
+    <string name="place_edit_city_label">Город</string>
+    <string name="place_edit_phone_label">Телефон</string>
+    <string name="place_edit_website_label">Сайт</string>
+    <string name="place_edit_website_invalid">Некорректный адрес сайта.</string>
+    <string name="place_edit_text_too_long">Слишком длинно — сократите.</string>
+    <string name="place_edit_submit">Сохранить</string>
+    <string name="place_review_reply_action">Ответить</string>
+    <string name="place_review_reply_edit_action">Изменить ответ</string>
+    <string name="place_review_reply_title">Ответ на отзыв</string>
+    <string name="place_review_reply_label">Ваш ответ</string>
+    <string name="place_review_reply_submit">Отправить</string>
+    <string name="place_review_owner_reply_title">Ответ заведения</string>
     <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>
