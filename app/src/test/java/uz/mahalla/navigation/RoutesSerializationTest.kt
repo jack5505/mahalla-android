@@ -29,6 +29,10 @@ class RoutesSerializationTest {
         val place = PlaceRoute(placeId = "p-42")
         assertEquals(place, json.decodeFromString<PlaceRoute>(json.encodeToString(place)))
 
+        // Сотрудники заведения (issue #189).
+        val staff = PlaceStaffRoute(placeId = "p-42")
+        assertEquals(staff, json.decodeFromString<PlaceStaffRoute>(json.encodeToString(staff)))
+
         val otp = OtpRoute(phone = "+998901234567", otpToken = "otp-1")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
 
@@ -430,7 +434,7 @@ class RoutesSerializationTest {
         // маршрутом (issue #100).
         val descriptor = serializer<PharmacyRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "isOwner"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 

@@ -575,13 +575,41 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | PUT | `notifications/read-all` |
 | PUT | `notifications/{id}/read` |
 
-## PharmacyApi ⚠️
+## PharmacyApi ✅
 
-`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt`. `GET
+products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ НЕ СВЕРЕН» здесь стояла
+по ошибке — сам путь в KDoc файла отмечен как проверенный, файл её не
+повторял). `POST products` и `PUT products/{id}/stock` (issue #252, владелец
+правит витрину) сверены схемой `/v3/api-docs` 2026-09-11, но не живым
+запросом — обе требуют Bearer владельца заведения, а `CONTRACT_REFRESH_TOKEN`
+в песочнице не задан.
 
 | Метод | Путь |
 |---|---|
 | GET | `pharmacy/places/{placeId}/products` |
+| POST | `pharmacy/places/{placeId}/products` |
+| PUT | `pharmacy/places/{placeId}/products/{id}/stock` |
+
+**`POST products`** — тело `PharmacyCreateRequest`, имя в `/v3/api-docs`
+коллизией springdoc не перекрыто (встречается только в этом контроллере).
+Обязательны `name` (≤ 300) и `price` (тийины, issue #149); `manufacturer`,
+`description`, `dosageForm`, `strength`, `stockQuantity`,
+`requiresPrescription` необязательны и без ограничения длины в схеме. Ответ —
+`ProductResponse`, клиент его не использует: список товаров перечитывается
+отдельным запросом (тот же приём, что у `PUT places/{id}` выше).
+
+**`PUT products/{id}/stock`** — тело в схеме объявлено безымянной картой
+(`additionalProperties: integer`), тот же случай, что `walkin/accept`/
+`walkin/decline` в PR #161 и `reviews/{id}/reply` в issue #188. Имени ключа
+схема не называет — выведено из соседних схем того же контроллера: и
+`ProductResponse`, и `PharmacyCreateRequest` называют это поле
+`stockQuantity`. Отправляется как `{"stockQuantity": N}`. **Не проверено
+живым запросом** (нужен Bearer владельца заведения, которого в песочнице
+нет) — если бэкенд ждёт другой ключ, тело уйдёт с полем, которого он не
+узнает, и обновление молча не подействует, а не ответит ошибкой; при
+расхождении смотреть сюда в первую очередь и подтвердить настоящим curl'ом
+до релиза.
 
 ## SessionsApi ⚠️
 
@@ -620,6 +648,32 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | POST | `places` |
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
+
+## PlaceStaffApi ✅
+
+`app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/staff` |
+| POST | `places/{placeId}/staff` |
+| PUT | `places/{placeId}/staff/{staffUserId}` |
+| DELETE | `places/{placeId}/staff/{staffUserId}` |
+
+`role` — закрытое перечисление **`STAFF`/`MANAGER`/`OWNER`**, то же самое, что
+уже приезжает в `Mine.role` у «моих заведений» (`ProviderApi.myPlaces`,
+issue #94) — второй домен-тип под тот же смысл не заводился, клиент
+переиспользует `PlaceStaffRole`. Схемы `PlaceStaffResponse`, `AddRequest`,
+`PlaceStaffChangeRoleRequest` в `/v3/api-docs` встречаются по одному разу,
+коллизии springdoc здесь нет.
+
+`PUT`/`DELETE` адресуют сотрудника по `{staffUserId}` — это `userId`, а не
+`id` записи `PlaceStaffResponse`; клиент `id` записи в домен не переводит,
+им всё равно нечего было бы делать. Найти пользователя по телефону схема не
+даёт (поиска по `users` нет) — ID в форму добавления вводится вручную.
+
+`geoExempt` (`boolean`, необязательный и в запросе, и в ответе) разобран
+DTO→домен, но в интерфейсе не показан: задача его не требовала.
 
 ## SubscriptionsApi ⚠️
 

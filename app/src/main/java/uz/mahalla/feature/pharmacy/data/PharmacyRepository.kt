@@ -1,10 +1,13 @@
 package uz.mahalla.feature.pharmacy.data
 
+import uz.mahalla.core.format.Money
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
+import uz.mahalla.feature.pharmacy.domain.NewPharmacyProductDraft
+import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
 import uz.mahalla.feature.pharmacy.domain.PharmacyProductPage
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +36,23 @@ interface PharmacyRepository {
         page: Int = 0,
         size: Int = PAGE_SIZE,
     ): ApiResult<PharmacyProductPage>
+
+    /**
+     * Новый товар витрины (issue #252). Владелец правит своё заведение —
+     * доступ проверяет бэкенд, клиент только не даёт заведомо невалидному
+     * черновику уйти в сеть.
+     */
+    suspend fun createProduct(
+        placeId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<Unit>
+
+    /** Остаток товара (issue #252). */
+    suspend fun updateStock(
+        placeId: String,
+        productId: String,
+        quantity: Int,
+    ): ApiResult<PharmacyProduct>
 
     companion object {
         /** Код отказа, когда спрашивать нечего ещё до запроса. */
@@ -73,5 +93,79 @@ class DefaultPharmacyRepository @Inject constructor(
                 size = size,
             ).payload()
         }.map(ProductPageDto::toDomain)
+    }
+
+    /**
+     * Черновик уже проверен формой (`canSubmit`), но повторная проверка тут
+     * — не подстраховка от опечатки, а защита от вызова репозитория в обход
+     * экрана (как и у [uz.mahalla.feature.role.data.DefaultProviderRepository]).
+     */
+    override suspend fun createProduct(
+        placeId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<Unit> {
+        val price = draft.priceSum
+        if (placeId.isBlank() || !draft.canSubmit || price == null) {
+            return ApiResult.Failure(
+                ApiError.Business(NewPharmacyProductDraft.INVALID_CODE),
+            )
+        }
+
+        return apiCall {
+            api.create(
+                placeId = placeId,
+                body = CreateProductRequest(
+                    name = draft.name.trim(),
+                    manufacturer = draft.manufacturer.trim().takeIf(String::isNotEmpty),
+                    description = draft.description.trim().takeIf(String::isNotEmpty),
+                    dosageForm = draft.dosageForm.trim().takeIf(String::isNotEmpty),
+                    strength = draft.strength.trim().takeIf(String::isNotEmpty),
+                    price = Money.somToTiyin(price),
+                    stockQuantity = draft.stockQuantity,
+                    requiresPrescription = draft.requiresPrescription,
+                ),
+            ).payload()
+        }.map {}
+    }
+
+    /**
+     * Пустой `productId` или отрицательный остаток в сеть не уходят — тот же
+     * приём, что и у пустого `placeId` в [products].
+     */
+    override suspend fun updateStock(
+        placeId: String,
+        productId: String,
+        quantity: Int,
+    ): ApiResult<PharmacyProduct> {
+        if (placeId.isBlank() || productId.isBlank() || quantity < 0) {
+            return ApiResult.Failure(
+                ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            )
+        }
+
+        val result = apiCall {
+            api.updateStock(
+                placeId = placeId,
+                productId = productId,
+                body = mapOf(STOCK_QUANTITY_KEY to quantity),
+            ).payload()
+        }
+        return when (result) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> result.data.toDomain()?.let { ApiResult.Success(it) }
+                // Товар только что обновлён по своему id — ответ без имени
+                // или id был бы дефектом бэкенда, а не поводом промолчать.
+                ?: ApiResult.Failure(ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE))
+        }
+    }
+
+    private companion object {
+        /**
+         * Ключ карты `PUT products/{id}/stock` (issue #252) — схема
+         * называет его безымянным `additionalProperties`, имя выведено из
+         * `ProductResponse.stockQuantity`/`PharmacyCreateRequest.stockQuantity`
+         * того же контроллера. Не проверено живым запросом — см. [PharmacyApi].
+         */
+        const val STOCK_QUANTITY_KEY = "stockQuantity"
     }
 }

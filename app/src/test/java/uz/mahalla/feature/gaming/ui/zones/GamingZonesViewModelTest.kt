@@ -254,6 +254,11 @@ class GamingZonesViewModelTest {
     fun `returning to the screen refreshes the zones`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel()
         runCurrent()
+
+        // Первый resume — это открытие экрана, зоны уже запросил `init`.
+        viewModel.onEvent(GamingZonesEvent.ScreenResumed)
+        runCurrent()
+
         repository.zonesResult = ApiResult.Success(
             listOf(gamingZone(id = "z-2", name = "VR")),
         )

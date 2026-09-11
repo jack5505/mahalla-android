@@ -8,7 +8,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.gaming.data.GamingRepository
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
@@ -26,6 +25,7 @@ class GamingBookingsViewModel @Inject constructor(
     private val repository: GamingRepository,
 ) : MviViewModel<GamingBookingsState, GamingBookingsEvent, UiEffect>(GamingBookingsState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -35,10 +35,12 @@ class GamingBookingsViewModel @Inject constructor(
 
     override fun onEvent(event: GamingBookingsEvent) {
         when (event) {
-            GamingBookingsEvent.ScreenResumed ->
-                if (!currentState.bookings.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            GamingBookingsEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             GamingBookingsEvent.Refreshed -> load(showLoading = false, refreshing = true)
             GamingBookingsEvent.Retry -> load()
@@ -57,7 +59,7 @@ class GamingBookingsViewModel @Inject constructor(
                 loadMoreFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myBookings(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }
