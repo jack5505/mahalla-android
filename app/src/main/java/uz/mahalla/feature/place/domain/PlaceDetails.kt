@@ -156,17 +156,21 @@ data class PlaceCapabilities(
  * @param authorId id автора с сервера. Единственный признак, по которому свой
  * отзыв отличается от чужого (issue #76) — «мой» это факт про аккаунт, а не
  * про отзыв, поэтому сравнение живёт в состоянии экрана, а не здесь.
+ *
+ * Имени автора и аватара здесь нет: у бэкенда их нет вовсе, ни под каким
+ * именем поля (issue #192) — экран показывает отзыв без имени, а не пустую
+ * строку на его месте.
+ *
+ * @param ownerReply ответ заведения на отзыв; `null` — заведение не ответило.
  */
 @Immutable
 data class Review(
     val id: String,
-    val author: String,
     val rating: Int,
     val text: String,
     val createdAt: Instant?,
     val authorId: String? = null,
-    /** Аватар автора (issue #60); `null` — рисуется первая буква имени. */
-    val avatarUrl: String? = null,
+    val ownerReply: String? = null,
 )
 
 /**

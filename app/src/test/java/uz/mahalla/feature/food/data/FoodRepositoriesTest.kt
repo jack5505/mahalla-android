@@ -24,6 +24,7 @@ import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.MenuItem
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.wallet.domain.IdempotencyKey
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.cartLine
 import java.time.Clock
@@ -37,6 +38,7 @@ import java.time.ZoneOffset
  *
  * Тела ответов — с живого стенда (`/v3/api-docs` + curl'ы): конверт
  * `{success, data}`, список «меню» вместо категорий, `OrderView` со суммами.
+ * Деньги в телах — в тийинах, ожидаемые значения домена — в сумах (issue #149).
  */
 class FoodRepositoriesTest {
 
@@ -67,6 +69,17 @@ class FoodRepositoriesTest {
         assertEquals(listOf("osh", "somsa"), items.map(MenuItem::id))
         assertEquals(30_000L, items.first().priceSum)
         assertFalse(items.last().isAvailable)
+    }
+
+    @Test
+    fun `menu prices arrive in tiyin and are shown in som`() = runTest {
+        server.enqueue(json(TIYIN_MENU_BODY))
+
+        val items = (menuRepository().menu("place-1") as ApiResult.Success).data
+            .categories.single().items
+
+        // 5 000 000 тийинов — это 50 000 сум, а не «5 000 000 so'm» за плов.
+        assertEquals(listOf(50_000L, 1_500L, 0L), items.map(MenuItem::priceSum))
     }
 
     @Test
@@ -150,10 +163,15 @@ class FoodRepositoriesTest {
                 address = "  Amir Temur 1  ",
                 payment = PaymentMethod.Wallet,
             ),
+            idempotencyKey = "idem-1",
         )
 
         val request = server.takeRequest()
         assertEquals("/food/orders", request.path)
+        // Ключ повторной отправки (8.3): серверную поддержку бэкенд не
+        // подтверждал, но уходить он обязан — иначе повтор после оборванного
+        // соединения останется только клиентской надеждой.
+        assertEquals("idem-1", request.getHeader(IdempotencyKey.HEADER))
         val body = request.body.readUtf8()
         assertTrue(body, body.contains("\"placeId\":\"place-1\""))
         assertTrue(body, body.contains("\"itemId\":\"osh\""))
@@ -178,6 +196,7 @@ class FoodRepositoriesTest {
         orderRepository().create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         val body = server.takeRequest().body.readUtf8()
@@ -193,6 +212,7 @@ class FoodRepositoriesTest {
         orderRepository().create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup, address = "Amir Temur 1"),
+            idempotencyKey = "idem-1",
         )
 
         val body = server.takeRequest().body.readUtf8()
@@ -210,6 +230,7 @@ class FoodRepositoriesTest {
         val result = orderRepository(cart).create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
@@ -224,6 +245,7 @@ class FoodRepositoriesTest {
         val result = orderRepository(cart).create(
             cart = Cart("place-1", "Osh markazi", lines = listOf(cartLine("osh"))),
             form = CheckoutForm(method = DeliveryMethod.Pickup),
+            idempotencyKey = "idem-1",
         )
 
         assertTrue(result is ApiResult.Failure)
@@ -253,6 +275,20 @@ class FoodRepositoriesTest {
         assertEquals(Instant.parse("2026-08-26T10:00:00Z"), order.createdAt)
         // Имя заведения подставляется из кэша: в `OrderView` его нет.
         assertEquals("Osh markazi", order.placeName)
+    }
+
+    @Test
+    fun `order sums arrive in tiyin and are shown in som`() = runTest {
+        server.enqueue(json(TIYIN_ORDER_VIEW_BODY))
+
+        val order = (orderRepository().order("o-1") as ApiResult.Success).data
+
+        assertEquals(50_000L, order.totals.subtotalSum)
+        // 50 тийинов — половина сума, округляется вверх.
+        assertEquals(1L, order.totals.deliverySum)
+        // Скидки в ответе нет — ноль, а не мусор.
+        assertEquals(0L, order.totals.discountSum)
+        assertEquals(25_000L, order.lines.single().unitPriceSum)
     }
 
     @Test
@@ -398,11 +434,19 @@ class FoodRepositoriesTest {
         const val MENU_BODY = """
             {"success":true,"data":[
               {"id":"m-1","name":"Asosiy","description":"Issiq taomlar","items":[
-                {"id":"osh","name":"Osh","description":"Toshkent oshi","price":30000,
+                {"id":"osh","name":"Osh","description":"Toshkent oshi","price":3000000,
                  "prepMinutes":20,"isAvailable":true,"isHalal":true},
-                {"id":"somsa","name":"Somsa","price":12000,"isAvailable":false}
+                {"id":"somsa","name":"Somsa","price":1200000,"isAvailable":false}
               ]}
             ]}
+        """
+
+        const val TIYIN_MENU_BODY = """
+            {"success":true,"data":[{"id":"m-1","name":"Asosiy","items":[
+              {"id":"a","name":"A","price":5000000},
+              {"id":"b","name":"B","price":149950},
+              {"id":"c","name":"C"}
+            ]}]}
         """
 
         const val AVAILABILITY_BODY = """
@@ -423,7 +467,7 @@ class FoodRepositoriesTest {
 
         const val BROKEN_MENU_BODY = """
             {"success":true,"data":[{"id":"m-1","name":"Asosiy","items":[
-              {"id":"osh","name":"Osh","price":30000},
+              {"id":"osh","name":"Osh","price":3000000},
               {"id":"","name":"","price":1000},
               {"name":"Nomsiz","price":1000}
             ]}]}
@@ -434,15 +478,21 @@ class FoodRepositoriesTest {
         const val ORDER_VIEW_BODY = """
             {"success":true,"data":{"id":"o-1","orderNumber":"F-42","placeId":"place-1",
              "vertical":"FOOD","status":"PREPARING","fulfillment":"DELIVERY","paymentMethod":"CASH",
-             "itemsAmount":60000,"deliveryAmount":15000,"discountAmount":5000,"totalAmount":70000,
+             "itemsAmount":6000000,"deliveryAmount":1500000,"discountAmount":500000,"totalAmount":7000000,
              "deliveryAddress":"Amir Temur 1","createdAt":"2026-08-26T10:00:00",
              "items":[{"itemType":"MENU_ITEM","itemId":"osh","itemName":"Osh","quantity":2,
-                       "unitPrice":30000,"totalPrice":60000}]}}
+                       "unitPrice":3000000,"totalPrice":6000000}]}}
+        """
+
+        const val TIYIN_ORDER_VIEW_BODY = """
+            {"success":true,"data":{"id":"o-1","placeId":"place-1","status":"NEW",
+             "itemsAmount":5000000,"deliveryAmount":50,
+             "items":[{"itemId":"osh","itemName":"Osh","quantity":2,"totalPrice":5000000}]}}
         """
 
         const val NO_UNIT_PRICE_BODY = """
             {"success":true,"data":{"id":"o-1","placeId":"place-1","status":"NEW",
-             "items":[{"itemId":"osh","itemName":"Osh","quantity":2,"totalPrice":60000}]}}
+             "items":[{"itemId":"osh","itemName":"Osh","quantity":2,"totalPrice":6000000}]}}
         """
     }
 }

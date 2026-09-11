@@ -80,6 +80,9 @@ class MainActivity : FragmentActivity() {
                     afterUpdate = appStart,
                     backendUrlOverrideEnabled = ready.backendUrlOverrideEnabled,
                     onOnboardingFinished = viewModel::onOnboardingFinished,
+                    // Сессия может умереть на любом экране (issue #138):
+                    // уводить на вход умеет только корень.
+                    sessionExpired = viewModel.sessionExpired,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
                     // иначе пользователь получит второй платный SMS-код.
                     onboardingStartDestination = if (ready.resumeOnboardingAtPin) {

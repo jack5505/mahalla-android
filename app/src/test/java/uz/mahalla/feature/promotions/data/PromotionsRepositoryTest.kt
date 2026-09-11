@@ -47,7 +47,7 @@ class PromotionsRepositoryTest {
             envelope(
                 """{"content":[{"id":"promo-1","title":"20% chegirma",
                    "description":"Faqat ish kunlari","promoType":"PERCENT_OFF",
-                   "placeId":"p-1","discountPercent":20,"minOrderAmount":50000,
+                   "placeId":"p-1","discountPercent":20,"minOrderAmount":5000000,
                    "promoCode":"OSH20","startedAt":"2026-09-01T09:00:00",
                    "endedAt":"2026-09-30T18:00:00","isActive":true,
                    "isPlatformWide":true,"valid":true}],"page":0,"last":true}""",
@@ -149,6 +149,29 @@ class PromotionsRepositoryTest {
         assertEquals("Bepul yetkazib berish", items.single().title)
         // Второй раз тот же текст не показываем.
         assertNull(items.single().description)
+    }
+
+    @Test
+    fun `money fields arrive in tiyin and are shown in som but the percent is untouched`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"promo-1","title":"A","discountPercent":20,
+                   "discountAmount":5000000,"minOrderAmount":149950},
+                   {"id":"promo-2","title":"B","discountAmount":49}],"last":true}""",
+            ),
+        )
+
+        val items = (repository().platformPromotions() as ApiResult.Success).data.items
+
+        val first = items.first()
+        assertEquals(20, first.discountPercent)
+        assertEquals(50_000L, first.discountAmount)
+        // Половина сума округляется вверх.
+        assertEquals(1_500L, first.minOrderAmount)
+        // 49 тийинов — ноль сум, а ноль — не скидка; отсутствующее поле — null.
+        val second = items.last()
+        assertNull(second.discountAmount)
+        assertNull(second.minOrderAmount)
     }
 
     @Test

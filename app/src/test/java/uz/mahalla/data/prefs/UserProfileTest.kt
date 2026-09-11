@@ -41,4 +41,13 @@ class UserProfileTest {
         assertTrue(UserProfile().isEmpty)
         assertFalse(UserProfile(phone = "+998901234567").isEmpty)
     }
+
+    @Test
+    fun `profile with server data only is not empty`() {
+        // Вход мог отдать блок `user` без имени и номера, но с ролью и
+        // статусами (issue #237): «пусто» тогда значило бы «входа не было».
+        assertFalse(UserProfile(serverRole = "FOOD_OWNER").isEmpty)
+        assertFalse(UserProfile(verificationStatus = "UNVERIFIED").isEmpty)
+        assertFalse(UserProfile(accountStatus = "TEMP_BLOCKED").isEmpty)
+    }
 }

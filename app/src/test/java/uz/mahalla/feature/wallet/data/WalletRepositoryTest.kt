@@ -15,7 +15,6 @@ import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.wallet.domain.TopUpProvider
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import java.time.Instant
@@ -204,7 +203,7 @@ class WalletRepositoryTest {
      * перечисления.
      */
     @Test
-    fun `top up sends the amount in the units of the backend`() = runTest {
+    fun `top up sends the amount in tiyin`() = runTest {
         server.enqueue(
             envelope(
                 """{"paymentUrl":"https://checkout.paycom.uz/abc","transactionId":"p-1",
@@ -216,7 +215,6 @@ class WalletRepositoryTest {
             repository().topUp(
                 amountSum = 250_000,
                 provider = TopUpProvider.Payme,
-                scale = WalletAmounts.TIYIN_IN_SOM,
             ) as ApiResult.Success
             ).data
 
@@ -230,19 +228,6 @@ class WalletRepositoryTest {
         assertEquals("https://checkout.paycom.uz/abc", order.paymentUrl)
     }
 
-    /** Тот же ввод при другом делителе уходит другим числом. */
-    @Test
-    fun `top up in a wallet counted in sums sends the sum as is`() = runTest {
-        server.enqueue(envelope("""{"paymentUrl":"https://my.click.uz/pay?id=7"}"""))
-
-        repository().topUp(amountSum = 250_000, provider = TopUpProvider.Click, scale = 1L)
-
-        assertEquals(
-            """{"amount":250000,"provider":"CLICK"}""",
-            server.takeRequest().body.readUtf8(),
-        )
-    }
-
     /**
      * Сумма ниже серверного минимума в сеть не уходит: 400 сказал бы то же
      * самое, но платой были бы запрос и молчание экрана.
@@ -252,7 +237,6 @@ class WalletRepositoryTest {
         val failure = repository().topUp(
             amountSum = 999,
             provider = TopUpProvider.Payme,
-            scale = WalletAmounts.TIYIN_IN_SOM,
         ) as ApiResult.Failure
 
         assertEquals(
@@ -278,7 +262,6 @@ class WalletRepositoryTest {
             val failure = repository.topUp(
                 amountSum = 250_000,
                 provider = TopUpProvider.Payme,
-                scale = WalletAmounts.TIYIN_IN_SOM,
             ) as ApiResult.Failure
             assertEquals(
                 ApiError.Business(WalletRepository.NO_PAYMENT_URL_CODE),
@@ -304,7 +287,6 @@ class WalletRepositoryTest {
             repository().topUp(
                 amountSum = 250_000,
                 provider = TopUpProvider.Payme,
-                scale = WalletAmounts.TIYIN_IN_SOM,
             ) as ApiResult.Failure
             ).failure
 
@@ -328,7 +310,6 @@ class WalletRepositoryTest {
             repository().topUp(
                 amountSum = 250_000,
                 provider = TopUpProvider.Uzum,
-                scale = WalletAmounts.TIYIN_IN_SOM,
             ) as ApiResult.Failure
             ).failure
 
@@ -346,23 +327,26 @@ class WalletRepositoryTest {
                 repository().topUp(
                     amountSum = 250_000,
                     provider = TopUpProvider.Payme,
-                    scale = WalletAmounts.TIYIN_IN_SOM,
                 ) as ApiResult.Failure
                 ).error,
         )
     }
 
     /**
-     * Делитель приезжает в домене вместе с балансом: пополнение обязано
-     * считать сумму тем же делителем, которым посчитан показанный баланс.
+     * Единица целых полей — тийины по документации бэкенда (issue #149), и
+     * дробный близнец её не переопределяет: даже если `balanceSom` врёт или
+     * отсутствует, баланс делится на сто.
      */
     @Test
-    fun `scale of the response reaches the domain`() = runTest {
-        server.enqueue(envelope("""{"balance":128450000,"balanceSom":1284500.0}"""))
+    fun `the som twin does not change the unit of the integer field`() = runTest {
+        server.enqueue(envelope("""{"balance":128450000,"balanceSom":128450000.0}"""))
+        server.enqueue(envelope("""{"balance":128450000}"""))
 
-        val wallet = (repository().wallet() as ApiResult.Success).data
+        val lying = (repository().wallet() as ApiResult.Success).data
+        val silent = (repository().wallet() as ApiResult.Success).data
 
-        assertEquals(WalletAmounts.TIYIN_IN_SOM, wallet.amountScale)
+        assertEquals(1_284_500L, lying.balanceSum)
+        assertEquals(1_284_500L, silent.balanceSum)
     }
 
     private fun repository() = DefaultWalletRepository(

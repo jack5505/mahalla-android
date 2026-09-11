@@ -2,6 +2,7 @@ package uz.mahalla.feature.fashion.data
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -132,16 +133,11 @@ class DefaultFashionOrderRepository @Inject constructor(
 }
 
 /**
- * Есть ли следующая страница. Приоритет у `last` — его считает сервер; без
- * него смотрим на номер страницы и `totalPages`. Полное молчание о страницах
- * останавливает догрузку: лучше не показать хвост, чем крутить одну страницу
- * в цикле.
+ * Есть ли следующая страница — общее правило [hasMorePages] (issue #142).
  *
- * [requestedPage] — то, что попросили мы: сервер, не вернувший `page`, отдаёт
- * дефолтный `0`, и «следующей» навсегда осталась бы первая.
+ * [requestedPage] — то, что попросили мы, а не пришедший `page`: сервер, не
+ * вернувший его, отдаёт дефолтный `0`, и «следующей» навсегда осталась бы
+ * первая.
  */
-private fun OrderPageDto.hasMore(requestedPage: Int): Boolean {
-    last?.let { return !it }
-    val total = totalPages ?: return false
-    return requestedPage + 1 < total
-}
+private fun OrderPageDto.hasMore(requestedPage: Int): Boolean =
+    hasMorePages(page = requestedPage, totalPages = totalPages, last = last)
