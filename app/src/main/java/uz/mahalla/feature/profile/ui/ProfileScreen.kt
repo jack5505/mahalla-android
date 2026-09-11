@@ -224,7 +224,7 @@ fun ProfileContentScreen(
             // серверные права (issue #237) — их показывает шапка.
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(state.formRole.labelRes()),
+                subtitle = stringResource(state.formRole?.labelRes() ?: R.string.role_not_selected),
                 onClick = onOpenRole,
             )
 
