@@ -2,6 +2,7 @@ package uz.mahalla.feature.place.ui
 
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -23,6 +24,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.discovery.domain.GeoPoint
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceCapabilities
@@ -434,6 +436,104 @@ class PlaceDetailsViewModelTest {
         assertTrue(viewModel.state.value.details is ScreenState.Content)
     }
 
+    // --- Галерея: свои фото и удаление (issue #185) ---
+
+    @Test
+    fun `an empty gallery is an empty list, not a broken card`() = runTest {
+        repository.details = ApiResult.Success(details(photos = emptyList()))
+
+        val state = viewModel().state.value
+
+        assertTrue(state.data!!.photos.isEmpty())
+    }
+
+    @Test
+    fun `only the owner sees a delete button worth pressing`() = runTest {
+        val mine = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        val someoneElses = MediaFile(id = "m-2", url = "other.jpg", ownerId = "u-2")
+        repository.details = ApiResult.Success(details(photos = listOf(mine, someoneElses)))
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf(mine, someoneElses), state.data!!.photos)
+    }
+
+    @Test
+    fun `gallery deletion asks for confirmation and dismissal changes nothing`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        assertEquals(photo, viewModel.state.value.galleryDeletePending)
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteDismissed)
+
+        assertNull(viewModel.state.value.galleryDeletePending)
+        assertEquals(listOf(photo), viewModel.state.value.data!!.photos)
+        assertTrue(repository.deletedMedia.isEmpty())
+    }
+
+    @Test
+    fun `a confirmed deletion removes the photo right away`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        val kept = MediaFile(id = "m-2", url = "kept.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo, kept)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+
+        assertEquals(listOf("m-1"), repository.deletedMedia)
+        assertNull(viewModel.state.value.galleryDeletePending)
+        assertEquals(listOf(kept), viewModel.state.value.data!!.photos)
+    }
+
+    @Test
+    fun `a failed deletion puts the photo back and explains why`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+
+        // Откат: файл остался на сервере — карточка должна показывать то же самое.
+        assertEquals(listOf(photo), viewModel.state.value.data!!.photos)
+        assertEquals(ApiError.Forbidden, viewModel.state.value.galleryDeleteFailure?.error)
+        assertNull("диалог закрыт", viewModel.state.value.galleryDeletePending)
+    }
+
+    @Test
+    fun `a failed deletion restores the photo without discarding a refresh that raced it`() = runTest {
+        // Пока запрос удаления висит, карточка обновляется отдельно —
+        // например, силентным перезапросом после отправки отзыва (issue #76).
+        // Грубый откат «на снимок до удаления» стёр бы эту догрузку.
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        val gate = CompletableDeferred<Unit>()
+        repository.deleteMediaGate = gate
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+        assertTrue("фото убрано оптимистично", viewModel.state.value.data!!.photos.isEmpty())
+
+        val fresh = MediaFile(id = "m-2", url = "fresh.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(fresh)))
+        viewModel.onEvent(PlaceDetailsEvent.Retry)
+        assertEquals(listOf(fresh), viewModel.state.value.data!!.photos)
+
+        gate.complete(Unit)
+
+        assertEquals(
+            setOf("fresh.jpg", "mine.jpg"),
+            viewModel.state.value.data!!.photos.map { it.url }.toSet(),
+        )
+    }
+
     // --- Акции заведения (issue #104) ---
 
     @Test
@@ -577,9 +677,11 @@ class PlaceDetailsViewModelTest {
         point: GeoPoint? = null,
         capabilities: PlaceCapabilities = PlaceCapabilities(),
         reviews: List<Review> = emptyList(),
+        photos: List<MediaFile> = emptyList(),
     ) = PlaceDetails(
         place = place(PLACE_ID, name = "Osh markazi", isOpenNow = isOpenNow, point = point),
         description = "Eng mazali osh",
+        photos = photos,
         hours = hours,
         contacts = PlaceContacts(phone = phone),
         capabilities = capabilities,

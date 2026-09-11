@@ -3,6 +3,7 @@ package uz.mahalla.feature.place.domain
 import androidx.compose.runtime.Immutable
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -181,12 +182,16 @@ data class Review(
  * [fromCache] отмечает данные, поднятые из Room после сетевой ошибки: экран
  * показывает их, но подписывает — иначе устаревшие часы работы выглядят как
  * актуальные.
+ *
+ * [photos] — галерея из `media/entity/{placeId}` (issue #185), а не только
+ * обложка с логотипом: у элементов с [MediaFile.ownerId] есть кому предложить
+ * удаление, у запасного варианта (медиа не ответило) — нет.
  */
 @Immutable
 data class PlaceDetails(
     val place: Place,
     val description: String? = null,
-    val photos: List<String> = emptyList(),
+    val photos: List<MediaFile> = emptyList(),
     val hours: List<OpeningHours> = emptyList(),
     val contacts: PlaceContacts = PlaceContacts(),
     val capabilities: PlaceCapabilities = PlaceCapabilities(),
