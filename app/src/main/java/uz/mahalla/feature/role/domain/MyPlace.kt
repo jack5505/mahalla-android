@@ -66,6 +66,18 @@ data class MyPlace(
         get() = category == PlaceCategory.Pharmacy &&
             status == PlaceModerationStatus.Active &&
             staffRole != PlaceStaffRole.Staff
+
+    /**
+     * Показывать ли переход на «Сотрудники» (issue #189).
+     *
+     * В отличие от [canToggleAvailability] — только владельцу: назначать
+     * менеджеров и удалять сотрудников самим сотрудникам и менеджерам
+     * бэкенд не даст (`place-staff-controller` описан как действие
+     * владельца), а кнопка, которая всегда отвечает отказом, читается как
+     * сломанная.
+     */
+    val canManageStaff: Boolean
+        get() = status == PlaceModerationStatus.Active && staffRole == PlaceStaffRole.Owner
 }
 
 /**

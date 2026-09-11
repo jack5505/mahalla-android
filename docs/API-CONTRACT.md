@@ -368,15 +368,18 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
 ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
-**Аватара автора отзыва у сервера нет вовсе** (сверено 2026-09-10, после
-развода коллизии; раньше схема `Response` была перекрыта, issue #60/#76).
-`ReviewResponse {id, placeId, userId, rating, text, isVerified, helpfulCount,
-ownerReply, createdAt}` — ни фото, ни имени, только `userId`. Три имени
-(`userAvatarUrl`, `avatarUrl`, `userAvatar`), под которыми `ReviewDto` ищет
-поле, ни одному ничего не соответствует — как и трём именам автора. Экран не
-ломается: пустое имя подменяется словом «аноним», и в аватаре видна его первая
-буква. Но настоящего автора у отзыва на экране нет и не будет, пока бэкенд не
-скажет, чем его называть — живой баг, issue #192.
+**Аватара и имени автора отзыва у сервера нет вовсе** (сверено 2026-09-10,
+после развода коллизии; раньше схема `Response` была перекрыта, issue
+#60/#76). `ReviewResponse {id, placeId, userId, rating, text, isVerified,
+helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, только `userId`.
+`ReviewDto` больше не гадает алиасы `userName`/`userAvatarUrl` — их снесли.
+Заодно добавлены поля `isVerified`, `helpfulCount`, `ownerReply` — они есть в
+`ReviewResponse`, но раньше в DTO не были описаны вовсе, поэтому молча
+отбрасывались (issue #192, закрыт отрицательным ответом бэкенда про
+имя/аватар). Экран
+показывает отзыв без имени (плейсхолдер «гость», первая буква в аватаре — от
+него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
+теперь разбирается и выводится под текстом отзыва.
 
 ## FashionApi ⚠️
 
@@ -525,13 +528,15 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
-## MediaApi ✅
+## MediaApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась).
+`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — `POST` сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась). `GET`/`DELETE` (issue #185) объявлены **по схеме из этого же issue и `MediaFile` из `POST`**, живым запросом на стенд не перепроверены — сверить при первом расхождении.
 
 | Метод | Путь |
 |---|---|
 | POST | `media/upload` |
+| GET | `media/entity/{entityId}` |
+| DELETE | `media/{id}` |
 
 `multipart/form-data`, часть называется **`file`**; `entityType` и `entityId` —
 необязательные query-параметры. Ответ — `MediaFile` (`id`, `url`,
@@ -545,8 +550,12 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 проверяется на клиенте до отправки (`MediaUploadLimits`), а картинка
 сжимается.
 
-`GET media/entity/{entityId}` и `DELETE media/{id}` у бэкенда есть, но клиентом
-**не объявлены**: показывать и редактировать загруженное пока нечем.
+`GET media/entity/{entityId}` отдаёт `List<MediaFile>` той же схемы (плюс
+`createdAt`, клиентом не используется); файл без `url` в списке пропускается,
+а не роняет всю галерею. `DELETE media/{id}` отвечает пустым конвертом
+(`ensureSuccess`); прав на удаление в схеме нет — экран показывает кнопку
+только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
+любой другой) отвечает текстом, а не молчанием.
 
 ## NotificationsApi ⚠️
 
@@ -632,6 +641,32 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 | POST | `places` |
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
+
+## PlaceStaffApi ✅
+
+`app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/staff` |
+| POST | `places/{placeId}/staff` |
+| PUT | `places/{placeId}/staff/{staffUserId}` |
+| DELETE | `places/{placeId}/staff/{staffUserId}` |
+
+`role` — закрытое перечисление **`STAFF`/`MANAGER`/`OWNER`**, то же самое, что
+уже приезжает в `Mine.role` у «моих заведений» (`ProviderApi.myPlaces`,
+issue #94) — второй домен-тип под тот же смысл не заводился, клиент
+переиспользует `PlaceStaffRole`. Схемы `PlaceStaffResponse`, `AddRequest`,
+`PlaceStaffChangeRoleRequest` в `/v3/api-docs` встречаются по одному разу,
+коллизии springdoc здесь нет.
+
+`PUT`/`DELETE` адресуют сотрудника по `{staffUserId}` — это `userId`, а не
+`id` записи `PlaceStaffResponse`; клиент `id` записи в домен не переводит,
+им всё равно нечего было бы делать. Найти пользователя по телефону схема не
+даёт (поиска по `users` нет) — ID в форму добавления вводится вручную.
+
+`geoExempt` (`boolean`, необязательный и в запросе, и в ответе) разобран
+DTO→домен, но в интерфейсе не показан: задача его не требовала.
 
 ## SubscriptionsApi ⚠️
 

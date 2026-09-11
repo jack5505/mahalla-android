@@ -50,6 +50,7 @@ class MyPlacesViewModel @Inject constructor(
             MyPlacesEvent.RegisterPlaceRequested ->
                 emitEffect(MyPlacesEffect.OpenProviderForm)
             is MyPlacesEvent.ManageProductsClicked -> manageProducts(event.placeId)
+            is MyPlacesEvent.ManageStaffClicked -> manageStaff(event.placeId)
         }
     }
 
@@ -193,6 +194,17 @@ class MyPlacesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Так же, как и [open]: заявка на модерации и рядовой сотрудник этой
+     * кнопки на экране не видят вовсе, но событие проверяется и здесь на
+     * случай, если оно всё-таки придёт.
+     */
+    private fun manageStaff(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManageStaff) return
+        emitEffect(MyPlacesEffect.OpenStaff(place.id))
     }
 
     private fun placeOrNull(placeId: String): MyPlace? =

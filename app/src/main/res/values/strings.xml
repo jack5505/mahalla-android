@@ -356,6 +356,7 @@
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
+    <string name="place_review_owner_reply_label">Muassasa javobi</string>
     <!-- Sharh qoldirish (issue #76) -->
     <string name="place_reviews_empty">Hozircha sharhlar yo\'q. Birinchi bo\'ling.</string>
     <string name="place_review_add">Sharh qoldirish</string>
@@ -371,6 +372,9 @@
     <string name="place_review_delete">Sharhni o\'chirish</string>
     <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
     <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
+    <string name="place_gallery_delete">Suratni o\'chirish</string>
+    <string name="place_gallery_delete_title">Suratni o\'chirasizmi?</string>
+    <string name="place_gallery_delete_text">Surat serverdan butunlay o\'chiriladi — buni ortga qaytarib bo\'lmaydi.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
@@ -541,6 +545,24 @@
     <string name="my_places_status_suspended_hint">Muassasa to\'xtatilgan. Sababini bilish uchun qo\'llab-quvvatlashga murojaat qiling.</string>
     <string name="my_places_role_manager">Siz bu yerda menejersiz</string>
     <string name="my_places_role_staff">Siz bu yerda xodimsiz: sozlamalarni egasi o\'zgartiradi</string>
+    <string name="my_places_staff_action">Xodimlar</string>
+
+    <!-- Сотрудники заведения (issue #189) -->
+    <string name="place_staff_title">Xodimlar</string>
+    <string name="place_staff_empty_title">Xodimlar yo\'q</string>
+    <string name="place_staff_empty_description">Birinchi xodimni ID bo\'yicha qo\'shing.</string>
+    <string name="place_staff_add">Xodim qo\'shish</string>
+    <string name="place_staff_user_id_label">Foydalanuvchi ID (UUID)</string>
+    <string name="place_staff_user_id_supporting">Odam identifikatorni o\'z profilidan ko\'rsatishi kerak — telefon raqami bo\'yicha qidiruv yo\'q.</string>
+    <string name="place_staff_user_id_error">UUID formatida kiriting</string>
+    <string name="place_staff_role_label">Rol</string>
+    <string name="place_staff_role_owner">Egasi</string>
+    <string name="place_staff_role_manager">Menejer</string>
+    <string name="place_staff_role_staff">Xodim</string>
+    <string name="place_staff_role_unknown">Noma\'lum rol</string>
+    <string name="place_staff_add_submit">Qo\'shish</string>
+    <string name="place_staff_remove_title">Xodim o\'chirilsinmi?</string>
+    <string name="place_staff_remove_message">%1$s ID\'li xodim muassasadan o\'chiriladi. Bu amalni ortga qaytarib bo\'lmaydi.</string>
 
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Davom etish</string>

@@ -66,6 +66,7 @@ import uz.mahalla.ui.theme.Spacing
 fun MyPlacesScreen(
     onPlaceClick: (String) -> Unit,
     onRegisterPlace: () -> Unit,
+    onManageStaff: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onManageProducts: (placeId: String, placeName: String) -> Unit = { _, _ -> },
@@ -80,6 +81,7 @@ fun MyPlacesScreen(
                 MyPlacesEffect.OpenProviderForm -> onRegisterPlace()
                 is MyPlacesEffect.OpenPharmacyManagement ->
                     onManageProducts(effect.placeId, effect.placeName)
+                is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
             }
         }
     }
@@ -313,6 +315,19 @@ private fun MyPlaceCard(
                 modifier = Modifier.padding(top = Spacing.item),
                 variant = MahallaButtonVariant.Secondary,
                 icon = Icons.Outlined.Sell,
+            )
+        }
+
+        // Только владельцу (issue #189): менеджеру и сотруднику бэкенд эти
+        // действия не даст, а кнопка, которая всегда отвечает отказом,
+        // читается как сломанная.
+        if (place.canManageStaff) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_staff_action),
+                onClick = { onEvent(MyPlacesEvent.ManageStaffClicked(place.id)) },
+                variant = MahallaButtonVariant.Ghost,
+                fillWidth = false,
+                modifier = Modifier.padding(top = Spacing.item),
             )
         }
     }

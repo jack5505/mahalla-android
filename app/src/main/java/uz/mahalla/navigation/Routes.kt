@@ -223,6 +223,14 @@ data object SubscriptionRoute
 @Serializable
 data class PlaceRoute(val placeId: String)
 
+/**
+ * «Сотрудники» заведения (issue #189). Вне обоих графов, как «мои заведения»:
+ * открывается со своей карточки в [MyPlacesRoute], доступ владельцу проверяет
+ * ещё раз сам бэкенд.
+ */
+@Serializable
+data class PlaceStaffRoute(val placeId: String)
+
 // --- Вертикаль «Очередь» (эпик #10, issue #96) ---
 
 /**

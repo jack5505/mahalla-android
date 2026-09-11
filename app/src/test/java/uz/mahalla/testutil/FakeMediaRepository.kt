@@ -18,11 +18,15 @@ class FakeMediaRepository(
     ),
     var progress: List<Int> = listOf(0, 50, 100),
     var gate: CompletableDeferred<Unit>? = null,
+    var entityResult: ApiResult<List<MediaFile>> = ApiResult.Success(emptyList()),
+    var deleteResult: ApiResult<Unit> = ApiResult.Success(Unit),
 ) : MediaRepository {
 
     data class Upload(val source: String, val entityType: String?, val entityId: String?)
 
     val uploads = mutableListOf<Upload>()
+    val requestedEntities = mutableListOf<String>()
+    val deletedIds = mutableListOf<String>()
 
     override suspend fun uploadImage(
         source: String,
@@ -34,5 +38,15 @@ class FakeMediaRepository(
         progress.forEach(onProgress)
         gate?.await()
         return result
+    }
+
+    override suspend fun mediaForEntity(entityId: String): ApiResult<List<MediaFile>> {
+        requestedEntities += entityId
+        return entityResult
+    }
+
+    override suspend fun deleteMedia(id: String): ApiResult<Unit> {
+        deletedIds += id
+        return deleteResult
     }
 }

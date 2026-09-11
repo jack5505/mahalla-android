@@ -81,6 +81,24 @@ class MyPlaceTest {
     }
 
     @Test
+    fun `only the owner of an active place manages staff`() {
+        assertTrue(place(staffRole = PlaceStaffRole.Owner).canManageStaff)
+
+        // `place-staff-controller` описан как действие владельца — менеджеру
+        // и сотруднику бэкенд его не даст.
+        assertFalse(place(staffRole = PlaceStaffRole.Manager).canManageStaff)
+        assertFalse(place(staffRole = PlaceStaffRole.Staff).canManageStaff)
+        assertFalse(place(staffRole = PlaceStaffRole.Unknown).canManageStaff)
+    }
+
+    @Test
+    fun `an application under moderation has nobody to manage staff for yet`() {
+        assertFalse(
+            place(status = PlaceModerationStatus.Pending, staffRole = PlaceStaffRole.Owner).canManageStaff,
+        )
+    }
+
+    @Test
     fun `roles are parsed case-insensitively and an unknown one is not an error`() {
         assertEquals(PlaceStaffRole.Owner, PlaceStaffRole.fromApi("OWNER"))
         assertEquals(PlaceStaffRole.Manager, PlaceStaffRole.fromApi(" manager "))
