@@ -153,24 +153,25 @@ class MyFreelancerIncomingOrdersViewModel @Inject constructor(
     }
 
     /**
-     * Смена статуса — одна за раз ([MyFreelancerIncomingOrdersState.pendingOrderId]):
-     * кнопки других заказов при этом остаются кликабельными, а повторный клик
-     * по тому же заказу игнорируется, пока летит предыдущий запрос.
+     * Смена статуса — по заказу, а не по экрану целиком
+     * ([MyFreelancerIncomingOrdersState.pendingOrderIds]): кнопки **других**
+     * заказов остаются кликабельными, пока летит эта смена статуса, а
+     * повторный клик по **тому же** заказу игнорируется.
      *
      * Предыдущий отказ действия очищается сразу, не дожидаясь ответа: иначе
      * баннер прежней ошибки висел бы поверх уже идущей новой попытки.
      */
     private fun changeStatus(orderId: String, status: FreelancerOrderStatus) {
-        if (currentState.pendingOrderId != null) return
-        updateState { copy(pendingOrderId = orderId, actionFailure = null) }
+        if (orderId in currentState.pendingOrderIds) return
+        updateState { copy(pendingOrderIds = pendingOrderIds + orderId, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.updateOrderStatus(orderId, status)) {
                 is ApiResult.Failure -> updateState {
-                    copy(pendingOrderId = null, actionFailure = result.failure)
+                    copy(pendingOrderIds = pendingOrderIds - orderId, actionFailure = result.failure)
                 }
 
                 is ApiResult.Success -> {
-                    updateState { copy(pendingOrderId = null) }
+                    updateState { copy(pendingOrderIds = pendingOrderIds - orderId) }
                     // Источник правды — сервер: ответ смены статуса не
                     // разбирается как заказ (см. репозиторий), поэтому
                     // список перечитывается целиком, без оптимистичной правки.

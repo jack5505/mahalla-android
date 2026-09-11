@@ -151,7 +151,7 @@ class MyFreelancerIncomingOrdersViewModelTest {
             )
             // Загрузка после успеха — источник правды сервер, а не оптимистичная правка.
             assertEquals(listOf(0, 0), repository.requestedIncomingOrderPages)
-            assertNull(viewModel.state.value.pendingOrderId)
+            assertTrue(viewModel.state.value.pendingOrderIds.isEmpty())
         }
 
     @Test
@@ -178,16 +178,40 @@ class MyFreelancerIncomingOrdersViewModelTest {
 
     /** Пока летит смена статуса, повторный клик по тому же заказу игнорируется. */
     @Test
-    fun `a second click while pending is ignored`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = MyFreelancerIncomingOrdersViewModel(repository)
-        runCurrent()
+    fun `a second click on the same order while pending is ignored`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = MyFreelancerIncomingOrdersViewModel(repository)
+            runCurrent()
 
-        viewModel.onEvent(MyFreelancerIncomingOrdersEvent.AcceptClicked("o-1"))
-        viewModel.onEvent(MyFreelancerIncomingOrdersEvent.AcceptClicked("o-1"))
-        runCurrent()
+            viewModel.onEvent(MyFreelancerIncomingOrdersEvent.AcceptClicked("o-1"))
+            viewModel.onEvent(MyFreelancerIncomingOrdersEvent.AcceptClicked("o-1"))
+            runCurrent()
 
-        assertEquals(1, repository.orderStatusChanges.size)
-    }
+            assertEquals(1, repository.orderStatusChanges.size)
+        }
+
+    /**
+     * `pendingOrderIds` — набор, а не одно значение: заказы независимы, и
+     * пока один ждёт ответа сервера, клик по **другому** заказу должен
+     * пройти, а не молча проигнорироваться (это и отличает набор от
+     * единственного `pendingOrderId`, которым экран управлялся раньше).
+     */
+    @Test
+    fun `clicking a different order while one is pending still proceeds`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = MyFreelancerIncomingOrdersViewModel(repository)
+            runCurrent()
+
+            viewModel.onEvent(MyFreelancerIncomingOrdersEvent.AcceptClicked("o-1"))
+            viewModel.onEvent(MyFreelancerIncomingOrdersEvent.RejectClicked("o-2"))
+            runCurrent()
+
+            assertEquals(
+                listOf("o-1" to FreelancerOrderStatus.Accepted, "o-2" to FreelancerOrderStatus.Rejected),
+                repository.orderStatusChanges,
+            )
+            assertTrue(viewModel.state.value.pendingOrderIds.isEmpty())
+        }
 
     @Test
     fun `failed status change keeps the list and shows the reason`() =
@@ -201,7 +225,7 @@ class MyFreelancerIncomingOrdersViewModelTest {
             runCurrent()
 
             val state = viewModel.state.value
-            assertNull(state.pendingOrderId)
+            assertTrue(state.pendingOrderIds.isEmpty())
             assertEquals(ApiError.NoConnection, state.actionFailure?.error)
             // Список остаётся: провал действия не должен смыть уже загруженный экран.
             assertTrue(state.orders is ScreenState.Content)

@@ -148,7 +148,7 @@ private fun LazyListScope.orderItems(
             items(orders.data, key = FreelancerOrder::id) { order ->
                 OrderCard(
                     order = order,
-                    pending = state.pendingOrderId == order.id,
+                    pending = order.id in state.pendingOrderIds,
                     onEvent = onEvent,
                 )
             }
@@ -236,9 +236,11 @@ private fun OrderCard(
  * Кнопки зависят от статуса: ждущий заказ можно принять или отклонить,
  * принятый — отметить выполненным, а по финальным статусам
  * ([FreelancerOrderStatus.isFinal]) действий больше нет. Пока летит смена
- * статуса ([pending]), кнопки уступают место крутилке — какая именно из двух
- * была нажата, состояние не хранит (`pendingOrderId` один на заказ), а
- * показать сразу обе загруженными было бы неправдой.
+ * статуса **этого** заказа ([pending]), его кнопки уступают место крутилке —
+ * какая именно из двух была нажата, состояние не хранит (`pendingOrderIds` —
+ * набор id, не различающий действие), а показать сразу обе загруженными
+ * было бы неправдой. Карточки других заказов при этом остаются кликабельными
+ * — `pending` считается по конкретному `order.id`, а не по экрану целиком.
  */
 @Composable
 private fun OrderActions(

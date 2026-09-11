@@ -16,10 +16,13 @@ import uz.mahalla.feature.freelancer.domain.FreelancerOrder
  * (`PUT freelancers/orders/{orderId}/status`, контракт не сверен со стендом —
  * `docs/API-CONTRACT.md`).
  *
- * @param pendingOrderId заказ, для которого сейчас летит смена статуса.
- * Один за раз, как `deletingServiceId` в [uz.mahalla.feature.freelancer.ui.me.MyServicesState]:
- * две одновременные смены статуса одного и того же заказа непонятно как
- * согласовывать, а кнопки других заказов при этом остаются кликабельными.
+ * @param pendingOrderIds заказы, для которых сейчас летит смена статуса.
+ * Набор, а не одно значение: заказы независимы друг от друга, и пока один
+ * ждёт ответа сервера, кнопки остальных карточек должны оставаться
+ * кликабельными — блокируется только повторный клик по **тому же** заказу
+ * (то же правило, что у `deletingServiceId` в
+ * [uz.mahalla.feature.freelancer.ui.me.MyServicesState], но там на экране
+ * может действовать только один заказ, а на этом их — целый список).
  * @param actionFailure отказ последней смены статуса. Отдельно от
  * [ScreenState.Error] списка: список мог загрузиться успешно, а действие —
  * нет, и тогда список показывать не перестаём. Очищается сам, как только
@@ -33,7 +36,7 @@ data class MyFreelancerIncomingOrdersState(
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
     val loadMoreFailure: ApiFailure? = null,
-    val pendingOrderId: String? = null,
+    val pendingOrderIds: Set<String> = emptySet(),
     val actionFailure: ApiFailure? = null,
 ) : UiState
 
