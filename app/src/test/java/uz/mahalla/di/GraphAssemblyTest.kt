@@ -262,6 +262,7 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             userProfileStore = DataStoreUserProfileStore(dataStore),
+            formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
