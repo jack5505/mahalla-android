@@ -22,7 +22,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import uz.mahalla.R
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
@@ -79,6 +81,27 @@ data class NavItemUi(
 )
 
 /**
+ * Кегль подписи таба — 9 / SemiBold из ТЗ (`design/android/TZ-ANDROID.md`,
+ * компонент `navbar`: «подпись 9/600 `ellipsis`»). По умолчанию M3 подставил бы
+ * `labelMedium` 12sp — в `MahallaTypography` он не задан, поэтому подпись таба
+ * заодно уезжала в дефолтную семью вместо Inter.
+ *
+ * Разница не косметическая. Бокс подписи в M3 — это слот item'а минус
+ * `NavigationBarItemHorizontalPadding` (8 dp): на базовых 393 dp это
+ * `(393 − 3×8) / 4 − 8 = 84.25 dp`, на 360 dp — 76 dp. При 12sp с трекингом
+ * 0.5sp «Активности» занимают 72 dp и не влезают в бокс уже при системном
+ * fontScale 1.15 на 360 dp и при 1.3 на 393 dp (93.6 dp) — то есть обрезаются
+ * ровно там, где шрифт увеличивают. При 9/600 те же строки дают 53 dp
+ * (68.9 dp при 1.3) и ложатся в макет: в Figma-экспортах самая длинная
+ * подпись, «Buyurtmalar», — 53.5 dp.
+ */
+private val NavLabelTextStyle: TextStyle
+    @Composable get() = MaterialTheme.typography.labelLarge.copy(
+        fontSize = 9.sp,
+        letterSpacing = 0.sp,
+    )
+
+/**
  * Нижняя навигация. Подпись показывается всегда: иконка без текста хуже
  * читается и при крупном шрифте, и в TalkBack.
  */
@@ -103,7 +126,14 @@ fun MahallaBottomNav(
                     // Подпись рядом уже несёт смысл — иконку TalkBack пропускает.
                     Icon(imageVector = item.icon, contentDescription = null)
                 },
-                label = { Text(text = item.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                label = {
+                    Text(
+                        text = item.label,
+                        style = NavLabelTextStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 alwaysShowLabel = true,
                 modifier = Modifier.heightIn(min = MahallaComponentDefaults.navItemMinHeight),
                 colors = NavigationBarItemDefaults.colors(
