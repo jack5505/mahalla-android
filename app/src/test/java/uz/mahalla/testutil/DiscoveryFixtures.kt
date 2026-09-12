@@ -60,6 +60,10 @@ class FakeCatalogRepository : CatalogRepository {
     /** Гейт для проверки гонки: удаление фото висит, пока его не открыли. */
     var deleteMediaGate: CompletableDeferred<Unit>? = null
 
+    /** Карточки для «Избранного» (issue #75): ответ на каждый id отдельно. */
+    val cards: MutableMap<String, ApiResult<Place>> = mutableMapOf()
+    val requestedCards: MutableList<String> = mutableListOf()
+
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
 
     /** Области, по которым карта ходила за маркерами (issue #168). */
@@ -108,6 +112,11 @@ class FakeCatalogRepository : CatalogRepository {
     override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> {
         detailsRequests++
         return details
+    }
+
+    override suspend fun placeCard(placeId: String): ApiResult<Place> {
+        requestedCards += placeId
+        return cards[placeId] ?: ApiResult.Failure(ApiError.NotFound)
     }
 
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> = reviews

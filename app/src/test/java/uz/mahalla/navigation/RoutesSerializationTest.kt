@@ -203,6 +203,8 @@ class RoutesSerializationTest {
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
+            // «Избранное» (issue #75): вне графа табов, открывается из профиля.
+            serializer<SavedPlacesRoute>().descriptor.serialName,
             serializer<NotificationsRoute>().descriptor.serialName,
             // «Мои заведения» (issue #94): вне обоих графов, как уведомления.
             serializer<MyPlacesRoute>().descriptor.serialName,

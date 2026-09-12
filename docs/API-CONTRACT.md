@@ -677,6 +677,24 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
 
+## SocialApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы
+ответов сняты со схемы стенда (`/v3/api-docs`) и curl'ами, issue #75, но
+успешный путь не проверен: все семь ручек требуют Bearer, а входа в CI нет.
+Тело нового комментария springdoc описал как `Map<String,String>` — имя ключа
+(`text`) взято из `CommentResponse`, это предположение.
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/status` |
+| POST | `places/{placeId}/like` |
+| POST | `places/{placeId}/save` |
+| GET | `places/{placeId}/comments` |
+| POST | `places/{placeId}/comments` |
+| DELETE | `comments/{id}` |
+| GET | `saved-places` |
+
 ## PlaceStaffApi ✅
 
 `app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
