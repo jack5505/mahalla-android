@@ -1,8 +1,13 @@
 package uz.mahalla.feature.fashion.data
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -58,21 +63,16 @@ class FashionOrderRepositoryTest {
 
         val request = server.takeRequest()
         assertEquals("/fashion/orders", request.path)
-        val body = request.body.readUtf8()
-        assertTrue(body.contains(""""storeId":"$STORE""""))
-        assertFalse(body.contains("placeId"))
-        // Состав заказа сервер берёт из своей корзины (`fashion/cart*`) —
-        // тело оформления его не несёт вовсе.
-        assertFalse(body.contains("items"))
-        assertFalse(body.contains("itemId"))
-        assertTrue(body.contains(""""fulfillment":"DELIVERY""""))
-        assertTrue(body.contains(""""paymentMethod":"WALLET""""))
-        assertTrue(body.contains(""""deliveryAddress":"Amir Temur 1""""))
-        // Координаты и промокод — не отправляются: на экране их некому
-        // заполнить (issue #221).
-        assertFalse(body.contains("deliveryLat"))
-        assertFalse(body.contains("deliveryLng"))
-        assertFalse(body.contains("promoCode"))
+        val body = request.bodyJson()
+        // Состав заказа сервер берёт из своей корзины (`fashion/cart*`), а
+        // координаты и промокод — не отправляются: на экране их некому
+        // заполнить (issue #221). Проверка набора ключей целиком — иначе
+        // опечатка в имени поля прошла бы мимо `assertFalse`-подстрок.
+        assertEquals(setOf("storeId", "fulfillment", "paymentMethod", "deliveryAddress"), body.keys)
+        assertEquals(STORE, body["storeId"]?.jsonPrimitive?.content)
+        assertEquals("DELIVERY", body["fulfillment"]?.jsonPrimitive?.content)
+        assertEquals("WALLET", body["paymentMethod"]?.jsonPrimitive?.content)
+        assertEquals("Amir Temur 1", body["deliveryAddress"]?.jsonPrimitive?.content)
         assertEquals("o-1", orderId)
     }
 
@@ -254,6 +254,9 @@ class FashionOrderRepositoryTest {
         .setResponseCode(200)
         .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
         .setBody("""{"success":true}""")
+
+    private fun RecordedRequest.bodyJson(): JsonObject =
+        Json.parseToJsonElement(body.readUtf8()).jsonObject
 
     private companion object {
         const val STORE = "11111111-1111-1111-1111-111111111111"

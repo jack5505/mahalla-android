@@ -51,7 +51,7 @@ import uz.mahalla.ui.theme.TabularNums
 /**
  * Корзина одежды (issue #108) — серверная и общая на все магазины, поэтому
  * показывается разделами: каждый магазин оформляется отдельным заказом
- * (`PlaceOrderRequest` принимает ровно один `placeId`).
+ * (`FashionPlaceOrderRequest` принимает ровно один `storeId`).
  */
 @Composable
 fun FashionCartScreen(
