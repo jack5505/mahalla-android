@@ -596,6 +596,7 @@ class GraphAssemblyTest {
                 api = api,
                 store = DataStoreWalkInTicketStore(
                     dataStore = sharedDataStore(context),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
                     clock = AppModule.provideClock(),
                 ),
                 clock = AppModule.provideClock(),
