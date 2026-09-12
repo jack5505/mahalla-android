@@ -501,7 +501,7 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
-| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181) |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181); тем же путём «мои записи» дотягивают имя врача для больничной записи (issue #219) |
 | GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
@@ -525,9 +525,13 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `contract/booking.sh`.
 
 Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
-общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
-теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
-никогда — на экране «мои записи» она останется без имени врача (issue #219).
+общих полей хватает на всё, что показывает экран, а `complaint` теряется —
+экран его не показывает. `serviceName` у больничной записи не приходит
+никогда: `doctorId` в `AppointmentDto` теперь объявлен, и «мои записи»
+дотягивают имя врача отдельным запросом `GET hospitals/doctors/{id}` на
+карточки без него (issue #219, `DefaultHospitalRepository.withDoctorNames`).
+Список «мои активности» (`ActivityRepository`, issue #73) этот запрос не
+делает — карточка записи к врачу там остаётся без подписи (issue #266).
 
 **Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
 `GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и
