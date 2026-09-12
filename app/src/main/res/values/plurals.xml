@@ -138,6 +138,12 @@
         <item quantity="other">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
 
+    <!-- Подтверждение оплаты (8.3, issue #12): сколько попыток PIN осталось. -->
+    <plurals name="payment_confirm_pin_wrong">
+        <item quantity="one">PIN-kod xato. %1$d urinish qoldi.</item>
+        <item quantity="other">PIN-kod xato. %1$d urinish qoldi.</item>
+    </plurals>
+
     <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
     <plurals name="pharmacy_stock_left">
         <item quantity="one">%1$d dona qoldi</item>

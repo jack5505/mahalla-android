@@ -104,6 +104,11 @@ class CinemaViewModelTest {
             runCurrent()
             assertEquals(1, repository.moviesRequests)
 
+            // Первый resume — это открытие экрана, афиша уже запросила `init`.
+            viewModel.onEvent(CinemaEvent.ScreenResumed)
+            runCurrent()
+            assertEquals(1, repository.moviesRequests)
+
             viewModel.onEvent(CinemaEvent.ScreenResumed)
             runCurrent()
 

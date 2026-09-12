@@ -72,8 +72,8 @@ class SubscriptionRepositoryTest {
         val plan = plans.single()
         assertEquals("PRO", plan.code)
         assertEquals("Pro", plan.displayName(uzbek = true))
-        // Цены пересчитаны делителем, который вывела пара `monthlyPrice` и
-        // `monthlyPriceSom`, — как в кошельке (issue #62).
+        // Целые цены — в тийинах, делитель сто (issue #149); дробные близнецы
+        // `*Som` на результат не влияют.
         assertEquals(49_000L, plan.monthlySum)
         assertEquals(470_000L, plan.yearlySum)
         assertEquals(20, plan.savingsPercent)

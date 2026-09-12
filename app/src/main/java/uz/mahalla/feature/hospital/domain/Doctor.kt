@@ -2,8 +2,8 @@ package uz.mahalla.feature.hospital.domain
 
 import androidx.compose.runtime.Immutable
 import uz.mahalla.core.format.DateTimeFormatters
+import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.feature.booking.domain.BookingSlots
-import uz.mahalla.feature.booking.domain.WorkingHours
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -20,11 +20,10 @@ import java.time.ZoneId
  * @param specialty специальность. Именно её человек и ищет («терапевт»,
  * «стоматолог»), поэтому она показывается рядом с именем, а не прячется в
  * описание.
- * @param consultationPriceSum цена приёма. Бэкенд отдаёт `consultationPrice`
- * целым числом **без** дробного близнеца (в кошельке пара
- * `balance`/`balanceSom` есть — issue #62, здесь нет), поэтому считаем сумами,
- * как в «Еде» (issue #9) и в брони (issue #97). Ноль — «цена не названа»:
- * экран тогда её просто не показывает, а не пишет «0 сум».
+ * @param consultationPriceSum цена приёма в **сумах**. Бэкенд отдаёт
+ * `consultationPrice` в тийинах, пересчёт делает маппер (`Money.tiyinToSom`,
+ * issue #149). Ноль — «цена не названа»: экран тогда её просто не показывает,
+ * а не пишет «0 сум».
  */
 @Immutable
 data class Doctor(
@@ -36,40 +35,42 @@ data class Doctor(
 )
 
 /**
- * Время приёма, которое приложение предлагает выбрать.
+ * Свободный слот записи к врачу (issue #181).
  *
- * **У больниц нет ручки свободных слотов.** В `hospital-controller` их четыре
- * (`doctors`, `addDoctor`, `appointments`, `appointments/my`), а
- * `barber-services/places/{placeId}/slots` из брони (issue #97) принимает
- * `serviceId` барберской услуги и к врачам отношения не имеет — проверено по
- * полной схеме стенда 2026-09-04. То есть занятость врача сервер клиенту не
- * сообщает **никак**.
+ * Приезжает из `GET /api/v1/hospitals/doctors/{id}/slots?date=` —
+ * `ApiResponseListString`, тот же вид ответа, что у слотов брони (issue #97).
  *
- * Отсюда решение: сетка времени строится на клиенте, и приложение честно
- * называет её «удобное время», а не «свободное». Разница видна и в том, что
- * происходит дальше: запись создаётся со статусом `PENDING`, и подтверждает её
- * больница. Выдать эту сетку за свободные слоты значило бы обещать от имени
- * сервера то, чего он не говорил.
+ * @param raw строка ровно в том виде, в котором её отдал сервер
+ * (`"09:00"`/`"09:00:00"`). Именно она уходит в `startTime` записи —
+ * без повторного разбора и сборки: строка слота не переводится между зонами
+ * нигде на этом пути, но лишний шаг «разобрали → собрали заново» уже один раз
+ * стоил вертикали расхождения в пять часов между UTC и Asia/Tashkent
+ * (issue #144), и здесь его нет вовсе.
+ * @param time тот же момент, разобранный в [LocalTime] — только для сортировки,
+ * отсечения прошедшего времени и показа на экране.
+ */
+@Immutable
+data class DoctorSlot(
+    val raw: String,
+    val time: LocalTime,
+)
+
+/**
+ * Свободные слоты и календарь — правила, по которым экран решает, что можно
+ * предложить.
+ *
+ * **Слоты считает сервер, а не приложение** (issue #181: до неё ручки слотов
+ * у больниц не было вовсе, и сетку времени строил клиент). Правило то же, что
+ * у брони ([BookingSlots.available]): из ответа сервера убирается только уже
+ * наступившее время сегодняшнего дня.
  *
  * Вся арифметика — в зоне заведения ([DateTimeFormatters.AppZone],
  * `Asia/Tashkent`): на телефоне с часами в другой зоне «сегодня» и «уже
  * прошло» считались бы неверно.
  *
- * Календарь дней берётся у [BookingSlots], а сама сетка — у [WorkingHours]:
- * день и часы выбирают одинаково всюду, где занятость исполнителя неизвестна
- * (у мастеров-фрилансеров, issue #107, ручки занятости тоже нет), и вторая
- * копия правила разъехалась бы с первой.
+ * Календарь дней берётся у [BookingSlots] — день выбирают одинаково всюду.
  */
-object DoctorSchedule {
-
-    /** Первый приём. */
-    val OPENS_AT: LocalTime = WorkingHours.DEFAULT_OPENS_AT
-
-    /** Последний приём, на который записывают. */
-    val LAST_START: LocalTime = WorkingHours.DEFAULT_LAST_START
-
-    /** Шаг сетки. Полчаса — обычная длина приёма и привычный шаг в регистратуре. */
-    const val STEP_MINUTES = WorkingHours.DEFAULT_STEP_MINUTES
+object DoctorSlots {
 
     /** Дни, среди которых выбирают дату записи. */
     fun dates(
@@ -78,25 +79,36 @@ object DoctorSchedule {
     ): List<LocalDate> = BookingSlots.dates(now = now, zone = zone)
 
     /**
-     * Время, которое можно предложить на выбранный день.
+     * Что из ответа сервера можно предложить.
      *
-     * Единственное правило, которое здесь есть, — **не предлагать прошедшее**:
-     * на сегодня из сетки уходит всё, что уже наступило, а прошедший день
-     * целиком даёт пустой список. Занятость врача в этом не участвует, потому
-     * что о ней приложению никто не сообщает (см. KDoc объекта).
+     * Порядок правил: разобрать → выбросить прошедшее → упорядочить.
+     * Неразобранная строка просто выпадает: из-за одного мусорного значения
+     * прятать остальные слоты незачем. Дубликаты по разобранному времени
+     * снимаются — сервер вполне может прислать `"10:00"` и `"10:00:00"`, а для
+     * `LazyColumn` это два одинаковых ключа.
+     *
+     * @param date день, на который сервер отдал слоты. Прошедший день целиком
+     * даёт пустой список — даже если сервер что-то в нём предложил.
      */
-    fun times(
+    fun available(
+        raw: List<String>,
         date: LocalDate,
         now: Instant,
         zone: ZoneId = DateTimeFormatters.AppZone,
-    ): List<LocalTime> = WorkingHours.times(
-        date = date,
-        now = now,
-        zone = zone,
-        opensAt = OPENS_AT,
-        lastStart = LAST_START,
-        stepMinutes = STEP_MINUTES,
-    )
+    ): List<DoctorSlot> {
+        val today = BookingSlots.today(now, zone)
+        if (date.isBefore(today)) return emptyList()
+
+        val parsed = raw
+            .mapNotNull { value -> parseServerLocalTime(value)?.let { DoctorSlot(value, it) } }
+            .distinctBy(DoctorSlot::time)
+            .sortedBy(DoctorSlot::time)
+
+        if (date.isAfter(today)) return parsed
+
+        val currentTime = now.atZone(zone).toLocalTime()
+        return parsed.filter { !it.time.isBefore(currentTime) }
+    }
 }
 
 /**
@@ -108,14 +120,17 @@ object DoctorSchedule {
  * раньше времени» стоит человеку отказа сервера вместо подсказки на экране.
  *
  * @param complaint жалоба — **необязательное** поле контракта
- * (`BookRequest.complaint`, обязательны только `doctorId`, `date`,
+ * (`HospitalBookRequest.complaint`, обязательны только `doctorId`, `date`,
  * `startTime`). Записаться, не объясняя причины, — нормальный случай.
+ * @param slot выбранный слот целиком, а не разобранное время: `startTime`
+ * записи уходит строкой [DoctorSlot.raw], ровно как её отдал сервер
+ * (issue #181).
  */
 @Immutable
 data class DoctorAppointmentDraft(
     val doctorId: String? = null,
     val date: LocalDate? = null,
-    val time: LocalTime? = null,
+    val slot: DoctorSlot? = null,
     val complaint: String = "",
 ) {
 
@@ -132,7 +147,7 @@ data class DoctorAppointmentDraft(
     val canSubmit: Boolean
         get() = !doctorId.isNullOrBlank() &&
             date != null &&
-            time != null &&
+            slot != null &&
             !isComplaintTooLong
 
     /** Пустая жалоба уходит отсутствующим полем, а не пустой строкой. */

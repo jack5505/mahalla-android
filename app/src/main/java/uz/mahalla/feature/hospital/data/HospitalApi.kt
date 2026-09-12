@@ -10,6 +10,7 @@ import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.booking.data.AppointmentPageDto
+import uz.mahalla.feature.hospital.domain.DoctorSlot
 
 /**
  * Вертикаль «Больницы» (эпик #11, issue #99): врачи заведения и запись к ним.
@@ -26,16 +27,44 @@ import uz.mahalla.feature.booking.data.AppointmentPageDto
  * заголовок, который читающей ручке не мешает, — а «голый» `@RefreshClient`
  * сломал бы запись. Поэтому API целиком собирается на **основном** Retrofit.
  *
- * Ответы записи — те же `AppointmentResponse` и
- * `PageResponseAppointmentResponse`, что у брони (issue #97), поэтому DTO
- * переиспользуются: у бэкенда это буквально одна модель, и вторая её копия
- * разъехалась бы с первой при первой же правке контракта.
+ * Ответы записи разбираются теми же DTO, что у брони (issue #97), но **не
+ * потому, что модель одна**: в схеме от 2026-09-09 у больниц свой
+ * `HospitalAppointmentResponse`, у брони — `AppointmentBookingResponse`
+ * (issue #167). Общего в них хватает на всё, что показывает экран
+ * (`id`, `apptDate`, `startTime`, `status`, `createdAt`), поэтому DTO пока
+ * один; `doctorId` теперь в нём объявлен (issue #219), а `complaint` по
+ * прежнему не входит и теряется — экран его нигде не показывает.
  */
 interface HospitalApi {
 
     /** Врачи заведения. `data` — массив `DoctorResponse`. */
     @GET("hospitals/places/{placeId}/doctors")
     suspend fun doctors(@Path("placeId") placeId: String): ApiResponse<List<DoctorDto>>
+
+    /**
+     * Карточка врача (issue #181). `data` — `DoctorResponse`, та же схема, что
+     * и в списке.
+     *
+     * Помимо своего экрана нужна ещё для одного случая: у записи к врачу в
+     * «моих записях» (`HospitalAppointmentResponse`) есть `doctorId`, но нет
+     * ни имени врача, ни `placeId`, чтобы получить его через [doctors], —
+     * единственный способ подписать карточку врачом, а не заглушкой
+     * «Врач не указан» (issue #219).
+     */
+    @GET("hospitals/doctors/{id}")
+    suspend fun doctor(@Path("id") doctorId: String): ApiResponse<DoctorDto>
+
+    /**
+     * Свободные слоты врача на день (issue #181, найдено сверкой в #92).
+     * `data` — массив строк (`ApiResponseListString`), как у слотов брони
+     * (issue #97): сервер отдаёт готовое время (`"09:00"`/`"09:00:00"`),
+     * занятое в него уже не попадает. `date` обязателен, `yyyy-MM-dd`.
+     */
+    @GET("hospitals/doctors/{id}/slots")
+    suspend fun slots(
+        @Path("id") doctorId: String,
+        @Query("date") date: String,
+    ): ApiResponse<List<String>>
 
     /** Записаться к врачу. Требует Bearer. */
     @POST("hospitals/appointments")
@@ -49,31 +78,58 @@ interface HospitalApi {
     ): ApiResponse<AppointmentPageDto>
 
     /**
-     * Отмена. **Своей отмены у `hospitals` нет** — в контроллере всего четыре
-     * пути, — поэтому берётся общая ручка записи. Она объявлена над той же
-     * схемой `AppointmentResponse`, что и запись к врачу, то есть на бэкенде
-     * это одна сущность; проверить это под токеном в CI нечем (`401` приходит
-     * до маршрутизации), и расхождение попадёт в отчёт отдельным риском.
+     * Карточка записи к врачу (issue #181). `data` — `HospitalAppointmentResponse`,
+     * разбирается тем же [AppointmentDto], что и остальные ответы вертикали —
+     * `doctorId` и `complaint` из неё теряются (issue #219). Экран, который эту
+     * ручку показывает, — отдельная задача (#183); здесь ручка только объявлена.
      */
-    @POST("appointments/{id}/cancel")
+    @GET("hospitals/appointments/{id}")
+    suspend fun appointment(@Path("id") appointmentId: String): ApiResponse<AppointmentDto>
+
+    /**
+     * Отмена записи к врачу — **своей ручкой больниц** (issue #167).
+     *
+     * До 2026-09-09 её здесь не было: в `hospital-controller` было четыре пути,
+     * и отмена уходила в общую `POST appointments/{id}/cancel`. В схеме от
+     * 2026-09-09 путь `POST /api/v1/hospitals/appointments/{id}/cancel` есть, и
+     * заодно рассосалась коллизия springdoc, из-за которой обе вертикали
+     * выглядели одной сущностью: у больниц теперь `HospitalAppointmentResponse`
+     * (`{id, doctorId, apptDate, startTime, complaint, status, createdAt}`), у
+     * брони — `AppointmentBookingResponse` (`{id, placeId, userId, serviceId,
+     * serviceName, price, apptDate, startTime, endTime, status, createdAt}`).
+     * Разные схемы у создания и у чтения — значит, и записи разные, а общая
+     * ручка чужую отменить не сможет.
+     *
+     * Живой пробой это не доказать: `401` приходит до маршрутизации (оба пути
+     * отвечают им одинаково, проверено 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
+     * в CI не задан. Ответ разбирается тем же [AppointmentDto] — общих полей
+     * хватает, а лишние `kotlinx.serialization` игнорирует.
+     */
+    @POST("hospitals/appointments/{id}/cancel")
     suspend fun cancel(@Path("id") appointmentId: String): ApiResponse<AppointmentDto>
 }
 
 /**
- * Тело `POST /api/v1/hospitals/appointments` — схема `BookRequest`.
+ * Тело `POST /api/v1/hospitals/appointments` — схема `HospitalBookRequest`.
  *
- * Имя `BookRequest` в `/v3/api-docs` перекрыто коллизией springdoc (на него
- * ссылаются `appointments`, `gaming/bookings` и `hospitals/appointments`), но
- * здесь это **не мешает**: показанный набор полей —
- * `{doctorId, date, startTime, complaint}` — и есть больничный, то есть
- * коллизию «выиграл» как раз этот путь. Обязательны `doctorId`, `date`,
- * `startTime`; `complaint` — `@Size(max = 1000)`.
+ * В схеме 2026-09-04 она называлась `BookRequest` и была перекрыта коллизией
+ * springdoc (на имя ссылались `appointments`, `gaming/bookings` и
+ * `hospitals/appointments`); коллизию «выиграл» как раз больничный путь, и
+ * поля брались оттуда. В схеме 2026-09-09 коллизии больше нет, и собственная
+ * `HospitalBookRequest` подтверждает тот же набор:
+ * `{doctorId, date, startTime, complaint}`, обязательны `doctorId`, `date`,
+ * `startTime`, у `complaint` — `maxLength: 1000`.
  *
- * [startTime] уходит строкой `HH:mm:ss`, хотя springdoc описывает `LocalTime`
- * объектом `{hour, minute, second, nano}`: так его читает Jackson с
- * `JavaTimeModule`, и так же отправляет бронь (issue #97). Живым запросом это
- * не проверить — `401` приходит **до** валидации тела (проверено и на пустом
- * теле, и на заполненном, и с мусорным Bearer).
+ * [startTime] уходит строкой, хотя springdoc описывает `LocalTime` объектом
+ * `{hour, minute, second, nano}`: так его читает Jackson с `JavaTimeModule`.
+ * Живым запросом это не проверить — `401` приходит **до** валидации тела
+ * (проверено и на пустом теле, и на заполненном, и с мусорным Bearer).
+ *
+ * **В отличие от брони** (issue #97, там `LocalTime.toServerTime()` всегда
+ * собирает `HH:mm:ss`), здесь строка — ровно [DoctorSlot.raw] выбранного
+ * слота, без разбора и повторной сборки (issue #181, риск из issue #144: там
+ * лишний шаг «разобрали → собрали заново» стоил вертикали брони пяти часов
+ * расхождения между UTC и Asia/Tashkent).
  *
  * Пустая жалоба уходит **отсутствующим** полем, а не `null`: в `Json` проекта
  * `explicitNulls = false`.
@@ -83,7 +139,7 @@ data class BookDoctorRequest(
     @SerialName("doctorId") val doctorId: String,
     /** `yyyy-MM-dd`. */
     @SerialName("date") val date: String,
-    /** `HH:mm:ss`. */
+    /** Ровно [DoctorSlot.raw] выбранного слота — без разбора и повторной сборки. */
     @SerialName("startTime") val startTime: String,
     @SerialName("complaint") val complaint: String? = null,
 )

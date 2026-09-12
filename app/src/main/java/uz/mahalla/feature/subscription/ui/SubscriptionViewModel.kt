@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.role.domain.UserRole
@@ -63,15 +62,14 @@ class SubscriptionViewModel @Inject constructor(
 
     override fun onEvent(event: SubscriptionEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние. Действие в полёте — тем более: его ответ
-            // сам обновит подписку.
-            SubscriptionEvent.ScreenResumed ->
-                if (!currentState.plans.isLoading && !currentState.isRefreshing &&
-                    !currentState.isBusy && loadJob?.isActive != true
-                ) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209). Действие в
+            // полёте — тем более повод не перезапрашивать: его ответ сам
+            // обновит подписку.
+            SubscriptionEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true || currentState.isBusy },
+                load = { load(showLoading = false) },
+            )
 
             SubscriptionEvent.Refreshed -> load(showLoading = false, refreshing = true)
             SubscriptionEvent.Retry -> load()

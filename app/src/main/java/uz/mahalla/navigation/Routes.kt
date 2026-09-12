@@ -223,6 +223,14 @@ data object SubscriptionRoute
 @Serializable
 data class PlaceRoute(val placeId: String)
 
+/**
+ * «Сотрудники» заведения (issue #189). Вне обоих графов, как «мои заведения»:
+ * открывается со своей карточки в [MyPlacesRoute], доступ владельцу проверяет
+ * ещё раз сам бэкенд.
+ */
+@Serializable
+data class PlaceStaffRoute(val placeId: String)
+
 // --- Вертикаль «Очередь» (эпик #10, issue #96) ---
 
 /**
@@ -279,6 +287,16 @@ data object GamingBookingsRoute
  * Не `null`, а пустая строка: типизированные маршруты кладут аргументы в
  * `Bundle`, и необязательная строка потребовала бы своего `NavType` (то же
  * решение, что у [placeName]).
+ * @param rescheduleLabel чем переносимая запись подписана в «моих записях»
+ * (`Appointment.serviceName`). Едет маршрутом, потому что название услуги на
+ * экране иначе взять негде, кроме каталога, — а он мог не ответить или уже не
+ * содержать эту услугу (issue #155), и тогда перенос подтверждают, не видя, что
+ * переносят.
+ * @param rescheduleDate и [rescheduleTime] — прежние день и время записи в
+ * формате ISO-8601 (`2026-09-06`, `10:40`), пусто — сервер их не назвал (в
+ * `AppointmentResponse` оба поля необязательные). Именно ISO, а не готовая
+ * строка «06.09.2026, 10:40»: аргументы маршрута переживают и смерть процесса,
+ * и смену языка, а формат — дело экрана.
  */
 @Serializable
 data class BookingRoute(
@@ -286,6 +304,9 @@ data class BookingRoute(
     val placeName: String = "",
     val serviceId: String = "",
     val rescheduleId: String = "",
+    val rescheduleLabel: String = "",
+    val rescheduleDate: String = "",
+    val rescheduleTime: String = "",
 )
 
 /**
@@ -299,10 +320,12 @@ data class BookingRoute(
  * enum понадобился бы собственный `NavType` (то же решение, что у канала
  * доставки кода в [OtpRoute] и у точки на карте в [MapPickerRoute]).
  *
- * Экран один на обе вертикали, а не два одинаковых: у бэкенда это одна модель
- * записи и одна ручка отмены, а две копии разошлись бы при первой же правке
- * (то же решение, что у [RoleRoute] в issue #84). Списки при этом разные —
- * `appointments/my` и `hospitals/appointments/my`.
+ * Экран один на обе вертикали, а не два одинаковых: запись выглядит и ведёт
+ * себя на экране одинаково, а две копии разошлись бы при первой же правке (то
+ * же решение, что у [RoleRoute] в issue #84). На бэкенде вертикали разные —
+ * свои схемы и свои ручки, и списка (`appointments/my` против
+ * `hospitals/appointments/my`), и отмены (issue #167); за источник отвечает
+ * [uz.mahalla.feature.booking.data.AppointmentsSource].
  *
  * Других аргументов нет: список грузится с сервера целиком, а конкретная
  * запись никуда не ведёт — своего экрана у неё нет.
@@ -493,11 +516,17 @@ data object MyTicketsRoute
  * @param placeName название аптеки. Едет маршрутом по той же причине, что и у
  * [QueueRoute], [BookingRoute] и [MenuRoute]: в ответе `pharmacy/.../products`
  * его нет, а шапка без имени места читается как чужая.
+ * @param isOwner владелец/менеджер заведения (issue #252): экран получает
+ * действия «добавить товар» и «править остаток». Выставляется вызывающей
+ * стороной — сегодня только «Моими заведениями», где принадлежность уже
+ * известна из `places/my`, — а не проверяется на месте: у товара аптеки нет
+ * своего `ownerId`, по которому это можно было бы сделать здесь.
  */
 @Serializable
 data class PharmacyRoute(
     val placeId: String,
     val placeName: String = "",
+    val isOwner: Boolean = false,
 )
 
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---

@@ -2,6 +2,7 @@ package uz.mahalla.feature.place.ui
 
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -16,11 +17,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEventType
+import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.discovery.domain.GeoPoint
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceCapabilities
@@ -28,6 +32,7 @@ import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -431,6 +436,104 @@ class PlaceDetailsViewModelTest {
         assertTrue(viewModel.state.value.details is ScreenState.Content)
     }
 
+    // --- Галерея: свои фото и удаление (issue #185) ---
+
+    @Test
+    fun `an empty gallery is an empty list, not a broken card`() = runTest {
+        repository.details = ApiResult.Success(details(photos = emptyList()))
+
+        val state = viewModel().state.value
+
+        assertTrue(state.data!!.photos.isEmpty())
+    }
+
+    @Test
+    fun `only the owner sees a delete button worth pressing`() = runTest {
+        val mine = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        val someoneElses = MediaFile(id = "m-2", url = "other.jpg", ownerId = "u-2")
+        repository.details = ApiResult.Success(details(photos = listOf(mine, someoneElses)))
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf(mine, someoneElses), state.data!!.photos)
+    }
+
+    @Test
+    fun `gallery deletion asks for confirmation and dismissal changes nothing`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        assertEquals(photo, viewModel.state.value.galleryDeletePending)
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteDismissed)
+
+        assertNull(viewModel.state.value.galleryDeletePending)
+        assertEquals(listOf(photo), viewModel.state.value.data!!.photos)
+        assertTrue(repository.deletedMedia.isEmpty())
+    }
+
+    @Test
+    fun `a confirmed deletion removes the photo right away`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        val kept = MediaFile(id = "m-2", url = "kept.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo, kept)))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+
+        assertEquals(listOf("m-1"), repository.deletedMedia)
+        assertNull(viewModel.state.value.galleryDeletePending)
+        assertEquals(listOf(kept), viewModel.state.value.data!!.photos)
+    }
+
+    @Test
+    fun `a failed deletion puts the photo back and explains why`() = runTest {
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+
+        // Откат: файл остался на сервере — карточка должна показывать то же самое.
+        assertEquals(listOf(photo), viewModel.state.value.data!!.photos)
+        assertEquals(ApiError.Forbidden, viewModel.state.value.galleryDeleteFailure?.error)
+        assertNull("диалог закрыт", viewModel.state.value.galleryDeletePending)
+    }
+
+    @Test
+    fun `a failed deletion restores the photo without discarding a refresh that raced it`() = runTest {
+        // Пока запрос удаления висит, карточка обновляется отдельно —
+        // например, силентным перезапросом после отправки отзыва (issue #76).
+        // Грубый откат «на снимок до удаления» стёр бы эту догрузку.
+        val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(photo)))
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        val gate = CompletableDeferred<Unit>()
+        repository.deleteMediaGate = gate
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
+        viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed)
+        assertTrue("фото убрано оптимистично", viewModel.state.value.data!!.photos.isEmpty())
+
+        val fresh = MediaFile(id = "m-2", url = "fresh.jpg", ownerId = USER_ID)
+        repository.details = ApiResult.Success(details(photos = listOf(fresh)))
+        viewModel.onEvent(PlaceDetailsEvent.Retry)
+        assertEquals(listOf(fresh), viewModel.state.value.data!!.photos)
+
+        gate.complete(Unit)
+
+        assertEquals(
+            setOf("fresh.jpg", "mine.jpg"),
+            viewModel.state.value.data!!.photos.map { it.url }.toSet(),
+        )
+    }
+
     // --- Акции заведения (issue #104) ---
 
     @Test
@@ -483,10 +586,86 @@ class PlaceDetailsViewModelTest {
         assertEquals(listOf("fresh"), viewModel.state.value.promotions.map { it.id })
     }
 
+    @Test
+    fun `an open card is a VIEW sent once, a retry does not repeat it`() = runTest {
+        repository.details = ApiResult.Success(details())
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.Retry)
+
+        // Второе событие превратило бы один просмотр в панели в несколько.
+        assertEquals(
+            listOf(AnalyticsEvents.placeViewed(PLACE_ID)),
+            analytics.events,
+        )
+    }
+
+    @Test
+    fun `a card that failed to load is still a VIEW`() = runTest {
+        // Карточку открыли — это факт, даже если её содержимое не приехало.
+        repository.details = ApiResult.Failure(ApiError.NoConnection)
+
+        viewModel()
+
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+    }
+
+    @Test
+    fun `call and route are sent along with the action, not instead of it`() = runTest {
+        repository.details = ApiResult.Success(
+            details(phone = "+998901234567", point = GeoPoint(41.31, 69.28)),
+        )
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call))
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route))
+
+        assertEquals(
+            listOf(AnalyticsEventType.View, AnalyticsEventType.Call, AnalyticsEventType.Navigate),
+            analytics.events.map { it.type },
+        )
+    }
+
+    @Test
+    fun `there is no CALL without a phone to call`() = runTest {
+        repository.details = ApiResult.Success(details(phone = null, point = null))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call))
+        viewModel.onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route))
+
+        // Действия не было: нажали по кнопке, которой на экране быть не должно.
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+    }
+
+    @Test
+    fun `a review becomes an event only after the server accepted it`() = runTest {
+        repository.details = ApiResult.Success(details())
+        repository.addReviewResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel()
+
+        viewModel.onEvent(PlaceDetailsEvent.AddReviewClicked)
+        viewModel.onEvent(PlaceDetailsEvent.ReviewRatingSelected(5))
+        viewModel.onEvent(PlaceDetailsEvent.ReviewSubmitted)
+        assertEquals(listOf(AnalyticsEventType.View), analytics.events.map { it.type })
+
+        repository.addReviewResult = ApiResult.Success(Unit)
+        viewModel.onEvent(PlaceDetailsEvent.ReviewSubmitted)
+
+        assertEquals(
+            listOf(AnalyticsEventType.View, AnalyticsEventType.Review),
+            analytics.events.map { it.type },
+        )
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel(clock: Clock = mondayAt("12:00")) = PlaceDetailsViewModel(
         repository = repository,
         promotions = promotions,
         profileStore = profileStore,
+        analytics = analytics,
         clock = clock,
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )
@@ -498,9 +677,11 @@ class PlaceDetailsViewModelTest {
         point: GeoPoint? = null,
         capabilities: PlaceCapabilities = PlaceCapabilities(),
         reviews: List<Review> = emptyList(),
+        photos: List<MediaFile> = emptyList(),
     ) = PlaceDetails(
         place = place(PLACE_ID, name = "Osh markazi", isOpenNow = isOpenNow, point = point),
         description = "Eng mazali osh",
+        photos = photos,
         hours = hours,
         contacts = PlaceContacts(phone = phone),
         capabilities = capabilities,
@@ -512,7 +693,6 @@ class PlaceDetailsViewModelTest {
 
     private fun review(id: String, authorId: String? = null) = Review(
         id = id,
-        author = "Ali",
         rating = 5,
         text = "Zo'r",
         createdAt = Instant.parse("2026-08-25T10:15:30Z"),

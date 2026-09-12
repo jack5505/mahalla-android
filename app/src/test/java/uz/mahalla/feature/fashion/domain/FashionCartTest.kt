@@ -52,9 +52,9 @@ class FashionCartTest {
 
     @Test
     fun `variant label joins only what the server actually sent`() {
-        assertEquals("Qora · L", item("v-1", color = "Qora", size = "L").variantLabel)
-        assertEquals("L", item("v-1", color = null, size = "L").variantLabel)
-        assertEquals("", item("v-1", color = null, size = null).variantLabel)
+        assertEquals("Qora · L", item("v-1", color = "Qora", size = "L").variantLabel(JOIN_TEMPLATE))
+        assertEquals("L", item("v-1", color = null, size = "L").variantLabel(JOIN_TEMPLATE))
+        assertEquals("", item("v-1", color = null, size = null).variantLabel(JOIN_TEMPLATE))
     }
 
     @Test
@@ -95,4 +95,9 @@ class FashionCartTest {
         quantity = quantity,
         serverTotalSum = serverTotal,
     )
+
+    private companion object {
+        /** То же значение, что `R.string.text_joined_with_dot` — тест домена ресурсов не читает. */
+        const val JOIN_TEMPLATE = "%1\$s · %2\$s"
+    }
 }

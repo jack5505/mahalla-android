@@ -77,28 +77,33 @@ data class PlaceDocumentDto(
 )
 
 /**
- * Отзыв. Имена полей в схеме стенда перекрыты коллизией `Response` (springdoc
- * склеил несколько классов с одинаковым простым именем), поэтому у автора и
- * текста приняты оба вероятных варианта: разбор не должен зависеть от того,
- * какое из них окажется настоящим.
+ * Отзыв — `ReviewResponse {id, placeId, userId, rating, text, isVerified,
+ * helpfulCount, ownerReply, createdAt}` (сверено по живому `/v3/api-docs`
+ * 2026-09-10; раньше имя было перекрыто коллизией `Response`). **Ни имени
+ * автора, ни аватара в схеме нет вовсе** — ни под одним именем. Раньше
+ * `ReviewDto` гадал три имени под `@JsonNames`, ни одно не совпадало, и
+ * молчаливый дефолт («» / `null`) выглядел как случайно пропавшее поле —
+ * на деле поля не было никогда (issue #192). Гадать больше не пытаемся: экран
+ * показывает отзыв без имени автора вместо пустой строки.
  *
  * @param userId автор отзыва. По нему и только по нему приложение отличает
  * свой отзыв от чужого (issue #76): отдельного флага «это ваш отзыв» бэкенд не
  * отдаёт. Поле не пришло — своего отзыва не видно, и кнопку удаления показать
  * некому.
+ * @param ownerReply ответ заведения на отзыв. Поле в схеме есть, но раньше
+ * не разбиралось вовсе — молча терялось (issue #192).
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ReviewDto(
     @SerialName("id") val id: String,
     @JsonNames("authorId", "createdBy") @SerialName("userId") val userId: String? = null,
-    @JsonNames("author", "authorName") @SerialName("userName") val author: String = "",
     @SerialName("rating") val rating: Int = 0,
     @JsonNames("comment") @SerialName("text") val text: String = "",
+    @SerialName("isVerified") val isVerified: Boolean = false,
+    @SerialName("ownerReply") val ownerReply: String? = null,
+    @SerialName("helpfulCount") val helpfulCount: Int = 0,
     @SerialName("createdAt") val createdAt: String? = null,
-    /** По той же причине — два вероятных имени поля с аватаром (issue #60). */
-    @JsonNames("avatarUrl", "userAvatar") @SerialName("userAvatarUrl")
-    val avatarUrl: String? = null,
 )
 
 /**
@@ -159,6 +164,25 @@ interface CatalogApi {
         @Query("category") category: String? = null,
     ): ApiResponse<List<PlaceSummaryDto>>
 
+    /**
+     * Маркеры для видимой области карты (issue #168).
+     *
+     * Прямоугольник, а не радиус: `nearby` отдаёт то, что попало в круг вокруг
+     * человека, и заведения на другом краю кадра в него не входят.
+     *
+     * Ответ — тот же `PlaceSummaryDto`, что у `nearby`, вместе с
+     * `distanceMeters`: расстояние сервер считает по заголовкам `X-Geo-*`, а не
+     * по прямоугольнику. Пагинации нет — область целиком одним списком.
+     */
+    @GET("places/map-bounds")
+    suspend fun mapBounds(
+        @Query("minLat") minLatitude: Double,
+        @Query("minLng") minLongitude: Double,
+        @Query("maxLat") maxLatitude: Double,
+        @Query("maxLng") maxLongitude: Double,
+        @Query("category") category: String? = null,
+    ): ApiResponse<List<PlaceSummaryDto>>
+
     /** Поиск по индексу: описание, город и название, а не только имя. */
     @GET("search")
     suspend fun search(
@@ -168,6 +192,18 @@ interface CatalogApi {
 
     @GET("places/{id}")
     suspend fun place(@Path("id") id: String): ApiResponse<PlaceDetailDto>
+
+    /**
+     * Заведения пачкой по id (issue #182, снимает клиентскую часть #150).
+     *
+     * Ручка снята со схемы стенда при сверке issue #92: требует токена — без
+     * него `401`. `ids` обязателен и повторяемый (`?ids=<uuid>&ids=<uuid>…`) —
+     * Retrofit разворачивает `List<String>` в `@Query` этим же способом.
+     * Лимита на число `ids` в схеме нет, поэтому вызывающий обязан резать
+     * длинный список на пачки сам — здесь это [uz.mahalla.feature.activity.data.PlaceNameResolver].
+     */
+    @GET("places")
+    suspend fun places(@Query("ids") ids: List<String>): ApiResponse<List<PlaceSummaryDto>>
 
     @GET("reviews/places/{placeId}")
     suspend fun reviews(

@@ -38,6 +38,7 @@ import com.yandex.mapkit.map.ClusterizedPlacemarkCollection
 import com.yandex.mapkit.map.MapObject
 import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.map.PlacemarkMapObject
+import com.yandex.mapkit.map.VisibleRegion
 import com.yandex.mapkit.mapview.MapView
 import com.yandex.mapkit.user_location.UserLocationLayer
 import com.yandex.runtime.image.ImageProvider
@@ -69,6 +70,7 @@ fun YandexMapCanvas(
     showUserLocation: Boolean = false,
     onMarkerClick: (String) -> Unit = {},
     onCameraChanged: (MapCameraPosition) -> Unit = {},
+    onVisibleBoundsChanged: (MapBounds) -> Unit = {},
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -89,6 +91,7 @@ fun YandexMapCanvas(
     // держали бы первый пришедший коллбэк навсегда.
     val currentOnMarkerClick by rememberUpdatedState(onMarkerClick)
     val currentOnCameraChanged by rememberUpdatedState(onCameraChanged)
+    val currentOnVisibleBoundsChanged by rememberUpdatedState(onVisibleBoundsChanged)
 
     val mapView = remember { MapView(context) }
     val controller = remember(mapView) {
@@ -96,6 +99,7 @@ fun YandexMapCanvas(
             mapView = mapView,
             onMarkerClick = { id -> currentOnMarkerClick(id) },
             onCameraChanged = { position -> currentOnCameraChanged(position) },
+            onVisibleBoundsChanged = { bounds -> currentOnVisibleBoundsChanged(bounds) },
         )
     }
 
@@ -197,6 +201,7 @@ fun MapCanvas(
     showUserLocation: Boolean = false,
     onMarkerClick: (String) -> Unit = {},
     onCameraChanged: (MapCameraPosition) -> Unit = {},
+    onVisibleBoundsChanged: (MapBounds) -> Unit = {},
 ) {
     Box(modifier = modifier) {
         when (engine.state) {
@@ -215,6 +220,7 @@ fun MapCanvas(
                 showUserLocation = showUserLocation,
                 onMarkerClick = onMarkerClick,
                 onCameraChanged = onCameraChanged,
+                onVisibleBoundsChanged = onVisibleBoundsChanged,
             )
 
             MapEngineState.MissingApiKey, MapEngineState.Failed -> MapUnavailable(
@@ -298,6 +304,7 @@ private class MapCanvasController(
     private val mapView: MapView,
     private val onMarkerClick: (String) -> Unit,
     private val onCameraChanged: (MapCameraPosition) -> Unit,
+    private val onVisibleBoundsChanged: (MapBounds) -> Unit,
 ) {
     private val map get() = mapView.mapWindow.map
 
@@ -360,6 +367,11 @@ private class MapCanvasController(
         if (requested == null || !MapCameraFit.isSamePosition(moved, requested)) {
             onCameraChanged(moved)
         }
+        // Область отдаётся всегда, в том числе на своём же движении: по ней
+        // грузятся маркеры (issue #168), а после кнопок масштаба и полёта к
+        // «моему местоположению» кадр меняется ровно так же, как от жеста, —
+        // промолчав здесь, мы оставили бы новый кадр без маркеров.
+        onVisibleBoundsChanged(map.visibleRegion.toCanvasBounds())
     }
 
     /**
@@ -471,6 +483,28 @@ private fun CameraPosition.toCanvasPosition() = MapCameraPosition(
     target = MapCoordinates(target.latitude, target.longitude),
     zoom = zoom,
 )
+
+/**
+ * Видимая область MapKit в модель полотна.
+ *
+ * Крайние значения берутся по всем четырём углам, а не по юго-западному и
+ * северо-восточному: приложение карту не поворачивает, но жест поворота у SDK
+ * включён, и у повёрнутого кадра «левый нижний» угол перестаёт быть самым
+ * западным.
+ */
+private fun VisibleRegion.toCanvasBounds(): MapBounds {
+    val corners = listOf(topLeft, topRight, bottomLeft, bottomRight)
+    return MapBounds(
+        southWest = MapCoordinates(
+            latitude = corners.minOf { it.latitude },
+            longitude = corners.minOf { it.longitude },
+        ),
+        northEast = MapCoordinates(
+            latitude = corners.maxOf { it.latitude },
+            longitude = corners.maxOf { it.longitude },
+        ),
+    )
+}
 
 private val MARKER_SIZE = 20.dp
 private val CLUSTER_SIZE = 36.dp

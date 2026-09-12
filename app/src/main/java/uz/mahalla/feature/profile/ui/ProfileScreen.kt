@@ -1,6 +1,7 @@
 package uz.mahalla.feature.profile.ui
 
 import android.app.Activity
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,8 +62,10 @@ import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.media.ui.mediaMessage
 import uz.mahalla.feature.media.ui.rememberPhotoPicker
+import uz.mahalla.feature.profile.domain.AccountStatus
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
+import uz.mahalla.feature.profile.domain.VerificationStatus
 import uz.mahalla.feature.role.domain.UserRole
 import uz.mahalla.feature.role.ui.labelRes
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -195,7 +198,11 @@ fun ProfileContentScreen(
                 .padding(bottom = Spacing.gutter),
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
-            ProfileHeader(profile = state.profile)
+            ProfileHeader(
+                profile = state.profile,
+                verification = state.verification,
+                account = state.account,
+            )
 
             AvatarUploadSection(
                 upload = state.avatarUpload,
@@ -206,18 +213,19 @@ fun ProfileContentScreen(
 
             // Анкеты покупателя и продавца (issue #84). Подпись — текущая
             // роль: строка «Моя анкета» без неё не отвечает на вопрос, кем
-            // человек в приложении числится сейчас.
-            val role = UserRole.fromStoredValue(state.settings.roleId)
+            // человек в приложении числится сейчас. Это локальный выбор, а не
+            // серверные права (issue #237) — их показывает шапка.
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(role.labelRes()),
+                subtitle = stringResource(state.formRole.labelRes()),
                 onClick = onOpenRole,
             )
 
-            // «Мои заведения» (issue #94) — только продавцу: покупателю
-            // показывать список, который всегда пуст, незачем. Роль он меняет
-            // строкой выше, и тогда строка появится.
-            if (role == UserRole.Provider) {
+            // «Мои заведения» (issue #94) — тому, кто оказывает услуги:
+            // покупателю показывать список, который всегда пуст, незачем.
+            // Право даёт либо анкета продавца, либо роль на сервере
+            // (issue #237) — правило и его причина лежат в `showMyPlaces`.
+            if (state.showMyPlaces) {
                 MahallaListItem(
                     title = stringResource(R.string.my_places_title),
                     subtitle = stringResource(R.string.my_places_profile_subtitle),
@@ -379,7 +387,12 @@ fun ProfileContentScreen(
  * фото не загрузилось, шапка всё равно остаётся про конкретного человека.
  */
 @Composable
-private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
+private fun ProfileHeader(
+    profile: UserProfile,
+    verification: VerificationStatus,
+    account: AccountStatus,
+    modifier: Modifier = Modifier,
+) {
     MahallaCard(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -434,6 +447,24 @@ private fun ProfileHeader(profile: UserProfile, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = LocalMahallaColors.current.fgMuted,
                 )
+                // Блокировка — цветом ошибки: строка «аккаунт заблокирован»
+                // объясняет отказы на половине экранов, и потеряться в шапке
+                // она не должна. Статус проверки — обычным приглушённым
+                // текстом: это подпись, а не беда.
+                account.labelRes()?.let { labelRes ->
+                    Text(
+                        text = stringResource(labelRes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                verification.labelRes()?.let { labelRes ->
+                    Text(
+                        text = stringResource(labelRes),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
             }
         }
     }
@@ -659,6 +690,32 @@ private fun DeviceSession.displayName(): String = deviceName
     ?: platform
     ?: stringResource(R.string.profile_device_unknown)
 
+/**
+ * Статус аккаунта показываем только тогда, когда он объясняет что-то человеку
+ * (issue #237). `ACTIVE` — норма, о ней сообщать нечего; `Unknown` — состояние
+ * из будущей версии API, называть его своими словами нельзя.
+ */
+@StringRes
+private fun AccountStatus.labelRes(): Int? = when (this) {
+    AccountStatus.TempBlocked -> R.string.profile_account_temp_blocked
+    AccountStatus.PermBlocked -> R.string.profile_account_perm_blocked
+    AccountStatus.Suspended -> R.string.profile_account_suspended
+    AccountStatus.Deleted -> R.string.profile_account_deleted
+    AccountStatus.Active, AccountStatus.Unknown -> null
+}
+
+/**
+ * `SMS_VERIFIED` — состояние всех, кто вошёл по коду: строка «телефон
+ * подтверждён» у каждого человека всегда — это шум, а не сведения. Говорим
+ * только о двух краях (issue #237).
+ */
+@StringRes
+private fun VerificationStatus.labelRes(): Int? = when (this) {
+    VerificationStatus.Unverified -> R.string.profile_verification_unverified
+    VerificationStatus.FullVerified -> R.string.profile_verification_full
+    VerificationStatus.SmsVerified, VerificationStatus.Unknown -> null
+}
+
 /** Статус показываем только тогда, когда он объясняет что-то человеку. */
 private fun DeviceSessionStatus.labelRes(): Int? = when (this) {
     DeviceSessionStatus.Locked -> R.string.profile_device_status_locked
@@ -696,6 +753,9 @@ private fun ProfilePreview() {
                 profile = UserProfile(
                     phone = "+998 90 123 45 67",
                     fullName = "Jahongir Sabirov",
+                    // Непроверенный номер: строку статуса в превью тоже надо
+                    // видеть — у подтверждённого её нет (issue #237).
+                    verificationStatus = "UNVERIFIED",
                 ),
                 sessions = ScreenState.Content(
                     listOf(

@@ -17,6 +17,7 @@ import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
+import uz.mahalla.feature.hospital.domain.DoctorSlot
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -28,12 +29,12 @@ import java.time.ZoneOffset
  * [MockWebServer]): подмена Retrofit фейком не поймала бы ни ошибку в пути
  * запроса, ни несовпадение схемы JSON.
  *
- * Контракт снят со стенда 2026-09-04. Список врачей анонимен (`200` без
- * токена), запись, список и отмена требуют Bearer (`401`). Тело
- * `POST hospitals/appointments` подтвердить живым запросом нельзя — `401`
- * приходит до валидации; тест закрепляет то, что приложение отправляет
- * **сейчас**, чтобы правка после проверки под токеном была видна одной
- * строкой.
+ * Контракт снят со стенда 2026-09-04, пути и схемы пересверены 2026-09-10
+ * (issue #167). Список врачей анонимен (`200` без токена), запись, список и
+ * отмена требуют Bearer (`401`). Что именно бэкенд делает с запросом,
+ * по-прежнему не проверить — `401` приходит до валидации и до маршрутизации;
+ * тест закрепляет то, что приложение отправляет **сейчас**, чтобы правка после
+ * проверки под токеном была видна одной строкой.
  */
 class HospitalRepositoryTest {
 
@@ -55,7 +56,7 @@ class HospitalRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"d-1","name":"Aliyev Bekzod","specialty":"Terapevt",
-                   "bio":"20 yillik tajriba","consultationPrice":90000}]""",
+                   "bio":"20 yillik tajriba","consultationPrice":9000000}]""",
             ),
         )
 
@@ -67,7 +68,23 @@ class HospitalRepositoryTest {
         assertEquals(1, doctors.size)
         assertEquals("Aliyev Bekzod", doctors.first().name)
         assertEquals("Terapevt", doctors.first().specialty)
+        // Бэкенд шлёт тийины: 9 000 000 — это 90 000 сум (issue #149).
         assertEquals(90_000L, doctors.first().consultationPriceSum)
+    }
+
+    /** Без пересчёта приём стоил бы «5 000 000 so'm»; молчание о цене — ноль. */
+    @Test
+    fun `consultation price is converted from tiyin and null stays unnamed`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"d-1","consultationPrice":5000000},{"id":"d-2"},
+                   {"id":"d-3","consultationPrice":150},{"id":"d-4","consultationPrice":149}]""",
+            ),
+        )
+
+        val doctors = (repository().doctors(PLACE) as ApiResult.Success).data
+
+        assertEquals(listOf(50_000L, 0L, 2L, 1L), doctors.map { it.consultationPriceSum })
     }
 
     /** Врача без `id` записывать нечем: `doctorId` обязателен в теле запроса. */
@@ -76,7 +93,7 @@ class HospitalRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"name":"Ismsiz"},{"id":"  "},
-                   {"id":"d-2","consultationPrice":-5}]""",
+                   {"id":"d-2","consultationPrice":-500}]""",
             ),
         )
 
@@ -97,8 +114,14 @@ class HospitalRepositoryTest {
         assertTrue((repository().doctors(PLACE) as ApiResult.Success).data.isEmpty())
     }
 
+    /**
+     * `startTime` уходит **ровно той строкой**, что пришла в слоте — сервер в
+     * этом фикстуре отдал время без секунд, и оно без секунд же уходит назад:
+     * повторная сборка через `toServerTime()` дописала бы `:00`, а этого делать
+     * нельзя (issue #181, риск из issue #144).
+     */
     @Test
-    fun `booking sends doctor date time and complaint`() = runTest {
+    fun `booking sends doctor date and the exact slot string, complaint included`() = runTest {
         server.enqueue(
             envelope(
                 """{"id":"a-1","serviceName":"Aliyev Bekzod","apptDate":"2026-09-05",
@@ -110,7 +133,7 @@ class HospitalRepositoryTest {
             DoctorAppointmentDraft(
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 5),
-                time = LocalTime.of(9, 30),
+                slot = DoctorSlot("09:30", LocalTime.of(9, 30)),
                 complaint = "  tomoq og'riyapti  ",
             ),
         )
@@ -119,7 +142,7 @@ class HospitalRepositoryTest {
         assertEquals("POST", request.method)
         assertEquals("/hospitals/appointments", request.path)
         assertEquals(
-            """{"doctorId":"$DOCTOR","date":"2026-09-05","startTime":"09:30:00",""" +
+            """{"doctorId":"$DOCTOR","date":"2026-09-05","startTime":"09:30",""" +
                 """"complaint":"tomoq og'riyapti"}""",
             request.body.readUtf8(),
         )
@@ -138,7 +161,7 @@ class HospitalRepositoryTest {
             DoctorAppointmentDraft(
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 5),
-                time = LocalTime.of(9, 30),
+                slot = DoctorSlot("09:30:00", LocalTime.of(9, 30)),
                 complaint = "   ",
             ),
         )
@@ -147,6 +170,101 @@ class HospitalRepositoryTest {
             """{"doctorId":"$DOCTOR","date":"2026-09-05","startTime":"09:30:00"}""",
             server.takeRequest().body.readUtf8(),
         )
+    }
+
+    @Test
+    fun `slots are requested by doctor and date, past times are dropped`() = runTest {
+        server.enqueue(envelope("""["09:00","14:00","14:00:00","19:00"]"""))
+
+        // 09:00 UTC = 14:00 в Ташкенте — 09:00 уже прошло, 14:00:00 дублирует 14:00.
+        val slots = (
+            repository().slots(DOCTOR, LocalDate.of(2026, 9, 4)) as ApiResult.Success
+            ).data
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/hospitals/doctors/$DOCTOR/slots?date=2026-09-04", request.path)
+        assertEquals(
+            listOf(LocalTime.of(14, 0), LocalTime.of(19, 0)),
+            slots.map(DoctorSlot::time),
+        )
+        // Строка сохранена как пришла — без повторной сборки.
+        assertEquals("14:00", slots.first().raw)
+    }
+
+    /** Пустой день — ответ сервера, а не отказ: другого дня свободных слотов может и не быть. */
+    @Test
+    fun `an empty day of slots is a success with an empty list`() = runTest {
+        server.enqueue(envelope("[]"))
+
+        val result = repository().slots(DOCTOR, LocalDate.of(2026, 9, 5))
+
+        assertTrue((result as ApiResult.Success).data.isEmpty())
+    }
+
+    @Test
+    fun `a slots load failure keeps the server message`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"NOT_FOUND",
+                       "message":"Shifokor topilmadi"}}""",
+                ),
+        )
+
+        val result = repository().slots(DOCTOR, LocalDate.of(2026, 9, 5))
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertEquals("Shifokor topilmadi", result.failure.server?.message)
+    }
+
+    @Test
+    fun `doctor card is requested by id and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"$DOCTOR","name":"Aliyev Bekzod","specialty":"Terapevt",
+                   "consultationPrice":9000000}""",
+            ),
+        )
+
+        val doctor = (repository().doctor(DOCTOR) as ApiResult.Success).data
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/hospitals/doctors/$DOCTOR", request.path)
+        assertEquals("Aliyev Bekzod", doctor.name)
+        assertEquals(90_000L, doctor.consultationPriceSum)
+    }
+
+    /** Запрошенный `id` уже известен — его молчание в ответе не должно терять карточку. */
+    @Test
+    fun `doctor card without an id in the response falls back to the requested one`() = runTest {
+        server.enqueue(envelope("""{"name":"Aliyev Bekzod"}"""))
+
+        val doctor = (repository().doctor(DOCTOR) as ApiResult.Success).data
+
+        assertEquals(DOCTOR, doctor.id)
+        assertEquals("Aliyev Bekzod", doctor.name)
+    }
+
+    @Test
+    fun `appointment card is requested by id and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"a-1","apptDate":"2026-09-05","startTime":"09:30:00",
+                   "status":"CONFIRMED"}""",
+            ),
+        )
+
+        val appointment = (repository().appointment("a-1") as ApiResult.Success).data
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/hospitals/appointments/a-1", request.path)
+        assertEquals(AppointmentStatus.Confirmed, appointment.status)
+        assertEquals(LocalTime.of(9, 30), appointment.startTime)
     }
 
     /**
@@ -189,6 +307,99 @@ class HospitalRepositoryTest {
         assertTrue(page.hasMore)
     }
 
+    /**
+     * `HospitalAppointmentResponse` не называет врача — только `doctorId`
+     * (issue #219). Без имени карточка в «моих записях» осталась бы с
+     * заглушкой «Врач не указан», хотя записанный доктор известен.
+     */
+    @Test
+    fun `appointment without a service name is enriched with the doctor's name`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR","apptDate":"2026-09-05",
+                   "status":"CONFIRMED"}],"last":true}""",
+            ),
+        )
+        server.enqueue(envelope("""{"id":"$DOCTOR","name":"Aliyev Bekzod"}"""))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        server.takeRequest()
+        val doctorRequest = server.takeRequest()
+        assertEquals("GET", doctorRequest.method)
+        assertEquals("/hospitals/doctors/$DOCTOR", doctorRequest.path)
+        assertEquals("Aliyev Bekzod", page.items.single().serviceName)
+    }
+
+    /**
+     * Два визита к одному врачу — запрос на имя должен быть один, а не по
+     * одному на карточку: тот же врач не станет другим человеком между
+     * визитами.
+     */
+    @Test
+    fun `two appointments with the same doctor share one name lookup`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[
+                       {"id":"a-1","doctorId":"$DOCTOR","apptDate":"2026-09-05"},
+                       {"id":"a-2","doctorId":"$DOCTOR","apptDate":"2026-09-12"}
+                   ],"last":true}""",
+            ),
+        )
+        server.enqueue(envelope("""{"id":"$DOCTOR","name":"Aliyev Bekzod"}"""))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertEquals(2, server.requestCount)
+        assertTrue(page.items.all { it.serviceName == "Aliyev Bekzod" })
+    }
+
+    /** Имя уже есть — второй запрос был бы лишней задержкой без надобности. */
+    @Test
+    fun `appointment with a service name is not enriched again`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR",
+                   "serviceName":"Soch olish"}],"last":true}""",
+            ),
+        )
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertEquals("Soch olish", page.items.single().serviceName)
+        assertEquals(1, server.requestCount)
+    }
+
+    /** Провал одного докторского запроса не должен ронять список записей. */
+    @Test
+    fun `failed doctor lookup keeps the placeholder instead of failing the list`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"a-1","doctorId":"$DOCTOR"}],"last":true}""",
+            ),
+        )
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertNull(page.items.single().serviceName)
+    }
+
+    /**
+     * Ответ на отмену не называет врача (та же схема, что у списка), поэтому
+     * уже известное имя переносится с записи-аргумента, а не пропадает.
+     */
+    @Test
+    fun `cancel keeps the already known doctor name`() = runTest {
+        server.enqueue(envelope("""{"id":"a-1","status":"CANCELLED"}"""))
+
+        val result = repository().cancel(
+            Appointment(id = "a-1", serviceName = "Aliyev Bekzod"),
+        )
+
+        assertEquals("Aliyev Bekzod", (result as ApiResult.Success).data.serviceName)
+    }
+
     @Test
     fun `appointment without id is dropped from the list`() = runTest {
         server.enqueue(
@@ -202,18 +413,21 @@ class HospitalRepositoryTest {
     }
 
     /**
-     * Своей отмены у больниц нет — идём в общую ручку записи. Тела у запроса
-     * нет.
+     * Отмена идёт в **свою** ручку больниц (issue #167): общая
+     * `appointments/{id}/cancel` объявлена над другой схемой ответа
+     * (`AppointmentBookingResponse` против `HospitalAppointmentResponse`) —
+     * значит, и записи это разные, и на чужую общая ручка рассчитана вряд ли.
+     * Тела у запроса нет.
      */
     @Test
-    fun `cancel goes to the shared appointments endpoint`() = runTest {
+    fun `cancel goes to the hospital endpoint`() = runTest {
         server.enqueue(envelope("""{"id":"a-1","status":"CANCELLED"}"""))
 
         val result = repository().cancel(Appointment(id = "a-1"))
 
         val request = server.takeRequest()
         assertEquals("POST", request.method)
-        assertEquals("/appointments/a-1/cancel", request.path)
+        assertEquals("/hospitals/appointments/a-1/cancel", request.path)
         assertEquals("", request.body.readUtf8())
         assertEquals(
             AppointmentStatus.Cancelled,
@@ -263,7 +477,7 @@ class HospitalRepositoryTest {
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 4),
                 // 09:00 UTC = 14:00 в Ташкенте, значит 09:00 уже прошло.
-                time = LocalTime.of(9, 0),
+                slot = DoctorSlot("09:00", LocalTime.of(9, 0)),
             ),
         )
 
@@ -280,7 +494,7 @@ class HospitalRepositoryTest {
             DoctorAppointmentDraft(
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 5),
-                time = LocalTime.of(9, 30),
+                slot = DoctorSlot("09:30", LocalTime.of(9, 30)),
                 complaint = "a".repeat(DoctorAppointmentDraft.MAX_COMPLAINT_LENGTH + 1),
             ),
         )
@@ -306,7 +520,7 @@ class HospitalRepositoryTest {
             DoctorAppointmentDraft(
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 5),
-                time = LocalTime.of(9, 30),
+                slot = DoctorSlot("09:30", LocalTime.of(9, 30)),
             ),
         )
 
@@ -333,7 +547,7 @@ class HospitalRepositoryTest {
             DoctorAppointmentDraft(
                 doctorId = DOCTOR,
                 date = LocalDate.of(2026, 9, 5),
-                time = LocalTime.of(9, 30),
+                slot = DoctorSlot("09:30", LocalTime.of(9, 30)),
             ),
         )
 

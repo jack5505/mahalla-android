@@ -1,6 +1,7 @@
 package uz.mahalla.feature.subscription.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.ChargeProvider
 import uz.mahalla.feature.subscription.domain.ChargeStatus
@@ -8,10 +9,8 @@ import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.subscription.domain.SubscriptionCharge
-import uz.mahalla.feature.subscription.domain.SubscriptionAmounts
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 
 /**
  * Разбор ответов подписки (issue #103). Мягкий, как в каталоге (issue #53):
@@ -23,12 +22,6 @@ import uz.mahalla.feature.wallet.domain.WalletAmounts
  */
 internal fun PlanDto.toDomain(): SubscriptionPlan? {
     val planCode = code?.takeIf { it.isNotBlank() } ?: return null
-    val scale = SubscriptionAmounts.scaleOf(
-        monthly = monthlyPrice,
-        monthlySom = monthlyPriceSom,
-        yearly = yearlyPrice,
-        yearlySom = yearlyPriceSom,
-    )
     return SubscriptionPlan(
         code = planCode,
         name = name?.takeIf { it.isNotBlank() },
@@ -38,9 +31,8 @@ internal fun PlanDto.toDomain(): SubscriptionPlan? {
         tier = tier?.takeIf { it.isNotBlank() },
         // Отрицательная цена — ошибка сервера: «−10 000 в месяц» на карточке
         // тарифа не значит ничего, а на решение влияет как ноль.
-        monthlySum = WalletAmounts.toSom(monthlyPrice, scale).coerceAtLeast(0),
-        yearlySum = WalletAmounts.toSom(yearlyPrice, scale).coerceAtLeast(0),
-        amountScale = scale,
+        monthlySum = (monthlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
+        yearlySum = (yearlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
         yearlyDiscountPercent = yearlyDiscountPercent?.coerceIn(0, MAX_PERCENT) ?: 0,
         trialDays = trialDays?.coerceAtLeast(0) ?: 0,
         isFree = isFree ?: free ?: false,
@@ -77,14 +69,13 @@ private fun PlanDto.features(): Set<PlanFeature> = buildSet {
  * без зоны, и иначе срок подписки был бы пуст у всех.
  */
 internal fun SubscriptionDto.toDomain(): Subscription {
-    val scale = WalletAmounts.scaleOf(pricePaid, pricePaidSom)
     return Subscription(
         id = id?.takeIf { it.isNotBlank() },
         planCode = planCode?.takeIf { it.isNotBlank() },
         planName = planName?.takeIf { it.isNotBlank() },
         status = SubscriptionStatus.fromServer(status),
         billingPeriod = BillingPeriod.fromServer(billingPeriod),
-        pricePaidSum = WalletAmounts.toSom(pricePaid, scale).coerceAtLeast(0),
+        pricePaidSum = (pricePaid ?: 0).tiyinToSom().coerceAtLeast(0),
         startedAt = parseServerInstant(startedAt),
         expiresAt = parseServerInstant(expiresAt),
         autoRenew = autoRenew ?: false,
@@ -103,13 +94,7 @@ internal fun SubscriptionDto.toDomain(): Subscription {
  * операция кошелька: в `LazyColumn` он дубликат ключа, а отличить его от
  * соседнего всё равно нечем.
  *
- * **Единица суммы выведена быть не может** — в отличие от кошелька (issue #62)
- * и цен тарифа, у `amount` нет дробного близнеца `amountSom`. Читается как
- * тийины: так названы денежные поля в остальной схеме бэкенда (`mrrTiyin`,
- * `walletRevenueTiyin`), и тот же делитель приложение уже использует, когда
- * отправляет сумму пополнения. Если бэкенд хранит платежи в сумах, суммы в
- * истории окажутся в сто раз меньше — это первое, что надо проверить живым
- * ответом (риск записан в отчёт задачи).
+ * `amount` — тийины, как и все целые денежные поля бэкенда (issue #149).
  */
 internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
     val chargeId = id?.takeIf { it.isNotBlank() } ?: return null
@@ -118,7 +103,7 @@ internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
         id = chargeId,
         // Отрицательное списание — ошибка сервера: «−49 000» в истории платежей
         // не значит ничего.
-        amountSum = WalletAmounts.toSom(amount, WalletAmounts.TIYIN_IN_SOM).coerceAtLeast(0),
+        amountSum = (amount ?: 0).tiyinToSom().coerceAtLeast(0),
         status = ChargeStatus.fromServer(status),
         provider = ChargeProvider.fromServer(provider),
         purpose = purpose?.takeIf { it.isNotBlank() },

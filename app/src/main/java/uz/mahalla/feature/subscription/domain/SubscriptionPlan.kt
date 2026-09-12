@@ -1,13 +1,11 @@
 package uz.mahalla.feature.subscription.domain
 
-import uz.mahalla.feature.wallet.domain.WalletAmounts
-
 /**
  * Тариф подписки (`PlanResponse`, issue #103, эпик #13).
  *
  * Все суммы — целые сумы, как и везде в приложении
- * ([uz.mahalla.core.format.MoneyFormatter]): пересчёт из младших единиц
- * бэкенда делает [SubscriptionAmounts] на границе данных.
+ * ([uz.mahalla.core.format.MoneyFormatter]): пересчёт из тийинов бэкенда
+ * делает [uz.mahalla.core.format.Money] в маппере (issue #149).
  *
  * @param code машинный код (`FREE`, `PRO`, …) — им же тариф оформляется и по
  * нему же сверяется с текущей подпиской. Тариф без кода до домена не доезжает:
@@ -18,10 +16,6 @@ import uz.mahalla.feature.wallet.domain.WalletAmounts
  * @param yearlyDiscountPercent выгода годовой оплаты по версии сервера.
  * @param trialDays сколько дней пробного периода даёт тариф; `0` — не даёт.
  * @param features возможности-флаги, [maxPlaces] и соседи — числовые лимиты.
- * @param amountScale делитель, которым суммы этого тарифа переведены в сумы.
- * Хранится в домене по той же причине, что и у кошелька: если однажды
- * понадобится отправить сумму обратно, переводить её надо тем же делителем,
- * который вывела эта же выдача.
  */
 data class SubscriptionPlan(
     val code: String,
@@ -32,7 +26,6 @@ data class SubscriptionPlan(
     val tier: String? = null,
     val monthlySum: Long = 0,
     val yearlySum: Long = 0,
-    val amountScale: Long = WalletAmounts.TIYIN_IN_SOM,
     val yearlyDiscountPercent: Int = 0,
     val trialDays: Int = 0,
     val isFree: Boolean = false,
@@ -168,33 +161,4 @@ enum class PlanFeature {
     MultiStaff,
     CustomBranding,
     ApiAccess,
-}
-
-/**
- * Единица цен тарифа (тот же приём, что у кошелька в issue #62).
- *
- * Бэкенд отдаёт каждую цену дважды — целым числом (`monthlyPrice`) и дробным
- * «в сумах» (`monthlyPriceSom`), — а что за единица у целого поля, схема не
- * говорит. Делитель поэтому не зашивается, а выводится из самой пары.
- *
- * Пар две, и это важно: у тарифа вполне может быть только годовая цена
- * (месячная — ноль), и тогда месячная пара ничего не доказывает. Берётся
- * первая пара, у которой оба числа ненулевые; нет ни одной (бесплатный тариф)
- * — делитель не важен, ноль остаётся нулём.
- */
-object SubscriptionAmounts {
-
-    fun scaleOf(
-        monthly: Long?,
-        monthlySom: Double?,
-        yearly: Long?,
-        yearlySom: Double?,
-    ): Long = when {
-        isConclusive(monthly, monthlySom) -> WalletAmounts.scaleOf(monthly, monthlySom)
-        isConclusive(yearly, yearlySom) -> WalletAmounts.scaleOf(yearly, yearlySom)
-        else -> WalletAmounts.TIYIN_IN_SOM
-    }
-
-    private fun isConclusive(minor: Long?, som: Double?): Boolean =
-        minor != null && som != null && minor != 0L && som != 0.0
 }

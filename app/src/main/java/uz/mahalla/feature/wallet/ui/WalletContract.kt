@@ -53,15 +53,13 @@ data class WalletState(
     val canTopUp: Boolean
         get() = loadedWallet?.status?.let { it != WalletStatus.Blocked } == true
 
-    /** Баланс, который уже приехал, — источник делителя единиц бэкенда. */
+    /** Баланс, который уже приехал: без него пополнять нечего. */
     val loadedWallet: Wallet? get() = (wallet as? ScreenState.Content)?.data
 }
 
 /**
  * Шторка пополнения.
  *
- * @param scale делитель единиц бэкенда из выдачи баланса — он же задаёт
- * минимум в сумах.
  * @param errors проверка черновика. Показываются только после первой попытки
  * отправки ([showErrors]): подсвечивать пустое поле сразу после открытия
  * шторки — ругать человека за то, что он ещё не начал.
@@ -70,13 +68,12 @@ data class WalletState(
  */
 data class TopUpState(
     val draft: TopUpDraft = TopUpDraft(),
-    val scale: Long,
     val isSubmitting: Boolean = false,
     val showErrors: Boolean = false,
     val errors: Set<TopUpError> = emptySet(),
     val failure: ApiFailure? = null,
 ) {
-    val minAmountSum: Long get() = WalletTopUp.minAmountSum(scale)
+    val minAmountSum: Long get() = WalletTopUp.MIN_AMOUNT_SUM
 
     val visibleErrors: Set<TopUpError> get() = if (showErrors) errors else emptySet()
 }

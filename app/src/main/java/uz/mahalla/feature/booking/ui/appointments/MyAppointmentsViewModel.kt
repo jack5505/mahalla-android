@@ -9,7 +9,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.booking.data.AppointmentsSource
 import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.booking.domain.Appointment
@@ -27,15 +26,11 @@ sealed interface MyAppointmentsEffect : UiEffect {
      * Перенос: экран уходит выбирать новое время на экран записи — там уже
      * есть и календарь, и слоты, и правило «прошедший слот не предлагать».
      *
-     * Ids едут наружу, а не только `appointmentId`: заведение и услугу
-     * запрашивает `POST appointments`, а взять их больше негде — своего экрана
-     * у одной записи нет, и `GET appointments/{id}` приложение не использует.
+     * Наружу едет вся [RescheduleTarget], а не только `appointmentId`: взять
+     * её там больше негде — своего экрана у одной записи нет, и
+     * `GET appointments/{id}` приложение не использует.
      */
-    data class OpenReschedule(
-        val appointmentId: String,
-        val placeId: String,
-        val serviceId: String,
-    ) : MyAppointmentsEffect
+    data class OpenReschedule(val target: RescheduleTarget) : MyAppointmentsEffect
 }
 
 /**
@@ -74,6 +69,7 @@ class MyAppointmentsViewModel @Inject constructor(
         AppointmentVertical.Doctor -> hospitalRepository
     }
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -88,14 +84,16 @@ class MyAppointmentsViewModel @Inject constructor(
 
     override fun onEvent(event: MyAppointmentsEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние. Деление на активные и прошедшие при этом
-            // пересчитывается всегда — время идёт и без запросов.
+            // Деление на активные и прошедшие пересчитывается всегда — время
+            // идёт и без запросов. Защита загрузки от дубля (первый resume,
+            // два resume подряд) — общая, см. MviViewModel.onScreenResumed
+            // (issue #145, #209).
             MyAppointmentsEvent.ScreenResumed -> {
                 updateState { withSections(appointmentsOrEmpty()) }
-                if (!currentState.appointments.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(
+                    isLoadInFlight = { loadJob?.isActive == true },
+                    load = { load(showLoading = false) },
+                )
             }
 
             MyAppointmentsEvent.Refreshed -> load(showLoading = false, refreshing = true)
@@ -127,9 +125,16 @@ class MyAppointmentsViewModel @Inject constructor(
         val appointment = appointmentOrNull(appointmentId)?.takeIf { it.canReschedule } ?: return
         emitEffect(
             MyAppointmentsEffect.OpenReschedule(
-                appointmentId = appointment.id,
-                placeId = appointment.placeId.orEmpty(),
-                serviceId = appointment.serviceId.orEmpty(),
+                RescheduleTarget(
+                    appointmentId = appointment.id,
+                    placeId = appointment.placeId.orEmpty(),
+                    serviceId = appointment.serviceId.orEmpty(),
+                    // Подпись и прежнее время — то, что человек видел в строке,
+                    // по которой нажал «перенести» (issue #155).
+                    serviceName = appointment.serviceName.orEmpty(),
+                    date = appointment.date,
+                    startTime = appointment.startTime,
+                ),
             ),
         )
     }
@@ -146,7 +151,7 @@ class MyAppointmentsViewModel @Inject constructor(
                 cancelFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myAppointments(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

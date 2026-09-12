@@ -10,8 +10,10 @@ import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
+import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceFilterEngine
+import uz.mahalla.feature.media.data.MediaRepository
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
@@ -40,6 +42,18 @@ interface CatalogRepository {
 
     suspend fun places(filters: DiscoveryFilters, page: Int = 0): ApiResult<PlacePage>
 
+    /**
+     * Места в видимой области карты (issue #168).
+     *
+     * Без кэша и без страниц: кэш Room — срез радиуса вокруг человека, и
+     * подставлять его вместо области, на которую человек только что посмотрел,
+     * значит показать маркеры не там, где он смотрит.
+     */
+    suspend fun placesInBounds(
+        bounds: GeoBounds,
+        filters: DiscoveryFilters = DiscoveryFilters(),
+    ): ApiResult<List<Place>>
+
     suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails>
 
     suspend fun reviews(placeId: String, page: Int = 0): ApiResult<List<Review>>
@@ -49,6 +63,13 @@ interface CatalogRepository {
 
     /** Удалить свой отзыв. Чей он — проверяет бэкенд по токену. */
     suspend fun deleteReview(reviewId: String): ApiResult<Unit>
+
+    /**
+     * Удалить свою фотографию из галереи места (issue #185). Прокси до
+     * [MediaRepository.deleteMedia] — карточка места знает только про
+     * `CatalogRepository`, отдельная зависимость на медиа ей не нужна.
+     */
+    suspend fun deleteMediaFile(id: String): ApiResult<Unit>
 }
 
 /**
@@ -86,6 +107,7 @@ class DefaultCatalogRepository @Inject constructor(
     private val api: CatalogApi,
     private val placeDao: PlaceDao,
     private val locationProvider: RequestLocationProvider,
+    private val media: MediaRepository,
     private val clock: Clock,
 ) : CatalogRepository {
 
@@ -130,6 +152,28 @@ class DefaultCatalogRepository @Inject constructor(
         }
     }
 
+    /**
+     * Ответ по области не фильтруется повторно и не сортируется по расстоянию:
+     * на карте маркеры не в списке, порядок им ни о чём не говорит, а вырезать
+     * из кадра валидную выдачу локальным фильтром — дыры в тех местах, где
+     * заведение видно глазом.
+     */
+    override suspend fun placesInBounds(
+        bounds: GeoBounds,
+        filters: DiscoveryFilters,
+    ): ApiResult<List<Place>> {
+        val location = location()
+        return apiCall {
+            api.mapBounds(
+                minLatitude = bounds.minLatitude,
+                minLongitude = bounds.minLongitude,
+                maxLatitude = bounds.maxLatitude,
+                maxLongitude = bounds.maxLongitude,
+                category = filters.apiCategory(),
+            ).payload().map { it.toDomain(location) }
+        }
+    }
+
     override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> {
         val place = apiCall { api.place(placeId).payload() }
         if (place is ApiResult.Failure) {
@@ -147,10 +191,12 @@ class DefaultCatalogRepository @Inject constructor(
         val dto = (place as ApiResult.Success).data
         val location = location()
         cacheDetails(dto, location)
-        // Отзывы — отдельный запрос: их отсутствие не должно ронять карточку,
-        // ради которой человек сюда пришёл.
+        // Отзывы и галерея — отдельные запросы: их отсутствие не должно
+        // ронять карточку, ради которой человек сюда пришёл.
         val reviews = reviews(placeId).let { if (it is ApiResult.Success) it.data else emptyList() }
-        return ApiResult.Success(dto.toDetails(reviews, location))
+        val gallery = media.mediaForEntity(placeId)
+            .let { if (it is ApiResult.Success) it.data else emptyList() }
+        return ApiResult.Success(dto.toDetails(reviews, gallery, location))
     }
 
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> =
@@ -178,6 +224,8 @@ class DefaultCatalogRepository @Inject constructor(
 
     override suspend fun deleteReview(reviewId: String): ApiResult<Unit> =
         apiCall { api.deleteReview(reviewId).ensureSuccess() }
+
+    override suspend fun deleteMediaFile(id: String): ApiResult<Unit> = media.deleteMedia(id)
 
     /**
      * Координаты обязательны для `places/nearby` и нужны, чтобы посчитать

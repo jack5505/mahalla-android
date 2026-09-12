@@ -21,9 +21,8 @@ import uz.mahalla.data.network.ApiResponse
  *   ([uz.mahalla.feature.subscription.domain.SubscriptionCharge.isSubscriptionPurpose]);
  * - **отдаёт сырую сущность** `PaymentTransaction`, а не отдельный
  *   `*Response`: отсюда и `createdBy`/`updatedBy` в схеме, которые приложению
- *   не нужны, и — важнее — **отсутствие пары `amountSom`**. У кошелька единица
- *   целых сумм выводится из такой пары (issue #62), здесь выводить её нечем,
- *   поэтому `amount` читается как тийины (см. `toDomain`);
+ *   не нужны. `amount` — тийины, как и все целые денежные поля бэкенда
+ *   (issue #149, [uz.mahalla.core.format.Money]);
  * - `purposeId` (id подписки) в домен не берётся: показывать его человеку
  *   нечем, а перехода к сущности бэкенд не даёт.
  *

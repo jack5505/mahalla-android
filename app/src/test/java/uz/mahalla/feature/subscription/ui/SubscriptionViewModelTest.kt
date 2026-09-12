@@ -321,6 +321,10 @@ class SubscriptionViewModelTest {
         }
         val viewModel = viewModel(repository)
 
+        // Первый resume — это открытие экрана, тарифы уже запросил `init`.
+        viewModel.onEvent(SubscriptionEvent.ScreenResumed)
+        assertEquals(1, repository.currentCount)
+
         viewModel.onEvent(SubscriptionEvent.ScreenResumed)
 
         assertEquals(2, repository.currentCount)

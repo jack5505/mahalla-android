@@ -7,12 +7,14 @@ import uz.mahalla.data.db.entity.PlaceEntity
 import uz.mahalla.feature.discovery.data.CatalogRepository
 import uz.mahalla.feature.discovery.data.PlacePage
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
+import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.place.domain.PlaceDetails
 import uz.mahalla.feature.place.domain.Review
 import uz.mahalla.feature.place.domain.ReviewDraft
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -53,12 +55,28 @@ class FakeCatalogRepository : CatalogRepository {
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
     var addReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var deleteReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var deleteMediaResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Гейт для проверки гонки: удаление фото висит, пока его не открыли. */
+    var deleteMediaGate: CompletableDeferred<Unit>? = null
 
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
+
+    /** Области, по которым карта ходила за маркерами (issue #168). */
+    val requestedBounds: MutableList<GeoBounds> = mutableListOf()
+
+    var boundsResult: ApiResult<List<Place>> = ApiResult.Success(emptyList())
+
+    /** Гейт для проверки отмены: запрос по области виснет, пока его не открыли. */
+    var boundsGate: CompletableDeferred<Unit>? = null
+
+    /** То же для радиусной выдачи — ею проверяется гонка первого кадра с областью. */
+    var pagesGate: CompletableDeferred<Unit>? = null
 
     /** Черновики отправленных отзывов — тест проверяет, что уехало на сервер. */
     val addedReviews: MutableList<Pair<String, ReviewDraft>> = mutableListOf()
     val deletedReviews: MutableList<String> = mutableListOf()
+    val deletedMedia: MutableList<String> = mutableListOf()
 
     /** Сколько раз запрашивалась карточка: перезапрос после отзыва — часть контракта. */
     var detailsRequests: Int = 0
@@ -74,7 +92,17 @@ class FakeCatalogRepository : CatalogRepository {
 
     override suspend fun places(filters: DiscoveryFilters, page: Int): ApiResult<PlacePage> {
         requestedFilters += filters to page
+        pagesGate?.await()
         return pages[page] ?: ApiResult.Failure(ApiError.NotFound)
+    }
+
+    override suspend fun placesInBounds(
+        bounds: GeoBounds,
+        filters: DiscoveryFilters,
+    ): ApiResult<List<Place>> {
+        requestedBounds += bounds
+        boundsGate?.await()
+        return boundsResult
     }
 
     override suspend fun placeDetails(placeId: String): ApiResult<PlaceDetails> {
@@ -92,6 +120,12 @@ class FakeCatalogRepository : CatalogRepository {
     override suspend fun deleteReview(reviewId: String): ApiResult<Unit> {
         deletedReviews += reviewId
         return deleteReviewResult
+    }
+
+    override suspend fun deleteMediaFile(id: String): ApiResult<Unit> {
+        deletedMedia += id
+        deleteMediaGate?.await()
+        return deleteMediaResult
     }
 }
 
