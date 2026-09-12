@@ -11,7 +11,7 @@
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Рядом</string>
-    <string name="nav_orders">Заказы</string>
+    <string name="nav_activity">Активности</string>
     <string name="nav_wallet">Кошелёк</string>
     <string name="nav_profile">Профиль</string>
 

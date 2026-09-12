@@ -15,7 +15,7 @@
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Yaqin atrofda</string>
-    <string name="nav_orders">Buyurtmalar</string>
+    <string name="nav_activity">Amallarim</string>
     <string name="nav_wallet">Hamyon</string>
     <string name="nav_profile">Profil</string>
 
