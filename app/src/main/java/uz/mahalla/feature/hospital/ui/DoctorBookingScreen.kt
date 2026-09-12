@@ -46,6 +46,7 @@ import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
+import uz.mahalla.feature.hospital.domain.DoctorSlot
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -127,7 +128,7 @@ fun DoctorBookingContent(
                 DatesRow(state = state, onEvent = onEvent)
 
                 SectionHeader(title = stringResource(R.string.doctor_booking_time_title))
-                TimesBlock(state = state, onEvent = onEvent)
+                SlotsBlock(state = state, onEvent = onEvent)
 
                 SectionHeader(title = stringResource(R.string.doctor_booking_complaint_title))
                 ComplaintField(state = state, onEvent = onEvent)
@@ -243,47 +244,44 @@ private fun DayOfWeek.labelRes(): Int = when (this) {
     DayOfWeek.SUNDAY -> R.string.weekday_short_sun
 }
 
-/**
- * Время приёма. Подпись под сеткой обязательна: это **не** свободные слоты —
- * занятость врача бэкенд не сообщает, — и выдать их за проверенные значило бы
- * обещать от имени сервера то, чего он не говорил.
- */
+/** Свободные слоты врача на выбранный день (issue #181). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TimesBlock(
+private fun SlotsBlock(
     state: DoctorBookingState,
     onEvent: (DoctorBookingEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMahallaColors.current
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
-        if (state.times.isEmpty()) {
-            // Сегодняшний приём закончился: остальные дни в календаре есть.
-            Text(
-                text = stringResource(R.string.doctor_booking_times_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.fgMuted,
-            )
-            return@Column
-        }
+    when (val slots = state.slots) {
+        is ScreenState.Loading -> CardSkeleton(modifier = modifier)
 
-        FlowRow(
-            modifier = Modifier.selectableGroup(),
+        // Свободных слотов нет — это ответ сервера, а не сбой: человеку нужно
+        // выбрать другой день, и текст говорит именно это.
+        is ScreenState.Empty -> Text(
+            text = stringResource(R.string.doctor_booking_slots_empty),
+            modifier = modifier,
+            style = MaterialTheme.typography.bodyMedium,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+
+        is ScreenState.Error -> InlineFailure(
+            failure = slots.failure,
+            onRetry = { onEvent(DoctorBookingEvent.SlotsRetry) },
+            modifier = modifier,
+        )
+
+        is ScreenState.Content -> FlowRow(
+            modifier = modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {
-            state.times.forEach { time ->
+            slots.data.forEach { slot ->
                 MahallaFilterChip(
-                    label = DateTimeFormatters.time(time),
-                    selected = time == state.draft.time,
-                    onClick = { onEvent(DoctorBookingEvent.TimeSelected(time)) },
+                    label = DateTimeFormatters.time(slot.time),
+                    selected = slot == state.draft.slot,
+                    onClick = { onEvent(DoctorBookingEvent.SlotSelected(slot)) },
                 )
             }
         }
-        Text(
-            text = stringResource(R.string.doctor_booking_times_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.fgMuted,
-        )
     }
 }
 
@@ -336,7 +334,7 @@ private fun SummaryBlock(
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
         val doctor = state.selectedDoctor
         val date = state.draft.date
-        val time = state.draft.time
+        val time = state.draft.slot?.time
         if (doctor != null && date != null && time != null) {
             MahallaCard {
                 Text(
@@ -452,11 +450,17 @@ private fun DoctorBookingPreview() {
                     ),
                 ),
                 dates = listOf(LocalDate.of(2026, 9, 4), LocalDate.of(2026, 9, 5)),
-                times = listOf(LocalTime.of(9, 0), LocalTime.of(9, 30), LocalTime.of(10, 0)),
+                slots = ScreenState.Content(
+                    listOf(
+                        DoctorSlot("09:00", LocalTime.of(9, 0)),
+                        DoctorSlot("09:30", LocalTime.of(9, 30)),
+                        DoctorSlot("10:00", LocalTime.of(10, 0)),
+                    ),
+                ),
                 draft = DoctorAppointmentDraft(
                     doctorId = "d-1",
                     date = LocalDate.of(2026, 9, 4),
-                    time = LocalTime.of(9, 30),
+                    slot = DoctorSlot("09:30", LocalTime.of(9, 30)),
                 ),
             ),
             onEvent = {},
