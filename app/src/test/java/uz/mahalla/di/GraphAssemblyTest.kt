@@ -187,6 +187,10 @@ class GraphAssemblyTest {
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
                     locationProvider = locationProvider(context),
+                    media = DefaultMediaRepository(
+                        api = MediaDataModule.provideMediaApi(retrofit),
+                        compressor = AndroidImageCompressor(context),
+                    ),
                     clock = AppModule.provideClock(),
                 ),
             )
@@ -263,6 +267,7 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             userProfileStore = DataStoreUserProfileStore(dataStore),
+            formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),

@@ -3,6 +3,7 @@ package uz.mahalla.feature.freelancer.data
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.paging.hasMorePages
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
@@ -37,6 +38,32 @@ internal fun FreelancerDto.toDomain(): Freelancer? {
         isAvailable = isAvailable ?: available ?: true,
         ratingAvg = ratingAvg?.coerceAtLeast(0.0) ?: 0.0,
         ratingCount = ratingCount?.coerceAtLeast(0) ?: 0,
+    )
+}
+
+/**
+ * Разбор мягкий, как в каталоге: услуга без `id` отбрасывается — заказать её
+ * нечем (`serviceId` идёт в тело заказа), а в списке она стала бы дубликатом
+ * ключа. Домен переиспользует [BarberService] барбершопа: набор полей на
+ * экране один и тот же, а `freelancerId` уже известен вызывающей стороне
+ * (`route.freelancerId`) и на экран не идёт.
+ *
+ * Выключенные (`isActive: false`) сюда доезжают — отсеивает их
+ * [FreelancerRepository.services], чтобы правило было видно в одном месте
+ * (то же решение, что у брони, issue #97).
+ */
+internal fun FreelancerServiceDto.toDomain(): BarberService? {
+    val serviceId = id?.takeIf { it.isNotBlank() } ?: return null
+    return BarberService(
+        id = serviceId,
+        title = title?.takeIf { it.isNotBlank() }.orEmpty(),
+        description = description?.trim()?.takeIf { it.isNotEmpty() },
+        // Отрицательная цена — не скидка, а мусор.
+        priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
+        durationMinutes = durationMinutes?.takeIf { it > 0 },
+        // Молчание сервера — «услуга оказывается»: спрятать её из-за
+        // отсутствующего флага хуже, чем показать лишнюю.
+        isActive = isActive ?: active ?: true,
     )
 }
 

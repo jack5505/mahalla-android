@@ -223,6 +223,14 @@ data object SubscriptionRoute
 @Serializable
 data class PlaceRoute(val placeId: String)
 
+/**
+ * «Сотрудники» заведения (issue #189). Вне обоих графов, как «мои заведения»:
+ * открывается со своей карточки в [MyPlacesRoute], доступ владельцу проверяет
+ * ещё раз сам бэкенд.
+ */
+@Serializable
+data class PlaceStaffRoute(val placeId: String)
+
 // --- Вертикаль «Очередь» (эпик #10, issue #96) ---
 
 /**
@@ -508,11 +516,17 @@ data object MyTicketsRoute
  * @param placeName название аптеки. Едет маршрутом по той же причине, что и у
  * [QueueRoute], [BookingRoute] и [MenuRoute]: в ответе `pharmacy/.../products`
  * его нет, а шапка без имени места читается как чужая.
+ * @param isOwner владелец/менеджер заведения (issue #252): экран получает
+ * действия «добавить товар» и «править остаток». Выставляется вызывающей
+ * стороной — сегодня только «Моими заведениями», где принадлежность уже
+ * известна из `places/my`, — а не проверяется на месте: у товара аптеки нет
+ * своего `ownerId`, по которому это можно было бы сделать здесь.
  */
 @Serializable
 data class PharmacyRoute(
     val placeId: String,
     val placeName: String = "",
+    val isOwner: Boolean = false,
 )
 
 // --- Вертикаль «Еда» (эпик 5): меню → корзина → checkout → статус ---

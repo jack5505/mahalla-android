@@ -219,6 +219,10 @@ class ProfileViewModelTest {
         val sessions = FakeSessionsRepository(listOf(session("s-1")))
         val viewModel = viewModel(sessions = sessions)
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+        assertEquals(1, sessions.sessionsCount)
+
         viewModel.onEvent(ProfileEvent.ScreenResumed)
 
         // Вход с другого устройства мог случиться, пока приложение было в фоне.

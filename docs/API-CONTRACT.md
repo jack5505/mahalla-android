@@ -385,15 +385,18 @@ GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
 Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
 ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
-**Аватара автора отзыва у сервера нет вовсе** (сверено 2026-09-10, после
-развода коллизии; раньше схема `Response` была перекрыта, issue #60/#76).
-`ReviewResponse {id, placeId, userId, rating, text, isVerified, helpfulCount,
-ownerReply, createdAt}` — ни фото, ни имени, только `userId`. Три имени
-(`userAvatarUrl`, `avatarUrl`, `userAvatar`), под которыми `ReviewDto` ищет
-поле, ни одному ничего не соответствует — как и трём именам автора. Экран не
-ломается: пустое имя подменяется словом «аноним», и в аватаре видна его первая
-буква. Но настоящего автора у отзыва на экране нет и не будет, пока бэкенд не
-скажет, чем его называть — живой баг, issue #192.
+**Аватара и имени автора отзыва у сервера нет вовсе** (сверено 2026-09-10,
+после развода коллизии; раньше схема `Response` была перекрыта, issue
+#60/#76). `ReviewResponse {id, placeId, userId, rating, text, isVerified,
+helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, только `userId`.
+`ReviewDto` больше не гадает алиасы `userName`/`userAvatarUrl` — их снесли.
+Заодно добавлены поля `isVerified`, `helpfulCount`, `ownerReply` — они есть в
+`ReviewResponse`, но раньше в DTO не были описаны вовсе, поэтому молча
+отбрасывались (issue #192, закрыт отрицательным ответом бэкенда про
+имя/аватар). Экран
+показывает отзыв без имени (плейсхолдер «гость», первая буква в аватаре — от
+него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
+теперь разбирается и выводится под текстом отзыва.
 
 ## FashionApi ⚠️
 
@@ -420,15 +423,19 @@ ownerReply, createdAt}` — ни фото, ни имени, только `userId
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
 
-**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
-оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
-#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
-fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
-`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
-(состав берётся из серверной корзины `fashion/cart*`), зато есть
-`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
-`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
-пути больше нет.
+**`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
+2026-09-10, issue #167; исправлено в issue #221). У пути свой
+`FashionPlaceOrderRequest`, отдельный от `FoodPlaceOrderRequest` «Еды»:
+обязателен **`storeId`** (а не `placeId`), поля `items` нет вовсе (состав
+заказа сервер берёт из серверной корзины `fashion/cart*`, которую клиент уже
+ведёт). Клиент отправляет `FashionPlaceOrderRequestDto` (`storeId`,
+`fulfillment`, `paymentMethod`, `deliveryAddress`).
+
+Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
+**сознательно не шлёт**: на экране оформления нет ни выбора точки на карте,
+ни поля промокода. Не проверено живым запросом (`401` до валидации тела,
+`CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
+(`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
 ## FoodApi ✅
 
@@ -461,13 +468,16 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | POST | `freelancers/{id}/orders` |
 | GET | `freelancers/orders/my` |
 
-**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
-(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
-title, description, priceAmount, durationMinutes, isActive}`, а клиент
-разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
-мастера будет пустое название и цена 0. До развода коллизии обе ручки
-выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
-только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
+**`freelancers/{id}/services` отдавала не ту схему, которой её разбирали**
+(сверено 2026-09-10, issue #216, исправлено). Здесь `FreelancerServiceResponse
+{id, freelancerId, title, description, priceAmount, durationMinutes,
+isActive}`, а клиент до исправления разбирал ответ барберским `ServiceDto`
+(`name`, `price`) — у каждой услуги мастера было пустое название и цена 0. До
+развода коллизии обе ручки выглядели как одна схема `ServiceResponse`, отсюда
+и ошибка; не всплыла она на стенде только потому, что каталог мастеров там
+пуст. Теперь ответ разбирает свой `FreelancerServiceDto`
+(`FreelancerApi.kt`), домен — общий `BarberService` барбершопа: набор полей на
+экране один и тот же, а `freelancerId` уже известен вызывающей стороне.
 
 ## GamingApi ⚠️ частично
 
@@ -508,8 +518,11 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181) |
+| GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -533,22 +546,28 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
 никогда — на экране «мои записи» она останется без имени врача (issue #219).
 
-Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
-`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
-свободные слоты; приложение вместо них рисует сетку времени из
-`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
-бизнес-панельные
+**Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
+`GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и
+показывает ответ сервера как есть — `DoctorSchedule`, клиентская сетка
+времени, ушла вместе со своим тестом. `startTime` записи уходит той же
+строкой, что пришла в слоте, без разбора в `LocalTime` и повторной сборки:
+лишний шаг «разобрали → собрали заново» уже один раз стоил вертикали брони
+пяти часов расхождения между UTC и Asia/Tashkent (issue #144).
+
+Ручки больниц, которые клиент по-прежнему **не** объявляет — бизнес-панельные
 `POST hospitals/places/{placeId}/doctors`,
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
-## MediaApi ✅
+## MediaApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась).
+`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — `POST` сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась). `GET`/`DELETE` (issue #185) объявлены **по схеме из этого же issue и `MediaFile` из `POST`**, живым запросом на стенд не перепроверены — сверить при первом расхождении.
 
 | Метод | Путь |
 |---|---|
 | POST | `media/upload` |
+| GET | `media/entity/{entityId}` |
+| DELETE | `media/{id}` |
 
 `multipart/form-data`, часть называется **`file`**; `entityType` и `entityId` —
 необязательные query-параметры. Ответ — `MediaFile` (`id`, `url`,
@@ -562,8 +581,12 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 проверяется на клиенте до отправки (`MediaUploadLimits`), а картинка
 сжимается.
 
-`GET media/entity/{entityId}` и `DELETE media/{id}` у бэкенда есть, но клиентом
-**не объявлены**: показывать и редактировать загруженное пока нечем.
+`GET media/entity/{entityId}` отдаёт `List<MediaFile>` той же схемы (плюс
+`createdAt`, клиентом не используется); файл без `url` в списке пропускается,
+а не роняет всю галерею. `DELETE media/{id}` отвечает пустым конвертом
+(`ensureSuccess`); прав на удаление в схеме нет — экран показывает кнопку
+только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
+любой другой) отвечает текстом, а не молчанием.
 
 ## NotificationsApi ⚠️
 
@@ -576,13 +599,41 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | PUT | `notifications/read-all` |
 | PUT | `notifications/{id}/read` |
 
-## PharmacyApi ⚠️
+## PharmacyApi ✅
 
-`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt`. `GET
+products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ НЕ СВЕРЕН» здесь стояла
+по ошибке — сам путь в KDoc файла отмечен как проверенный, файл её не
+повторял). `POST products` и `PUT products/{id}/stock` (issue #252, владелец
+правит витрину) сверены схемой `/v3/api-docs` 2026-09-11, но не живым
+запросом — обе требуют Bearer владельца заведения, а `CONTRACT_REFRESH_TOKEN`
+в песочнице не задан.
 
 | Метод | Путь |
 |---|---|
 | GET | `pharmacy/places/{placeId}/products` |
+| POST | `pharmacy/places/{placeId}/products` |
+| PUT | `pharmacy/places/{placeId}/products/{id}/stock` |
+
+**`POST products`** — тело `PharmacyCreateRequest`, имя в `/v3/api-docs`
+коллизией springdoc не перекрыто (встречается только в этом контроллере).
+Обязательны `name` (≤ 300) и `price` (тийины, issue #149); `manufacturer`,
+`description`, `dosageForm`, `strength`, `stockQuantity`,
+`requiresPrescription` необязательны и без ограничения длины в схеме. Ответ —
+`ProductResponse`, клиент его не использует: список товаров перечитывается
+отдельным запросом (тот же приём, что у `PUT places/{id}` выше).
+
+**`PUT products/{id}/stock`** — тело в схеме объявлено безымянной картой
+(`additionalProperties: integer`), тот же случай, что `walkin/accept`/
+`walkin/decline` в PR #161 и `reviews/{id}/reply` в issue #188. Имени ключа
+схема не называет — выведено из соседних схем того же контроллера: и
+`ProductResponse`, и `PharmacyCreateRequest` называют это поле
+`stockQuantity`. Отправляется как `{"stockQuantity": N}`. **Не проверено
+живым запросом** (нужен Bearer владельца заведения, которого в песочнице
+нет) — если бэкенд ждёт другой ключ, тело уйдёт с полем, которого он не
+узнает, и обновление молча не подействует, а не ответит ошибкой; при
+расхождении смотреть сюда в первую очередь и подтвердить настоящим curl'ом
+до релиза.
 
 ## SessionsApi ⚠️
 
@@ -621,6 +672,32 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 | POST | `places` |
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
+
+## PlaceStaffApi ✅
+
+`app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/staff` |
+| POST | `places/{placeId}/staff` |
+| PUT | `places/{placeId}/staff/{staffUserId}` |
+| DELETE | `places/{placeId}/staff/{staffUserId}` |
+
+`role` — закрытое перечисление **`STAFF`/`MANAGER`/`OWNER`**, то же самое, что
+уже приезжает в `Mine.role` у «моих заведений» (`ProviderApi.myPlaces`,
+issue #94) — второй домен-тип под тот же смысл не заводился, клиент
+переиспользует `PlaceStaffRole`. Схемы `PlaceStaffResponse`, `AddRequest`,
+`PlaceStaffChangeRoleRequest` в `/v3/api-docs` встречаются по одному разу,
+коллизии springdoc здесь нет.
+
+`PUT`/`DELETE` адресуют сотрудника по `{staffUserId}` — это `userId`, а не
+`id` записи `PlaceStaffResponse`; клиент `id` записи в домен не переводит,
+им всё равно нечего было бы делать. Найти пользователя по телефону схема не
+даёт (поиска по `users` нет) — ID в форму добавления вводится вручную.
+
+`geoExempt` (`boolean`, необязательный и в запросе, и в ответе) разобран
+DTO→домен, но в интерфейсе не показан: задача его не требовала.
 
 ## SubscriptionsApi ⚠️
 

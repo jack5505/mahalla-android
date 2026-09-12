@@ -215,9 +215,10 @@ class FreelancerRepositoryTest {
 
     /**
      * Фикстура — `FreelancerServiceResponse`, как в живой схеме 2026-09-10:
-     * `title`, `priceAmount`, `description`, `freelancerId`, `isActive`. Это
-     * **не** схема барбершопа (`name`/`price`), хотя разбирает ответ пока
-     * барберский `ServiceDto` — issue #216, см. следующий тест.
+     * `title`, `priceAmount`, `description`, `freelancerId`, `isActive`.
+     * Разбирает свой `FreelancerServiceDto` (issue #216) — не барберский
+     * `ServiceDto` (`name`/`price`), который сюда раньше подставлялся из-за
+     * коллизии springdoc.
      *
      * Выключенные не показываются: заказать их нельзя. Услуга без `id`
      * отбрасывается. Флаг принимается и как `isActive`, и как `active`.
@@ -244,27 +245,26 @@ class FreelancerRepositoryTest {
     }
 
     /**
-     * Живой баг issue #216, закреплённый тестом, чтобы он был виден в CI, а не
-     * только в тексте issue: `title` и `priceAmount` мастера барберский
-     * `ServiceDto` не читает, поэтому на экране — пустое название и цена 0.
-     *
-     * Когда появится свой `FreelancerServiceDto`, ожидания здесь должны стать
-     * `"Kran"` и `150_000L`, и этот тест обязан покраснеть — в этом его
-     * назначение.
+     * Регрессия issue #216: `title` и `priceAmount` мастера — DTO этой
+     * вертикали, а не барберский `ServiceDto`, у которого этих полей нет
+     * вовсе. Название и цена больше не пустые.
      */
     @Test
-    fun `services are parsed with the barber schema - bug 216`() = runTest {
+    fun `services are parsed with the freelancer schema, not the barber one`() = runTest {
         server.enqueue(
             envelope(
                 """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
-                   "priceAmount":150000,"durationMinutes":60,"isActive":true}]""",
+                   "description":"Almashtirish","priceAmount":150000,
+                   "durationMinutes":60,"isActive":true}]""",
             ),
         )
 
         val service = (repository().services("f-1") as ApiResult.Success).data.single()
 
-        assertEquals("", service.title)
-        assertEquals(0L, service.priceSum)
+        assertEquals("Kran", service.title)
+        assertEquals("Almashtirish", service.description)
+        // 150 000 тийинов (issue #149) — это 1 500 сум.
+        assertEquals(1_500L, service.priceSum)
     }
 
     @Test

@@ -114,6 +114,7 @@ fun MahallaFilterRow(
     selectedId: String?,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = modifier
@@ -128,6 +129,7 @@ fun MahallaFilterRow(
                 selected = item.id == selectedId,
                 onClick = { onSelect(item.id) },
                 icon = item.icon,
+                enabled = enabled,
             )
         }
     }

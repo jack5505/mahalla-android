@@ -55,6 +55,10 @@ class FakeCatalogRepository : CatalogRepository {
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
     var addReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var deleteReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var deleteMediaResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Гейт для проверки гонки: удаление фото висит, пока его не открыли. */
+    var deleteMediaGate: CompletableDeferred<Unit>? = null
 
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
 
@@ -72,6 +76,7 @@ class FakeCatalogRepository : CatalogRepository {
     /** Черновики отправленных отзывов — тест проверяет, что уехало на сервер. */
     val addedReviews: MutableList<Pair<String, ReviewDraft>> = mutableListOf()
     val deletedReviews: MutableList<String> = mutableListOf()
+    val deletedMedia: MutableList<String> = mutableListOf()
 
     /** Сколько раз запрашивалась карточка: перезапрос после отзыва — часть контракта. */
     var detailsRequests: Int = 0
@@ -115,6 +120,12 @@ class FakeCatalogRepository : CatalogRepository {
     override suspend fun deleteReview(reviewId: String): ApiResult<Unit> {
         deletedReviews += reviewId
         return deleteReviewResult
+    }
+
+    override suspend fun deleteMediaFile(id: String): ApiResult<Unit> {
+        deletedMedia += id
+        deleteMediaGate?.await()
+        return deleteMediaResult
     }
 }
 

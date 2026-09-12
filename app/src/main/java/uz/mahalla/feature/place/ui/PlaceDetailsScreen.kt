@@ -3,7 +3,9 @@ package uz.mahalla.feature.place.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Delete
@@ -37,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -71,6 +75,7 @@ import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.ui.distanceLabel
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -192,6 +197,17 @@ fun PlaceDetailsContent(
             destructive = true,
         )
     }
+
+    state.galleryDeletePending?.let {
+        MahallaDialog(
+            title = stringResource(R.string.place_gallery_delete_title),
+            text = stringResource(R.string.place_gallery_delete_text),
+            confirmLabel = stringResource(R.string.action_delete),
+            onConfirm = { onEvent(PlaceDetailsEvent.GalleryPhotoDeleteConfirmed) },
+            onDismiss = { onEvent(PlaceDetailsEvent.GalleryPhotoDeleteDismissed) },
+            destructive = true,
+        )
+    }
 }
 
 @Composable
@@ -207,7 +223,16 @@ private fun DetailsList(
         contentPadding = PaddingValues(bottom = Spacing.gutter),
     ) {
         item(key = "gallery") {
-            Gallery(photos = details.photos, placeName = details.place.name)
+            Gallery(
+                photos = details.photos,
+                placeName = details.place.name,
+                userId = state.userId,
+                onDeleteRequested = { onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(it)) },
+            )
+        }
+
+        state.galleryDeleteFailure?.let { failure ->
+            item(key = "gallery-failure") { ApiFailureText(failure = failure) }
         }
 
         item(key = "summary") { Summary(details = details, openNow = state.openNow) }
@@ -256,18 +281,29 @@ private fun DetailsList(
 }
 
 /**
- * Галерея (issue #60): фотографии заведения лентой.
+ * Галерея (issue #60, #185): фотографии заведения лентой — из
+ * `media/entity/{placeId}`, а обложка с логотипом только запасной вариант.
  *
  * Одна фотография занимает не всю ширину намеренно — край следующей говорит,
  * что ленту можно листать. Подпись для TalkBack одна на весь блок: читать
  * «фотографии такого-то» столько раз, сколько снимков, бессмысленно.
+ *
+ * В сетку идёт [MediaFile.thumbnailUrl] — полный размер сюда не грузим
+ * (issue #185); все ссылки идут тем же `MahallaAsyncImage`, то есть через тот
+ * же белый список схем, что и везде в приложении (issue #139).
  */
 @Composable
-private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier = Modifier) {
+private fun Gallery(
+    photos: List<MediaFile>,
+    placeName: String,
+    userId: String?,
+    onDeleteRequested: (MediaFile) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     // Ключ элемента LazyRow — сама ссылка, а дубликат ключа роняет список.
     // Бэкенд повторов и пустых строк не обещает, поэтому чистим здесь: то же
     // решение, что у SearchHistory.decode (PR #23).
-    val shown = remember(photos) { photos.filter(String::isNotBlank).distinct() }
+    val shown = remember(photos) { photos.filter { it.url.isNotBlank() }.distinctBy { it.url } }
     if (shown.isEmpty()) return
     val description = stringResource(R.string.image_gallery_of, placeName)
     LazyRow(
@@ -276,18 +312,57 @@ private fun Gallery(photos: List<String>, placeName: String, modifier: Modifier 
             .semantics { contentDescription = description },
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        items(items = shown, key = { it }) { photo ->
-            MahallaAsyncImage(
-                url = photo,
-                contentDescription = null,
-                modifier = Modifier.size(
-                    width = MahallaComponentDefaults.galleryImageWidth,
-                    height = MahallaComponentDefaults.galleryImageHeight,
-                ),
+        items(items = shown, key = { it.url }) { photo ->
+            GalleryPhoto(
+                photo = photo,
+                // Своё фото — то, у которого есть и id, и владелец, совпавший
+                // с вошедшим: запасной вариант (id пуст) удалить нельзя, а
+                // чужое бэкенд всё равно отклонит.
+                isMine = photo.id.isNotBlank() &&
+                    userId != null &&
+                    photo.ownerId == userId,
+                onDeleteRequested = { onDeleteRequested(photo) },
             )
         }
     }
 }
+
+@Composable
+private fun GalleryPhoto(
+    photo: MediaFile,
+    isMine: Boolean,
+    onDeleteRequested: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        MahallaAsyncImage(
+            url = photo.thumbnailUrl ?: photo.url,
+            contentDescription = null,
+            modifier = Modifier.size(
+                width = MahallaComponentDefaults.galleryImageWidth,
+                height = MahallaComponentDefaults.galleryImageHeight,
+            ),
+        )
+        if (isMine) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(Spacing.item / 2)
+                    .background(GALLERY_DELETE_SCRIM, CircleShape),
+            ) {
+                MahallaIconButton(
+                    icon = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.place_gallery_delete),
+                    onClick = onDeleteRequested,
+                    tint = Color.White,
+                )
+            }
+        }
+    }
+}
+
+/** Скрим под кнопкой удаления: без него белая иконка теряется на светлом фото. */
+private val GALLERY_DELETE_SCRIM = Color.Black.copy(alpha = 0.45f)
 
 @Composable
 private fun Summary(
@@ -485,7 +560,7 @@ private fun LazyListScope.reviews(
     // Отказ на удалении: текст сервера (issue #34), а не молчаливо оставшийся
     // на месте отзыв.
     state.reviewDeleteFailure?.let { failure ->
-        item(key = "reviews-failure") { ReviewFailure(failure = failure) }
+        item(key = "reviews-failure") { ApiFailureText(failure = failure) }
     }
 
     if (reviews.isEmpty()) {
@@ -519,7 +594,7 @@ private fun LazyListScope.reviews(
 }
 
 @Composable
-private fun ReviewFailure(failure: ApiFailure, modifier: Modifier = Modifier) {
+private fun ApiFailureText(failure: ApiFailure, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.item / 2),
@@ -546,14 +621,17 @@ private fun ReviewCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Имени автора у бэкенда нет вовсе, ни под каким полем (issue
+            // #192) — показываем «мой отзыв» либо честно «гость», а не
+            // угаданное и всегда пустое имя.
             val author = if (isMine) {
                 stringResource(R.string.place_review_mine)
             } else {
-                review.author.ifBlank { stringResource(R.string.place_review_anonymous) }
+                stringResource(R.string.place_review_anonymous)
             }
             // Имя автора стоит той же строкой — аватар только рисуется,
             // TalkBack не должен читать его дважды.
-            MahallaAvatar(url = review.avatarUrl, name = author, contentDescription = null)
+            MahallaAvatar(url = null, name = author, contentDescription = null)
             Text(
                 text = author,
                 modifier = Modifier.weight(1f),
@@ -589,6 +667,31 @@ private fun ReviewCard(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Start,
         )
+        // Ответ заведения был в схеме и раньше, но не разбирался (issue #192).
+        review.ownerReply?.let { reply ->
+            Column(
+                modifier = Modifier
+                    .padding(top = Spacing.item / 2)
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.small,
+                    )
+                    .padding(Spacing.item),
+            ) {
+                Text(
+                    text = stringResource(R.string.place_review_owner_reply_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = reply,
+                    modifier = Modifier.padding(top = Spacing.item / 4),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -640,7 +743,7 @@ private fun ReviewFormSheet(
             enabled = !form.submitting,
             singleLine = false,
         )
-        form.failure?.let { failure -> ReviewFailure(failure = failure) }
+        form.failure?.let { failure -> ApiFailureText(failure = failure) }
         MahallaButton(
             text = stringResource(R.string.place_review_submit),
             onClick = { onEvent(PlaceDetailsEvent.ReviewSubmitted) },

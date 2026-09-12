@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonState
@@ -215,6 +216,7 @@ private fun ActivityRow(
     modifier: Modifier = Modifier,
 ) {
     val kindLabel = stringResource(activity.kind.labelRes())
+    val joinTemplate = stringResource(R.string.text_joined_with_dot)
     // Названием заведения открывается заголовок, если оно дорезолвилось
     // (issue #182, `GET places?ids=`); не дорезолвилось или резолвить
     // нечего (билет кино — issue #150) — вид активности, как раньше.
@@ -223,7 +225,7 @@ private fun ActivityRow(
         order = OrderCardUi(
             id = activity.key,
             // Уточнение (номер заказа, услуга, место в зале) идёт рядом.
-            title = activity.note?.let { "$titleLead · $it" } ?: titleLead,
+            title = activity.note?.let { TextJoiner.join(joinTemplate, titleLead, it) } ?: titleLead,
             statusLabel = stringResource(activity.status.labelRes()),
             statusTone = activity.status.tone(),
             amountLabel = activity.amount

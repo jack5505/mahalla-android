@@ -8,7 +8,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.cinema.data.CinemaRepository
 import uz.mahalla.feature.cinema.domain.CinemaTicket
 import uz.mahalla.feature.cinema.domain.CinemaTicketPage
@@ -31,6 +30,7 @@ class MyTicketsViewModel @Inject constructor(
     private val repository: CinemaRepository,
 ) : MviViewModel<MyTicketsState, MyTicketsEvent, MyTicketsEffect>(MyTicketsState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -40,13 +40,12 @@ class MyTicketsViewModel @Inject constructor(
 
     override fun onEvent(event: MyTicketsEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            MyTicketsEvent.ScreenResumed -> if (!currentState.tickets.isLoading &&
-                !currentState.isRefreshing
-            ) {
-                load(showLoading = false)
-            }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            MyTicketsEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             MyTicketsEvent.Refreshed -> load(showLoading = false, refreshing = true)
             MyTicketsEvent.Retry -> load()
@@ -76,7 +75,7 @@ class MyTicketsViewModel @Inject constructor(
                 cancelFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myTickets(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

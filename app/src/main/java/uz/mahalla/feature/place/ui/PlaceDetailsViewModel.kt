@@ -13,6 +13,7 @@ import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -96,6 +97,16 @@ class PlaceDetailsViewModel @Inject constructor(
             }
 
             PlaceDetailsEvent.ReviewDeleteConfirmed -> deleteReview()
+
+            is PlaceDetailsEvent.GalleryPhotoDeleteRequested -> updateState {
+                copy(galleryDeletePending = event.photo, galleryDeleteFailure = null)
+            }
+
+            PlaceDetailsEvent.GalleryPhotoDeleteDismissed -> updateState {
+                copy(galleryDeletePending = null)
+            }
+
+            PlaceDetailsEvent.GalleryPhotoDeleteConfirmed -> deleteGalleryPhoto()
         }
     }
 
@@ -181,6 +192,40 @@ class PlaceDetailsViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Удаление своего фото (issue #185) — **оптимистичное**: файл необратим, и
+     * ждать ответа сервера, прежде чем убрать его из ленты, только удлиняет
+     * то же самое ожидание для человека. Отказ возвращает фото на место и
+     * показывает причину текстом сервера — молчаливого 403 быть не должно.
+     */
+    private fun deleteGalleryPhoto() {
+        val photo = currentState.galleryDeletePending ?: return
+
+        updateState {
+            copy(galleryDeletePending = null, galleryDeleteFailure = null)
+                .withPhotos(data?.photos.orEmpty() - photo)
+        }
+        viewModelScope.launch {
+            when (val result = repository.deleteMediaFile(photo.id)) {
+                is ApiResult.Success -> Unit
+                is ApiResult.Failure -> updateState {
+                    // Возвращаем именно удалённое фото в **текущий** список, а
+                    // не переигрываем весь снимок «до удаления» целиком: пока
+                    // запрос летел, карточка могла обновиться отдельным силент-
+                    // перезапросом (issue #76), и грубый откат стёр бы его.
+                    val photos = data?.photos.orEmpty()
+                    val restored = if (photo in photos) photos else photos + photo
+                    withPhotos(restored).copy(galleryDeleteFailure = result.failure)
+                }
+            }
+        }
+    }
+
+    private fun PlaceDetailsState.withPhotos(photos: List<MediaFile>): PlaceDetailsState {
+        val content = details as? ScreenState.Content<PlaceDetails> ?: return this
+        return copy(details = content.copy(data = content.data.copy(photos = photos)))
     }
 
     private fun updateForm(transform: ReviewFormState.() -> ReviewFormState) {
