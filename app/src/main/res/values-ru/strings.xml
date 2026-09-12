@@ -680,9 +680,8 @@
     <string name="doctor_booking_doctors_empty_title">Список врачей пуст</string>
     <string name="doctor_booking_doctors_empty_description">Больница ещё не завела врачей. Уточните по телефону.</string>
     <string name="doctor_booking_price">Приём: %1$s</string>
-    <string name="doctor_booking_time_title">Выберите удобное время</string>
-    <string name="doctor_booking_times_note">Это желаемое время. Больница подтвердит его вместе с записью.</string>
-    <string name="doctor_booking_times_empty">Приём на сегодня закончился. Выберите другой день.</string>
+    <string name="doctor_booking_time_title">Выберите время</string>
+    <string name="doctor_booking_slots_empty">На этот день свободного времени не осталось. Выберите другой день.</string>
     <string name="doctor_booking_complaint_title">Жалоба</string>
     <string name="doctor_booking_complaint_label">На что жалуетесь? (необязательно)</string>
     <string name="doctor_booking_complaint_placeholder">Например: третий день болит горло</string>

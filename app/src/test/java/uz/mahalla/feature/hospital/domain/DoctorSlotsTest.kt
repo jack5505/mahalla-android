@@ -9,57 +9,116 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * Сетка времени приёма (issue #99).
+ * Свободные слоты записи к врачу (issue #181).
  *
- * Проверять её нужно тестом, потому что в отличие от брони (issue #97) её
- * никто не подтверждает: свободных слотов больничный контроллер не отдаёт, и
- * единственная защита от «предложили время, которое уже прошло» — вот эти
- * правила.
+ * До этой задачи слоты считались на клиенте, и тест проверял придуманную
+ * сетку. Теперь их отдаёт сервер (`ApiResponseListString`, тот же вид, что у
+ * слотов брони), и здесь проверяется только разбор ответа и то самое
+ * правило, которое клиент по-прежнему добавляет сам: не предлагать
+ * наступившее время.
  *
  * Все ожидания — в зоне заведения `Asia/Tashkent` (UTC+5), поэтому в тестах
  * фиксированный `Instant` и отдельный случай на границу суток.
  */
-class DoctorScheduleTest {
+class DoctorSlotsTest {
 
     @Test
-    fun `future day offers the whole grid`() {
-        val times = DoctorSchedule.times(date = TOMORROW, now = NOW)
+    fun `raw slots are parsed and sorted`() {
+        val slots = DoctorSlots.available(
+            raw = listOf("10:00", "09:00:00", "09:30"),
+            date = TOMORROW,
+            now = NOW,
+        )
 
-        assertEquals(DoctorSchedule.OPENS_AT, times.first())
-        assertEquals(DoctorSchedule.LAST_START, times.last())
-        // 08:00…19:30 с шагом 30 минут — 24 значения.
-        assertEquals(24, times.size)
-        assertTrue(times.zipWithNext().all { (a, b) -> a < b })
+        assertEquals(
+            listOf(LocalTime.of(9, 0), LocalTime.of(9, 30), LocalTime.of(10, 0)),
+            slots.map(DoctorSlot::time),
+        )
+    }
+
+    /** `startTime` уходит на сервер ровно той строкой, что от него и пришла. */
+    @Test
+    fun `the raw server string survives untouched`() {
+        val slots = DoctorSlots.available(raw = listOf("09:00:00"), date = TOMORROW, now = NOW)
+
+        assertEquals("09:00:00", slots.single().raw)
+    }
+
+    /** Один мусорный слот не должен ронять остальные. */
+    @Test
+    fun `an unparsable slot is dropped, the rest survive`() {
+        val slots = DoctorSlots.available(
+            raw = listOf("not-a-time", "09:00", ""),
+            date = TOMORROW,
+            now = NOW,
+        )
+
+        assertEquals(listOf(LocalTime.of(9, 0)), slots.map(DoctorSlot::time))
+    }
+
+    /** `"10:00"` и `"10:00:00"` — одно и то же время для человека и для ключа списка. */
+    @Test
+    fun `duplicate times by value are collapsed`() {
+        val slots = DoctorSlots.available(
+            raw = listOf("10:00", "10:00:00"),
+            date = TOMORROW,
+            now = NOW,
+        )
+
+        assertEquals(1, slots.size)
+    }
+
+    @Test
+    fun `future day offers the whole server answer`() {
+        val slots = DoctorSlots.available(
+            raw = listOf("08:00", "19:30"),
+            date = TOMORROW,
+            now = NOW,
+        )
+
+        assertEquals(2, slots.size)
     }
 
     @Test
     fun `today drops the time that has already passed`() {
         // 09:00 UTC = 14:00 в Ташкенте.
-        val times = DoctorSchedule.times(date = TODAY, now = NOW)
+        val slots = DoctorSlots.available(
+            raw = listOf("09:00", "14:00", "19:00"),
+            date = TODAY,
+            now = NOW,
+        )
 
-        assertEquals(LocalTime.of(14, 0), times.first())
-        assertFalse(times.any { it.isBefore(LocalTime.of(14, 0)) })
-        assertEquals(DoctorSchedule.LAST_START, times.last())
+        assertEquals(listOf(LocalTime.of(14, 0), LocalTime.of(19, 0)), slots.map(DoctorSlot::time))
     }
 
     @Test
     fun `exact current time is still offered`() {
         // Ровно 14:00 в Ташкенте — это «сейчас», а не «прошло».
-        assertTrue(DoctorSchedule.times(date = TODAY, now = NOW).contains(LocalTime.of(14, 0)))
+        val slots = DoctorSlots.available(raw = listOf("14:00"), date = TODAY, now = NOW)
+
+        assertTrue(slots.any { it.time == LocalTime.of(14, 0) })
     }
 
     @Test
-    fun `evening leaves nothing for today`() {
+    fun `evening leaves nothing for today even if the server offered it`() {
         val evening = Instant.parse("2026-09-04T15:00:00Z") // 20:00 в Ташкенте
 
-        assertTrue(DoctorSchedule.times(date = TODAY, now = evening).isEmpty())
-        // …но завтрашний день предлагается целиком.
-        assertEquals(24, DoctorSchedule.times(date = TOMORROW, now = evening).size)
+        assertTrue(
+            DoctorSlots.available(raw = listOf("09:00"), date = TODAY, now = evening).isEmpty(),
+        )
     }
 
     @Test
-    fun `past day is empty`() {
-        assertTrue(DoctorSchedule.times(date = TODAY.minusDays(1), now = NOW).isEmpty())
+    fun `an empty server answer is an empty day`() {
+        assertTrue(DoctorSlots.available(raw = emptyList(), date = TODAY, now = NOW).isEmpty())
+    }
+
+    @Test
+    fun `past day is empty even if the server offered slots`() {
+        assertTrue(
+            DoctorSlots.available(raw = listOf("09:00"), date = TODAY.minusDays(1), now = NOW)
+                .isEmpty(),
+        )
     }
 
     /**
@@ -71,16 +130,14 @@ class DoctorScheduleTest {
     fun `day boundary is counted in Tashkent`() {
         val lateUtc = Instant.parse("2026-09-04T21:00:00Z") // 02:00 5 сентября
 
-        val dates = DoctorSchedule.dates(lateUtc)
+        val dates = DoctorSlots.dates(lateUtc)
 
         assertEquals(LocalDate.of(2026, 9, 5), dates.first())
-        // Ночью приёма ещё не было — сетка на этот день целая.
-        assertEquals(24, DoctorSchedule.times(date = dates.first(), now = lateUtc).size)
     }
 
     @Test
     fun `calendar starts today and covers two weeks`() {
-        val dates = DoctorSchedule.dates(NOW)
+        val dates = DoctorSlots.dates(NOW)
 
         assertEquals(TODAY, dates.first())
         assertEquals(14, dates.size)
@@ -103,7 +160,7 @@ class DoctorAppointmentDraftTest {
         val draft = DoctorAppointmentDraft(
             doctorId = "d-1",
             date = LocalDate.of(2026, 9, 5),
-            time = LocalTime.of(9, 0),
+            slot = SLOT,
         )
 
         assertTrue(draft.canSubmit)
@@ -116,13 +173,13 @@ class DoctorAppointmentDraftTest {
         val full = DoctorAppointmentDraft(
             doctorId = "d-1",
             date = LocalDate.of(2026, 9, 5),
-            time = LocalTime.of(9, 0),
+            slot = SLOT,
         )
 
         assertFalse(full.copy(doctorId = null).canSubmit)
         assertFalse(full.copy(doctorId = "  ").canSubmit)
         assertFalse(full.copy(date = null).canSubmit)
-        assertFalse(full.copy(time = null).canSubmit)
+        assertFalse(full.copy(slot = null).canSubmit)
     }
 
     @Test
@@ -149,7 +206,7 @@ class DoctorAppointmentDraftTest {
         val base = DoctorAppointmentDraft(
             doctorId = "d-1",
             date = LocalDate.of(2026, 9, 5),
-            time = LocalTime.of(9, 0),
+            slot = SLOT,
         )
 
         val exact = base.copy(complaint = "a".repeat(DoctorAppointmentDraft.MAX_COMPLAINT_LENGTH))
@@ -161,5 +218,9 @@ class DoctorAppointmentDraftTest {
         )
         assertTrue(over.isComplaintTooLong)
         assertFalse(over.canSubmit)
+    }
+
+    private companion object {
+        val SLOT = DoctorSlot("09:00", LocalTime.of(9, 0))
     }
 }

@@ -686,9 +686,8 @@
     <string name="doctor_booking_doctors_empty_title">Shifokorlar ro\'yxati bo\'sh</string>
     <string name="doctor_booking_doctors_empty_description">Muassasa hali shifokorlarini kiritmagan. Qo\'ng\'iroq qilib aniqlashtiring.</string>
     <string name="doctor_booking_price">Qabul narxi: %1$s</string>
-    <string name="doctor_booking_time_title">Qulay vaqtni tanlang</string>
-    <string name="doctor_booking_times_note">Bu — taklif qilingan vaqt. Shifoxona yozuvni tasdiqlaganidan keyin aniq bo\'ladi.</string>
-    <string name="doctor_booking_times_empty">Bugungi qabul tugadi. Boshqa kunni tanlang.</string>
+    <string name="doctor_booking_time_title">Vaqtni tanlang</string>
+    <string name="doctor_booking_slots_empty">Bu kunga bo\'sh vaqt qolmadi. Boshqa kunni tanlang.</string>
     <string name="doctor_booking_complaint_title">Shikoyatingiz</string>
     <string name="doctor_booking_complaint_label">Nimadan shikoyat qilyapsiz? (majburiy emas)</string>
     <string name="doctor_booking_complaint_placeholder">Masalan: uch kundan beri tomoq og\'riyapti</string>
