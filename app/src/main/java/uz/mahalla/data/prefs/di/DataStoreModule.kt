@@ -17,7 +17,9 @@ import uz.mahalla.core.locale.AndroidAppLocaleManager
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.DataStoreUserProfileStore
+import uz.mahalla.data.prefs.FormOwnership
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfileStore
 import javax.inject.Singleton
 
@@ -55,6 +57,10 @@ interface StorageBindingsModule {
     /** Профиль вошедшего пользователя (issue #61): пишет вход, читает профиль. */
     @Binds
     fun bindUserProfileStore(impl: DataStoreUserProfileStore): UserProfileStore
+
+    /** Чья анкета (issue #243): анкета лежит в настройках, там же и владелец. */
+    @Binds
+    fun bindFormOwnership(impl: SettingsDataStore): FormOwnership
 
     @Binds
     fun bindAppLocaleManager(impl: AndroidAppLocaleManager): AppLocaleManager

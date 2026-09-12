@@ -91,6 +91,26 @@ object MahallaMigrations {
         }
     }
 
+    /**
+     * v3 → v4 (issue #149): суммы в кэше — в сумах, а не в тийинах.
+     *
+     * До этой версии приложение считало целые суммы бэкенда сумами и складывало
+     * их в `priceSum`/`deliverySum`/`totalSum` как есть, то есть **в тийинах**
+     * под именем сумов. Схема не меняется — меняется смысл столбцов, поэтому
+     * старые строки делятся на сто с округлением половины вверх, как
+     * `Money.tiyinToSom`. Иначе перенесённая корзина показывала бы цены в сто
+     * раз больше только что загруженного меню и складывалась бы с ним.
+     */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "UPDATE `cart_draft_items` SET `priceSum` = (`priceSum` + 50) / 100, " +
+                    "`deliverySum` = (`deliverySum` + 50) / 100",
+            )
+            db.execSQL("UPDATE `orders` SET `totalSum` = (`totalSum` + 50) / 100")
+        }
+    }
+
     /** Все миграции по порядку — этот список уходит в `Room.databaseBuilder`. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

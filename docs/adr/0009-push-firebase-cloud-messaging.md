@@ -1,4 +1,4 @@
-# 0006. Пуши на Firebase Cloud Messaging, настройки — локальные
+# 0009. Пуши на Firebase Cloud Messaging, настройки — локальные
 
 **Статус:** Принято (эпик 11, issue #15)
 

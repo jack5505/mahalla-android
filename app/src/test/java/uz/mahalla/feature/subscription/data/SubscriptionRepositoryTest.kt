@@ -14,6 +14,8 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.subscription.domain.BillingPeriod
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
@@ -30,6 +32,10 @@ import java.time.Instant
  * `business/subscribe`), `POST subscriptions/trial?planCode`,
  * `POST subscriptions/cancel?reason`, `PUT subscriptions/auto-renew` — всё в
  * общем конверте и всё под Bearer.
+ *
+ * История списаний (задача 9.3) берётся из другого контроллера —
+ * `GET payments/transactions`, — и фильтруется по назначению платежа: своей
+ * ручки у неё нет (см. [PaymentsApi]).
  */
 class SubscriptionRepositoryTest {
 
@@ -66,8 +72,8 @@ class SubscriptionRepositoryTest {
         val plan = plans.single()
         assertEquals("PRO", plan.code)
         assertEquals("Pro", plan.displayName(uzbek = true))
-        // Цены пересчитаны делителем, который вывела пара `monthlyPrice` и
-        // `monthlyPriceSom`, — как в кошельке (issue #62).
+        // Целые цены — в тийинах, делитель сто (issue #149); дробные близнецы
+        // `*Som` на результат не влияют.
         assertEquals(49_000L, plan.monthlySum)
         assertEquals(470_000L, plan.yearlySum)
         assertEquals(20, plan.savingsPercent)
@@ -338,6 +344,134 @@ class SubscriptionRepositoryTest {
         assertFalse(server.takeRequest().path.isNullOrEmpty())
     }
 
+    @Test
+    fun `the history of charges is asked from the payments and filtered by purpose`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[
+                     {"id":"pay-1","createdAt":"2026-09-04T09:00:00","provider":"PAYME",
+                      "amount":4900000,"status":"PAID","purpose":"SUBSCRIPTION",
+                      "purposeId":"sub-1"},
+                     {"id":"pay-2","createdAt":"2026-09-03T09:00:00","provider":"CLICK",
+                      "amount":1000000,"status":"PAID","purpose":"WALLET_TOP_UP"},
+                     {"id":"pay-3","createdAt":"2026-08-04T09:00:00","provider":"CLICK",
+                      "amount":4900000,"status":"FAILED","purpose":"SUBSCRIPTION_RENEWAL",
+                      "errorMessage":"Mablag' yetarli emas"}
+                   ],"page":0,"size":20,"totalPages":1,"last":true}""",
+            ),
+        )
+
+        val page = (repository().charges() as ApiResult.Success).data
+
+        assertEquals("/payments/transactions?page=0&size=20", server.takeRequest().path)
+        // Пополнение кошелька в истории подписки не показывается: фильтра у
+        // ручки нет, поэтому отбирает клиент.
+        assertEquals(listOf("pay-1", "pay-3"), page.items.map { it.id })
+        val paid = page.items.first()
+        // Пары `amountSom` у платежей нет — сумма читается как тийины.
+        assertEquals(49_000, paid.amountSum)
+        assertEquals(ChargeStatus.Paid, paid.status)
+        assertEquals(ChargeProvider.Payme, paid.provider)
+        // Дата приезжает без зоны (Jackson отдаёт `LocalDateTime`).
+        assertEquals(Instant.parse("2026-09-04T09:00:00Z"), paid.createdAt)
+        assertEquals("Mablag' yetarli emas", page.items[1].errorMessage)
+        assertFalse(page.hasMore)
+        assertEquals(1, page.nextPage)
+    }
+
+    @Test
+    fun `pages without subscription payments are skipped, not shown as an empty history`() =
+        runTest {
+            // Фильтр клиентский: страница платежей может целиком состоять из
+            // пополнений, а списания за подписку — лежать на следующей.
+            server.enqueue(
+                envelope(
+                    """{"content":[{"id":"pay-1","amount":100,"status":"PAID",
+                         "purpose":"WALLET_TOP_UP"}],"page":0,"last":false}""",
+                ),
+            )
+            server.enqueue(
+                envelope(
+                    """{"content":[{"id":"pay-2","amount":4900000,"status":"PAID",
+                         "purpose":"SUBSCRIPTION"}],"page":1,"last":false}""",
+                ),
+            )
+
+            val page = (repository().charges() as ApiResult.Success).data
+
+            assertEquals("/payments/transactions?page=0&size=20", server.takeRequest().path)
+            assertEquals("/payments/transactions?page=1&size=20", server.takeRequest().path)
+            assertEquals(listOf("pay-2"), page.items.map { it.id })
+            // Догрузка продолжится со следующей страницы сервера, а не со
+            // второй по счёту.
+            assertEquals(2, page.nextPage)
+            assertTrue(page.hasMore)
+        }
+
+    @Test
+    fun `the scan of empty pages is bounded`() = runTest {
+        // У истории платежей предела нет, и «пролистать всё до конца» одним
+        // запросом нельзя: дальше слово за кнопкой «показать ещё».
+        repeat(SubscriptionRepository.CHARGES_MAX_PAGES_PER_REQUEST + 1) { index ->
+            server.enqueue(
+                envelope(
+                    """{"content":[{"id":"pay-$index","amount":100,"status":"PAID",
+                         "purpose":"ORDER"}],"page":$index,"last":false}""",
+                ),
+            )
+        }
+
+        val page = (repository().charges() as ApiResult.Success).data
+
+        assertEquals(
+            SubscriptionRepository.CHARGES_MAX_PAGES_PER_REQUEST,
+            server.requestCount,
+        )
+        assertTrue(page.items.isEmpty())
+        assertTrue(page.hasMore)
+    }
+
+    @Test
+    fun `the history is read from the page it is asked for`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"pay-9","amount":4900000,"status":"PAID",
+                     "purpose":"SUBSCRIPTION"}],"page":3,"totalPages":4}""",
+            ),
+        )
+
+        val page = (repository().charges(fromPage = 3) as ApiResult.Success).data
+
+        assertEquals("/payments/transactions?page=3&size=20", server.takeRequest().path)
+        assertEquals(listOf("pay-9"), page.items.map { it.id })
+        // `last` сервер не прислал — хвост считается по `page`/`totalPages`.
+        assertFalse(page.hasMore)
+    }
+
+    @Test
+    fun `a payment without an id is dropped from the history`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"amount":4900000,"status":"PAID","purpose":"SUBSCRIPTION"},
+                     {"id":"pay-1","amount":4900000,"status":"PAID","purpose":"SUBSCRIPTION"}
+                   ],"last":true}""",
+            ),
+        )
+
+        val page = (repository().charges() as ApiResult.Success).data
+
+        assertEquals(listOf("pay-1"), page.items.map { it.id })
+    }
+
+    @Test
+    fun `a refusal of the history stays a refusal`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401))
+
+        val result = repository().charges()
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+    }
+
     private fun plan(
         code: String = "PRO",
         audience: PlanAudience = PlanAudience.User,
@@ -350,15 +484,17 @@ class SubscriptionRepositoryTest {
         trialDays = trialDays,
     )
 
-    private fun repository() = DefaultSubscriptionRepository(
-        NetworkFactory
-            .retrofit(
-                server.url("/").toString(),
-                NetworkFactory.clientBuilder().build(),
-                NetworkFactory.converterFactory(NetworkFactory.json()),
-            )
-            .create(SubscriptionsApi::class.java),
-    )
+    private fun repository(): DefaultSubscriptionRepository {
+        val retrofit = NetworkFactory.retrofit(
+            server.url("/").toString(),
+            NetworkFactory.clientBuilder().build(),
+            NetworkFactory.converterFactory(NetworkFactory.json()),
+        )
+        return DefaultSubscriptionRepository(
+            api = retrofit.create(SubscriptionsApi::class.java),
+            paymentsApi = retrofit.create(PaymentsApi::class.java),
+        )
+    }
 
     private fun envelope(data: String): MockResponse = MockResponse()
         .setResponseCode(200)

@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
@@ -13,8 +16,12 @@ import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
+import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
+import uz.mahalla.feature.wallet.domain.IdempotencyKey
+import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlow
+import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlowFactory
 import uz.mahalla.navigation.CheckoutRoute
 import javax.inject.Inject
 
@@ -25,6 +32,11 @@ import javax.inject.Inject
  * кошельком не блокируем: отказать в оформлении из-за неотвеченного запроса
  * хуже, чем получить отказ на стороне сервера, который всё равно проверит
  * деньги повторно.
+ *
+ * Оплата кошельком с задачи 8.3 (эпик #12) идёт через общий
+ * [WalletPaymentFlow]: он перечитывает баланс, спрашивает PIN или биометрию,
+ * отправляет **один** запрос на одно подтверждение и разбирает отказ. Наличные
+ * им не проходят — подтверждать нечего, деньги кошелька не касаются.
  */
 @HiltViewModel
 class CheckoutViewModel @Inject constructor(
@@ -32,6 +44,8 @@ class CheckoutViewModel @Inject constructor(
     private val orderRepository: OrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    private val analytics: AnalyticsTracker,
+    paymentFlows: WalletPaymentFlowFactory,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
 
@@ -40,7 +54,34 @@ class CheckoutViewModel @Inject constructor(
     /** Черновик корзины на момент открытия — из него собирается заказ. */
     private var cart: Cart = Cart(placeId = placeId, placeName = "")
 
+    /**
+     * Оплата кошельком. Состав и форма читаются в момент отправки, а не при
+     * создании flow: между нажатием «оформить» и подтверждением человек мог
+     * поправить адрес.
+     */
+    private val payment: WalletPaymentFlow<String> = paymentFlows.create(viewModelScope) { key ->
+        orderRepository.create(
+            cart = cart.copy(lines = currentState.lines),
+            form = currentState.form,
+            idempotencyKey = key,
+        )
+    }
+
+    /**
+     * Ключ наличного заказа. Тоже нужен: двойное нажатие «оформить» создаёт два
+     * заказа независимо от способа оплаты, а повтор после отказа — это тот же
+     * заказ, а не новый.
+     */
+    private var cashIdempotencyKey: String? = null
+
     init {
+        viewModelScope.launch {
+            payment.state.collect { paymentState -> updateState { copy(payment = paymentState) } }
+        }
+        viewModelScope.launch {
+            // Заказ создан и оплачен: черновик корзины уже почистил репозиторий.
+            payment.paid.collect { orderId -> onOrderCreated(orderId) }
+        }
         updateState { copy(placeId = placeId).revalidated() }
         viewModelScope.launch {
             cartRepository.cart(placeId).collect { updated ->
@@ -59,8 +100,22 @@ class CheckoutViewModel @Inject constructor(
             is CheckoutEvent.PaymentSelected -> updateForm { copy(payment = event.payment) }
 
             CheckoutEvent.SubmitClicked -> submit()
-            CheckoutEvent.TopUpClicked -> emitEffect(CheckoutEffect.OpenWallet)
+
+            // Пополнение открывается вместо шторки, а не под ней: возвращаться
+            // человек будет на экран кошелька, и подтверждение прошлой попытки
+            // за ним висеть не должно.
+            CheckoutEvent.TopUpClicked -> {
+                payment.dismiss()
+                emitEffect(CheckoutEffect.OpenWallet)
+            }
+
             CheckoutEvent.BackClicked -> emitEffect(CheckoutEffect.NavigateBack)
+
+            is CheckoutEvent.PaymentPinChanged -> payment.pinChanged(event.pin)
+            CheckoutEvent.PaymentBiometricConfirmed -> payment.biometricConfirmed()
+            CheckoutEvent.PaymentBiometricRejected -> payment.biometricRejected()
+            CheckoutEvent.PaymentRetried -> payment.retry()
+            CheckoutEvent.PaymentDismissed -> payment.dismiss()
         }
     }
 
@@ -138,26 +193,53 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Оформление. Кошелёк уходит в подтверждение (8.3), наличные — сразу в
+     * сеть: спрашивать PIN за заказ, который оплатят курьеру, незачем.
+     */
     private fun submit() {
         val state = currentState.revalidated()
         if (state.errors.isNotEmpty()) {
             updateState { state.copy(validationShown = true) }
             return
         }
-        if (state.isSubmitting) return
+        if (state.isSubmitting || state.payment != null) return
 
+        if (state.form.payment == PaymentMethod.Wallet) {
+            updateState { copy(submitError = null) }
+            payment.start(state.totals.totalSum)
+            return
+        }
+        submitCash(state)
+    }
+
+    private fun submitCash(state: CheckoutState) {
+        val key = cashIdempotencyKey ?: IdempotencyKey.random().also { cashIdempotencyKey = it }
         updateState { copy(isSubmitting = true, submitError = null) }
         viewModelScope.launch {
-            when (val result = orderRepository.create(cart.copy(lines = state.lines), state.form)) {
+            val result = orderRepository.create(
+                cart = cart.copy(lines = state.lines),
+                form = state.form,
+                idempotencyKey = key,
+            )
+            when (result) {
                 is ApiResult.Failure -> updateState {
+                    // Ключ остаётся: повтор — тот же заказ, а не второй.
                     copy(isSubmitting = false, submitError = result.failure)
                 }
 
                 is ApiResult.Success -> {
+                    cashIdempotencyKey = null
                     updateState { copy(isSubmitting = false) }
-                    emitEffect(CheckoutEffect.OrderCreated(result.data))
+                    onOrderCreated(result.data)
                 }
             }
         }
+    }
+
+    /** Общий финал обоих способов оплаты: событие `ordered` не зависит от того, чем платили. */
+    private fun onOrderCreated(orderId: String) {
+        analytics.track(AnalyticsEvents.ordered(placeId, AnalyticsVertical.Food))
+        emitEffect(CheckoutEffect.OrderCreated(orderId))
     }
 }

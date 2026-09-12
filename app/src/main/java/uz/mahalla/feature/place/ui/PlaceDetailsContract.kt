@@ -6,6 +6,7 @@ import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.domain.GeoPoint
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -38,6 +39,10 @@ data class PlaceDetailsState(
     val deletingReview: Boolean = false,
     /** Отказ на удалении — показывается в блоке отзывов текстом сервера. */
     val reviewDeleteFailure: ApiFailure? = null,
+    /** Своя фотография, для которой спрошено подтверждение удаления (issue #185). */
+    val galleryDeletePending: MediaFile? = null,
+    /** Отказ на удалении фото — файл возвращается в галерею (откат). */
+    val galleryDeleteFailure: ApiFailure? = null,
     /**
      * Акции заведения (issue #104). Пустой список — секции нет: отказ этой
      * ручки карточку не роняет, а заголовок над пустотой обещает то, чего нет.
@@ -109,6 +114,11 @@ sealed interface PlaceDetailsEvent : UiEvent {
     data class ReviewDeleteRequested(val review: Review) : PlaceDetailsEvent
     data object ReviewDeleteConfirmed : PlaceDetailsEvent
     data object ReviewDeleteDismissed : PlaceDetailsEvent
+
+    // --- Галерея (issue #185) ---
+    data class GalleryPhotoDeleteRequested(val photo: MediaFile) : PlaceDetailsEvent
+    data object GalleryPhotoDeleteConfirmed : PlaceDetailsEvent
+    data object GalleryPhotoDeleteDismissed : PlaceDetailsEvent
 }
 
 sealed interface PlaceDetailsEffect : UiEffect {

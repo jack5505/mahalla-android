@@ -4,12 +4,15 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.gaming.data.GamingRepository
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingValidator
@@ -30,11 +33,14 @@ import javax.inject.Inject
 @HiltViewModel
 class GamingZonesViewModel @Inject constructor(
     private val repository: GamingRepository,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<GamingZonesState, GamingZonesEvent, GamingZonesEffect>(GamingZonesState()) {
 
     private val route: GamingRoute = savedStateHandle.toRoute()
+
+    private var loadJob: Job? = null
 
     init {
         updateState { copy(placeName = route.placeName) }
@@ -46,12 +52,12 @@ class GamingZonesViewModel @Inject constructor(
             GamingZonesEvent.Retry -> load()
             GamingZonesEvent.Refreshed -> load(showLoading = false, refreshing = true)
 
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            GamingZonesEvent.ScreenResumed ->
-                if (!currentState.zones.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            GamingZonesEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             is GamingZonesEvent.ZoneClicked -> openSheet(event.zoneId)
             GamingZonesEvent.SheetDismissed -> updateState { closedSheet() }
@@ -77,7 +83,7 @@ class GamingZonesViewModel @Inject constructor(
                 isRefreshing = refreshing,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             when (val result = repository.zones(route.placeId)) {
                 is ApiResult.Failure -> updateState {
                     copy(zones = ScreenState.Error(result.failure), isRefreshing = false)
@@ -157,8 +163,13 @@ class GamingZonesViewModel @Inject constructor(
 
                 // Шторка закрывается, подтверждение остаётся на экране: бронь
                 // состоялась, и об этом надо сказать словами, а не пустотой.
-                is ApiResult.Success -> updateState {
-                    closedSheet().copy(isBooking = false, confirmed = result.data)
+                is ApiResult.Success -> {
+                    updateState {
+                        closedSheet().copy(isBooking = false, confirmed = result.data)
+                    }
+                    analytics.track(
+                        AnalyticsEvents.booked(route.placeId, AnalyticsVertical.Gaming),
+                    )
                 }
             }
         }

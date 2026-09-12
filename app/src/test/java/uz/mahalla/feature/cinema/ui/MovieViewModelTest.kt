@@ -17,6 +17,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
@@ -27,6 +29,7 @@ import uz.mahalla.feature.cinema.domain.Movie
 import uz.mahalla.feature.cinema.ui.movie.MovieEffect
 import uz.mahalla.feature.cinema.ui.movie.MovieEvent
 import uz.mahalla.feature.cinema.ui.movie.MovieViewModel
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCinemaRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Clock
@@ -316,8 +319,39 @@ class MovieViewModelTest {
         availableSeats = 10,
     )
 
+    @Test
+    fun `a bought ticket is a BOOK of the cinema vertical`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = openedSheet()
+
+            viewModel.onEvent(MovieEvent.SeatChanged("C7"))
+            viewModel.onEvent(MovieEvent.BuyClicked)
+            runCurrent()
+
+            assertEquals(
+                listOf(AnalyticsEvents.booked(PLACE, AnalyticsVertical.Cinema)),
+                analytics.events,
+            )
+        }
+
+    @Test
+    fun `a refused purchase is not counted`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.buyResult = ApiResult.Failure(ApiError.Business("SEAT_TAKEN"))
+        val viewModel = openedSheet()
+
+        viewModel.onEvent(MovieEvent.SeatChanged("C7"))
+        viewModel.onEvent(MovieEvent.BuyClicked)
+        runCurrent()
+
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */
+    private val analytics = FakeAnalyticsTracker()
+
     private fun viewModel() = MovieViewModel(
         repository = repository,
+        analytics = analytics,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
         savedStateHandle = SavedStateHandle(
             mapOf("placeId" to PLACE, "movieId" to MOVIE, "placeName" to "Cinema Park"),

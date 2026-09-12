@@ -58,6 +58,11 @@ class MyFreelancerOrdersViewModelTest {
         val viewModel = MyFreelancerOrdersViewModel(repository)
         runCurrent()
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyFreelancerOrdersEvent.ScreenResumed)
+        runCurrent()
+        assertEquals(listOf(0), repository.requestedMyOrderPages)
+
         viewModel.onEvent(MyFreelancerOrdersEvent.ScreenResumed)
         runCurrent()
 

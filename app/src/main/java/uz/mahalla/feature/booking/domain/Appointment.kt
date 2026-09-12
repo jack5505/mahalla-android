@@ -48,11 +48,11 @@ enum class AppointmentStatus(val apiValue: String) {
 /**
  * К кому запись: к мастеру (issue #97) или к врачу (issue #99).
  *
- * Модель записи у обеих вертикалей одна — у бэкенда это буквально одна схема
- * `AppointmentResponse` и одна ручка отмены (`POST appointments/{id}/cancel`),
- * — а вот списки разные: `appointments/my` против `hospitals/appointments/my`.
- * Поэтому вертикаль — не поле самой записи (сервер её не сообщает), а признак
- * того, откуда список пришёл: он выбирает источник и заголовок экрана.
+ * Модель записи на экране у обеих вертикалей одна, а на бэкенде — нет: у
+ * каждой своя схема и свои ручки, и списка (`appointments/my` против
+ * `hospitals/appointments/my`), и отмены (issue #167). Поэтому вертикаль — не
+ * поле самой записи (сервер её не сообщает), а признак того, откуда список
+ * пришёл: он выбирает источник и заголовок экрана.
  *
  * Незнакомое значение аргумента маршрута читается как [Barber] (см.
  * [byName]) — на экран без списка это не уводит.
@@ -84,12 +84,18 @@ enum class AppointmentVertical {
  * ([DateTimeFormatters.AppZone]). Оба необязательны: запись без времени
  * показывается как есть, а не прячется.
  * @param priceSum цена услуги на момент записи; ноль — «не названа».
+ * @param doctorId запись к врачу (issue #99): `doctorId` из
+ * `HospitalAppointmentResponse`, `null` у записи к мастеру. Сервер не называет
+ * врача в [serviceName] (схема этого поля вовсе не знает), поэтому имя
+ * дотягивается отдельным запросом по этому id —
+ * [uz.mahalla.feature.hospital.data.DefaultHospitalRepository] (issue #219).
  */
 data class Appointment(
     val id: String,
     val placeId: String? = null,
     val serviceId: String? = null,
     val serviceName: String? = null,
+    val doctorId: String? = null,
     val priceSum: Long = 0,
     val date: LocalDate? = null,
     val startTime: LocalTime? = null,

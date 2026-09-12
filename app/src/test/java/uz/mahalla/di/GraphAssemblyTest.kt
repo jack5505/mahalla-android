@@ -28,6 +28,7 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
@@ -45,7 +46,10 @@ import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
 import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
+import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.DefaultPlaceNameResolver
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
+import uz.mahalla.feature.fashion.data.di.FashionDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
@@ -112,6 +116,7 @@ class GraphAssemblyTest {
             authInterceptor = AuthInterceptor(sessionStore),
             tokenAuthenticator = TokenAuthenticator(
                 sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
                 authApi = authApi,
                 deviceInfoProvider = deviceInfoProvider(context),
                 locationProvider = locationProvider(context),
@@ -183,6 +188,10 @@ class GraphAssemblyTest {
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
                     locationProvider = locationProvider(context),
+                    media = DefaultMediaRepository(
+                        api = MediaDataModule.provideMediaApi(retrofit),
+                        compressor = AndroidImageCompressor(context),
+                    ),
                     clock = AppModule.provideClock(),
                 ),
             )
@@ -259,6 +268,7 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             userProfileStore = DataStoreUserProfileStore(dataStore),
+            formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
@@ -341,9 +351,13 @@ class GraphAssemblyTest {
         )
 
         val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+        // История списаний (задача 9.3) живёт в контроллере платежей, но под
+        // тем же Bearer — значит и на том же клиенте.
+        val paymentsApi = SubscriptionDataModule.providePaymentsApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultSubscriptionRepository(api))
+        assertNotNull(paymentsApi)
+        assertNotNull(DefaultSubscriptionRepository(api, paymentsApi))
     }
 
     /**
@@ -500,6 +514,34 @@ class GraphAssemblyTest {
 
         assertNotNull(api)
         assertNotNull(DefaultGamingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * «Мои активности» (issue #73) — пять источников, и **ни одного своего
+     * `Api`** (issue #142): фича собирается из интерфейсов вертикалей. Тест
+     * это и проверяет: все пять живут на **основном** Retrofit, а значит
+     * получают Bearer, без которого каждая из пяти ручек отвечает `401`.
+     */
+    @Test
+    fun `activities assemble on the apis of their own verticals`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        assertNotNull(
+            DefaultActivityRepository(
+                fashionApi = FashionDataModule.provideFashionApi(retrofit),
+                gamingApi = GamingDataModule.provideGamingApi(retrofit),
+                bookingApi = BookingDataModule.provideBookingApi(retrofit),
+                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
+                placeNameResolver = DefaultPlaceNameResolver(
+                    DiscoveryDataModule.provideCatalogApi(retrofit),
+                ),
+            ),
+        )
     }
 
     @Test

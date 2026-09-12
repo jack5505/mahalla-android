@@ -9,6 +9,9 @@
     <string name="screen_skeleton_note">Ekran keyingi bosqichda maketga ko\'ra tayyorlanadi.</string>
     <string name="action_back">Orqaga</string>
     <string name="currency_uzs">so\'m</string>
+    <!-- Склейка двух частей строки (заголовок и уточнение, дата и время…) —
+         общий ресурс, а не символ в коде каждого экрана (issue #212). -->
+    <string name="text_joined_with_dot">%1$s · %2$s</string>
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Yaqin atrofda</string>
@@ -128,8 +131,6 @@
 
     <!-- Основные разделы -->
     <string name="discovery_title">Yaqin atrofda</string>
-    <string name="orders_title">Buyurtmalar</string>
-    <string name="orders_subtitle">Faol buyurtmalar, navbatlar va bandlovlar.</string>
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_available">Sarflash mumkin</string>
     <string name="wallet_balance_total">Hisobda</string>
@@ -159,6 +160,19 @@
     <string name="wallet_top_up_provider_note">To\'lov shakli brauzerda ochiladi.</string>
     <string name="wallet_top_up_started">%1$s to\'lovi yuborildi. Pul tushgach balans o\'zgaradi — bu bir necha daqiqa olishi mumkin.</string>
     <string name="wallet_top_up_started_dismiss">Tushunarli</string>
+    <!-- Hamyondan to'lovni tasdiqlash (8.3, issue #12). -->
+    <string name="payment_confirm_title">To\'lovni tasdiqlash</string>
+    <string name="payment_confirm_amount">Yechib olinadi</string>
+    <string name="payment_confirm_available">Hamyonda: %1$s</string>
+    <string name="payment_confirm_pin_hint">To\'lovni tasdiqlash uchun PIN-kodni kiriting.</string>
+    <string name="payment_confirm_preparing">Balans tekshirilmoqda…</string>
+    <string name="payment_confirm_submitting">To\'lov yuborilmoqda. Oynani yopmang.</string>
+    <string name="payment_confirm_insufficient">Hamyonda pul yetmaydi.</string>
+    <string name="payment_confirm_insufficient_missing">Hamyonda %1$s yetmaydi.</string>
+    <string name="payment_confirm_blocked">Hamyon bloklangan — to\'lov o\'tmaydi. Yordam xizmatiga murojaat qiling.</string>
+    <string name="payment_confirm_failed">To\'lovni tasdiqlash imkoni bo\'lmadi. Pul yechilmadi.</string>
+    <string name="payment_confirm_biometric_subtitle">%1$s to\'lovini tasdiqlang</string>
+    <string name="payment_confirm_biometric_negative">PIN-kod bilan</string>
     <string name="profile_title">Profil</string>
     <string name="profile_language">Til</string>
     <string name="profile_theme">Mavzu</string>
@@ -181,6 +195,14 @@
     <string name="profile_device_status_locked">Bloklangan</string>
     <string name="profile_device_status_pin_required">PIN kerak</string>
     <string name="profile_device_status_pending_pin">PIN o\'rnatilmagan</string>
+
+    <!-- Проверка и блокировка аккаунта на сервере (issue #237) -->
+    <string name="profile_verification_unverified">Raqam tasdiqlanmagan</string>
+    <string name="profile_verification_full">Hisob to\'liq tasdiqlangan</string>
+    <string name="profile_account_temp_blocked">Hisob vaqtincha bloklangan</string>
+    <string name="profile_account_perm_blocked">Hisob bloklangan</string>
+    <string name="profile_account_suspended">Hisob to\'xtatib turilgan</string>
+    <string name="profile_account_deleted">Hisob o\'chirilgan</string>
 
     <!-- Центр уведомлений (issue #81) -->
     <string name="notifications_title">Bildirishnomalar</string>
@@ -337,6 +359,7 @@
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
+    <string name="place_review_owner_reply_label">Muassasa javobi</string>
     <!-- Sharh qoldirish (issue #76) -->
     <string name="place_reviews_empty">Hozircha sharhlar yo\'q. Birinchi bo\'ling.</string>
     <string name="place_review_add">Sharh qoldirish</string>
@@ -352,6 +375,9 @@
     <string name="place_review_delete">Sharhni o\'chirish</string>
     <string name="place_review_delete_title">Sharhni o\'chirasizmi?</string>
     <string name="place_review_delete_text">Sharh va bahoyingiz joy kartochkasidan olib tashlanadi.</string>
+    <string name="place_gallery_delete">Suratni o\'chirish</string>
+    <string name="place_gallery_delete_title">Suratni o\'chirasizmi?</string>
+    <string name="place_gallery_delete_text">Surat serverdan butunlay o\'chiriladi — buni ortga qaytarib bo\'lmaydi.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s ta sharh</string>
     <string name="place_no_rating">Baholanmagan</string>
     <string name="place_action_queue">Navbatga yozilish</string>
@@ -511,6 +537,8 @@
     <string name="my_places_unnamed">Nomsiz muassasa</string>
     <string name="my_places_available">Hozir ochiq</string>
     <string name="my_places_available_description">O\'chirilsa, muassasa katalogda yopiq ko\'rinadi.</string>
+    <!-- Управление витриной аптеки (issue #252). -->
+    <string name="my_places_manage_products">Tovarlarni boshqarish</string>
     <string name="my_places_status_pending">Moderatsiyada</string>
     <string name="my_places_status_active">Faol</string>
     <string name="my_places_status_suspended">To\'xtatilgan</string>
@@ -520,6 +548,24 @@
     <string name="my_places_status_suspended_hint">Muassasa to\'xtatilgan. Sababini bilish uchun qo\'llab-quvvatlashga murojaat qiling.</string>
     <string name="my_places_role_manager">Siz bu yerda menejersiz</string>
     <string name="my_places_role_staff">Siz bu yerda xodimsiz: sozlamalarni egasi o\'zgartiradi</string>
+    <string name="my_places_staff_action">Xodimlar</string>
+
+    <!-- Сотрудники заведения (issue #189) -->
+    <string name="place_staff_title">Xodimlar</string>
+    <string name="place_staff_empty_title">Xodimlar yo\'q</string>
+    <string name="place_staff_empty_description">Birinchi xodimni ID bo\'yicha qo\'shing.</string>
+    <string name="place_staff_add">Xodim qo\'shish</string>
+    <string name="place_staff_user_id_label">Foydalanuvchi ID (UUID)</string>
+    <string name="place_staff_user_id_supporting">Odam identifikatorni o\'z profilidan ko\'rsatishi kerak — telefon raqami bo\'yicha qidiruv yo\'q.</string>
+    <string name="place_staff_user_id_error">UUID formatida kiriting</string>
+    <string name="place_staff_role_label">Rol</string>
+    <string name="place_staff_role_owner">Egasi</string>
+    <string name="place_staff_role_manager">Menejer</string>
+    <string name="place_staff_role_staff">Xodim</string>
+    <string name="place_staff_role_unknown">Noma\'lum rol</string>
+    <string name="place_staff_add_submit">Qo\'shish</string>
+    <string name="place_staff_remove_title">Xodim o\'chirilsinmi?</string>
+    <string name="place_staff_remove_message">%1$s ID\'li xodim muassasadan o\'chiriladi. Bu amalni ortga qaytarib bo\'lmaydi.</string>
 
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Davom etish</string>
@@ -590,6 +636,8 @@
     <string name="booking_reschedule_title">Yozuvni ko\'chirish</string>
     <string name="booking_reschedule_service_title">Xizmat</string>
     <string name="booking_reschedule_hint">Xizmat o\'zgarmaydi — faqat yangi kun va vaqtni tanlang.</string>
+    <string name="booking_reschedule_current">Hozir: %1$s</string>
+    <string name="booking_reschedule_new">Yangi: %1$s</string>
     <string name="booking_reschedule_submit">Yangi vaqtga ko\'chirish</string>
     <string name="booking_reschedule_done_title">Yozuv ko\'chirildi</string>
     <string name="booking_reschedule_done_description">Muassasa yangi vaqtni tasdiqlaydi. Eski yozuv bekor qilindi.</string>
@@ -641,9 +689,8 @@
     <string name="doctor_booking_doctors_empty_title">Shifokorlar ro\'yxati bo\'sh</string>
     <string name="doctor_booking_doctors_empty_description">Muassasa hali shifokorlarini kiritmagan. Qo\'ng\'iroq qilib aniqlashtiring.</string>
     <string name="doctor_booking_price">Qabul narxi: %1$s</string>
-    <string name="doctor_booking_time_title">Qulay vaqtni tanlang</string>
-    <string name="doctor_booking_times_note">Bu — taklif qilingan vaqt. Shifoxona yozuvni tasdiqlaganidan keyin aniq bo\'ladi.</string>
-    <string name="doctor_booking_times_empty">Bugungi qabul tugadi. Boshqa kunni tanlang.</string>
+    <string name="doctor_booking_time_title">Vaqtni tanlang</string>
+    <string name="doctor_booking_slots_empty">Bu kunga bo\'sh vaqt qolmadi. Boshqa kunni tanlang.</string>
     <string name="doctor_booking_complaint_title">Shikoyatingiz</string>
     <string name="doctor_booking_complaint_label">Nimadan shikoyat qilyapsiz? (majburiy emas)</string>
     <string name="doctor_booking_complaint_placeholder">Masalan: uch kundan beri tomoq og\'riyapti</string>
@@ -803,6 +850,19 @@
     <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
     <string name="subscription_feature_api_access">API orqali kirish</string>
     <string name="subscription_analytics">Tahlil: %1$s</string>
+    <string name="subscription_status_expiring">Tugayapti</string>
+    <string name="subscription_next_charge">Keyingi to\'lov</string>
+    <string name="subscription_renew">Obunani uzaytirish</string>
+    <string name="subscription_renew_until">Uzaytirsangiz, taxminan %1$s gacha ishlaydi.</string>
+    <string name="subscription_notice_renewed">Obuna uzaytirildi.</string>
+    <string name="subscription_charges_title">To\'lovlar tarixi</string>
+    <string name="subscription_charges_empty">Obuna uchun hali pul yechilmagan.</string>
+    <string name="subscription_charges_more">Yana ko\'rsatish</string>
+    <string name="subscription_charge_no_date">Sanasi ko\'rsatilmagan</string>
+    <string name="subscription_charge_pending">Bajarilmoqda</string>
+    <string name="subscription_charge_failed">O\'tmadi</string>
+    <string name="subscription_charge_cancelled">Bekor qilingan</string>
+    <string name="subscription_charge_refunded">Qaytarilgan</string>
 
     <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
     <string name="cinema_title">Afisha</string>
@@ -852,6 +912,27 @@
     <string name="pharmacy_empty_description">Bu dorixona hali dorilarini qo\'shmagan.</string>
     <string name="pharmacy_not_found_title">Topilmadi</string>
     <string name="pharmacy_not_found_description">«%1$s» bo\'yicha hech narsa topilmadi. Nomini boshqacha yozib ko\'ring.</string>
+    <!-- Бизнес-панель аптеки (issue #252): владелец добавляет товар и правит остаток. -->
+    <string name="pharmacy_add_product">Tovar qo\'shish</string>
+    <string name="pharmacy_new_product_title">Yangi tovar</string>
+    <string name="pharmacy_field_name">Nomi</string>
+    <string name="pharmacy_field_name_invalid">Nomini kiriting (300 belgigacha)</string>
+    <string name="pharmacy_field_manufacturer">Ishlab chiqaruvchi</string>
+    <string name="pharmacy_field_dosage_form">Chiqarilish shakli</string>
+    <string name="pharmacy_field_strength">Dozasi</string>
+    <string name="pharmacy_field_description">Tavsif</string>
+    <string name="pharmacy_field_price">Narxi, so\'m</string>
+    <string name="pharmacy_field_price_invalid">Narxni kiriting</string>
+    <string name="pharmacy_field_stock">Qoldiq (ixtiyoriy)</string>
+    <string name="pharmacy_field_stock_invalid">Butun son kiriting</string>
+    <string name="pharmacy_field_prescription">Retsept talab qilinadi</string>
+    <string name="pharmacy_create_submit">Qo\'shish</string>
+    <string name="pharmacy_edit_stock_action">Qoldiqni tahrirlash</string>
+    <string name="pharmacy_stock_edit_title">Qoldiqni yangilash</string>
+    <string name="pharmacy_stock_edit_label">Qoldiq</string>
+    <string name="pharmacy_stock_edit_submit">Saqlash</string>
+    <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
+    <string name="pharmacy_stock_owner_count">Qoldiq: %1$d</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">O\'yin zonalari</string>
     <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>
@@ -910,4 +991,47 @@
     <string name="notification_settings_quiet_hours_selected">Tanlangan</string>
     <string name="notification_settings_push_unavailable">Bu yig\'malada push xizmati sozlanmagan: xabarlar faqat bildirishnomalar markazida ko\'rinadi.</string>
 
+    <!-- Мои активности (issue #73) -->
+    <string name="activity_title">Mening amallarim</string>
+    <string name="activity_filter_active">Faol</string>
+    <string name="activity_filter_history">Tarix</string>
+    <string name="activity_empty_title">Hozircha hech narsa yo\'q</string>
+    <string name="activity_empty_description">Buyurtmalar, bandlovlar, navbatlar va chiptalar shu yerda yig\'iladi.</string>
+    <string name="activity_empty_action">Yaqin atrofga qarash</string>
+    <string name="activity_empty_active_title">Faol amallar yo\'q</string>
+    <string name="activity_empty_active_description">Barcha buyurtma va bandlovlaringiz tugagan. Ular «Tarix» bo\'limida.</string>
+    <string name="activity_empty_history_title">Tarix bo\'sh</string>
+    <string name="activity_empty_history_description">Tugagan buyurtma va bandlovlar shu yerga tushadi.</string>
+    <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
+    <string name="action_load_more">Ko\'proq ko\'rsatish</string>
+    <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
+    <string name="activity_source_failed">%1$s yuklanmadi</string>
+    <string name="activity_source_orders">Buyurtmalar</string>
+    <string name="activity_source_gaming_bookings">O\'yin zonasi bandlovlari</string>
+    <string name="activity_source_master_appointments">Ustaga yozilishlar</string>
+    <string name="activity_source_doctor_appointments">Shifokorga yozilishlar</string>
+    <string name="activity_source_cinema_tickets">Kino chiptalari</string>
+    <!-- Вид активности: названия заведения бэкенд не отдаёт ни в одном ответе -->
+    <string name="activity_kind_food_order">Ovqat buyurtmasi</string>
+    <string name="activity_kind_clothing_order">Kiyim buyurtmasi</string>
+    <string name="activity_kind_pharmacy_order">Dorixona buyurtmasi</string>
+    <string name="activity_kind_cinema_order">Kino buyurtmasi</string>
+    <string name="activity_kind_gaming_order">O\'yin zonasi buyurtmasi</string>
+    <string name="activity_kind_other_order">Buyurtma</string>
+    <string name="activity_kind_gaming_booking">O\'yin zonasi bandlovi</string>
+    <string name="activity_kind_master_appointment">Ustaga yozilish</string>
+    <string name="activity_kind_doctor_appointment">Shifokorga yozilish</string>
+    <string name="activity_kind_cinema_ticket">Kino chiptasi</string>
+    <!-- Общий вид статусов пяти источников -->
+    <string name="activity_status_placed">Qabul qilindi</string>
+    <string name="activity_status_confirmed">Tasdiqlandi</string>
+    <string name="activity_status_in_progress">Bajarilmoqda</string>
+    <string name="activity_status_ready">Tayyor</string>
+    <string name="activity_status_on_the_way">Yo\'lda</string>
+    <string name="activity_status_completed">Bajarildi</string>
+    <string name="activity_status_cancelled">Bekor qilindi</string>
+    <string name="activity_status_refunded">Qaytarildi</string>
+    <string name="activity_status_missed">Kelmadi</string>
+    <string name="activity_status_unknown">Ishlanmoqda</string>
+    <string name="activity_no_date">Sana ko\'rsatilmagan</string>
 </resources>

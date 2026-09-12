@@ -1,299 +1,288 @@
-# Инвентаризация UI и план развития (issue #57)
+# Инвентаризация проекта (снимок 2026-09-09, issue #36)
 
-Снимок: 2026-08-30. Ветка `claude/issue-57-*`. Кода не менялось — это документ
-для нарезки задач.
+Файл отвечает на один вопрос: **в каком состоянии проект и что брать дальше**.
+Читается первым — до `CHANGELOG.md` (там «как пришли», ищется grep'ом) и до
+`docs/API-CONTRACT.md` (там «что именно шлём»).
 
-Контракт бэкенда снят со стенда: `https://189-74-96-232.nip.io/v3/api-docs`
-(дизайн-репозиторий агенту в CI по-прежнему недоступен — `DESIGN_REPO_PAT` не
-задан). В схеме **129 эндпоинтов в 26 контроллерах**. Приложение использует
-**12** — и это главный вывод инвентаризации: не «в приложении мало экранов», а
-«бэкенд уехал вперёд на порядок».
+Все числа сняты командами, а не переписаны из прошлого снимка: команды указаны
+рядом, чтобы следующий агент пересчитал их за минуту и не поверил устаревшему
+файлу на слово. Команду смотри до того, как поверить числу: в этом же файле
+ноль `<plurals>` уже получался из-за grep'а не по тому файлу. Ветка снимка —
+`claude/issue-36-*`, кода не менялось.
+
+## Состояние одной строкой
+
+Каркас, онбординг, discovery и **девять вертикалей** уже в `main`. Все четыре
+таба живые: «Заказы» стал «Моими активностями» (issue #73, влит цепочкой PR по
+#142–#151). Выдуманных эндпоинтов больше нет:
+все 77 путей клиента существуют на стенде (сверено с живым `/v3/api-docs`
+2026-09-09). Работа сместилась с «написать вертикаль» на **платформенные
+куски** — соцфункции, серверный PIN, платежи, push, бизнес-панель, — и почти
+каждый из них **уже лежит в открытом PR**, а не ждёт исполнителя.
 
 ---
 
-## 1. Что видит пользователь сейчас
+## 0. Первое действие в новой задаче — посмотреть, не сделано ли это уже
 
-Нижняя навигация — 4 таба (`navigation/BottomNavItem.kt`). Из них **три —
-заглушки**:
+```bash
+gh pr list --state open      # 12 открытых PR на 2026-09-09
+gh issue list --state open   # 47 открытых issue
+```
 
-| Таб | Файл | Состояние |
+Это не формальность. Таб «Заказы» написан **дважды** — PR #110 и PR #152 по
+одной и той же issue #73; issue #142 отдельно фиксирует, что в одном из них
+продублированы уже существующие в `main` `FashionApi`/`BookingApi`/
+`HospitalApi`/`CinemaApi`. Ветка живёт неделю, автор прогона о ней не знает —
+и вертикаль пишется заново.
+
+---
+
+## 1. Цифры
+
+| Что | Сколько | Чем считать |
 |---|---|---|
-| Главная | `feature/discovery/ui/home/DiscoveryHomeScreen.kt` | **рабочий**: поиск, плитка 6 категорий, «рядом», «рекомендуем», pull-to-refresh |
-| Заказы | `feature/orders/ui/OrdersScreen.kt` (16 строк) | **заглушка**: `ScreenSkeleton(title, subtitle)`, ни одного запроса |
-| Кошелёк | `feature/wallet/ui/WalletScreen.kt` (32 строки) | **заглушка, показывающая выдуманное число**: `DEMO_BALANCE_SUM = 1_284_500` зашит в код |
-| Профиль | `feature/profile/ui/ProfileScreen.kt` | **полузаглушка**: язык, тема, адрес сервера, Chucker. Нет имени, номера, аватара, **и нет кнопки «Выйти»** |
-
-Дальше первого экрана путей всего три: карточка места, поиск, карта.
-
-### Экраны, которые есть в коде и работают
-
-- **Онбординг (6 экранов + 2)**: welcome, телефон, OTP, Telegram-вход, PIN,
-  биометрия, геолокация, адрес бэкенда. Самая проработанная часть приложения.
-- **Discovery**: главная, поиск с фильтрами и историей, карточка места
-  (галерея-скелетон, описание, часы, контакты, действия, отзывы), карта.
-- **Еда (5 экранов)**: меню → шторка модификаторов → корзина → checkout →
-  статус заказа. Логика полная, **но ходит по несуществующим путям** (см. §3).
-
-### Почему приложение «выглядит очень просто» — четыре причины, по порядку вклада
-
-1. **3 из 4 табов ничего не делают.** Это 75% нижней навигации.
-2. **Нет ни одной картинки.** Загрузчика изображений в проекте нет вовсе
-   (`grep coil|glide` по `libs.versions.toml` — пусто). Вместо фото заведений,
-   блюд, афиш и аватаров — серые скелетоны. Один этот пункт меняет
-   восприятие сильнее, чем любой новый экран.
-3. **Каталог стенда пуст**: `places/nearby`, `search` и `map-bounds` отвечают
-   `200` с `data: []` на любой радиус (проверено в issue #53). То есть даже
-   рабочая главная показывает пустой список — и это ответ сервера, а не баг
-   клиента.
-4. **Карта — заглушка со списком маркеров.** Полотно `MapCanvas` (Yandex
-   MapKit) написано и покрыто тестами в эпике 4.2, но `MapScreen.kt:94`
-   по-прежнему рисует `MapCanvasPlaceholder`.
+| Kotlin в `main` | 405 файлов | `find app/src/main -name '*.kt' \| wc -l` |
+| feature-пакетов | 24 | `ls app/src/main/java/uz/mahalla/feature` |
+| Назначений в графе | **45** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
+| Экранов (`*Screen.kt`) | 45 | `find app/src/main -name '*Screen.kt' \| wc -l` |
+| ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
+| `*Api.kt` / эндпоинтов | 19 / **77** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (79 аннотаций: `orders/{id}` и `appointments/{id}/cancel` объявлены в двух API каждый) |
+| Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://189-74-96-232.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
+| Тестов | **1967 в 184 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` |
+| Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
+| `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
+| Room | 3 сущности, 3 DAO | `data/db/` |
 
 ---
 
-## 2. Что умеет бэкенд, а приложение — нет
+## 2. Что работает в `main`
 
-Полный разбор по контроллерам. «Пользовательское» = нужно в этом приложении,
-«бизнес/админ» = панель заведения (отдельный скоуп, ТЗ его упоминает).
+### 2.1 Нижняя навигация
 
-| Контроллер | Ключевые эндпоинты | В приложении | Что это даёт UI |
+| Таб | Экран | Состояние |
+|---|---|---|
+| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
+| Заказы | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба пока `nav_orders` — issue #211 |
+| Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
+| Профиль | `profile/ui/ProfileScreen.kt` (731) | **работает**: имя, телефон, аватар (`media/upload`), мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |
+
+### 2.2 Вертикали: путь от карточки места
+
+Действие на карточке (`PlaceAction` → `PlaceDetailsEffect.OpenVertical`)
+открывает вертикаль по категории заведения (`PlaceCategory`).
+
+| Вертикаль | Экраны | Ручки | Готово в |
 |---|---|---|---|
-| `wallet` | `GET wallet`, `GET wallet/transactions`, `POST wallet/top-up` | ✗ | настоящий кошелёк вместо зашитого числа |
-| `notification` | `GET notifications`, `unread-count`, `PUT read-all` | ✗ | центр уведомлений, бейдж на главной |
-| `social` | `POST places/{id}/like`, `/save`, `/comments`, `GET places/{id}/status`, `GET saved-places` | ✗ | лайки, «Избранное», комментарии |
-| `review` | `POST reviews`, `POST reviews/{id}/reply`, `DELETE` | только `GET` | оставить отзыв (сейчас только чтение) |
-| `promotion` | `GET promotions/platform`, `promotions/places/{id}`, `promotions/check` | ✗ | баннеры акций на главной, скидки в чеке |
-| `media` | `POST media/upload`, `GET media/entity/{id}` | ✗ | фото в отзывах и профиле |
-| `food` | `GET food/places/{id}/menu`, `POST food/orders`, `GET food/orders/my` | **пути расходятся** | см. §3 — вертикаль не работает на живом бэкенде |
-| `gaming` | `GET gaming/places/{id}/zones`, `POST gaming/bookings`, `GET gaming/bookings/my` | ✗ | вертикаль «игровые зоны» (категория в приложении уже есть) |
-| `appointment` | `GET barber-services/places/{id}`, `.../slots`, `POST appointments`, `GET appointments/my` | ✗ | вертикаль «мастер/барбер» + запись на слот |
-| `walk-in` | `POST walkin/send`, `PUT walkin/{id}/accept|decline|start|complete` | ✗ | вызов мастера «сейчас» — живая очередь из ТЗ |
-| `cinema` | `GET cinema/movies`, `cinema/places/{id}/schedule`, `POST cinema/sessions/{id}/buy`, `GET cinema/tickets/my` | ✗ | вертикаль «кино» + билет с QR (`CinemaTicket.qrCode`) |
-| `hospital` | `GET hospitals/places/{id}/doctors`, `POST hospitals/appointments` | ✗ | вертикаль «больницы» |
-| `pharmacy` | `GET pharmacy/places/{id}/products` | ✗ | вертикаль «аптеки» (`requiresPrescription`, `stockQuantity`) |
-| `fashion` | `GET fashion/categories`, `stores/{id}/catalog`, `products/{id}`, корзина (`cart`, `cart/add`, `PUT`, `DELETE`), `POST fashion/orders` | ✗ | целая вторая вертикаль-магазин с серверной корзиной |
-| `freelancer` | `GET freelancers`, `GET/POST freelancers/me`, `PUT me/toggle-availability` | ✗ | каталог мастеров + «стать исполнителем» |
-| `subscription` | `GET subscriptions/plans`, `current`, `POST subscribe`, `trial`, `cancel`, `PUT auto-renew` | ✗ | подписки (в ТЗ есть); `PlanResponse` уже с `nameUz`, `trialDays`, `isPopular` |
-| `payment` | `GET payments/subscription`, `payments/transactions`, callbacks Click/Payme | ✗ | реальная оплата |
-| `pin-code` | `GET pin/status`, `POST pin/set`, `verify`, `reset`, `PUT change`, `PUT biometric`, `DELETE pin` | ✗ (используется только `auth/setup-pin`, `auth/pin-login`) | смена PIN из профиля, app-lock |
-| `bank-auth` | `GET auth/sessions`, `POST auth/sessions/revoke`, `sessions/{id}/trust`, `auth/session/check`, `auth/pin-resume` | частично | «мои устройства», отзыв сессии, замок при возврате |
-| `app-version` | `POST app/version/check`, `POST app/version/skip` | ✗ | экран обязательного обновления (`updateRequired`, `remainingSkips`, `storeUrl`) |
-| `analytics` | `POST analytics/track` | ✗ | продуктовая аналитика |
-| `place` | `GET places/nearby`, `search`, `places/{id}` | **есть** | — |
-| `place`(бизнес) | `POST places`, `PUT places/{id}`, `PUT availability` | ✗ | бизнес-панель |
-| `place-staff` | `GET/POST/PUT/DELETE places/{id}/staff` | ✗ | бизнес-панель |
-| `analytics`(бизнес) | `GET analytics/places/{id}/dashboard` | ✗ | бизнес-панель |
-| `auth`(админ) | `block`/`unblock` пользователя, админ версий | ✗ | не для этого приложения |
+| **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг) |
+| **Очередь** (walk-in) | талон, слежение, отмена | `walkin/send`, `walkin/{id}/cancel` | #96 |
+| **Бронь** (BARBER) | услуга → день → слот → подтверждение; «мои записи» с отменой и **переносом** | `barber-services/places/{id}`, `.../slots`, `appointments`, `appointments/my`, `appointments/{id}/cancel` | #97, перенос — #11 |
+| **Больницы** | врач → день → время → жалоба → подтверждение; «мои записи к врачу» (тот же экран, что у брони, с `vertical=Doctor`) | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my`, отмена — общая `appointments/{id}/cancel` (см. §4.1) | #99 |
+| **Игровые зоны** (GAMING) | зоны клуба → время и длительность → «мои брони» | `gaming/places/{id}/zones`, `gaming/bookings`, `gaming/bookings/my` | #98 |
+| **Кино** | афиша → фильм и сеансы → покупка → «мои билеты» | `cinema/movies`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `…/cancel` | #106 |
+| **Аптека** | витрина товаров с наличием — **только просмотр** | `pharmacy/places/{id}/products` | #100 (заказа нет и у бэкенда) |
+| **Одежда** (FASHION) | каталог → товар (цвет/размер) → **серверная** корзина → checkout → «мои заказы» | `fashion/categories`, `fashion/stores/{id}/catalog`, `fashion/products/{id}`, `fashion/cart*`, `fashion/orders` | #108 |
+| **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my` | #107 |
+
+Мастер живёт в двух местах, и это не ошибка: плитка «Мастера» на главной — это
+категория `BARBER` в каталоге заведений (`SearchRoute`), то есть барбершопы, а
+`FreelancersRoute` — каталог самих исполнителей (`freelancers`), отдельная
+сущность бэкенда со своими услугами и заказами.
+
+### 2.3 Платформа
+
+- **Онбординг**: welcome → телефон → OTP (SMS/Telegram) → PIN → биометрия →
+  гео; отдельно адрес бэкенда (#26) и вход по Telegram-боту (#46/#49/#54).
+  Прерванный онбординг продолжается с нужного шага (`RootViewModel`) — второй
+  платный SMS не запрашивается.
+- **Discovery**: главная, поиск с фильтрами и историей, карточка места
+  (галерея на Coil, часы, контакты, действия вертикалей, отзывы —
+  **чтение, добавление и удаление своего**), карта.
+- **Карта** — настоящая: `MapCanvas` на Yandex MapKit подключён к `MapScreen`
+  (#65, #126). Прежний `MapCanvasPlaceholder` из графа ушёл.
+- **Уведомления**: центр, бейдж на главной, чтение и «прочитать всё» (#81),
+  открытое уведомление гаснет само (#95).
+- **Акции**: карусель на главной и плашка на карточке (#104).
+- **Подписки**: тарифы, оформление, пробный период (#103).
+- **Обновление приложения**: блокирующий экран при `updateRequired` (#80).
+- **Роли**: «кто вы» → анкета покупателя / продавца (#84), «мои заведения» со
+  статусом модерации (#94), точка заведения выбирается на карте (#90).
+- **Картинки**: Coil + `MahallaAsyncImage`, загрузка своих файлов
+  `media/upload` (#101, #60, критичный фикс #137 — до него не грузилась
+  **ни одна** сетевая картинка).
+- **Инфраструктура**: Hilt, Retrofit + OkHttp + kotlinx.serialization, Room с
+  `exportSchema = true` и настоящими миграциями (#64), DataStore, Chucker
+  (#30), Sentry (#74), самоподписанный сертификат стенда (#32), гео-заголовки
+  в каждом запросе (#53), человеческие тексты ошибок бэкенда (#34).
 
 ---
 
-## 3. Блокеры контракта (чинить до новых экранов)
+## 3. Написано, но в `main` этого нет: 13 открытых PR
 
-### 3.1 Вертикаль «Еда» ходит по путям, которых нет
+Прежде чем брать что-либо из раздела 4 — проверь, нет ли этого здесь.
 
-`feature/food/data/FoodApi.kt` написан по здравому смыслу (эпик 5,
-дизайн-репо был недоступен). Реальность:
+| PR | Тема | issue |
+|---|---|---|
+| #223 | Маркеры карты по видимой области (`places/map-bounds`), а не радиусом | #168 |
+| #164 | Качество и релиз: R8, подпись, скриншот-тесты темы, Baseline Profile | #17 |
+| #161 | Бизнес-панель: дашборд, очередь, заказы, меню | #16 |
+| #159 | Push (FCM): каналы, разрешение, deep links | #15 |
+| #158 | Подписки: состояния, продление, история списаний | #13 |
+| #156 | Оплата из кошелька: подтверждение, идемпотентность, отказы | #12 |
+| #120 | Серверный PIN и app-lock: смена PIN, биометрия, `session/check` | #102 |
+| #78 | Соцфункции: лайк, «Избранное», комментарии | #105 |
+| #72 | Формы заказа и выставления услуги | #71 |
+| #41 | Чистый `lintDebug` (устарел: lint вернулся в CI отдельным PR #132) | #39 |
+| #38 | Тест цикла `HELLO.md` | #37 |
 
-| В приложении | На бэкенде |
-|---|---|
-| `GET places/{id}/menu` | `GET food/places/{placeId}/menu` |
-| `POST orders` | `POST food/orders` |
-| `GET orders/{id}` | **нет** — есть только `GET food/orders/my` (страница) |
-| `POST orders/{id}/cancel` | **нет** (есть только бизнес-переход статуса `PUT food/places/{placeId}/orders/{orderId}/status`) |
-| `POST places/{id}/promo` | **нет** — промокод проверяет `GET promotions/check` |
-| `GET wallet/balance` | `GET wallet` |
-
-Плюс модель уже: `MenuResponse` = категория с `items`, `ItemResponse` без
-модификаторов вовсе (`description, id, isAvailable, isHalal, menuId, name,
-prepMinutes, price`), `PlaceOrderRequest` = `placeId, items[{itemId,
-quantity}], fulfillment, paymentMethod, deliveryAddress` — **ни модификаторов,
-ни времени доставки, ни комментария, ни промокода**. То есть шторка
-модификаторов и слоты времени из эпика 5 бэкенду сейчас нечем отправить.
-
-Это одновременно и задача для Android (переписать `FoodApi` под реальность,
-как в issue #53 для каталога), и запрос к `jack5505/mahalla` (§5).
-
-### 3.2 Схемы в OpenAPI перекрыты коллизиями springdoc
-
-Один и тот же `#/components/schemas/BookRequest` объявлен телом сразу трёх
-разных эндпоинтов — `POST gaming/bookings`, `POST appointments`,
-`POST hospitals/appointments` — а его поля (`complaint, date, doctorId,
-startTime`) явно от больницы. Для игровой зоны нужны `zoneId`/`durationHours`
-(они видны в `GamingBooking`), для барбера — `serviceId`. То же у
-`CreateRequest` (отзывы) и `CheckRequest` (версия), и то же было с `Response` в
-issue #53.
-
-**Практический вывод: вертикали gaming/barber/hospital нельзя писать «по
-схеме» — тела запросов придётся снимать curl'ами или ждать починки springdoc
-(`springdoc.use-fqn=true`).** Это делает их дороже, чем кажется, и поэтому они
-не в первой волне задач.
+«Мои активности» дошли до `main` не сразу: таб был написан **дважды** (PR #110
+и #152 по одной issue #73), оба закрыты без мержа, а в `main` влита цепочка
+#201 → #202 → #204 → #206 → #207 → #215. По ней закрыты замечания ревью #142,
+#143, #144, #145, #151; открытыми остались #141 (частично), #146, #147 (PR
+#210), #148, #149, #150 и найденные позже #203, #205, #208, #209, #211, #213,
+#214. Ниже — чем были эти одиннадцать замечаний (#141–#151): типизированный
+`startTime`, UTC против Asia/Tashkent, пагинация на пустой вкладке, шесть
+сообщений об одной ошибке, дублированный контракт. Это цена того, что «Мои
+активности» писались дважды и в обход существующего кода.
 
 ---
 
-## 4. Предлагаемый список задач
+## 4. Чего в приложении нет
 
-Порядок — по отношению «заметность для пользователя ÷ стоимость». Каждый пункт
-рассчитан на отдельный issue.
 
-### Волна 0 — приложение перестаёт выглядеть пустым (4 задачи)
+### 3.2 Схемы в OpenAPI были перекрыты коллизиями springdoc — починено
 
-**A1. Картинки: Coil + фото мест, блюд, афиш, аватаров.**
-Добавить `io.coil-kt:coil-compose`, компонент кита `MahallaAsyncImage`
-(скелетон → фото → фоллбэк-иконка, кэш, `crossfade`), подключить в
-`PlaceCard`, галерею карточки места, меню, отзывы. Эндпоинт для загрузки своих
-файлов — `POST media/upload` (multipart, `entityType`/`entityId`), чтение —
-`GET media/entity/{entityId}`; у мест URL уже приезжает полем.
-*Самая дешёвая задача с самым большим визуальным эффектом. Делать первой.*
+**Было.** Один и тот же `#/components/schemas/BookRequest` был объявлен телом
+сразу трёх разных эндпоинтов — `POST gaming/bookings`, `POST appointments`,
+`POST hospitals/appointments`, — а его поля (`complaint, date, doctorId,
+startTime`) явно от больницы. Для игровой зоны нужны `zoneId`/`durationHours`,
+для барбера — `serviceId`. То же было у `CreateRequest` (отзывы) и
+`CheckRequest` (версия), и то же — с `Response` в issue #53. Вывод был:
+вертикали gaming/barber/hospital нельзя писать «по схеме», тела придётся
+снимать curl'ами.
 
-**A2. Кошелёк вместо зашитого числа.**
-`GET wallet` (`balance`, `bonusBalance`, `heldAmount`, `availableBalance`,
-`currency`, `status`), `GET wallet/transactions?page&size` (список с
-`type`/`direction`/`amount`/`balanceAfter`/`createdAt`, группировка по дням),
-`POST wallet/top-up` (`amount`, `provider`). Убрать `DEMO_BALANCE_SUM` —
-сейчас экран показывает выдуманные 1 284 500 сум, и это хуже пустого экрана.
+**Стало** (сверено по живому `/v3/api-docs` 2026-09-10, issue #167). Имени
+`BookRequest` в схеме больше нет: у каждого пути своё тело —
+`AppointmentBookRequest`, `HospitalBookRequest`, `GamingBookRequest`. Разошлись
+и `CreateRequest`/`CheckRequest` (`ReviewCreateRequest`,
+`FreelancerCreateRequest`, `PharmacyCreateRequest`, `CheckSessionRequest`, …).
+Телом больше одного пути остались ровно пять схем — `AdminPlanRequest`,
+`CreateDoctorRequest`, `SendOtpRequest`, `ServiceRequest`,
+`UserSubscriptionSubscribeRequest`, — и это настоящее переиспользование, а не
+коллизия.
 
-**A3. Таб «Заказы» → «Мои активности».**
-Один список из пяти источников: `GET food/orders/my`,
-`GET gaming/bookings/my`, `GET appointments/my`,
-`GET hospitals/appointments/my`, `GET cinema/tickets/my`. Фильтр
-«активные/история», переход на статус заказа. Пока вертикали не сделаны,
-источники подключаются по мере готовности — но каркас списка нужен сразу,
-иначе таб остаётся пустым.
+Выведенные тогда имена полей коллизия, как оказалось, не испортила: и у
+барбера, и у игровой зоны догадка совпала со схемой (см. `docs/API-CONTRACT.md`).
+**Новый вывод: тело запроса теперь можно читать из схемы.** Живым запросом
+по-прежнему не проверяется только то, что бэкенд с ним сделает: `401` приходит
+до валидации, нужен `CONTRACT_REFRESH_TOKEN`.
 
-**A4. Профиль: живой профиль + выход.**
-Имя, номер, аватар (данные приходят в `user` из `verify-otp`/`pin-login`),
-кнопка **«Выйти»** (`AuthRepository.logout()` уже написан и из UI не вызывается
-нигде), «Мои устройства» (`GET auth/sessions` → `deviceName`, `platform`,
-`lastActivityAt`, `lastIp`, `trustedDevice`; `POST auth/sessions/revoke`,
-`POST auth/sessions/{id}/trust`), смена PIN (`PUT pin/change`), переключатель
-биометрии (`PUT pin/biometric`). Сейчас из приложения нельзя выйти вообще.
+### 4.1 Клиентские ручки стенда, которые не зовёт никто
 
-### Волна 1 — вовлечение, дешёвые задачи (4 задачи)
+Из 180 эндпоинтов стенда приложение использует 77. Разница — 103 ручки, и
+это **не** «отставание на порядок»: около 63 из них — бизнес-панель, кабинет
+мастера и админка. Клиентские незакрытые области — десять, и пять из них
+уже в открытых PR:
 
-**B1. Карта по-настоящему.** Заменить `MapCanvasPlaceholder` на готовый
-`MapCanvas`, подключить `GET places/map-bounds` при движении камеры, решить
-судьбу сеточного `MarkerClusterer` (MapKit кластеризует сам). Нужен секрет
-`MAPKIT_API_KEY` в Actions — **действие пользователя**.
+| Область | Ручки | Состояние |
+|---|---|---|
+| Соцфункции | `places/{id}/like`, `/save`, `/comments` (GET/POST), `DELETE comments/{id}`, `saved-places`, `places/{id}/status` | issue #105, PR #78; вопросы к бэкенду — #88 |
+| Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #120. Сейчас PIN живёт на `auth/setup-pin` + `auth/pin-login`, сменить его из профиля нечем |
+| Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар приложение на сервере не меняет — хотя ручка для этого есть. **Контракт обеих ручек снят** чтением схемы 2026-09-10 (issue #237) и лежит в `docs/API-CONTRACT.md` с ✅: `PUT` принимает ровно `fullName` и `avatarUrl`, `language` и `role` отправить нечем — решение в `docs/adr/0007`. Из девяти KDoc, утверждавших, что ручек нет вовсе, исправлены семь (`ProfileViewModel` — оба места, класс и `uploadAvatar`, `ProfileContract`, `AuthRepository`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`); остались `PlaceDetailsViewModel` и `CustomerForm` — их правит работа по #170/#234 |
+| Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
+| Аналитика | `POST analytics/track` | issue #169, PR #229 — **подключена**: `VIEW`/`CALL`/`NAVIGATE`/`REVIEW` на карточке места, `BOOK` в пяти вертикалях, `ORDER` в двух. Ручка place-центрична (`placeId` обязателен, перечисление видов закрыто), поэтому событие без заведения — экран, поиск, отказ бэкенда — отправить нечем: issue **#226** |
+| Карта | `GET places/map-bounds` | issue #168, PR #223: маркеры брались из `CatalogRepository` (`places/nearby`), то есть радиусом вокруг человека; в PR область приходит от полотна (`visibleRegion`) с дебаунсом, `nearby` остался первым кадром |
+| Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | не подключены: поля промокода в checkout нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI), стоимость доставки не запрашивается |
+| «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `freelancers/me/orders`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
+| Медиа | `GET media/entity/{id}`, `DELETE media/{id}` | загрузка есть, чтения по сущности и удаления нет |
+| Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `PUT freelancers/orders/{id}/status` | «стать исполнителем» не начато |
+| Бизнес-панель | `analytics/places/{id}/dashboard`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163. `places/{id}/staff*` — отдельно, issue #189: экран «Сотрудники» (`feature/role/ui/staff`), доступ только владельцу |
+| Админка | `admin/*`, `auth/admin/users/{id}/block` | вне скоупа этого приложения |
+| Одиночки | `GET places` (постраничный список без гео), `POST p/request` (алиас запроса кода) | не нужны: каталог берётся `nearby`/`search`, код — `auth/send-otp` |
 
-**B2. Лайк, «Избранное», комментарии на карточке места.**
-`GET places/{id}/status` (`liked`, `saved`, `totalLikes`),
-`POST places/{id}/like`, `POST places/{id}/save`,
-`GET/POST places/{id}/comments`, раздел «Избранное» из `GET saved-places`.
-Внимание: `saved-places` отдаёт **только UUID'ы** (`PageResponseUUID`) — без
-изменения на бэкенде экран избранного потребует запрос на каждое место (§5).
+Расхождение, которое стоит проверить (issue **#167**): **отмену записи к врачу
+клиент шлёт на `POST appointments/{id}/cancel`** (`HospitalApi.cancel`), и в
+KDoc написано почему — на 2026-09-04 своей отмены у `hospitals` не было.
+Теперь есть: `POST hospitals/appointments/{id}/cancel` в
+`hospital-controller`. Какая из двух отменяет запись больницы — не проверено,
+всё под токеном.
 
-**B3. Оставить отзыв.** `POST reviews` (+ фото через A1/`media/upload`),
-удаление своего (`DELETE reviews/{id}`). Сейчас отзывы только читаются, при
-этом рейтинг — главный сигнал в выдаче.
+### 4.2 Не начато и не в PR
 
-**B4. Акции и промо.** `GET promotions/platform` — карусель баннеров на
-главной (`bannerUrl`, `title`, `discountPercent`, `validUntil`),
-`GET promotions/places/{id}` — плашка на карточке, `GET promotions/check` —
-проверка промокода в чеке (заменяет выдуманный `places/{id}/promo`).
+Заведено по итогам этой инвентаризации:
 
-**B5. Центр уведомлений.** `GET notifications?page&size`,
-`GET notifications/unread-count` (бейдж на иконке в топбаре главной),
-`PUT notifications/read-all`. Переход по `type` + `entityId`.
+- **`users/me`** — редактирование профиля на сервере, issue #170.
+- **Отмена записи к врачу** — какой ручкой, issue #167.
 
-### Волна 2 — вертикали (5 задач, каждая крупная)
+`map-bounds` (issue #168) отсюда ушёл — он в PR #223, см. раздел 3.
 
-Перед каждой — снять реальные тела запросов curl'ами (§3.2).
+Без issue (мелко или ждёт продукта):
 
-**C1. Еда под реальный контракт.** Переписать `FoodApi` на `food/*`, убрать
-несуществующие вызовы, решить, что делать с модификаторами и слотами доставки,
-которых нет в `PlaceOrderRequest`. Блокер работоспособности эпика 5 — по
-приоритету это волна 0, по объёму — волна 2.
+- **Кабинет мастера** (`freelancers/me`).
+- **`promotions/check` и `food/delivery-fee`** — промокода и стоимости
+  доставки в чеке нет.
+- **Сверка вёрстки с дизайн-репозиторием**: `DESIGN_REPO_PAT` не задан,
+  каталога `design-repo/` в прогонах нет — ни один экран машинно с
+  `TZ-ANDROID.md`/`SCREENS.md` не сверялся.
 
-**C2. Игровые зоны (GAMING).** `GET gaming/places/{id}/zones` (`zoneType`,
-`totalSeats`, `pricePerHour`, `isAvailable`) → выбор времени и длительности →
-`POST gaming/bookings` → `GET gaming/bookings/my`.
-
-**C3. Мастер/барбер + вызов «сейчас».** `GET barber-services/places/{id}`,
-`GET .../slots` (сетка слотов), `POST appointments`, `GET appointments/my`.
-Отдельно — `POST walkin/send` и статусы `accept/decline/start/complete`: это
-живая очередь из ТЗ, экран с ожиданием ответа мастера.
-
-**C4. Кино.** `GET cinema/movies` (`posterUrl`, `trailerUrl`, `genre`,
-`durationMinutes`, `titleUz`), `GET cinema/places/{id}/schedule`
-(`hallName`, `startTime`, `ticketPrice`, `availableSeats`),
-`POST cinema/sessions/{id}/buy` → билет с QR (`CinemaTicket.qrCode`) в
-«Активностях». Нужна отрисовка QR (библиотека или своя матрица).
-
-**C5. Больницы и аптеки.** `GET hospitals/places/{id}/doctors`
-(`specialty`, `consultationPrice`, `bio`) + `POST hospitals/appointments`;
-`GET pharmacy/places/{id}/products` (`requiresPrescription`, `stockQuantity`,
-`dosageForm`, `strength`) — поиск по препарату, наличие.
-
-**C6. Fashion-магазин.** `GET fashion/categories`, `stores/{id}/catalog`,
-`products/{id}` (варианты: размер/цвет), **серверная корзина**
-(`GET/POST/PUT/DELETE fashion/cart*`), `POST fashion/orders`. Отличается от
-еды тем, что корзина живёт на сервере — переиспользовать `CartCalculator`
-не получится, и это надо учесть в оценке.
-
-**C7. Фрилансеры.** `GET freelancers` (каталог с фильтрами) и «стать
-исполнителем» (`GET/POST freelancers/me`,
-`PUT freelancers/me/toggle-availability`).
-
-### Волна 3 — платформа (5 задач)
-
-**D1. Подписки.** `GET subscriptions/plans?audience`, `GET current`,
-`POST trial` (`trialDays`), `POST subscribe`, `POST cancel`,
-`PUT auto-renew`. `PlanResponse` уже несёт `nameUz`, `isPopular`,
-`yearlyDiscountPercent` — экран тарифов рисуется прямо по нему.
-
-**D2. Оплата Click/Payme.** `payments/*` + `wallet/top-up`, возврат из
-внешнего приложения, идемпотентность. Без этого «оплата кошельком» в еде —
-только проверка баланса.
-
-**D3. Обязательное обновление.** `POST app/version/check` →
-`updateRequired`/`updateAvailable`/`policy`/`remainingSkips`/`storeUrl`,
-`POST app/version/skip`. Блокирующий экран при `updateRequired`. Дёшево и
-снимает будущую боль с несовместимыми версиями API.
-
-**D4. Push-уведомления (FCM).** `DeviceDescriptor.fcmToken` уже объявлен и
-всегда `null` — поле ждёт FCM. Токен отправляется вместе с устройством в
-`send-otp`/`refresh`. Связать с B5.
-
-**D5. App-lock.** PIN/биометрия при возврате в приложение:
-`POST auth/session/check`, `POST auth/pin-resume`, `GET pin/status`. Флаги
-`biometricEnabled` и PIN уже сохраняются с эпика 3, но замка нет.
-
-**D6. Аналитика.** `POST analytics/track` — экраны, поиски, воронка заказа.
-
-### Волна 4 — бизнес-панель (отдельный скоуп, обсудить с продуктом)
-
-Заведение из приложения: `POST/PUT places`, `PUT places/{id}/availability`,
-меню (`POST food/places/{id}/items`, `PUT food/items/{id}/toggle`),
-статусы заказов, персонал (`places/{id}/staff`), дашборд
-(`GET analytics/places/{id}/dashboard`), бизнес-кошелёк
-(`GET wallet/business`), бизнес-подписка. Отвечать на отзывы
-(`POST reviews/{id}/reply`). Это по объёму сравнимо со всем клиентским
-приложением — стоит решить, отдельное это приложение или раздел в профиле.
-
-### Волна 5 — UI-долг и качество (уже частично в AGENTS.md)
-
-**E1. Навигация: 4 таба мало?** Сейчас Главная/Заказы/Кошелёк/Профиль. С
-появлением A3 и B5 стоит обсудить пятый таб («Избранное» или «Акции») либо
-оставить 4 и обогатить главную. Решение продукта, не техническое.
-**E2. Compose UI-тесты** (`ui-test-junit4` + Robolectric): в проекте нет ни
-одного — цели нажатия, состояния и семантика проверяются глазами по превью.
-**E3. Скриншот-тесты** и сверка с `TZ-ANDROID.md`/`SCREENS.md` — соответствие
-макету ни разу не проверялось машинно (дизайн-репо агенту недоступно).
-**E4. Пустые состояния с действием**: при пустом каталоге экран должен
-предлагать расширить радиус/сменить город, а не просто «ничего не найдено».
-**E5. Мелкий долг ревью** — уже перечислен в AGENTS.md (plurals для
-`otp_input_description`/`pin_input_description`, `TextFieldValue` в
-`MahallaPhoneField`, `disabledContainerColor`, двойной инсет в `Sheets.kt`,
-`SearchEvent.QueryCleared` без отправителя и т.д.).
 
 ---
+
+## 5. Техдолг (перепроверен по коду, а не переписан)
+
+### 5.1 В `main`
+
+- **Две a11y-строки не стали plural**: `otp_input_description` и
+  `pin_input_description` склеивают количество через `%1$d`
+  (`core/ui/components/TextFields.kt:179,181`). Остальные количества
+  переведены как надо — 26 `<plurals>` в каждой локали, правило есть в
+  `.claude/rules/i18n.md`.
+- **Скриншот-тестов в `main` нет** — Roborazzi приходит только с PR #164;
+  соответствие макету проверяется глазами по `@ThemeLanguagePreviews`.
+  `.claude/rules/compose-ui.md` про это говорит правду для `main`, но
+  разойдётся сразу после мержа #164 (issue #166).
+- **`.claude/rules/testing.md` называет 163 тест-класса** — их 177. Правка
+  агентом не доезжает дважды: локально окружение просит подтверждения на
+  `.claude/**`, а в CI каталог входит в `SENSITIVE_PATHS` action'а
+  (`restore-config.ts`) и **восстанавливается из базовой ветки поверх ветки
+  PR** — то есть молча затирается (это же описано в комментарии
+  `.github/workflows/claude.yml`). Поправить руками.
+- **Compose-тестов почти нет**: `ui-test-junit4` в проекте есть, но
+  использован ровно одним тестом (`MahallaAsyncImageTest`, #137). Цели
+  нажатия и семантика не проверяются.
+- **`BottomNavItem.route: Any`** — типизированные маршруты в enum'е стёрты до
+  `Any`, опечатка доживёт до рантайма.
+- **`SearchEvent.QueryCleared` не отправляет никто** — ветка обработчика
+  мёртвая.
+- **`TokenAuthenticator`**: `synchronized` + `runBlocking` на обновлении
+  токена — блокирующий вызов на потоке OkHttp.
+- **`content://` и `file://` обходят белый список схем картинок** (issue #139).
+- **Deep link вытесняет стартовый экран** обновления и адреса бэкенда
+  (issue #160). В `main` ссылка одна — `mahalla://place/{placeId}`; после
+  мержа #159 к ней добавится пуш, и цена вырастет.
+- **Контракт вертикалей сверен неравномерно**: в `docs/API-CONTRACT.md` ⚠️ у
+  всего, что требует Bearer, — `CONTRACT_REFRESH_TOKEN` в CI нет, харнесс
+  `contract/booking.sh` проверяет только анонимную половину. Два пропущенных
+  теста в прогоне — ровно они (`BookingContractTest`): без токена они не
+  падают, а тихо не проверяют ничего.
+
+### 5.2 Не в `main`, а в открытых PR — учитывать при планировании
+
+- **`Idempotency-Key` и коды отказа оплаты не подтверждены** бэкендом
+  (issue #157): это долг оплаты из PR #156/#158, самого кода в `main` нет.
+  Единица денег вопросом больше не является — тийины, делитель сто
+  (`core/format/Money`, issue #149).
+- **Остаток замечаний ревью по «Моим активностям»** — #146, #147, #148,
+  #203, #205, #208, #209, #211, #213, #214; см. раздел 3.
+
+---
+
 
 ## 5. Вопросы и просьбы к `jack5505/mahalla` (не блокеры этого issue)
 
-1. **Коллизии имён в OpenAPI** (`BookRequest`, `CreateRequest`,
-   `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`. Сейчас по
-   схеме нельзя понять тело трёх разных эндпоинтов бронирования — каждая
-   вертикаль начинается с обратной разработки curl'ами.
+1. ~~**Коллизии имён в OpenAPI** (`BookRequest`, `CreateRequest`,
+   `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`.~~
+   **Сделано** — в схеме от 2026-09-09 у каждого пути своё тело (см. §3.2,
+   issue #167).
 2. **Нет `GET /users/me` и обновления профиля**: данные пользователя приходят
    только в ответе на вход, аватар/имя менять нечем.
 3. **`PlaceOrderRequest` беднее корзины приложения**: нет модификаторов
@@ -312,15 +301,18 @@ issue #53.
 8. **Каталог стенда пуст** — до наполнения ни один экран discovery проверить
    на живых данных нельзя.
 
+## 6. Ждёт действий пользователя
+
+`MAPKIT_API_KEY`, `SENTRY_DSN`, `DESIGN_REPO_PAT`, `BACKEND_IMAGE` — см.
+AGENTS.md. Плюс `CONTRACT_REFRESH_TOKEN` для `contract-check.yml`: без него
+половина контракта остаётся непроверяемой.
+
+
 ---
 
-## 6. Порядок, который я предлагаю
+## 7. Как обновлять этот файл
 
-1. `A1` картинки → `A2` кошелёк → `A4` профиль с выходом → `A3` каркас
-   активностей. Четыре задачи, после которых приложение перестаёт выглядеть
-   демо.
-2. `C1` еда под реальный контракт (иначе единственная готовая вертикаль
-   мертва) + `B1` карта.
-3. `B2`–`B5` — дёшево и сильно оживляет.
-4. Вертикали `C2`–`C7` по одной, каждая после снятия контракта curl'ами.
-5. `D1`–`D6`, потом бизнес-панель.
+Пересчитывать числа командами из раздела 1 и ставить новую дату снимка.
+История этапов — в `CHANGELOG.md`, он не переписывается задним числом; здесь
+только «как сейчас». Появилась вертикаль или закрылся долг — правь **этот**
+файл в том же PR, иначе следующий агент будет планировать по прошлому месяцу.

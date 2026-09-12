@@ -74,6 +74,10 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
         val viewModel = MyPlacesViewModel(repository)
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyPlacesEvent.ScreenResumed)
+        assertEquals(listOf(0), repository.requestedPages)
+
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
 
@@ -219,6 +223,68 @@ class MyPlacesViewModelTest {
         assertTrue(repository.toggled.isEmpty())
     }
 
+    @Test
+    fun `a pharmacy owner opens the showcase in the owner mode`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", category = PlaceCategory.Pharmacy).copy(name = "Dori-Darmon")),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
+
+        assertEquals(
+            MyPlacesEffect.OpenPharmacyManagement("p-1", "Dori-Darmon"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `a staff member of a pharmacy cannot open the owner mode`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(
+                place("p-1", category = PlaceCategory.Pharmacy)
+                    .copy(staffRole = PlaceStaffRole.Staff),
+            ),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
+    @Test
+    fun `the owner opens staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Owner)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertEquals(MyPlacesEffect.OpenStaff("p-1"), viewModel.effects.first())
+    }
+
+    @Test
+    fun `a manager cannot open staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Manager)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
     private fun page(
         items: List<MyPlace>,
         hasMore: Boolean = false,
@@ -227,10 +293,11 @@ class MyPlacesViewModelTest {
     private fun place(
         id: String,
         status: PlaceModerationStatus = PlaceModerationStatus.Active,
+        category: PlaceCategory = PlaceCategory.Food,
     ) = MyPlace(
         id = id,
         name = "Osh Markazi",
-        category = PlaceCategory.Food,
+        category = category,
         status = status,
         staffRole = PlaceStaffRole.Owner,
     )

@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.notifications.data.NotificationsRepository
 import uz.mahalla.feature.notifications.domain.AppNotification
 import uz.mahalla.feature.notifications.domain.NotificationPage
@@ -30,6 +29,7 @@ class NotificationsViewModel @Inject constructor(
     NotificationsState(),
 ) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -59,12 +59,12 @@ class NotificationsViewModel @Inject constructor(
     override fun onEvent(event: NotificationsEvent) {
         when (event) {
             // Возврат на экран: уведомление могло прийти, пока приложение было
-            // в фоне. Пока идёт загрузка, перезапрашивать нечего — ответ
-            // приедет на уже сменившееся состояние.
-            NotificationsEvent.ScreenResumed ->
-                if (!currentState.items.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // в фоне. Защита от дубля (первый resume, два resume подряд) —
+            // общая, см. MviViewModel.onScreenResumed (issue #145, #209).
+            NotificationsEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             NotificationsEvent.Refreshed -> load(showLoading = false, refreshing = true)
             NotificationsEvent.Retry -> load()
@@ -102,7 +102,7 @@ class NotificationsViewModel @Inject constructor(
                 loadMoreFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val page = async { repository.notifications(page = 0) }
             val unread = async { repository.unreadCount() }
             applyPage(page.await())

@@ -1,6 +1,9 @@
 package uz.mahalla.feature.wallet.data
 
+import uz.mahalla.core.format.Money
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -14,8 +17,6 @@ import uz.mahalla.feature.wallet.domain.TopUpValidator
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
-import uz.mahalla.feature.wallet.domain.WalletTopUp
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
@@ -42,14 +43,12 @@ interface WalletRepository {
      * Заводит пополнение и возвращает форму оплаты (issue #93).
      *
      * @param amountSum сумма в сумах — ровно та, что человек видел на экране.
-     * @param scale делитель из выдачи баланса ([Wallet.amountScale]): в
-     * единицы бэкенда сумма переводится здесь, на границе данных, а не на
-     * экране.
+     * В тийины бэкенда она переводится здесь, на границе данных
+     * ([Money.somToTiyin], issue #149), а не на экране.
      */
     suspend fun topUp(
         amountSum: Long,
         provider: TopUpProvider,
-        scale: Long,
     ): ApiResult<TopUpOrder>
 
     companion object {
@@ -90,16 +89,15 @@ class DefaultWalletRepository @Inject constructor(
     override suspend fun topUp(
         amountSum: Long,
         provider: TopUpProvider,
-        scale: Long,
     ): ApiResult<TopUpOrder> {
         val draft = TopUpDraft(amountText = amountSum.toString(), provider = provider)
-        if (TopUpValidator.validate(draft, scale).isNotEmpty()) {
+        if (TopUpValidator.validate(draft).isNotEmpty()) {
             return ApiResult.Failure(ApiError.Business(WalletRepository.INVALID_TOP_UP_CODE))
         }
         val result = apiCall {
             api.topUp(
                 TopUpRequest(
-                    amount = WalletTopUp.toMinor(amountSum, scale),
+                    amount = Money.somToTiyin(amountSum),
                     provider = provider.apiValue,
                 ),
             ).payload()
@@ -118,27 +116,28 @@ class DefaultWalletRepository @Inject constructor(
 }
 
 /**
+ * Суммы приходят в тийинах, дробные близнецы `*Som` игнорируются: единицу
+ * бэкенд задокументировал, выводить её из пары больше незачем (issue #149).
+ *
  * Отрицательный баланс — ошибка сервера: показывать «−5 000» на карточке
  * кошелька незачем, а на вопрос «хватает ли денег» он влияет так же, как ноль.
  * Списания при этом знак сохраняют: там минус и есть смысл строки.
  */
 internal fun WalletDto.toDomain(): Wallet {
-    val scale = WalletAmounts.scaleOf(balance, balanceSom)
-    val balanceSum = WalletAmounts.toSom(balance, scale).coerceAtLeast(0)
-    val heldSum = WalletAmounts.toSom(heldAmount, scale).coerceAtLeast(0)
+    val balanceSum = (balance ?: 0).tiyinToSom().coerceAtLeast(0)
+    val heldSum = (heldAmount ?: 0).tiyinToSom().coerceAtLeast(0)
     return Wallet(
         balanceSum = balanceSum,
-        bonusSum = WalletAmounts.toSom(bonusBalance, scale).coerceAtLeast(0),
+        bonusSum = (bonusBalance ?: 0).tiyinToSom().coerceAtLeast(0),
         heldSum = heldSum,
         // Поля может не быть — тогда «доступно» считается тем же способом, что
         // и на сервере: заморозка вычитается из баланса.
         availableSum = availableBalance
-            ?.let { WalletAmounts.toSom(it, scale) }
+            ?.tiyinToSom()
             ?.coerceAtLeast(0)
             ?: (balanceSum - heldSum).coerceAtLeast(0),
         currency = currency?.takeIf { it.isNotBlank() },
         status = WalletStatus.fromServer(status),
-        amountScale = scale,
     )
 }
 
@@ -147,27 +146,17 @@ internal fun WalletDto.toDomain(): Wallet {
  * в `LazyColumn` она стала бы дубликатом ключа, а отличить её от соседней всё
  * равно нечем.
  *
- * `hasMore` считается по `last`, а при его отсутствии — по `page`/`totalPages`.
- * Полного молчания сервера о страницах достаточно, чтобы остановиться: лучше
- * не показать хвост истории, чем зациклить догрузку одной и той же страницы.
+ * `hasMore` — общее правило [hasMorePages] (issue #142): `last`, иначе
+ * `page`/`totalPages`, иначе останавливаемся.
  */
-internal fun TransactionPageDto.toDomain(): WalletTransactionPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return WalletTransactionPage(
-        items = content.mapNotNull(TransactionDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun TransactionPageDto.toDomain(): WalletTransactionPage = WalletTransactionPage(
+    items = content.mapNotNull(TransactionDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 internal fun TransactionDto.toDomain(): WalletTransaction? {
     val transactionId = id?.takeIf { it.isNotBlank() } ?: return null
-    val scale = WalletAmounts.scaleOf(amount, amountSom)
-    val signed = WalletAmounts.toSom(amount, scale)
+    val signed = (amount ?: 0).tiyinToSom()
     val movement = TransactionDirection.fromServer(direction)
     return WalletTransaction(
         id = transactionId,
@@ -183,7 +172,7 @@ internal fun TransactionDto.toDomain(): WalletTransaction? {
             TransactionDirection.Unknown -> signed
         },
         isBonus = isBonus,
-        balanceAfterSum = balanceAfter?.let { WalletAmounts.toSom(it, scale) },
+        balanceAfterSum = balanceAfter?.tiyinToSom(),
         status = TransactionStatus.fromServer(status),
         createdAt = parseServerInstant(createdAt),
     )

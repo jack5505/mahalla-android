@@ -29,6 +29,10 @@ class RoutesSerializationTest {
         val place = PlaceRoute(placeId = "p-42")
         assertEquals(place, json.decodeFromString<PlaceRoute>(json.encodeToString(place)))
 
+        // Сотрудники заведения (issue #189).
+        val staff = PlaceStaffRoute(placeId = "p-42")
+        assertEquals(staff, json.decodeFromString<PlaceStaffRoute>(json.encodeToString(staff)))
+
         val otp = OtpRoute(phone = "+998901234567", otpToken = "otp-1")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
 
@@ -337,17 +341,35 @@ class RoutesSerializationTest {
     fun `booking route carries the place and its name`() {
         // Имени заведения нет ни в ответе `barber-services`, ни в
         // `AppointmentResponse` — оно едет маршрутом (issue #97). Тем же
-        // маршрутом едет и перенос: услуга и id переносимой записи (эпик #11).
+        // маршрутом едет и перенос: услуга, id переносимой записи (эпик #11),
+        // её подпись и прежние день и время (issue #155).
         val descriptor = serializer<BookingRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName", "serviceId", "rescheduleId"),
+            listOf(
+                "placeId",
+                "placeName",
+                "serviceId",
+                "rescheduleId",
+                "rescheduleLabel",
+                "rescheduleDate",
+                "rescheduleTime",
+            ),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 
         val route = BookingRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<BookingRoute>(json.encodeToString(route)))
 
-        val reschedule = BookingRoute(placeId = "p-1", serviceId = "s-1", rescheduleId = "a-1")
+        val reschedule = BookingRoute(
+            placeId = "p-1",
+            serviceId = "s-1",
+            rescheduleId = "a-1",
+            rescheduleLabel = "Soch olish",
+            // ISO, а не «06.09.2026, 10:40»: маршрут переживает смену языка, а
+            // формат выбирает экран.
+            rescheduleDate = "2026-09-06",
+            rescheduleTime = "10:40",
+        )
         assertEquals(
             reschedule,
             json.decodeFromString<BookingRoute>(json.encodeToString(reschedule)),
@@ -454,7 +476,7 @@ class RoutesSerializationTest {
         // маршрутом (issue #100).
         val descriptor = serializer<PharmacyRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "isOwner"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 

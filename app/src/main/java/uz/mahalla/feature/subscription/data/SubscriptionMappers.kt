@@ -1,14 +1,16 @@
 package uz.mahalla.feature.subscription.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.subscription.domain.BillingPeriod
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
-import uz.mahalla.feature.subscription.domain.SubscriptionAmounts
+import uz.mahalla.feature.subscription.domain.SubscriptionCharge
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 
 /**
  * Разбор ответов подписки (issue #103). Мягкий, как в каталоге (issue #53):
@@ -20,12 +22,6 @@ import uz.mahalla.feature.wallet.domain.WalletAmounts
  */
 internal fun PlanDto.toDomain(): SubscriptionPlan? {
     val planCode = code?.takeIf { it.isNotBlank() } ?: return null
-    val scale = SubscriptionAmounts.scaleOf(
-        monthly = monthlyPrice,
-        monthlySom = monthlyPriceSom,
-        yearly = yearlyPrice,
-        yearlySom = yearlyPriceSom,
-    )
     return SubscriptionPlan(
         code = planCode,
         name = name?.takeIf { it.isNotBlank() },
@@ -35,9 +31,8 @@ internal fun PlanDto.toDomain(): SubscriptionPlan? {
         tier = tier?.takeIf { it.isNotBlank() },
         // Отрицательная цена — ошибка сервера: «−10 000 в месяц» на карточке
         // тарифа не значит ничего, а на решение влияет как ноль.
-        monthlySum = WalletAmounts.toSom(monthlyPrice, scale).coerceAtLeast(0),
-        yearlySum = WalletAmounts.toSom(yearlyPrice, scale).coerceAtLeast(0),
-        amountScale = scale,
+        monthlySum = (monthlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
+        yearlySum = (yearlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
         yearlyDiscountPercent = yearlyDiscountPercent?.coerceIn(0, MAX_PERCENT) ?: 0,
         trialDays = trialDays?.coerceAtLeast(0) ?: 0,
         isFree = isFree ?: free ?: false,
@@ -74,14 +69,13 @@ private fun PlanDto.features(): Set<PlanFeature> = buildSet {
  * без зоны, и иначе срок подписки был бы пуст у всех.
  */
 internal fun SubscriptionDto.toDomain(): Subscription {
-    val scale = WalletAmounts.scaleOf(pricePaid, pricePaidSom)
     return Subscription(
         id = id?.takeIf { it.isNotBlank() },
         planCode = planCode?.takeIf { it.isNotBlank() },
         planName = planName?.takeIf { it.isNotBlank() },
         status = SubscriptionStatus.fromServer(status),
         billingPeriod = BillingPeriod.fromServer(billingPeriod),
-        pricePaidSum = WalletAmounts.toSom(pricePaid, scale).coerceAtLeast(0),
+        pricePaidSum = (pricePaid ?: 0).tiyinToSom().coerceAtLeast(0),
         startedAt = parseServerInstant(startedAt),
         expiresAt = parseServerInstant(expiresAt),
         autoRenew = autoRenew ?: false,
@@ -91,6 +85,47 @@ internal fun SubscriptionDto.toDomain(): Subscription {
         isActive = isActive ?: active ?: (SubscriptionStatus.fromServer(status) == SubscriptionStatus.Active),
         inGracePeriod = inGracePeriod ?: false,
     )
+}
+
+/**
+ * Списание за подписку. Платёж **не про подписку** отбрасывается здесь же: у
+ * ручки нет фильтра по назначению, и в истории подписки пополнению кошелька
+ * взяться неоткуда. Платёж без `id` отбрасывается по той же причине, что и
+ * операция кошелька: в `LazyColumn` он дубликат ключа, а отличить его от
+ * соседнего всё равно нечем.
+ *
+ * `amount` — тийины, как и все целые денежные поля бэкенда (issue #149).
+ */
+internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
+    val chargeId = id?.takeIf { it.isNotBlank() } ?: return null
+    if (!SubscriptionCharge.isSubscriptionPurpose(purpose)) return null
+    return SubscriptionCharge(
+        id = chargeId,
+        // Отрицательное списание — ошибка сервера: «−49 000» в истории платежей
+        // не значит ничего.
+        amountSum = (amount ?: 0).tiyinToSom().coerceAtLeast(0),
+        status = ChargeStatus.fromServer(status),
+        provider = ChargeProvider.fromServer(provider),
+        purpose = purpose?.takeIf { it.isNotBlank() },
+        errorMessage = errorMessage?.takeIf { it.isNotBlank() },
+        createdAt = parseServerInstant(createdAt),
+    )
+}
+
+/**
+ * Есть ли у сервера ещё страницы платежей. Считается как у кошелька: по
+ * `last`, а без него — по `page`/`totalPages`. Полного молчания о страницах
+ * достаточно, чтобы остановиться: лучше не показать хвост истории, чем
+ * зациклить догрузку одной и той же страницы.
+ *
+ * @param requestedPage номер запрошенной страницы: сервер, не вернувший
+ * `page`, отдаёт дефолтный `0`, и «следующей» навсегда осталась бы первая
+ * (issue #53).
+ */
+internal fun PaymentTransactionPageDto.hasMore(requestedPage: Int): Boolean = when {
+    last != null -> !last
+    totalPages != null -> requestedPage + 1 < totalPages
+    else -> false
 }
 
 private const val MAX_PERCENT = 100
