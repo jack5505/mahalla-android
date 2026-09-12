@@ -42,7 +42,7 @@ class FashionOrderRepositoryTest {
     }
 
     @Test
-    fun `order carries variant ids as item ids`() = runTest {
+    fun `order carries the store id and no items`() = runTest {
         server.enqueue(envelope("""{"id":"o-1"}"""))
 
         val orderId = (
@@ -59,15 +59,20 @@ class FashionOrderRepositoryTest {
         val request = server.takeRequest()
         assertEquals("/fashion/orders", request.path)
         val body = request.body.readUtf8()
-        assertTrue(body.contains(""""placeId":"$STORE""""))
-        // В корзине бэкенда строка ключуется вариантом — заказывают
-        // конкретный размер конкретного цвета, а не товар.
-        assertTrue(body.contains(""""itemId":"v-1""""))
-        assertTrue(body.contains(""""quantity":2"""))
-        assertTrue(body.contains(""""itemId":"v-2""""))
+        assertTrue(body.contains(""""storeId":"$STORE""""))
+        assertFalse(body.contains("placeId"))
+        // Состав заказа сервер берёт из своей корзины (`fashion/cart*`) —
+        // тело оформления его не несёт вовсе.
+        assertFalse(body.contains("items"))
+        assertFalse(body.contains("itemId"))
         assertTrue(body.contains(""""fulfillment":"DELIVERY""""))
         assertTrue(body.contains(""""paymentMethod":"WALLET""""))
         assertTrue(body.contains(""""deliveryAddress":"Amir Temur 1""""))
+        // Координаты и промокод — не отправляются: на экране их некому
+        // заполнить (issue #221).
+        assertFalse(body.contains("deliveryLat"))
+        assertFalse(body.contains("deliveryLng"))
+        assertFalse(body.contains("promoCode"))
         assertEquals("o-1", orderId)
     }
 

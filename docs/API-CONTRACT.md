@@ -406,15 +406,19 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
 
-**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
-оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
-#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
-fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
-`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
-(состав берётся из серверной корзины `fashion/cart*`), зато есть
-`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
-`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
-пути больше нет.
+**`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
+2026-09-10, issue #167; исправлено в issue #221). У пути свой
+`FashionPlaceOrderRequest`, отдельный от `FoodPlaceOrderRequest` «Еды»:
+обязателен **`storeId`** (а не `placeId`), поля `items` нет вовсе (состав
+заказа сервер берёт из серверной корзины `fashion/cart*`, которую клиент уже
+ведёт). Клиент отправляет `FashionPlaceOrderRequestDto` (`storeId`,
+`fulfillment`, `paymentMethod`, `deliveryAddress`).
+
+Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
+**сознательно не шлёт**: на экране оформления нет ни выбора точки на карте,
+ни поля промокода. Не проверено живым запросом (`401` до валидации тела,
+`CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
+(`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
 ## FoodApi ✅
 
