@@ -229,6 +229,29 @@ class HospitalRepositoryTest {
         assertEquals("Aliyev Bekzod", page.items.single().serviceName)
     }
 
+    /**
+     * Два визита к одному врачу — запрос на имя должен быть один, а не по
+     * одному на карточку: тот же врач не станет другим человеком между
+     * визитами.
+     */
+    @Test
+    fun `two appointments with the same doctor share one name lookup`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[
+                       {"id":"a-1","doctorId":"$DOCTOR","apptDate":"2026-09-05"},
+                       {"id":"a-2","doctorId":"$DOCTOR","apptDate":"2026-09-12"}
+                   ],"last":true}""",
+            ),
+        )
+        server.enqueue(envelope("""{"id":"$DOCTOR","name":"Aliyev Bekzod"}"""))
+
+        val page = (repository().myAppointments() as ApiResult.Success).data
+
+        assertEquals(2, server.requestCount)
+        assertTrue(page.items.all { it.serviceName == "Aliyev Bekzod" })
+    }
+
     /** Имя уже есть — второй запрос был бы лишней задержкой без надобности. */
     @Test
     fun `appointment with a service name is not enriched again`() = runTest {

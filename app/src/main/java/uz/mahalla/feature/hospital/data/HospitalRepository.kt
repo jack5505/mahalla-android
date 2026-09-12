@@ -1,7 +1,6 @@
 package uz.mahalla.feature.hospital.data
 
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import uz.mahalla.core.format.toServerTime
 import uz.mahalla.core.result.ApiError
@@ -103,10 +102,11 @@ class DefaultHospitalRepository @Inject constructor(
 
     /**
      * `HospitalAppointmentResponse` не называет врача — только `doctorId`
-     * (issue #219). Имя дотягивается отдельным запросом на карточку без него;
-     * провал одного запроса не портит остальные и не превращает удачный
-     * список в ошибку — карточка просто останется с плейсхолдером экрана,
-     * тот же принцип мягкого разбора, что у самих DTO.
+     * (issue #219). Имя дотягивается отдельным запросом на каждого уникального
+     * врача среди карточек без имени — повторный визит к тому же врачу не
+     * плодит дублирующие запросы; провал одного запроса не портит остальные и
+     * не превращает удачный список в ошибку — карточка просто останется с
+     * плейсхолдером экрана, тот же принцип мягкого разбора, что у самих DTO.
      */
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> =
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
@@ -120,24 +120,27 @@ class DefaultHospitalRepository @Inject constructor(
             }
 
     private suspend fun withDoctorNames(items: List<Appointment>): List<Appointment> {
-        if (items.none(::needsDoctorName)) return items
-        return coroutineScope {
-            items.map { appointment ->
-                async { if (needsDoctorName(appointment)) appointment.withDoctorName() else appointment }
-            }.awaitAll()
+        val doctorIds = items.filter(::needsDoctorName).mapNotNull(Appointment::doctorId).distinct()
+        if (doctorIds.isEmpty()) return items
+        val namesByDoctorId = coroutineScope {
+            doctorIds.associateWith { id -> async { fetchDoctorName(id) } }
+                .mapValues { (_, deferred) -> deferred.await() }
+        }
+        return items.map { appointment ->
+            if (needsDoctorName(appointment)) {
+                namesByDoctorId[appointment.doctorId]?.let { appointment.copy(serviceName = it) } ?: appointment
+            } else {
+                appointment
+            }
         }
     }
 
     private fun needsDoctorName(appointment: Appointment): Boolean =
         appointment.serviceName.isNullOrBlank() && !appointment.doctorId.isNullOrBlank()
 
-    private suspend fun Appointment.withDoctorName(): Appointment {
-        val id = doctorId ?: return this
-        val name = apiCall { api.doctor(id).payload() }.dataOrNull()
+    private suspend fun fetchDoctorName(id: String): String? =
+        apiCall { api.doctor(id).payload() }.dataOrNull()
             ?.name?.trim()?.takeIf(String::isNotEmpty)
-            ?: return this
-        return copy(serviceName = name)
-    }
 
     /**
      * Ответ на отмену — та же запись, но обязательным его разбор не считаем:
