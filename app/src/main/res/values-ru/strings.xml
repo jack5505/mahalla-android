@@ -5,6 +5,9 @@
     <string name="screen_skeleton_note">Экран будет свёрстан по макету на следующем этапе.</string>
     <string name="action_back">Назад</string>
     <string name="currency_uzs">сум</string>
+    <!-- Склейка двух частей строки (заголовок и уточнение, дата и время…) —
+         общий ресурс, а не символ в коде каждого экрана (issue #212). -->
+    <string name="text_joined_with_dot">%1$s · %2$s</string>
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Рядом</string>
@@ -122,8 +125,6 @@
 
     <!-- Основные разделы -->
     <string name="discovery_title">Рядом</string>
-    <string name="orders_title">Заказы</string>
-    <string name="orders_subtitle">Активные заказы, очереди и брони.</string>
     <string name="wallet_title">Кошелёк</string>
     <string name="wallet_available">Можно потратить</string>
     <string name="wallet_balance_total">На счету</string>
@@ -153,6 +154,19 @@
     <string name="wallet_top_up_provider_note">Форма оплаты откроется в браузере.</string>
     <string name="wallet_top_up_started">Платёж на %1$s отправлен. Баланс изменится, когда деньги дойдут, — это может занять несколько минут.</string>
     <string name="wallet_top_up_started_dismiss">Понятно</string>
+    <!-- Подтверждение оплаты из кошелька (8.3, issue #12). -->
+    <string name="payment_confirm_title">Подтверждение оплаты</string>
+    <string name="payment_confirm_amount">К списанию</string>
+    <string name="payment_confirm_available">На кошельке: %1$s</string>
+    <string name="payment_confirm_pin_hint">Введите PIN-код, чтобы подтвердить оплату.</string>
+    <string name="payment_confirm_preparing">Проверяем баланс…</string>
+    <string name="payment_confirm_submitting">Отправляем платёж. Не закрывайте окно.</string>
+    <string name="payment_confirm_insufficient">На кошельке не хватает денег.</string>
+    <string name="payment_confirm_insufficient_missing">На кошельке не хватает %1$s.</string>
+    <string name="payment_confirm_blocked">Кошелёк заблокирован — оплата не пройдёт. Обратитесь в поддержку.</string>
+    <string name="payment_confirm_failed">Подтвердить оплату не удалось. Деньги не списаны.</string>
+    <string name="payment_confirm_biometric_subtitle">Подтвердите оплату %1$s</string>
+    <string name="payment_confirm_biometric_negative">Ввести PIN</string>
     <string name="profile_title">Профиль</string>
     <string name="profile_language">Язык</string>
     <string name="profile_theme">Тема</string>
@@ -177,6 +191,14 @@
     <string name="profile_device_status_locked">Заблокировано</string>
     <string name="profile_device_status_pin_required">Нужен PIN</string>
     <string name="profile_device_status_pending_pin">PIN не задан</string>
+
+    <!-- Проверка и блокировка аккаунта на сервере (issue #237) -->
+    <string name="profile_verification_unverified">Номер не подтверждён</string>
+    <string name="profile_verification_full">Аккаунт полностью подтверждён</string>
+    <string name="profile_account_temp_blocked">Аккаунт временно заблокирован</string>
+    <string name="profile_account_perm_blocked">Аккаунт заблокирован</string>
+    <string name="profile_account_suspended">Аккаунт приостановлен</string>
+    <string name="profile_account_deleted">Аккаунт удалён</string>
 
     <!-- Центр уведомлений (issue #81) -->
     <string name="notifications_title">Уведомления</string>
@@ -334,6 +356,7 @@
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
+    <string name="place_review_owner_reply_label">Ответ заведения</string>
     <!-- Оставить отзыв (issue #76) -->
     <string name="place_reviews_empty">Отзывов пока нет. Будьте первым.</string>
     <string name="place_review_add">Оставить отзыв</string>
@@ -349,10 +372,14 @@
     <string name="place_review_delete">Удалить отзыв</string>
     <string name="place_review_delete_title">Удалить отзыв?</string>
     <string name="place_review_delete_text">Ваша оценка и текст исчезнут с карточки места.</string>
+    <string name="place_gallery_delete">Удалить фото</string>
+    <string name="place_gallery_delete_title">Удалить фото?</string>
+    <string name="place_gallery_delete_text">Фото будет удалено с сервера навсегда — это нельзя отменить.</string>
     <string name="place_rating_with_reviews">%1$s · %2$s отзывов</string>
     <string name="place_no_rating">Нет оценок</string>
     <string name="place_action_queue">Встать в очередь</string>
     <string name="place_action_booking">Забронировать</string>
+    <string name="place_action_gaming">Забронировать зону</string>
     <string name="place_action_doctor">Записаться к врачу</string>
     <string name="place_action_cinema">Купить билет</string>
     <string name="place_action_order">Заказать</string>
@@ -527,6 +554,8 @@
     <string name="my_places_unnamed">Заведение без названия</string>
     <string name="my_places_available">Открыто сейчас</string>
     <string name="my_places_available_description">Если выключить, в каталоге заведение будет закрытым.</string>
+    <!-- Управление витриной аптеки (issue #252). -->
+    <string name="my_places_manage_products">Управлять товарами</string>
     <string name="my_places_status_pending">На модерации</string>
     <string name="my_places_status_active">Активно</string>
     <string name="my_places_status_suspended">Приостановлено</string>
@@ -536,11 +565,34 @@
     <string name="my_places_status_suspended_hint">Заведение приостановлено. Причину подскажет поддержка.</string>
     <string name="my_places_role_manager">Вы здесь менеджер</string>
     <string name="my_places_role_staff">Вы здесь сотрудник: настройки меняет владелец</string>
+    <string name="my_places_staff_action">Сотрудники</string>
+
+    <!-- Сотрудники заведения (issue #189) -->
+    <string name="place_staff_title">Сотрудники</string>
+    <string name="place_staff_empty_title">Сотрудников нет</string>
+    <string name="place_staff_empty_description">Добавьте первого сотрудника по ID.</string>
+    <string name="place_staff_add">Добавить сотрудника</string>
+    <string name="place_staff_user_id_label">ID пользователя (UUID)</string>
+    <string name="place_staff_user_id_supporting">Идентификатор человек должен показать сам из своего профиля — поиска по номеру телефона нет.</string>
+    <string name="place_staff_user_id_error">Введите в формате UUID</string>
+    <string name="place_staff_role_label">Роль</string>
+    <string name="place_staff_role_owner">Владелец</string>
+    <string name="place_staff_role_manager">Менеджер</string>
+    <string name="place_staff_role_staff">Сотрудник</string>
+    <string name="place_staff_role_unknown">Неизвестная роль</string>
+    <string name="place_staff_add_submit">Добавить</string>
+    <string name="place_staff_remove_title">Удалить сотрудника?</string>
+    <string name="place_staff_remove_message">Сотрудник с ID %1$s будет удалён из заведения. Это действие нельзя отменить.</string>
 
     <!-- Общие действия форм (issue #84) -->
     <string name="action_continue">Продолжить</string>
     <string name="action_save">Сохранить</string>
     <string name="action_done">Готово</string>
+
+
+    <!-- Картинки (issue #60) — подписи для TalkBack -->
+    <string name="image_avatar_of">Аватар: %1$s</string>
+    <string name="image_gallery_of">Фотографии: %1$s</string>
 
     <!-- Очередь (walk-in, issue #96) -->
     <string name="queue_title">Очередь</string>
@@ -598,6 +650,16 @@
     <string name="booking_submit">Записаться</string>
     <string name="booking_done_title">Вы записаны</string>
     <string name="booking_done_description">Заведение подтвердит запись. Состояние видно в «Моих записях».</string>
+    <string name="booking_reschedule_title">Перенос записи</string>
+    <string name="booking_reschedule_service_title">Услуга</string>
+    <string name="booking_reschedule_hint">Услуга остаётся та же — выберите новый день и время.</string>
+    <string name="booking_reschedule_current">Сейчас: %1$s</string>
+    <string name="booking_reschedule_new">Новое: %1$s</string>
+    <string name="booking_reschedule_submit">Перенести на новое время</string>
+    <string name="booking_reschedule_done_title">Запись перенесена</string>
+    <string name="booking_reschedule_done_description">Заведение подтвердит новое время. Прежняя запись отменена.</string>
+    <string name="booking_reschedule_done_description_kept">Заведение подтвердит новое время.</string>
+    <string name="booking_reschedule_old_kept">Новое время за вами, но прежнюю запись отменить не удалось. Отмените её сами в «Моих записях».</string>
     <string name="weekday_short_mon">пн</string>
     <string name="weekday_short_tue">вт</string>
     <string name="weekday_short_wed">ср</string>
@@ -618,6 +680,7 @@
     <string name="my_appointments_cancel_keep">Оставить</string>
     <string name="my_appointments_cancel_title">Отменить запись?</string>
     <string name="my_appointments_cancel_message">Время отдадут другому клиенту, записываться придётся заново.</string>
+    <string name="my_appointments_reschedule">Перенести время</string>
     <string name="appointment_status_pending">Ждёт подтверждения</string>
     <string name="appointment_status_confirmed">Подтверждена</string>
     <string name="appointment_status_cancelled">Отменена</string>
@@ -643,9 +706,8 @@
     <string name="doctor_booking_doctors_empty_title">Список врачей пуст</string>
     <string name="doctor_booking_doctors_empty_description">Больница ещё не завела врачей. Уточните по телефону.</string>
     <string name="doctor_booking_price">Приём: %1$s</string>
-    <string name="doctor_booking_time_title">Выберите удобное время</string>
-    <string name="doctor_booking_times_note">Это желаемое время. Больница подтвердит его вместе с записью.</string>
-    <string name="doctor_booking_times_empty">Приём на сегодня закончился. Выберите другой день.</string>
+    <string name="doctor_booking_time_title">Выберите время</string>
+    <string name="doctor_booking_slots_empty">На этот день свободного времени не осталось. Выберите другой день.</string>
     <string name="doctor_booking_complaint_title">Жалоба</string>
     <string name="doctor_booking_complaint_label">На что жалуетесь? (необязательно)</string>
     <string name="doctor_booking_complaint_placeholder">Например: третий день болит горло</string>
@@ -852,4 +914,96 @@
     <string name="pharmacy_empty_description">Эта аптека ещё не добавила свои товары.</string>
     <string name="pharmacy_not_found_title">Ничего не нашлось</string>
     <string name="pharmacy_not_found_description">По запросу «%1$s» ничего нет. Попробуйте написать название иначе.</string>
+    <!-- Бизнес-панель аптеки (issue #252): владелец добавляет товар и правит остаток. -->
+    <string name="pharmacy_add_product">Добавить товар</string>
+    <string name="pharmacy_new_product_title">Новый товар</string>
+    <string name="pharmacy_field_name">Название</string>
+    <string name="pharmacy_field_name_invalid">Введите название (до 300 символов)</string>
+    <string name="pharmacy_field_manufacturer">Производитель</string>
+    <string name="pharmacy_field_dosage_form">Форма выпуска</string>
+    <string name="pharmacy_field_strength">Дозировка</string>
+    <string name="pharmacy_field_description">Описание</string>
+    <string name="pharmacy_field_price">Цена, сум</string>
+    <string name="pharmacy_field_price_invalid">Введите цену</string>
+    <string name="pharmacy_field_stock">Остаток (необязательно)</string>
+    <string name="pharmacy_field_stock_invalid">Введите целое число</string>
+    <string name="pharmacy_field_prescription">Требуется рецепт</string>
+    <string name="pharmacy_create_submit">Добавить</string>
+    <string name="pharmacy_edit_stock_action">Изменить остаток</string>
+    <string name="pharmacy_stock_edit_title">Обновить остаток</string>
+    <string name="pharmacy_stock_edit_label">Остаток</string>
+    <string name="pharmacy_stock_edit_submit">Сохранить</string>
+    <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
+    <string name="pharmacy_stock_owner_count">Остаток: %1$d</string>
+    <!-- Игровые зоны (эпик #11, issue #98). -->
+    <string name="gaming_title">Игровые зоны</string>
+    <string name="gaming_zones_empty_title">Зон пока нет</string>
+    <string name="gaming_zones_empty_description">Как только заведение добавит игровые зоны, они появятся здесь.</string>
+    <string name="gaming_zone_unnamed">Зона без названия</string>
+    <string name="gaming_zone_unavailable">Бронь недоступна</string>
+    <string name="gaming_zone_price">%1$s / час</string>
+    <string name="gaming_book">Забронировать</string>
+    <string name="gaming_sheet_time">Время начала</string>
+    <string name="gaming_sheet_duration">На сколько</string>
+    <string name="gaming_total">Итого</string>
+    <string name="gaming_error_time_required">Выберите время начала.</string>
+    <string name="gaming_error_time_too_soon">Это время уже прошло — выберите другое.</string>
+    <string name="gaming_booked">Зона забронирована.</string>
+    <string name="gaming_booked_at">%1$s забронирована на %2$s.</string>
+    <string name="gaming_my_bookings">Мои брони</string>
+    <string name="gaming_bookings_profile_subtitle">Брони игровых зон</string>
+    <string name="gaming_bookings_empty_title">Броней нет</string>
+    <string name="gaming_bookings_empty_description">Забронируйте зону с карточки игрового клуба — бронь появится здесь.</string>
+    <string name="gaming_booking_zone_unknown">Игровая зона</string>
+    <string name="gaming_booking_interval">%1$s — %2$s</string>
+    <string name="gaming_cancel_note">Отменить бронь в приложении нельзя: для этого позвоните в заведение.</string>
+    <string name="gaming_status_confirmed">Подтверждена</string>
+    <string name="gaming_status_active">Идёт сейчас</string>
+    <string name="gaming_status_completed">Завершена</string>
+    <string name="gaming_status_cancelled">Отменена</string>
+    <string name="gaming_status_unknown">Состояние неизвестно</string>
+
+    <!-- Мои активности (issue #73) -->
+    <string name="activity_title">Мои активности</string>
+    <string name="activity_filter_active">Активные</string>
+    <string name="activity_filter_history">История</string>
+    <string name="activity_empty_title">Здесь пока пусто</string>
+    <string name="activity_empty_description">Заказы, брони, очереди и билеты будут собираться здесь.</string>
+    <string name="activity_empty_action">Посмотреть, что рядом</string>
+    <string name="activity_empty_active_title">Активных нет</string>
+    <string name="activity_empty_active_description">Все заказы и брони завершены — они во вкладке «История».</string>
+    <string name="activity_empty_history_title">История пуста</string>
+    <string name="activity_empty_history_description">Завершённые заказы и брони попадут сюда.</string>
+    <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
+    <string name="action_load_more">Показать ещё</string>
+    <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
+    <string name="activity_source_failed">Не удалось загрузить: %1$s</string>
+    <string name="activity_source_orders">заказы</string>
+    <string name="activity_source_gaming_bookings">брони игровых зон</string>
+    <string name="activity_source_master_appointments">записи к мастеру</string>
+    <string name="activity_source_doctor_appointments">записи к врачу</string>
+    <string name="activity_source_cinema_tickets">билеты в кино</string>
+    <!-- Вид активности: названия заведения бэкенд не отдаёт ни в одном ответе -->
+    <string name="activity_kind_food_order">Заказ еды</string>
+    <string name="activity_kind_clothing_order">Заказ одежды</string>
+    <string name="activity_kind_pharmacy_order">Заказ в аптеке</string>
+    <string name="activity_kind_cinema_order">Заказ в кино</string>
+    <string name="activity_kind_gaming_order">Заказ в игровой зоне</string>
+    <string name="activity_kind_other_order">Заказ</string>
+    <string name="activity_kind_gaming_booking">Бронь игровой зоны</string>
+    <string name="activity_kind_master_appointment">Запись к мастеру</string>
+    <string name="activity_kind_doctor_appointment">Запись к врачу</string>
+    <string name="activity_kind_cinema_ticket">Билет в кино</string>
+    <!-- Общий вид статусов пяти источников -->
+    <string name="activity_status_placed">Принят</string>
+    <string name="activity_status_confirmed">Подтверждён</string>
+    <string name="activity_status_in_progress">Выполняется</string>
+    <string name="activity_status_ready">Готово</string>
+    <string name="activity_status_on_the_way">В пути</string>
+    <string name="activity_status_completed">Выполнен</string>
+    <string name="activity_status_cancelled">Отменён</string>
+    <string name="activity_status_refunded">Возврат</string>
+    <string name="activity_status_missed">Не пришли</string>
+    <string name="activity_status_unknown">В работе</string>
+    <string name="activity_no_date">Дата не указана</string>
 </resources>

@@ -57,7 +57,7 @@ import uz.mahalla.ui.theme.Spacing
 @Composable
 fun SkeletonBox(
     modifier: Modifier = Modifier,
-    height: Dp = MahallaComponentDefaults.skeletonLineHeight,
+    height: Dp? = MahallaComponentDefaults.skeletonLineHeight,
     shape: Shape = MaterialTheme.shapes.extraSmall,
 ) {
     val transition = rememberInfiniteTransition(label = "skeleton")
@@ -72,7 +72,9 @@ fun SkeletonBox(
     )
     Box(
         modifier = modifier
-            .height(height)
+            // Высота `null` — заглушка занимает столько, сколько дал родитель
+            // (место фотографии в карточке, issue #60).
+            .then(if (height != null) Modifier.height(height) else Modifier)
             .alpha(alpha)
             .background(LocalMahallaColors.current.skeleton, shape),
     )

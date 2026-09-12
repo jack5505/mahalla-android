@@ -5,8 +5,10 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import java.time.Instant
 
 /**
@@ -89,9 +91,10 @@ class PlaceMappersTest {
     }
 
     @Test
-    fun `the cover comes before the logo and duplicates are dropped`() {
+    fun `the cover comes before the logo and duplicates are dropped when media is silent`() {
         // Логотип это иконка, а не фотография заведения: в галерее он не может
-        // стоять первым, а вторым экземпляром — тем более.
+        // стоять первым, а вторым экземпляром — тем более. Запасной вариант
+        // включается только когда `media/entity` ничего не ответило.
         val dto = PlaceDetailDto(
             id = "p",
             name = "P",
@@ -99,7 +102,19 @@ class PlaceMappersTest {
             logoUrl = "cover.jpg",
         )
 
-        assertEquals(listOf("cover.jpg"), dto.toDetails().photos)
+        assertEquals(listOf("cover.jpg"), dto.toDetails().photos.map { it.url })
+        // Запасное фото никому не принадлежит — предложить его удаление нельзя.
+        assertNull(dto.toDetails().photos.single().ownerId)
+    }
+
+    @Test
+    fun `real gallery from media entity wins over the cover fallback`() {
+        val dto = PlaceDetailDto(id = "p", name = "P", coverUrl = "cover.jpg")
+        val media = listOf(MediaFile(id = "m-1", url = "real.jpg", ownerId = "u-1"))
+
+        val photos = dto.toDetails(media = media).photos
+
+        assertEquals(media, photos)
     }
 
     @Test
@@ -120,6 +135,50 @@ class PlaceMappersTest {
         assertEquals(Instant.parse("2026-08-25T10:15:30Z"), instant.createdAt)
         assertEquals(Instant.parse("2026-08-25T10:15:30.123Z"), local.createdAt)
         assertNull(broken.createdAt)
+    }
+
+    /**
+     * Реальный `ReviewResponse` (issue #192): коллизия `Response` разведена,
+     * `userName`/`userAvatarUrl` в схеме нет вовсе — ни под каким именем.
+     * Раньше `ReviewDto` гадал три алиаса, ни один не совпадал, и дефолт
+     * («»/`null`) молча выглядел так, будто поле просто иногда пустое.
+     */
+    @Test
+    fun `real ReviewResponse has no author or avatar field, but does have owner reply`() {
+        val json = NetworkFactory.json()
+        val body = """
+            {
+              "id": "r-1",
+              "placeId": "p-1",
+              "userId": "u-1",
+              "rating": 5,
+              "text": "Zo'r joy",
+              "isVerified": true,
+              "helpfulCount": 3,
+              "ownerReply": "Rahmat!",
+              "createdAt": "2026-08-25T10:15:30Z"
+            }
+        """.trimIndent()
+
+        val dto = json.decodeFromString<ReviewDto>(body)
+
+        assertEquals("u-1", dto.userId)
+        assertTrue(dto.isVerified)
+        assertEquals(3, dto.helpfulCount)
+        assertEquals("Rahmat!", dto.ownerReply)
+
+        val review = dto.toDomain()
+        assertEquals("Rahmat!", review.ownerReply)
+    }
+
+    @Test
+    fun `a review without an owner reply maps to null, not a blank string`() {
+        val dto = NetworkFactory.json().decodeFromString<ReviewDto>(
+            """{"id":"r-2","userId":"u-2","rating":4,"text":"Yaxshi"}""",
+        )
+
+        assertNull(dto.ownerReply)
+        assertNull(dto.toDomain().ownerReply)
     }
 
     @Test

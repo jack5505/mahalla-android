@@ -29,6 +29,10 @@ class RoutesSerializationTest {
         val place = PlaceRoute(placeId = "p-42")
         assertEquals(place, json.decodeFromString<PlaceRoute>(json.encodeToString(place)))
 
+        // Сотрудники заведения (issue #189).
+        val staff = PlaceStaffRoute(placeId = "p-42")
+        assertEquals(staff, json.decodeFromString<PlaceStaffRoute>(json.encodeToString(staff)))
+
         val otp = OtpRoute(phone = "+998901234567", otpToken = "otp-1")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
 
@@ -137,6 +141,9 @@ class RoutesSerializationTest {
             // Очередь (issue #96): аргументы те же, что у меню, — склеенный
             // serialName увёл бы человека не на тот экран.
             serializer<QueueRoute>().descriptor.serialName,
+            // Игровые зоны (issue #98): аргументы те же, что у очереди.
+            serializer<GamingRoute>().descriptor.serialName,
+            serializer<GamingBookingsRoute>().descriptor.serialName,
             // Бронь (issue #97): аргументы те же, что у очереди и меню.
             serializer<BookingRoute>().descriptor.serialName,
             // Больницы (issue #99): и аргументы те же, и экран соседний —
@@ -267,17 +274,66 @@ class RoutesSerializationTest {
     }
 
     @Test
-    fun `booking route carries the place and its name`() {
-        // Имени заведения нет ни в ответе `barber-services`, ни в
-        // `AppointmentResponse` — оно едет маршрутом (issue #97).
-        val descriptor = serializer<BookingRoute>().descriptor
+    fun `gaming route carries the place and its name`() {
+        // Имя заведения едет маршрутом: ответ `gaming/…/zones` его не
+        // содержит (issue #98).
+        val gaming = serializer<GamingRoute>().descriptor
         assertEquals(
             listOf("placeId", "placeName"),
+            (0 until gaming.elementsCount).map(gaming::getElementName),
+        )
+
+        val gamingRoute = GamingRoute(placeId = "p-1")
+        assertEquals(
+            gamingRoute,
+            json.decodeFromString<GamingRoute>(json.encodeToString(gamingRoute)),
+        )
+    }
+
+    @Test
+    fun `my gaming bookings route has no arguments`() {
+        // `gaming/bookings/my` отдаёт брони всех заведений сразу — фильтровать
+        // маршрутом нечего.
+        assertEquals(0, serializer<GamingBookingsRoute>().descriptor.elementsCount)
+    }
+
+    @Test
+    fun `booking route carries the place and its name`() {
+        // Имени заведения нет ни в ответе `barber-services`, ни в
+        // `AppointmentResponse` — оно едет маршрутом (issue #97). Тем же
+        // маршрутом едет и перенос: услуга, id переносимой записи (эпик #11),
+        // её подпись и прежние день и время (issue #155).
+        val descriptor = serializer<BookingRoute>().descriptor
+        assertEquals(
+            listOf(
+                "placeId",
+                "placeName",
+                "serviceId",
+                "rescheduleId",
+                "rescheduleLabel",
+                "rescheduleDate",
+                "rescheduleTime",
+            ),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 
         val route = BookingRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<BookingRoute>(json.encodeToString(route)))
+
+        val reschedule = BookingRoute(
+            placeId = "p-1",
+            serviceId = "s-1",
+            rescheduleId = "a-1",
+            rescheduleLabel = "Soch olish",
+            // ISO, а не «06.09.2026, 10:40»: маршрут переживает смену языка, а
+            // формат выбирает экран.
+            rescheduleDate = "2026-09-06",
+            rescheduleTime = "10:40",
+        )
+        assertEquals(
+            reschedule,
+            json.decodeFromString<BookingRoute>(json.encodeToString(reschedule)),
+        )
     }
 
     @Test
@@ -380,7 +436,7 @@ class RoutesSerializationTest {
         // маршрутом (issue #100).
         val descriptor = serializer<PharmacyRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "isOwner"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 

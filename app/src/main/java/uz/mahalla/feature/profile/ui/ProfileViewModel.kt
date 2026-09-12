@@ -11,7 +11,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
@@ -26,9 +25,9 @@ import uz.mahalla.feature.profile.domain.DeviceSession
  * Профиль: кто вошёл, настройки приложения, устройства с открытым входом и
  * выход из аккаунта (issue #61).
  *
- * Данные профиля читаются из [UserProfileStore] — их записал вход. Отдельного
- * `GET /users/me` у бэкенда нет, поэтому обновить имя или аватар отсюда
- * нельзя: появится эндпоинт — появится и экран редактирования.
+ * Данные профиля читаются из [UserProfileStore] — их записал вход. `GET/PUT
+ * /users/me` у бэкенда есть (контракт — `docs/API-CONTRACT.md`), но приложение
+ * их ещё не зовёт, поэтому обновить имя или аватар отсюда нельзя: issue #170.
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -43,6 +42,8 @@ class ProfileViewModel @Inject constructor(
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
     private var avatarJob: Job? = null
+
+    private var sessionsJob: Job? = null
 
     init {
         updateState { copy(httpInspectorAvailable = httpInspector.isAvailable) }
@@ -80,13 +81,16 @@ class ProfileViewModel @Inject constructor(
             }
 
             // Возврат на экран: вход с другого устройства мог случиться, пока
-            // приложение было в фоне. Пока список грузится или идёт запрос по
-            // строке, перезапрашивать нечего — иначе ответ приедет на уже
-            // сменившееся состояние.
-            ProfileEvent.ScreenResumed ->
-                if (currentState.pendingSessionId == null && !currentState.sessions.isLoading) {
-                    loadSessions(showLoading = false)
-                }
+            // приложение было в фоне. Защита от дубля (первый resume, два
+            // resume подряд) — общая, см. MviViewModel.onScreenResumed (issue
+            // #145, #209); запрос по строке — тем более повод не грузить
+            // список заново, иначе ответ приедет на уже сменившееся состояние.
+            ProfileEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = {
+                    currentState.pendingSessionId != null || sessionsJob?.isActive == true
+                },
+                load = { loadSessions(showLoading = false) },
+            )
 
             ProfileEvent.SessionsRetryRequested -> loadSessions()
 
@@ -119,12 +123,13 @@ class ProfileViewModel @Inject constructor(
     /**
      * Фото профиля (issue #101): сжать, отправить, запомнить адрес.
      *
-     * **Адрес сохраняется только локально**, и это не выбор клиента: у бэкенда
-     * нет ни `PUT /users/me`, ни другой ручки, которой можно сообщить аватар
-     * (`UserInfo.avatarUrl` он отдаёт, но принимать не умеет — проверено по
-     * полной схеме). Значит после следующего входа профиль перезапишется
-     * ответом сервера, и адрес пропадёт вместе с ним. Сам файл при этом
-     * остаётся на сервере и числится за загрузившим (`ownerId`).
+     * **Адрес сохраняется только локально** — но уже не потому, что сообщить
+     * его серверу нечем: `PUT /users/me` принимает `avatarUrl` (контракт снят
+     * 2026-09-10, `docs/API-CONTRACT.md`; пустая строка снимает аватар).
+     * Отправку делает issue #170, и до неё остаётся прежнее следствие: после
+     * следующего входа профиль перезапишется ответом сервера, и адрес
+     * пропадёт вместе с ним. Сам файл при этом остаётся на сервере и числится
+     * за загрузившим (`ownerId`).
      *
      * `entityId` — id пользователя, когда он известен: по нему загруженное
      * потом находится (`GET media/entity/{id}`). `entityType` не отправляется:
@@ -189,7 +194,7 @@ class ProfileViewModel @Inject constructor(
      * показанных устройств он не нужен: список бы мигал на каждом возврате.
      */
     private fun loadSessions(showLoading: Boolean = true) {
-        viewModelScope.launch {
+        sessionsJob = viewModelScope.launch {
             if (showLoading) updateState { copy(sessions = ScreenState.Loading) }
             val result = sessionsRepository.sessions()
             updateState { copy(sessions = result.toListScreenState()) }

@@ -12,6 +12,8 @@ import java.time.LocalTime
 
 /**
  * Состояние экрана записи (issue #97): услуга → день → слот → подтверждение.
+ * Он же — экран переноса записи ([isReschedule], эпик #11): выбирают там то же
+ * самое, кроме услуги.
  *
  * Шаги живут на одном прокручиваемом экране, а не в мастере из четырёх окон:
  * выбор услуги меняет и слоты, и цену, и возвращаться назад за этим человеку
@@ -26,6 +28,20 @@ import java.time.LocalTime
  * `10:00` от вчерашнего дня значило бы записать человека не туда.
  * @param bookFailure отказ подтверждения вместе с ответом сервера (issue #34).
  * Выбор при этом остаётся: терять его из-за отказа незачем.
+ *
+ * @param isReschedule экран переносит уже существующую запись. Услуга тогда не
+ * выбирается — она у переносимой записи своя, — и меняется только время.
+ * @param rescheduleLabel подпись переносимой записи из «моих записей»
+ * (issue #155). Нужна как запасное имя услуги: название из каталога может и не
+ * приехать — заведение вправе убрать услугу из списка, — а подтверждать
+ * перенос вслепую человек не должен.
+ * @param rescheduleDate и [rescheduleTime] — прежние день и время: без них
+ * экран не отвечает на вопрос, **с какого** времени переносят. Оба
+ * необязательны по контракту (`AppointmentResponse`), и показывается то, что
+ * есть.
+ * @param previousCancelled удалось ли снять прежнюю запись. Значимо только
+ * после успешного переноса; `false` — у человека осталось две записи, и
+ * подтверждение обязано сказать об этом прямо.
  */
 data class BookingState(
     val placeName: String = "",
@@ -38,6 +54,11 @@ data class BookingState(
     val isBooking: Boolean = false,
     val bookFailure: ApiFailure? = null,
     val booked: Appointment? = null,
+    val isReschedule: Boolean = false,
+    val rescheduleLabel: String = "",
+    val rescheduleDate: LocalDate? = null,
+    val rescheduleTime: LocalTime? = null,
+    val previousCancelled: Boolean = true,
 ) : UiState {
 
     val selectedService: BarberService?
@@ -45,9 +66,17 @@ data class BookingState(
             ?.data
             ?.firstOrNull { it.id == selectedServiceId }
 
-    /** Подтверждать можно только полностью собранную запись. */
+    /**
+     * Подтверждать можно только полностью собранную запись.
+     *
+     * Проверяется **id** услуги, а не найденная по нему [selectedService]: при
+     * переносе id приезжает маршрутом, и заведение вполне могло убрать услугу
+     * из списка — но время-то за человеком уже занято, и запретить ему перенос
+     * из-за пропавшей строки в каталоге значило бы оставить его с записью,
+     * которую можно только отменить.
+     */
     val canBook: Boolean
-        get() = selectedService != null &&
+        get() = selectedServiceId != null &&
             selectedDate != null &&
             selectedTime != null &&
             !isBooking &&

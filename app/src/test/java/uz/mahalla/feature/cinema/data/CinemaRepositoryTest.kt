@@ -121,7 +121,7 @@ class CinemaRepositoryTest {
             envelope(
                 """[{"id":"s-1","placeId":"$PLACE","movieId":"$MOVIE","hallName":"1-zal",
                    "sessionDate":"2026-09-05","startTime":"18:30:00","endTime":"21:05:00",
-                   "ticketPrice":45000,"totalSeats":120,"availableSeats":12}]""",
+                   "ticketPrice":4500000,"totalSeats":120,"availableSeats":12}]""",
             ),
         )
 
@@ -137,9 +137,27 @@ class CinemaRepositoryTest {
         assertEquals(LocalDate.of(2026, 9, 5), session.date)
         assertEquals(LocalTime.of(18, 30), session.startTime)
         assertEquals(LocalTime.of(21, 5), session.endTime)
+        // Бэкенд шлёт тийины: 4 500 000 — это 45 000 сум (issue #149).
         assertEquals(45_000L, session.priceSum)
         assertEquals(12, session.availableSeats)
         assertEquals("1-zal", session.hallName)
+    }
+
+    /** Без пересчёта билет стоил бы «5 000 000 so'm»; без цены — «не названа». */
+    @Test
+    fun `ticket price is converted from tiyin and a missing one is zero`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"s-1","ticketPrice":5000000},{"id":"s-2"},
+                   {"id":"s-3","ticketPrice":150},{"id":"s-4","ticketPrice":149}]""",
+            ),
+        )
+
+        val sessions = (
+            repository().schedule(PLACE, LocalDate.of(2026, 9, 5)) as ApiResult.Success
+            ).data
+
+        assertEquals(listOf(50_000L, 0L, 2L, 1L), sessions.map { it.priceSum })
     }
 
     /**
@@ -166,7 +184,9 @@ class CinemaRepositoryTest {
     @Test
     fun `session without id is dropped and negative seats become zero`() = runTest {
         server.enqueue(
-            envelope("""[{"movieId":"$MOVIE"},{"id":"s-2","availableSeats":-3,"ticketPrice":-1}]"""),
+            envelope(
+                """[{"movieId":"$MOVIE"},{"id":"s-2","availableSeats":-3,"ticketPrice":-100}]""",
+            ),
         )
 
         val sessions = (
@@ -208,7 +228,7 @@ class CinemaRepositoryTest {
     fun `bought ticket is parsed`() = runTest {
         server.enqueue(
             envelope(
-                """{"id":"t-1","sessionId":"$SESSION","seatNumber":"C7","price":45000,
+                """{"id":"t-1","sessionId":"$SESSION","seatNumber":"C7","price":4500000,
                    "qrCode":"4820117499","status":"ACTIVE",
                    "createdAt":"2026-09-04T14:00:00"}""",
             ),
@@ -218,6 +238,7 @@ class CinemaRepositoryTest {
 
         assertEquals("t-1", ticket.id)
         assertEquals("C7", ticket.seatNumber)
+        // Цена билета — тийины, пересчёт тот же, что у сеанса (issue #149).
         assertEquals(45_000L, ticket.priceSum)
         assertEquals("4820117499", ticket.code)
         assertEquals(CinemaTicketStatus.Active, ticket.status)

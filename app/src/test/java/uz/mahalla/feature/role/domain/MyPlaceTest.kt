@@ -51,6 +51,54 @@ class MyPlaceTest {
     }
 
     @Test
+    fun `only a pharmacy owner or manager can manage products`() {
+        assertTrue(place(category = PlaceCategory.Pharmacy).canManageProducts)
+        assertTrue(
+            place(
+                category = PlaceCategory.Pharmacy,
+                staffRole = PlaceStaffRole.Manager,
+            ).canManageProducts,
+        )
+
+        // Рядовой сотрудник не получает кнопку, которая гарантированно откажет.
+        assertFalse(
+            place(
+                category = PlaceCategory.Pharmacy,
+                staffRole = PlaceStaffRole.Staff,
+            ).canManageProducts,
+        )
+
+        // Заявка на модерации ещё не значится в каталоге.
+        assertFalse(
+            place(
+                category = PlaceCategory.Pharmacy,
+                status = PlaceModerationStatus.Pending,
+            ).canManageProducts,
+        )
+
+        // Пока только у аптеки есть форма создания на клиенте (issue #252).
+        assertFalse(place(category = PlaceCategory.Food).canManageProducts)
+    }
+
+    @Test
+    fun `only the owner of an active place manages staff`() {
+        assertTrue(place(staffRole = PlaceStaffRole.Owner).canManageStaff)
+
+        // `place-staff-controller` описан как действие владельца — менеджеру
+        // и сотруднику бэкенд его не даст.
+        assertFalse(place(staffRole = PlaceStaffRole.Manager).canManageStaff)
+        assertFalse(place(staffRole = PlaceStaffRole.Staff).canManageStaff)
+        assertFalse(place(staffRole = PlaceStaffRole.Unknown).canManageStaff)
+    }
+
+    @Test
+    fun `an application under moderation has nobody to manage staff for yet`() {
+        assertFalse(
+            place(status = PlaceModerationStatus.Pending, staffRole = PlaceStaffRole.Owner).canManageStaff,
+        )
+    }
+
+    @Test
     fun `roles are parsed case-insensitively and an unknown one is not an error`() {
         assertEquals(PlaceStaffRole.Owner, PlaceStaffRole.fromApi("OWNER"))
         assertEquals(PlaceStaffRole.Manager, PlaceStaffRole.fromApi(" manager "))
@@ -73,10 +121,11 @@ class MyPlaceTest {
     private fun place(
         status: PlaceModerationStatus = PlaceModerationStatus.Active,
         staffRole: PlaceStaffRole = PlaceStaffRole.Owner,
+        category: PlaceCategory = PlaceCategory.Food,
     ) = MyPlace(
         id = "p-1",
         name = "Osh Markazi",
-        category = PlaceCategory.Food,
+        category = category,
         status = status,
         staffRole = staffRole,
     )

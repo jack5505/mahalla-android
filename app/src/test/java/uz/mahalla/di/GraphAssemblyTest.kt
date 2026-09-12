@@ -27,6 +27,7 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
 import uz.mahalla.data.network.inspector.ChuckerHttpInspector
@@ -44,7 +45,10 @@ import uz.mahalla.feature.cinema.data.DefaultCinemaRepository
 import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
+import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.DefaultPlaceNameResolver
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
+import uz.mahalla.feature.fashion.data.di.FashionDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
 import uz.mahalla.feature.food.data.DefaultMenuRepository
 import uz.mahalla.feature.food.data.DefaultOrderRepository
@@ -56,6 +60,8 @@ import uz.mahalla.feature.hospital.data.di.HospitalDataModule
 import uz.mahalla.feature.media.data.AndroidImageCompressor
 import uz.mahalla.feature.media.data.DefaultMediaRepository
 import uz.mahalla.feature.media.data.di.MediaDataModule
+import uz.mahalla.feature.gaming.data.DefaultGamingRepository
+import uz.mahalla.feature.gaming.data.di.GamingDataModule
 import uz.mahalla.feature.notifications.data.DefaultNotificationsRepository
 import uz.mahalla.feature.notifications.data.di.NotificationsDataModule
 import uz.mahalla.feature.promotions.data.DefaultPromotionsRepository
@@ -111,6 +117,7 @@ class GraphAssemblyTest {
             authInterceptor = AuthInterceptor(sessionStore),
             tokenAuthenticator = TokenAuthenticator(
                 sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
                 authApi = authApi,
                 deviceInfoProvider = deviceInfoProvider(context),
                 locationProvider = locationProvider(context),
@@ -182,6 +189,10 @@ class GraphAssemblyTest {
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
                     locationProvider = locationProvider(context),
+                    media = DefaultMediaRepository(
+                        api = MediaDataModule.provideMediaApi(retrofit),
+                        compressor = AndroidImageCompressor(context),
+                    ),
                     clock = AppModule.provideClock(),
                 ),
             )
@@ -248,6 +259,10 @@ class GraphAssemblyTest {
                         api = DiscoveryDataModule.provideCatalogApi(retrofit),
                         placeDao = DatabaseModule.providePlaceDao(database),
                         locationProvider = locationProvider(context),
+                        media = DefaultMediaRepository(
+                            api = MediaDataModule.provideMediaApi(retrofit),
+                            compressor = AndroidImageCompressor(context),
+                        ),
                         clock = AppModule.provideClock(),
                     ),
                     profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
@@ -289,6 +304,7 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             userProfileStore = DataStoreUserProfileStore(dataStore),
+            formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
@@ -513,6 +529,53 @@ class GraphAssemblyTest {
      * — значит API собирается на **основном** Retrofit. Взятый талон живёт в
      * DataStore, потому что прочитать его у бэкенда нечем.
      */
+    /**
+     * Игровые зоны (issue #98): список зон анонимен, а бронь и «мои брони»
+     * требуют Bearer — значит API собирается на **основном** Retrofit, а не
+     * на «голом» `@RefreshClient`.
+     */
+    @Test
+    fun `gaming assembles on the main retrofit`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        val api = GamingDataModule.provideGamingApi(retrofit)
+
+        assertNotNull(api)
+        assertNotNull(DefaultGamingRepository(api = api, clock = AppModule.provideClock()))
+    }
+
+    /**
+     * «Мои активности» (issue #73) — пять источников, и **ни одного своего
+     * `Api`** (issue #142): фича собирается из интерфейсов вертикалей. Тест
+     * это и проверяет: все пять живут на **основном** Retrofit, а значит
+     * получают Bearer, без которого каждая из пяти ручек отвечает `401`.
+     */
+    @Test
+    fun `activities assemble on the apis of their own verticals`() {
+        val retrofit = NetworkModule.provideRetrofit(
+            okhttp3.OkHttpClient(),
+            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+            NetworkModule.provideBaseUrl(),
+        )
+
+        assertNotNull(
+            DefaultActivityRepository(
+                fashionApi = FashionDataModule.provideFashionApi(retrofit),
+                gamingApi = GamingDataModule.provideGamingApi(retrofit),
+                bookingApi = BookingDataModule.provideBookingApi(retrofit),
+                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
+                placeNameResolver = DefaultPlaceNameResolver(
+                    DiscoveryDataModule.provideCatalogApi(retrofit),
+                ),
+            ),
+        )
+    }
+
     @Test
     fun `queue assembles on the main retrofit and the data store`() {
         val retrofit = NetworkModule.provideRetrofit(

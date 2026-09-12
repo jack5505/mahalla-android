@@ -1,11 +1,9 @@
 package uz.mahalla.feature.discovery.ui.search
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,17 +22,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
-import uz.mahalla.core.ui.components.MahallaComponentDefaults
-import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaSearchField
@@ -44,7 +38,6 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
-import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.ui.toCardUi
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -142,7 +135,12 @@ fun SearchContent(
                     }
                     if (state.hasMore) {
                         item(key = "load-more") {
-                            LoadMoreItem(state = state, itemCount = places.size, onEvent = onEvent)
+                            LoadMoreAuto(
+                                itemCount = places.size,
+                                isLoading = state.isLoadingMore,
+                                failure = state.loadMoreFailure,
+                                onLoadMore = { onEvent(SearchEvent.LoadMore) },
+                            )
                         }
                     }
                 }
@@ -156,68 +154,6 @@ fun SearchContent(
             onEvent = onEvent,
             onDismiss = { onEvent(SearchEvent.FiltersClosed) },
         )
-    }
-}
-
-/**
- * Хвост списка. Догрузка идёт по достижению конца — отдельная кнопка «ещё» на
- * длинной выдаче раздражает, — но после ошибки автотриггер бесполезен: список
- * не вырос, `LaunchedEffect(itemCount)` больше не сработает. Поэтому провал
- * показывает кнопку повтора, а крутилка живёт ровно столько, сколько идёт
- * запрос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: SearchState,
-    itemCount: Int,
-    onEvent: (SearchEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        // Одной кнопки «повторить» мало: человек должен видеть, почему хвост
-        // списка не доехал (issue #34).
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(Spacing.gap),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.item),
-        ) {
-            Text(
-                text = failure.userMessage(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-            )
-            MahallaButton(
-                text = stringResource(R.string.action_retry),
-                onClick = { onEvent(SearchEvent.LoadMore) },
-                variant = MahallaButtonVariant.Secondary,
-                fillWidth = false,
-            )
-            failure.server?.let { MahallaErrorDetails(server = it) }
-        }
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(SearchEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (state.isLoadingMore) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(LOADER_SIZE),
-                strokeWidth = MahallaComponentDefaults.progressStrokeWidth,
-            )
-        } else {
-            // Место под крутилку держится всегда: иначе список дёргается на
-            // высоту индикатора каждый раз, когда страница догрузилась.
-            Spacer(modifier = Modifier.size(LOADER_SIZE))
-        }
     }
 }
 
@@ -290,4 +226,3 @@ private fun HistoryList(
     }
 }
 
-private val LOADER_SIZE = 24.dp

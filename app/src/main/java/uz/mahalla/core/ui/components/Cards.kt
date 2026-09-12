@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -48,6 +49,8 @@ data class PlaceCardUi(
     val distanceLabel: String? = null,
     val priceLabel: String? = null,
     val isOpen: Boolean = true,
+    /** Логотип или фото заведения (issue #60); `null` — карточка без картинки. */
+    val photoUrl: String? = null,
 )
 
 @Immutable
@@ -92,6 +95,9 @@ fun PlaceCard(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.Top,
         ) {
+            // Картинка декоративная: название заведения стоит рядом, и
+            // TalkBack не должен читать его дважды.
+            MahallaThumbnail(url = place.photoUrl, contentDescription = null)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = place.title,
@@ -137,12 +143,19 @@ fun PlaceCard(
     }
 }
 
-/** Карточка заказа: статус тоном + текстом, сумма моноширинными цифрами. */
+/**
+ * Карточка заказа: статус тоном + текстом, сумма моноширинными цифрами.
+ *
+ * [onClick] необязателен, как у [TicketCard] и [BookingCard]: в списке «мои
+ * активности» (issue #73) карточкой показываются и те записи, у которых своего
+ * экрана ещё нет. Отдавать им пустой лямбдой значило бы оставить рябь нажатия
+ * и роль кнопки для TalkBack там, где нажатие ничего не делает.
+ */
 @Composable
 fun OrderCard(
     order: OrderCardUi,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     MahallaCard(onClick = onClick, modifier = modifier) {
         Row(
@@ -233,7 +246,14 @@ fun BookingCard(
         }
         Spacer(modifier = Modifier.size(Spacing.item))
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-            CardMeta(icon = Icons.Outlined.Schedule, text = "${booking.dateLabel} · ${booking.timeLabel}")
+            CardMeta(
+                icon = Icons.Outlined.Schedule,
+                text = TextJoiner.join(
+                    stringResource(R.string.text_joined_with_dot),
+                    booking.dateLabel,
+                    booking.timeLabel,
+                ),
+            )
             Text(
                 text = booking.guestsLabel,
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),

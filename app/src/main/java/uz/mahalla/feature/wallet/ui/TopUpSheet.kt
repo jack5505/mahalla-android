@@ -26,7 +26,6 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpProvider
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 import uz.mahalla.feature.wallet.domain.WalletTopUp
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -38,9 +37,9 @@ import uz.mahalla.ui.theme.TabularNums
  * Шторка, а не отдельный экран: форма короткая, а баланс остаётся видимым за
  * ней — на вопрос «сколько добавить» отвечают, глядя на то, сколько есть.
  *
- * Минимум называется в сумах и считается по делителю единиц бэкенда из выдачи
- * баланса ([WalletTopUp.minAmountSum]): подпись под полем обязана называть то
- * число, которое поле примет.
+ * Минимум называется в сумах ([WalletTopUp.MIN_AMOUNT_SUM] — серверные
+ * `100000` тийинов): подпись под полем обязана называть то число, которое
+ * поле примет.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -214,7 +213,7 @@ private fun TopUpSheetPreview() {
                 text = stringResource(
                     R.string.wallet_top_up_amount_hint,
                     MoneyFormatter.withCurrency(
-                        WalletTopUp.minAmountSum(WalletAmounts.TIYIN_IN_SOM),
+                        WalletTopUp.MIN_AMOUNT_SUM,
                         stringResource(R.string.currency_uzs),
                     ),
                 ),

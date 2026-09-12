@@ -10,13 +10,17 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.profile.domain.AccountStatus
 import uz.mahalla.feature.profile.domain.DeviceSession
+import uz.mahalla.feature.profile.domain.VerificationStatus
+import uz.mahalla.feature.role.domain.ServerRole
+import uz.mahalla.feature.role.domain.UserRole
 
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
  * показываем строку «сетевые запросы». В release её нет.
- * @param profile кто вошёл. Приезжает с ответом на вход и лежит в DataStore:
- * `GET /users/me` у бэкенда нет (issue #61).
+ * @param profile кто вошёл. Приезжает с ответом на вход и лежит в DataStore;
+ * `GET /users/me` у бэкенда есть, но приложение его ещё не зовёт (issue #170).
  * @param sessions устройства, на которых открыт вход.
  * @param pendingSessionId строка списка, на которой сейчас идёт запрос:
  * отзыв и доверие блокируются точечно, а не всем экраном.
@@ -38,7 +42,30 @@ data class ProfileState(
     val confirmRevoke: DeviceSession? = null,
     val loggingOut: Boolean = false,
     val avatarUpload: AvatarUpload = AvatarUpload(),
-) : UiState
+) : UiState {
+
+    /** Роль из анкеты — локальный выбор человека (issue #84). */
+    val formRole: UserRole? get() = UserRole.fromStoredValue(settings.roleId)
+
+    /** Права на сервере: их приложение не выбирает и не меняет (issue #237). */
+    val serverRole: ServerRole get() = ServerRole.fromServer(profile.serverRole)
+
+    val verification: VerificationStatus
+        get() = VerificationStatus.fromServer(profile.verificationStatus)
+
+    val account: AccountStatus get() = AccountStatus.fromServer(profile.accountStatus)
+
+    /**
+     * Показывать ли «Мои заведения» (issue #237).
+     *
+     * Два условия, а не одно: анкета продавца — это заявка, а не право, и
+     * человек может её не заполнять; серверная роль — право, и владелец
+     * заведения, который анкету не заполнял, до issue #237 своего заведения в
+     * приложении не находил вовсе. Ложное «да» стоит пустого списка, ложное
+     * «нет» — спрятанного бизнеса.
+     */
+    val showMyPlaces: Boolean get() = formRole == UserRole.Provider || serverRole.isProvider
+}
 
 /**
  * Состояние загрузки фото профиля (issue #101).

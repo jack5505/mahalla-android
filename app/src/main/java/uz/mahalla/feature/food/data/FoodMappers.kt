@@ -1,6 +1,7 @@
 package uz.mahalla.feature.food.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.data.db.entity.CartDraftItemEntity
 import uz.mahalla.data.db.entity.OrderEntity
 import uz.mahalla.feature.food.domain.Cart
@@ -21,6 +22,9 @@ import uz.mahalla.feature.food.domain.PaymentMethod
  * Разбор мягкий, как в каталоге: битое поле не роняет меню целиком. Позиции без
  * id или названия выбрасываются — положить в корзину то, что нечем
  * идентифицировать, всё равно нельзя, а пустая строка в списке выглядит багом.
+ *
+ * Деньги бэкенд отдаёт в тийинах, домен живёт в сумах — пересчёт
+ * `Money.tiyinToSom` делается здесь и только здесь (issue #149).
  */
 
 fun List<MenuSectionDto>.toMenu(placeId: String): Menu = Menu(
@@ -49,8 +53,8 @@ fun MenuItemDto.toDomain(): MenuItem? {
         name = itemName,
         description = description?.takeIf(String::isNotBlank),
         // Отрицательная цена — ошибка сервера, а не подарок.
-        priceSum = (price ?: 0).coerceAtLeast(0),
-        photoUrl = null,
+        priceSum = (price.tiyinToSom() ?: 0).coerceAtLeast(0),
+        photoUrl = imageUrl?.takeIf(String::isNotBlank),
         // Молчание сервера — «есть»: убрать позицию из продажи по
         // отсутствующему полю значит закрыть кухню целиком.
         isAvailable = isAvailable ?: available ?: true,
@@ -65,8 +69,8 @@ fun MenuItemDto.toDomain(): MenuItem? {
  */
 fun OrderViewDto.toDomain(placeName: String = ""): Order? {
     val orderId = id?.takeIf { it.isNotBlank() } ?: return null
-    val itemsSum = itemsAmount ?: 0
-    val discount = (discountAmount ?: 0).coerceAtLeast(0)
+    val itemsSum = itemsAmount.tiyinToSom() ?: 0
+    val discount = (discountAmount.tiyinToSom() ?: 0).coerceAtLeast(0)
     return Order(
         id = orderId,
         placeId = placeId.orEmpty(),
@@ -78,7 +82,7 @@ fun OrderViewDto.toDomain(placeName: String = ""): Order? {
         totals = CartTotals(
             subtotalSum = itemsSum.coerceAtLeast(0),
             discountSum = discount,
-            deliverySum = (deliveryAmount ?: 0).coerceAtLeast(0),
+            deliverySum = (deliveryAmount.tiyinToSom() ?: 0).coerceAtLeast(0),
         ),
         lines = items.mapNotNull(OrderItemViewDto::toDomain),
         createdAt = parseServerInstant(createdAt),
@@ -95,7 +99,7 @@ fun OrderItemViewDto.toDomain(): CartLine? {
     val count = (quantity ?: 1).coerceAtLeast(1)
     // Сервер отдаёт и цену за единицу, и сумму строки; если единичной нет —
     // считаем её из суммы, иначе строка показалась бы бесплатной.
-    val unit = unitPrice ?: totalPrice?.let { it / count } ?: 0
+    val unit = unitPrice.tiyinToSom() ?: totalPrice?.let { (it / count).tiyinToSom() } ?: 0
     return CartLine(
         id = CartCalculator.lineId(id, emptySet()),
         itemId = id,

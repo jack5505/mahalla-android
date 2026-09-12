@@ -16,9 +16,12 @@ import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
+import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
 import java.time.Instant
@@ -43,6 +46,11 @@ class CatalogRepositoryTest {
     private val location = object : RequestLocationProvider {
         override suspend fun current() = DeviceLocation(latitude = 41.3111, longitude = 69.2797)
     }
+
+    // Галерея места (issue #185) ходит через отдельный сервис, а не через
+    // `CatalogApi` — фейк, чтобы не enqueue'ить лишний ответ в тестах, которые
+    // её не проверяют.
+    private val media = FakeMediaRepository()
 
     @Before
     fun setUp() {
@@ -69,6 +77,59 @@ class CatalogRepositoryTest {
         assertTrue(path, path.contains("lat=41.3111"))
         assertTrue(path, path.contains("lng=69.2797"))
         assertTrue(path, path.contains("radiusMeters=${CatalogApi.DEFAULT_RADIUS_METERS}"))
+    }
+
+    @Test
+    fun `the map asks for a rectangle, not a radius`() = runTest {
+        // issue #168: маркеры грузятся по видимой области, иначе заведения на
+        // другом краю кадра на карте отсутствуют.
+        server.enqueue(json(BOUNDS_BODY))
+
+        val result = repository().placesInBounds(
+            GeoBounds(
+                minLatitude = 41.20,
+                minLongitude = 69.10,
+                maxLatitude = 41.40,
+                maxLongitude = 69.40,
+            ),
+            DiscoveryFilters(categories = setOf(PlaceCategory.Pharmacy)),
+        )
+
+        val path = server.takeRequest().path.orEmpty()
+        assertTrue(path, path.startsWith("/places/map-bounds?"))
+        assertTrue(path, path.contains("minLat=41.2"))
+        assertTrue(path, path.contains("minLng=69.1"))
+        assertTrue(path, path.contains("maxLat=41.4"))
+        assertTrue(path, path.contains("maxLng=69.4"))
+        assertTrue(path, path.contains("category=PHARMACY"))
+        assertEquals(listOf("in-frame"), (result as ApiResult.Success).data.map(Place::id))
+    }
+
+    @Test
+    fun `the map keeps the answer of the server as it is`() = runTest {
+        // Порядок маркерам ни о чём не говорит — они не в списке; а вырезать из
+        // кадра валидную выдачу локальным фильтром значит оставить дыры там,
+        // где заведение видно глазом.
+        server.enqueue(json(MIXED_BODY))
+
+        val result = repository().placesInBounds(BOUNDS, DiscoveryFilters(minRating = 4.9))
+
+        assertEquals(
+            listOf("food", "pharmacy", "unknown"),
+            (result as ApiResult.Success).data.map(Place::id),
+        )
+    }
+
+    @Test
+    fun `a failed area load is not patched with the cache`() = runTest {
+        // Кэш — срез радиуса вокруг человека: подставить его вместо области
+        // значит нарисовать маркеры не там, куда человек смотрит.
+        dao.seed(listOf(entity("cached")))
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val result = repository().placesInBounds(BOUNDS)
+
+        assertEquals(500, ((result as ApiResult.Failure).error as ApiError.Http).code)
     }
 
     @Test
@@ -276,10 +337,46 @@ class CatalogRepositoryTest {
         assertEquals("Eng mazali osh", details.description)
         assertEquals("+998901234567", details.contacts.phone)
         assertEquals(listOf("r-1"), details.reviews.map { it.id })
-        assertEquals("Ali", details.reviews.single().author)
+        assertEquals("Rahmat!", details.reviews.single().ownerReply)
         assertFalse(details.fromCache)
         assertEquals("/places/p-1", server.takeRequest().path)
         assertTrue(server.takeRequest().path.orEmpty().startsWith("/reviews/places/p-1"))
+    }
+
+    @Test
+    fun `the gallery comes from media entity, not just the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Success(
+            listOf(MediaFile(id = "m-1", url = "real.jpg", ownerId = "u-9")),
+        )
+
+        val result = repository().placeDetails("p-1")
+
+        val photos = (result as ApiResult.Success).data.photos
+        assertEquals(listOf("real.jpg"), photos.map { it.url })
+        assertEquals(listOf("p-1"), media.requestedEntities)
+    }
+
+    @Test
+    fun `an empty gallery response falls back to the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(listOf("cover.jpg"), (result as ApiResult.Success).data.photos.map { it.url })
+    }
+
+    @Test
+    fun `deleting a media file delegates to the media service`() = runTest {
+        media.deleteResult = ApiResult.Success(Unit)
+
+        val result = repository().deleteMediaFile("m-1")
+
+        assertEquals(listOf("m-1"), media.deletedIds)
+        assertTrue(result is ApiResult.Success)
     }
 
     @Test
@@ -497,7 +594,7 @@ class CatalogRepositoryTest {
                 NetworkFactory.converterFactory(NetworkFactory.json()),
             )
             .create(CatalogApi::class.java)
-        return DefaultCatalogRepository(api, dao, location, clock)
+        return DefaultCatalogRepository(api, dao, location, media, clock)
     }
 
     private fun entity(
@@ -524,6 +621,22 @@ class CatalogRepositoryTest {
     private companion object {
         const val NOW = 1_774_000_000L
         const val CACHE_TTL_SECONDS = 7L * 24 * 60 * 60
+
+        /** Кадр карты — когда важен сам факт запроса, а не его границы. */
+        val BOUNDS = GeoBounds(
+            minLatitude = 41.20,
+            minLongitude = 69.10,
+            maxLatitude = 41.40,
+            maxLongitude = 69.40,
+        )
+
+        /** Ответ `places/map-bounds` — тот же `PlaceSummary`, что у `nearby`. */
+        const val BOUNDS_BODY = """
+            {"success":true,"data":[
+              {"id":"in-frame","name":"In frame","category":"PHARMACY","lat":41.35,"lng":69.38,
+               "ratingAvg":4.2,"ratingCount":7,"distanceMeters":7400.0,"isAvailable":true}
+            ]}
+        """
 
         const val NEARBY_BODY = """
             {"success":true,"data":[
@@ -560,8 +673,9 @@ class CatalogRepositoryTest {
         """
 
         const val REVIEWS_BODY = """
-            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1","userName":"Ali",
-             "rating":5,"text":"Zo'r","createdAt":"2026-08-25T10:15:30Z"}],
+            {"success":true,"data":{"content":[{"id":"r-1","userId":"u-1",
+             "rating":5,"text":"Zo'r","ownerReply":"Rahmat!",
+             "createdAt":"2026-08-25T10:15:30Z"}],
              "page":0,"totalPages":1,"totalElements":1,"last":true}}
         """
 

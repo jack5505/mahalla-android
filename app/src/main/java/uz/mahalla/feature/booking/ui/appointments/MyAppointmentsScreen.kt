@@ -2,7 +2,6 @@ package uz.mahalla.feature.booking.ui.appointments
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,7 +14,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.EventAvailable
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -35,6 +32,7 @@ import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -59,10 +57,17 @@ import java.time.LocalDate
 import java.time.LocalTime
 
 /**
- * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением.
+ * «Мои записи» (issue #97): активные и прошедшие, отмена с подтверждением,
+ * перенос на другое время (эпик #11).
+ *
+ * @param onReschedule ведёт на экран записи с уже выбранной услугой: календарь,
+ * слоты и правило «прошедший слот не предлагать» там уже есть. Вместе с ids
+ * туда едут подпись записи и её прежнее время — их на том экране больше взять
+ * негде (issue #155).
  */
 @Composable
 fun MyAppointmentsScreen(
+    onReschedule: (RescheduleTarget) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MyAppointmentsViewModel = hiltViewModel(),
@@ -74,6 +79,14 @@ fun MyAppointmentsScreen(
     // идёт и без запросов.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.onEvent(MyAppointmentsEvent.ScreenResumed)
+    }
+
+    LaunchedEffect(viewModel) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is MyAppointmentsEffect.OpenReschedule -> onReschedule(effect.target)
+            }
+        }
     }
 
     MyAppointmentsContentScreen(
@@ -173,10 +186,11 @@ private fun LazyListScope.appointmentItems(
             )
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = appointments.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(MyAppointmentsEvent.LoadMore) },
                     )
                 }
             }
@@ -197,6 +211,7 @@ private fun LazyListScope.section(
         AppointmentCard(
             appointment = appointment,
             vertical = state.vertical,
+            canReschedule = state.canReschedule && appointment.canReschedule,
             pending = state.pendingCancelId == appointment.id,
             // Пока идёт отмена по одной строке, остальные не трогаем: ответы
             // приехали бы на список, которого уже нет.
@@ -210,6 +225,7 @@ private fun LazyListScope.section(
 private fun AppointmentCard(
     appointment: Appointment,
     vertical: AppointmentVertical,
+    canReschedule: Boolean,
     pending: Boolean,
     enabled: Boolean,
     onEvent: (MyAppointmentsEvent) -> Unit,
@@ -251,6 +267,20 @@ private fun AppointmentCard(
             )
         }
 
+        // Перенос выше отмены: время можно передвинуть, и предлагать это
+        // первым честнее, чем сразу отдавать слот другому. Кнопки в столбец, а
+        // не в строку: две подписи по три слова в ряд не помещаются, а при
+        // fontScale 1.5 не помещается и одна.
+        if (canReschedule) {
+            MahallaButton(
+                text = stringResource(R.string.my_appointments_reschedule),
+                onClick = { onEvent(MyAppointmentsEvent.RescheduleRequested(appointment.id)) },
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Secondary,
+                state = ButtonState(enabled = enabled && !pending),
+            )
+        }
+
         if (appointment.canCancel) {
             MahallaButton(
                 text = stringResource(R.string.my_appointments_cancel),
@@ -276,39 +306,6 @@ private fun Appointment.whenText(): String {
         day != null -> day
         time != null -> time
         else -> stringResource(R.string.my_appointments_time_unknown)
-    }
-}
-
-/**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: MyAppointmentsState,
-    itemCount: Int,
-    onEvent: (MyAppointmentsEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(MyAppointmentsEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(MyAppointmentsEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
     }
 }
 
@@ -361,13 +358,16 @@ private fun AppointmentStatus.tone(): MahallaTone = when (this) {
 }
 
 private const val LIST_SKELETONS = 3
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable
 private fun MyAppointmentsPreview() {
+    // Заведение и услуга заданы намеренно: без них у записи нечем сделать
+    // перенос, и превью не показало бы его кнопку.
     val upcoming = Appointment(
         id = "a-1",
+        placeId = "p-1",
+        serviceId = "s-1",
         serviceName = "Soch olish",
         priceSum = 60_000,
         date = LocalDate.of(2026, 9, 6),

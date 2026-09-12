@@ -4,6 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
+import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.fashion.data.FashionCartRepository
@@ -35,6 +38,7 @@ class FashionCheckoutViewModel @Inject constructor(
     private val orderRepository: FashionOrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    private val analytics: AnalyticsTracker,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<FashionCheckoutState, FashionCheckoutEvent, FashionCheckoutEffect>(
     FashionCheckoutState(),
@@ -166,8 +170,11 @@ class FashionCheckoutViewModel @Inject constructor(
                     copy(isSubmitting = false, submitError = result.failure)
                 }
 
-                is ApiResult.Success -> updateState {
-                    copy(isSubmitting = false, orderCreated = true)
+                is ApiResult.Success -> {
+                    updateState { copy(isSubmitting = false, orderCreated = true) }
+                    analytics.track(
+                        AnalyticsEvents.ordered(storeId, AnalyticsVertical.Fashion),
+                    )
                 }
             }
         }

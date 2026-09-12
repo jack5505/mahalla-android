@@ -7,6 +7,8 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentSections
 import uz.mahalla.feature.booking.domain.AppointmentVertical
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Состояние экрана «Мои записи» (issue #97; врачи — issue #99).
@@ -39,7 +41,41 @@ data class MyAppointmentsState(
     val pendingCancelId: String? = null,
     val cancelFailure: ApiFailure? = null,
     val loadMoreFailure: ApiFailure? = null,
-) : UiState
+) : UiState {
+
+    /**
+     * Есть ли на этом экране перенос вообще.
+     *
+     * Только у записи к мастеру: перенос собирается из `POST appointments` и
+     * отмены (своей ручки у бэкенда нет), а для записи к врачу вторая половина
+     * другая — `POST hospitals/appointments` требует `doctorId` и жалобу, и
+     * подставить туда `serviceId` значило бы записать человека не к тому.
+     * Врачебный перенос — это своя задача с врачами и их расписанием.
+     */
+    val canReschedule: Boolean get() = vertical == AppointmentVertical.Barber
+}
+
+/**
+ * Что переносят: всё, чего экран переноса о записи сам не узнает (issue #155).
+ *
+ * Одним объектом, а не шестью аргументами подряд: половина из них — строки, и
+ * перепутанные местами `placeId` и `serviceId` компилятор бы не заметил.
+ *
+ * @param placeId и [serviceId] — без них `POST appointments` не примут; пустыми
+ * они сюда не попадают (`Appointment.canReschedule`).
+ * @param serviceName подпись записи в списке. Пусто — сервер не назвал услугу;
+ * тогда её имя ищется в каталоге заведения, если он ответит.
+ * @param date и [startTime] — прежние день и время. Оба необязательны по
+ * контракту (`AppointmentResponse`), и показывается то, что есть.
+ */
+data class RescheduleTarget(
+    val appointmentId: String,
+    val placeId: String,
+    val serviceId: String,
+    val serviceName: String = "",
+    val date: LocalDate? = null,
+    val startTime: LocalTime? = null,
+)
 
 sealed interface MyAppointmentsEvent : UiEvent {
     /**
@@ -57,4 +93,11 @@ sealed interface MyAppointmentsEvent : UiEvent {
     data class CancelRequested(val appointmentId: String) : MyAppointmentsEvent
     data object CancelDismissed : MyAppointmentsEvent
     data object CancelConfirmed : MyAppointmentsEvent
+
+    /**
+     * «Перенести». Подтверждения здесь нет намеренно: перенос ничего не рушит
+     * до последнего шага — человек уходит выбирать новое время и в любой момент
+     * возвращается назад, оставив запись как была.
+     */
+    data class RescheduleRequested(val appointmentId: String) : MyAppointmentsEvent
 }

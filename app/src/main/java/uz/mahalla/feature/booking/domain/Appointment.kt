@@ -48,11 +48,11 @@ enum class AppointmentStatus(val apiValue: String) {
 /**
  * К кому запись: к мастеру (issue #97) или к врачу (issue #99).
  *
- * Модель записи у обеих вертикалей одна — у бэкенда это буквально одна схема
- * `AppointmentResponse` и одна ручка отмены (`POST appointments/{id}/cancel`),
- * — а вот списки разные: `appointments/my` против `hospitals/appointments/my`.
- * Поэтому вертикаль — не поле самой записи (сервер её не сообщает), а признак
- * того, откуда список пришёл: он выбирает источник и заголовок экрана.
+ * Модель записи на экране у обеих вертикалей одна, а на бэкенде — нет: у
+ * каждой своя схема и свои ручки, и списка (`appointments/my` против
+ * `hospitals/appointments/my`), и отмены (issue #167). Поэтому вертикаль — не
+ * поле самой записи (сервер её не сообщает), а признак того, откуда список
+ * пришёл: он выбирает источник и заголовок экрана.
  *
  * Незнакомое значение аргумента маршрута читается как [Barber] (см.
  * [byName]) — на экран без списка это не уводит.
@@ -84,12 +84,18 @@ enum class AppointmentVertical {
  * ([DateTimeFormatters.AppZone]). Оба необязательны: запись без времени
  * показывается как есть, а не прячется.
  * @param priceSum цена услуги на момент записи; ноль — «не названа».
+ * @param doctorId запись к врачу (issue #99): `doctorId` из
+ * `HospitalAppointmentResponse`, `null` у записи к мастеру. Сервер не называет
+ * врача в [serviceName] (схема этого поля вовсе не знает), поэтому имя
+ * дотягивается отдельным запросом по этому id —
+ * [uz.mahalla.feature.hospital.data.DefaultHospitalRepository] (issue #219).
  */
 data class Appointment(
     val id: String,
     val placeId: String? = null,
     val serviceId: String? = null,
     val serviceName: String? = null,
+    val doctorId: String? = null,
     val priceSum: Long = 0,
     val date: LocalDate? = null,
     val startTime: LocalTime? = null,
@@ -125,6 +131,24 @@ data class Appointment(
     val canCancel: Boolean get() = !isFinal && id.isNotBlank()
 
     /**
+     * Перенести можно то, что ещё можно отменить и на что есть чем записаться
+     * заново.
+     *
+     * Правило строже, чем у [canCancel], и это не перестраховка: **своей ручки
+     * переноса у бэкенда нет** (проверено по `/v3/api-docs` 2026-09-08 — у
+     * `appointments` есть только `my`, `{id}`, `{id}/cancel`, `{id}/status`),
+     * поэтому перенос собирается из двух: новая запись плюс отмена старой. Для
+     * новой нужны заведение и услуга, а сервер их в `AppointmentResponse`
+     * называть не обязан — запись без них показывается, но перенести её нечем.
+     *
+     * Прошедшее время перенос не запрещает по той же причине, что и отмену:
+     * `PENDING`, до которого заведение так и не дошло, человек вправе
+     * передвинуть, а последнее слово всё равно за сервером.
+     */
+    val canReschedule: Boolean
+        get() = canCancel && !placeId.isNullOrBlank() && !serviceId.isNullOrBlank()
+
+    /**
      * Запись ещё предстоит. Время неизвестно — считаем, что предстоит: прятать
      * незакрытую запись в «прошедшие» значило бы спрятать и кнопку отмены.
      */
@@ -134,6 +158,25 @@ data class Appointment(
         return !starts.isBefore(now)
     }
 }
+
+/**
+ * Итог переноса записи.
+ *
+ * Перенос — не одна операция, а две: сначала создаётся запись на новое время,
+ * потом отменяется старая (порядок объяснён в
+ * [uz.mahalla.feature.booking.data.BookingRepository.reschedule]). Вторая может
+ * не удаться, когда первая уже прошла, — и это **не** отказ переноса: новое
+ * время за человеком.
+ *
+ * @param appointment запись на новое время — та, которую вернул сервер.
+ * @param previousCancelled удалось ли снять старую. `false` — у человека
+ * осталось две записи, и экран обязан сказать об этом прямо: молча оставить
+ * лишнюю значит подвести и человека, и заведение.
+ */
+data class Rescheduled(
+    val appointment: Appointment,
+    val previousCancelled: Boolean,
+)
 
 /**
  * Список записей, разложенный так, как его читают: сначала то, куда идти, потом

@@ -4,11 +4,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 
 /**
  * Правила тарифа (issue #103): название по языку, выгода годовой оплаты,
- * пробный период и единица цен.
+ * пробный период. Единица цен — общая для проекта, см. `MoneyTest` (issue #149).
  */
 class SubscriptionPlanTest {
 
@@ -110,53 +109,6 @@ class SubscriptionPlanTest {
         // Молчание сервера — обычный пользователь: именно его берёт по
         // умолчанию и сам бэкенд.
         assertEquals(PlanAudience.User, PlanAudience.fromServer(null))
-    }
-
-    @Test
-    fun `the unit of prices is derived from the monthly pair`() {
-        assertEquals(
-            WalletAmounts.TIYIN_IN_SOM,
-            SubscriptionAmounts.scaleOf(
-                monthly = 4_900_000,
-                monthlySom = 49_000.0,
-                yearly = null,
-                yearlySom = null,
-            ),
-        )
-        assertEquals(
-            1L,
-            SubscriptionAmounts.scaleOf(
-                monthly = 49_000,
-                monthlySom = 49_000.0,
-                yearly = null,
-                yearlySom = null,
-            ),
-        )
-    }
-
-    @Test
-    fun `the yearly pair is used when there is no monthly price`() {
-        // У тарифа вполне может быть только годовая цена — тогда месячная пара
-        // не доказывает ничего.
-        assertEquals(
-            1L,
-            SubscriptionAmounts.scaleOf(
-                monthly = 0,
-                monthlySom = 0.0,
-                yearly = 480_000,
-                yearlySom = 480_000.0,
-            ),
-        )
-    }
-
-    @Test
-    fun `without any pair the minor unit is assumed`() {
-        // Отдельное поле `*Som` существует ровно потому, что целое поле хранит
-        // что-то другое (то же решение, что в кошельке, issue #62).
-        assertEquals(
-            WalletAmounts.TIYIN_IN_SOM,
-            SubscriptionAmounts.scaleOf(null, null, null, null),
-        )
     }
 
     private fun plan(

@@ -18,6 +18,7 @@ object PlaceActions {
     ): List<PlaceAction> = buildList {
         if (capabilities.queue) add(PlaceAction.Queue)
         if (capabilities.booking) add(PlaceAction.Booking)
+        if (capabilities.gaming) add(PlaceAction.Gaming)
         if (capabilities.doctors) add(PlaceAction.Doctor)
         if (capabilities.cinema) add(PlaceAction.Cinema)
         if (capabilities.shopping) add(PlaceAction.Shop)

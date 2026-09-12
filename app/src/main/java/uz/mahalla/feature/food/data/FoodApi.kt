@@ -1,13 +1,17 @@
 package uz.mahalla.feature.food.data
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 import uz.mahalla.data.network.ApiResponse
+import uz.mahalla.feature.wallet.domain.IdempotencyKey
 
 /**
  * Вертикаль «Еда» (эпик 5): меню, заказы.
@@ -35,8 +39,23 @@ interface FoodApi {
     @GET("food/places/{placeId}/menu")
     suspend fun menu(@Path("placeId") placeId: String): ApiResponse<List<MenuSectionDto>>
 
+    /**
+     * Оформление заказа.
+     *
+     * `Idempotency-Key` — **клиентское дополнение** (задача 8.3 эпика #12):
+     * поддержку на своей стороне бэкенд не подтверждал, в `/v3/api-docs`
+     * заголовка нет (см. `docs/API-CONTRACT.md`). Сервер, который его
+     * игнорирует, ведёт себя как раньше; сервер, который его прочтёт, не
+     * создаст второй заказ на повторе после оборванного соединения. Защиту от
+     * двойного списания сейчас держит клиент —
+     * [uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlow] не отправляет
+     * второй запрос, пока не ответил первый.
+     */
     @POST("food/orders")
-    suspend fun createOrder(@Body request: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
+    suspend fun createOrder(
+        @Header(IdempotencyKey.HEADER) idempotencyKey: String,
+        @Body request: PlaceOrderRequestDto,
+    ): ApiResponse<CreatedOrderDto>
 
     @GET("orders/{orderId}")
     suspend fun order(@Path("orderId") orderId: String): ApiResponse<OrderViewDto>
@@ -70,6 +89,7 @@ data class MenuSectionDto(
  * Модификаторов (`optionGroups`) в контракте нет — см. `FoodMappers`.
  */
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class MenuItemDto(
     @SerialName("id") val id: String? = null,
     @SerialName("name") val name: String? = null,
@@ -79,6 +99,13 @@ data class MenuItemDto(
     @SerialName("isAvailable") val isAvailable: Boolean? = null,
     @SerialName("available") val available: Boolean? = null,
     @SerialName("isHalal") val isHalal: Boolean? = null,
+    /**
+     * Фото блюда (issue #60). В схеме стенда у `ItemResponse` его **нет** —
+     * поле объявлено на вырост и разбирается под тремя вероятными именами:
+     * `imageUrl` бэкенд уже использует у `CartItemResponse`, значит имя у него
+     * такое. Молчание сервера — строка списка без картинки, ровно как сейчас.
+     */
+    @JsonNames("photoUrl", "image") @SerialName("imageUrl") val imageUrl: String? = null,
 )
 
 /**

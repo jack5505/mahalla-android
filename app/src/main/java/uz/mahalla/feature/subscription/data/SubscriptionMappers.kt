@@ -1,14 +1,13 @@
 package uz.mahalla.feature.subscription.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
-import uz.mahalla.feature.subscription.domain.SubscriptionAmounts
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
-import uz.mahalla.feature.wallet.domain.WalletAmounts
 
 /**
  * Разбор ответов подписки (issue #103). Мягкий, как в каталоге (issue #53):
@@ -20,12 +19,6 @@ import uz.mahalla.feature.wallet.domain.WalletAmounts
  */
 internal fun PlanDto.toDomain(): SubscriptionPlan? {
     val planCode = code?.takeIf { it.isNotBlank() } ?: return null
-    val scale = SubscriptionAmounts.scaleOf(
-        monthly = monthlyPrice,
-        monthlySom = monthlyPriceSom,
-        yearly = yearlyPrice,
-        yearlySom = yearlyPriceSom,
-    )
     return SubscriptionPlan(
         code = planCode,
         name = name?.takeIf { it.isNotBlank() },
@@ -35,9 +28,8 @@ internal fun PlanDto.toDomain(): SubscriptionPlan? {
         tier = tier?.takeIf { it.isNotBlank() },
         // Отрицательная цена — ошибка сервера: «−10 000 в месяц» на карточке
         // тарифа не значит ничего, а на решение влияет как ноль.
-        monthlySum = WalletAmounts.toSom(monthlyPrice, scale).coerceAtLeast(0),
-        yearlySum = WalletAmounts.toSom(yearlyPrice, scale).coerceAtLeast(0),
-        amountScale = scale,
+        monthlySum = (monthlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
+        yearlySum = (yearlyPrice ?: 0).tiyinToSom().coerceAtLeast(0),
         yearlyDiscountPercent = yearlyDiscountPercent?.coerceIn(0, MAX_PERCENT) ?: 0,
         trialDays = trialDays?.coerceAtLeast(0) ?: 0,
         isFree = isFree ?: free ?: false,
@@ -74,14 +66,13 @@ private fun PlanDto.features(): Set<PlanFeature> = buildSet {
  * без зоны, и иначе срок подписки был бы пуст у всех.
  */
 internal fun SubscriptionDto.toDomain(): Subscription {
-    val scale = WalletAmounts.scaleOf(pricePaid, pricePaidSom)
     return Subscription(
         id = id?.takeIf { it.isNotBlank() },
         planCode = planCode?.takeIf { it.isNotBlank() },
         planName = planName?.takeIf { it.isNotBlank() },
         status = SubscriptionStatus.fromServer(status),
         billingPeriod = BillingPeriod.fromServer(billingPeriod),
-        pricePaidSum = WalletAmounts.toSom(pricePaid, scale).coerceAtLeast(0),
+        pricePaidSum = (pricePaid ?: 0).tiyinToSom().coerceAtLeast(0),
         startedAt = parseServerInstant(startedAt),
         expiresAt = parseServerInstant(expiresAt),
         autoRenew = autoRenew ?: false,

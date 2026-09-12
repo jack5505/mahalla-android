@@ -3,6 +3,7 @@ package uz.mahalla.feature.place.domain
 import androidx.compose.runtime.Immutable
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -39,6 +40,13 @@ data class PlaceContacts(
 enum class PlaceAction {
     Queue,
     Booking,
+
+    /**
+     * Игровая зона клуба (issue #98). Отдельно от [Booking]: там запись на
+     * время к мастеру (`barber-services` + `appointments`), здесь зона клуба
+     * с почасовой ценой (`gaming-controller`) — другой список и другой экран.
+     */
+    Gaming,
 
     /**
      * Запись к врачу (issue #99). Отдельно от [Booking]: у больниц другой
@@ -84,6 +92,8 @@ enum class PlaceAction {
 data class PlaceCapabilities(
     val queue: Boolean = false,
     val booking: Boolean = false,
+    /** Игровая зона — вертикаль «Игровые зоны» (issue #98). */
+    val gaming: Boolean = false,
     /** Запись к врачу — вертикаль больниц (issue #99). */
     val doctors: Boolean = false,
     /** Билет в кино — вертикаль кинотеатров (issue #106). */
@@ -104,6 +114,11 @@ data class PlaceCapabilities(
          * `appointments`, issue #97). Услуг у заведения может и не быть — тогда
          * экран записи скажет это словами; спрятать кнопку заранее нельзя,
          * список услуг известен только серверу.
+         *
+         * У игровых клубов (`GAMING`) это зона (`gaming-controller`, issue
+         * #98): свой контроллер, своя почасовая цена и свой экран. Зон в
+         * клубе может и не оказаться — тогда экран скажет это словами;
+         * спрятать кнопку заранее нельзя, список зон известен только серверу.
          *
          * У больниц (`HOSPITAL`) это запись к врачу (`hospital-controller`,
          * issue #99): список врачей известен только серверу, поэтому кнопка
@@ -128,6 +143,7 @@ data class PlaceCapabilities(
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
+            PlaceCategory.Playground -> PlaceCapabilities(gaming = true)
             PlaceCategory.Hospital -> PlaceCapabilities(doctors = true)
             PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
             PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
@@ -141,15 +157,21 @@ data class PlaceCapabilities(
  * @param authorId id автора с сервера. Единственный признак, по которому свой
  * отзыв отличается от чужого (issue #76) — «мой» это факт про аккаунт, а не
  * про отзыв, поэтому сравнение живёт в состоянии экрана, а не здесь.
+ *
+ * Имени автора и аватара здесь нет: у бэкенда их нет вовсе, ни под каким
+ * именем поля (issue #192) — экран показывает отзыв без имени, а не пустую
+ * строку на его месте.
+ *
+ * @param ownerReply ответ заведения на отзыв; `null` — заведение не ответило.
  */
 @Immutable
 data class Review(
     val id: String,
-    val author: String,
     val rating: Int,
     val text: String,
     val createdAt: Instant?,
     val authorId: String? = null,
+    val ownerReply: String? = null,
 )
 
 /**
@@ -160,12 +182,16 @@ data class Review(
  * [fromCache] отмечает данные, поднятые из Room после сетевой ошибки: экран
  * показывает их, но подписывает — иначе устаревшие часы работы выглядят как
  * актуальные.
+ *
+ * [photos] — галерея из `media/entity/{placeId}` (issue #185), а не только
+ * обложка с логотипом: у элементов с [MediaFile.ownerId] есть кому предложить
+ * удаление, у запасного варианта (медиа не ответило) — нет.
  */
 @Immutable
 data class PlaceDetails(
     val place: Place,
     val description: String? = null,
-    val photos: List<String> = emptyList(),
+    val photos: List<MediaFile> = emptyList(),
     val hours: List<OpeningHours> = emptyList(),
     val contacts: PlaceContacts = PlaceContacts(),
     val capabilities: PlaceCapabilities = PlaceCapabilities(),
