@@ -11,7 +11,6 @@ import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.PinLoginRequest
-import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
 import uz.mahalla.data.network.auth.SetupPinRequest
 import uz.mahalla.data.network.auth.TelegramCheckRequest
@@ -103,13 +102,6 @@ interface AuthRepository {
      * ошибка; успех сохраняет сессию, как и [verifyCode].
      */
     suspend fun checkTelegramLogin(deepLinkToken: String): ApiResult<TelegramLoginState>
-
-    /**
-     * Явное обновление токенов. Обычный путь — `TokenAuthenticator` по 401;
-     * этот метод нужен там, где сессию надо проверить до запроса (запуск
-     * приложения, разблокировка по PIN).
-     */
-    suspend fun refresh(): ApiResult<Unit>
 
     /** Локальные данные чистятся всегда, даже если запрос к серверу не ушёл. */
     suspend fun logout()
@@ -515,40 +507,6 @@ class DefaultAuthRepository @Inject constructor(
 
         signIn(session, response.user)
         return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
-    }
-
-    override suspend fun refresh(): ApiResult<Unit> {
-        val session = sessionStore.current() ?: return ApiResult.Failure(ApiError.Unauthorized)
-        val device = deviceInfoProvider.current().toDto()
-        val location = locationProvider.current()
-
-        val result = apiCall {
-            authApi.refresh(
-                RefreshTokenRequest(
-                    refreshToken = session.refreshToken,
-                    device = device,
-                    lat = location.latitude,
-                    lng = location.longitude,
-                ),
-            ).payload()
-        }
-
-        return when (result) {
-            is ApiResult.Success -> {
-                val refreshed = result.data.tokens
-                    .toSession(sessionId = result.data.sessionId ?: session.sessionId)
-                    ?: return ApiResult.Failure(ApiError.Serialization)
-                sessionStore.save(refreshed)
-                ApiResult.Success(Unit)
-            }
-
-            is ApiResult.Failure -> {
-                // Refresh-токен мёртв — сессии больше нет, иначе приложение
-                // будет вечно ходить с невалидной парой токенов.
-                if (result.error == ApiError.Unauthorized) sessionStore.clear()
-                result
-            }
-        }
     }
 
     override suspend fun logout() {

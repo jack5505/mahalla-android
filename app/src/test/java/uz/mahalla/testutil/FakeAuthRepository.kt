@@ -24,7 +24,6 @@ class FakeAuthRepository(
         ApiResult.Success(OtpChallenge(otpToken = DEFAULT_OTP_TOKEN))
     var verifyResult: ApiResult<VerificationResult> =
         ApiResult.Success(VerificationResult.Authorized(LoginResult(isNewUser = false)))
-    var refreshResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
     /** Ответ `setup-pin`/`pin-login` (issue #51). */
     var completeServerPinResult: ApiResult<LoginResult> =
@@ -111,8 +110,6 @@ class FakeAuthRepository(
         }
         return result
     }
-
-    override suspend fun refresh(): ApiResult<Unit> = refreshResult
 
     override suspend fun logout() {
         logoutCount++
