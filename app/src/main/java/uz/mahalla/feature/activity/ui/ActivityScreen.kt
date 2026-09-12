@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.EmptyState
@@ -219,13 +220,14 @@ private fun ActivityRow(
     modifier: Modifier = Modifier,
 ) {
     val kindLabel = stringResource(activity.kind.labelRes())
+    val joinTemplate = stringResource(R.string.text_joined_with_dot)
     OrderCard(
         order = OrderCardUi(
             id = activity.key,
             // Названия заведения бэкенд не отдаёт ни в одном из пяти ответов
             // (только `placeId`), поэтому заголовок — вид активности, а
             // уточнение (номер заказа, услуга, место в зале) идёт рядом.
-            title = activity.note?.let { "$kindLabel · $it" } ?: kindLabel,
+            title = activity.note?.let { TextJoiner.join(joinTemplate, kindLabel, it) } ?: kindLabel,
             statusLabel = stringResource(activity.status.labelRes()),
             statusTone = activity.status.tone(),
             amountLabel = activity.amount

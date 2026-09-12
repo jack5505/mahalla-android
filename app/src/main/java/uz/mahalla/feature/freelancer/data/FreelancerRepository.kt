@@ -5,8 +5,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
-import uz.mahalla.feature.booking.data.ServiceDto
-import uz.mahalla.feature.booking.data.toDomain
 import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
@@ -112,7 +110,7 @@ class DefaultFreelancerRepository @Inject constructor(
 
     override suspend fun services(freelancerId: String): ApiResult<List<BarberService>> =
         apiCall { api.services(freelancerId).payload() }
-            .map { services -> services.mapNotNull(ServiceDto::toDomain).filter { it.isActive } }
+            .map { services -> services.mapNotNull(FreelancerServiceDto::toDomain).filter { it.isActive } }
 
     /**
      * Заказ.

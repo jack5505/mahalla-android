@@ -9,6 +9,9 @@
     <string name="screen_skeleton_note">Ekran keyingi bosqichda maketga ko\'ra tayyorlanadi.</string>
     <string name="action_back">Orqaga</string>
     <string name="currency_uzs">so\'m</string>
+    <!-- Склейка двух частей строки (заголовок и уточнение, дата и время…) —
+         общий ресурс, а не символ в коде каждого экрана (issue #212). -->
+    <string name="text_joined_with_dot">%1$s · %2$s</string>
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Yaqin atrofda</string>
@@ -686,9 +689,8 @@
     <string name="doctor_booking_doctors_empty_title">Shifokorlar ro\'yxati bo\'sh</string>
     <string name="doctor_booking_doctors_empty_description">Muassasa hali shifokorlarini kiritmagan. Qo\'ng\'iroq qilib aniqlashtiring.</string>
     <string name="doctor_booking_price">Qabul narxi: %1$s</string>
-    <string name="doctor_booking_time_title">Qulay vaqtni tanlang</string>
-    <string name="doctor_booking_times_note">Bu — taklif qilingan vaqt. Shifoxona yozuvni tasdiqlaganidan keyin aniq bo\'ladi.</string>
-    <string name="doctor_booking_times_empty">Bugungi qabul tugadi. Boshqa kunni tanlang.</string>
+    <string name="doctor_booking_time_title">Vaqtni tanlang</string>
+    <string name="doctor_booking_slots_empty">Bu kunga bo\'sh vaqt qolmadi. Boshqa kunni tanlang.</string>
     <string name="doctor_booking_complaint_title">Shikoyatingiz</string>
     <string name="doctor_booking_complaint_label">Nimadan shikoyat qilyapsiz? (majburiy emas)</string>
     <string name="doctor_booking_complaint_placeholder">Masalan: uch kundan beri tomoq og\'riyapti</string>

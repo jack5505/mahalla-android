@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.format.RatingFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -234,7 +235,7 @@ internal fun FreelancerMeta(freelancer: Freelancer, modifier: Modifier = Modifie
         add(freelancer.ratingText())
     }
     Text(
-        text = parts.joinToString(separator = SEPARATOR),
+        text = TextJoiner.join(stringResource(R.string.text_joined_with_dot), parts),
         modifier = modifier,
         style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
         color = colors.fgMuted,
@@ -262,7 +263,43 @@ internal fun Freelancer.ratingText(): String {
     )
 }
 
+
 private const val SEPARATOR = " · "
+
+/**
+ * Хвост списка: догрузка следующей страницы по достижению конца. Провал
+ * показывает кнопку с причиной — автотриггер по `itemCount` больше не
+ * сработает, список ведь не вырос.
+ */
+@Composable
+private fun LoadMoreItem(
+    state: FreelancersState,
+    itemCount: Int,
+    onEvent: (FreelancersEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val failure = state.loadMoreFailure
+    if (failure != null) {
+        InlineFailure(
+            failure = failure,
+            onRetry = { onEvent(FreelancersEvent.LoadMore) },
+            modifier = modifier,
+        )
+        return
+    }
+
+    LaunchedEffect(itemCount) { onEvent(FreelancersEvent.LoadMore) }
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(Spacing.gap),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
+    }
+}
+
+
 private const val LIST_SKELETONS = 3
 
 @ThemeLanguagePreviews
