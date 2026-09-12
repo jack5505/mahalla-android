@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.format.RatingFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -235,7 +236,7 @@ internal fun FreelancerMeta(freelancer: Freelancer, modifier: Modifier = Modifie
         add(freelancer.ratingText())
     }
     Text(
-        text = parts.joinToString(separator = SEPARATOR),
+        text = TextJoiner.join(stringResource(R.string.text_joined_with_dot), parts),
         modifier = modifier,
         style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
         color = colors.fgMuted,
@@ -296,7 +297,6 @@ private fun LoadMoreItem(
     }
 }
 
-private const val SEPARATOR = " · "
 private const val LIST_SKELETONS = 3
 private val LOAD_MORE_INDICATOR = 24.dp
 

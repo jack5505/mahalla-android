@@ -1,9 +1,11 @@
 package uz.mahalla.feature.hospital.data
 
-import uz.mahalla.core.format.toServerTime
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.core.result.dataOrNull
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
@@ -19,7 +21,10 @@ import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BookingSlots
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
+import uz.mahalla.feature.hospital.domain.DoctorSlot
+import uz.mahalla.feature.hospital.domain.DoctorSlots
 import java.time.Clock
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,11 +48,27 @@ interface HospitalRepository : AppointmentsSource {
     /** Врачи заведения. */
     suspend fun doctors(placeId: String): ApiResult<List<Doctor>>
 
+    /** Карточка врача (issue #181). */
+    suspend fun doctor(doctorId: String): ApiResult<Doctor>
+
+    /**
+     * Свободные слоты врача на день (issue #181) — так, как их отдал сервер,
+     * минус уже наступившие ([DoctorSlots.available]).
+     */
+    suspend fun slots(doctorId: String, date: LocalDate): ApiResult<List<DoctorSlot>>
+
     /**
      * Записаться к врачу. Черновик проверяется до запроса — см.
      * [DefaultHospitalRepository.book].
      */
     suspend fun book(draft: DoctorAppointmentDraft): ApiResult<Appointment>
+
+    /**
+     * Карточка записи к врачу (issue #181). Ручка объявлена по контракту, но
+     * пока не используется ни одним экраном — карточка записи целиком
+     * отдельная задача (#183).
+     */
+    suspend fun appointment(appointmentId: String): ApiResult<Appointment>
 }
 
 @Singleton
@@ -60,10 +81,24 @@ class DefaultHospitalRepository @Inject constructor(
         apiCall { api.doctors(placeId).payload() }
             .map { doctors -> doctors.mapNotNull(DoctorDto::toDomain) }
 
+    override suspend fun doctor(doctorId: String): ApiResult<Doctor> =
+        apiCall { api.doctor(doctorId).payload() }.map { dto -> dto.toDomain(doctorId) }
+
+    /**
+     * Прошедшее время отсеивается **после** ответа сервера, а не вместо него:
+     * какие слоты заняты, знает только он, а какие уже наступили — знают оба.
+     */
+    override suspend fun slots(doctorId: String, date: LocalDate): ApiResult<List<DoctorSlot>> =
+        apiCall { api.slots(doctorId = doctorId, date = date.toString()).payload() }
+            .map { raw -> DoctorSlots.available(raw = raw, date = date, now = clock.instant()) }
+
     /**
      * Незаполненный черновик и прошедшее время в сеть не уходят: сервер ответил
      * бы тем же отказом, но платой были бы запрос и молчание экрана на время
      * его выполнения.
+     *
+     * [DoctorSlot.raw] уходит в `startTime` без разбора и повторной сборки —
+     * ровно та строка, что пришла из `slots()` (issue #181, #144).
      *
      * Ответ без `id` отказом **не** считается — запись создана, а увидеть её
      * можно в «моих записях» (см. `AppointmentDto.toCreated`). Это разница с
@@ -73,13 +108,13 @@ class DefaultHospitalRepository @Inject constructor(
     override suspend fun book(draft: DoctorAppointmentDraft): ApiResult<Appointment> {
         val doctorId = draft.doctorId
         val date = draft.date
-        val time = draft.time
-        if (!draft.canSubmit || doctorId == null || date == null || time == null) {
+        val slot = draft.slot
+        if (!draft.canSubmit || doctorId == null || date == null || slot == null) {
             return ApiResult.Failure(
                 ApiError.Business(BookingRepository.INVALID_REQUEST_CODE),
             )
         }
-        if (BookingSlots.startsAt(date, time).isBefore(clock.instant())) {
+        if (BookingSlots.startsAt(date, slot.time).isBefore(clock.instant())) {
             return ApiResult.Failure(
                 ApiError.Business(BookingRepository.INVALID_REQUEST_CODE),
             )
@@ -90,16 +125,56 @@ class DefaultHospitalRepository @Inject constructor(
                 BookDoctorRequest(
                     doctorId = doctorId,
                     date = date.toString(),
-                    startTime = time.toServerTime(),
+                    startTime = slot.raw,
                     complaint = draft.complaintOrNull(),
                 ),
             ).payload()
         }.map(AppointmentDto::toCreated)
     }
 
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
+        apiCall { api.appointment(appointmentId).payload() }.map(AppointmentDto::toCreated)
+
+    /**
+     * `HospitalAppointmentResponse` не называет врача — только `doctorId`
+     * (issue #219). Имя дотягивается отдельным запросом на каждого уникального
+     * врача среди карточек без имени — повторный визит к тому же врачу не
+     * плодит дублирующие запросы; провал одного запроса не портит остальные и
+     * не превращает удачный список в ошибку — карточка просто останется с
+     * плейсхолдером экрана, тот же принцип мягкого разбора, что у самих DTO.
+     */
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> =
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
             .map(AppointmentPageDto::toDomain)
+            .let { result ->
+                when (result) {
+                    is ApiResult.Failure -> result
+                    is ApiResult.Success ->
+                        ApiResult.Success(result.data.copy(items = withDoctorNames(result.data.items)))
+                }
+            }
+
+    private suspend fun withDoctorNames(items: List<Appointment>): List<Appointment> {
+        val doctorIds = items.filter(::needsDoctorName).mapNotNull(Appointment::doctorId).distinct()
+        if (doctorIds.isEmpty()) return items
+        val namesByDoctorId = coroutineScope {
+            doctorIds.associateWith { id -> async { fetchDoctorName(id) } }
+                .mapValues { (_, deferred) -> deferred.await() }
+        }
+        return items.map { appointment ->
+            if (needsDoctorName(appointment)) {
+                namesByDoctorId[appointment.doctorId]?.let { appointment.copy(serviceName = it) } ?: appointment
+            } else {
+                appointment
+            }
+        }
+    }
+
+    private fun needsDoctorName(appointment: Appointment): Boolean =
+        appointment.serviceName.isNullOrBlank() && !appointment.doctorId.isNullOrBlank()
+
+    private suspend fun fetchDoctorName(id: String): String? =
+        doctor(id).dataOrNull()?.name?.takeIf(String::isNotBlank)
 
     /**
      * Ответ на отмену — та же запись, но обязательным его разбор не считаем:
@@ -107,6 +182,12 @@ class DefaultHospitalRepository @Inject constructor(
      * годного тела не окажется, состояние выводится из факта отмены — иначе
      * удачная отмена выглядела бы как «отменить не удалось» (та же грабля, что
      * у заказов еды, issue #9, и у талона очереди, issue #96).
+     *
+     * Имя врача заново запросом не дотягивается: `serviceName` из ответа на
+     * отмену будет тем же отсутствующим полем, что и всегда у больничной
+     * схемы (issue #219). Оно переносится с записи, пришедшей в аргументе, —
+     * там оно уже дотянуто [myAppointments] — иначе карточка после отмены
+     * откатилась бы на заглушку «Врач не указан».
      */
     override suspend fun cancel(appointment: Appointment): ApiResult<Appointment> {
         if (appointment.id.isBlank()) {
@@ -120,7 +201,12 @@ class DefaultHospitalRepository @Inject constructor(
             response.ensureSuccess()
             response.data
         }.map { dto ->
-            dto?.toDomain() ?: appointment.copy(status = AppointmentStatus.Cancelled)
+            val cancelled = dto?.toDomain() ?: appointment.copy(status = AppointmentStatus.Cancelled)
+            if (cancelled.serviceName.isNullOrBlank() && !appointment.serviceName.isNullOrBlank()) {
+                cancelled.copy(serviceName = appointment.serviceName)
+            } else {
+                cancelled
+            }
         }
     }
 }

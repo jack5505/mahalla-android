@@ -46,6 +46,7 @@ import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.DefaultPlaceNameResolver
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.fashion.data.di.FashionDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
@@ -531,6 +532,9 @@ class GraphAssemblyTest {
                 bookingApi = BookingDataModule.provideBookingApi(retrofit),
                 hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
                 cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
+                placeNameResolver = DefaultPlaceNameResolver(
+                    DiscoveryDataModule.provideCatalogApi(retrofit),
+                ),
             ),
         )
     }

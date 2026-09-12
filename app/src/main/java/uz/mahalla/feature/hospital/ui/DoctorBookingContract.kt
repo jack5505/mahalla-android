@@ -8,8 +8,8 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
+import uz.mahalla.feature.hospital.domain.DoctorSlot
 import java.time.LocalDate
-import java.time.LocalTime
 
 /**
  * Состояние экрана записи к врачу (issue #99): врач → день → время → жалоба →
@@ -19,11 +19,10 @@ import java.time.LocalTime
  * выбор врача меняет и цену приёма, и то, к кому человек идёт, — за этим ему
  * пришлось бы ходить назад постоянно (то же решение, что в брони, issue #97).
  *
- * @param times время, которое предлагается выбрать. Это **не** свободные слоты:
- * ручки занятости у больниц нет вовсе, сетку строит
- * [uz.mahalla.feature.hospital.domain.DoctorSchedule], и экран называет её
- * «удобное время». Отдельного состояния загрузки у неё нет — считать нечего.
- * @param draft черновик целиком: выбор врача, дня, времени и жалоба. Правила
+ * @param slots состояние **отдельно** от [doctors] (issue #181): слоты — это
+ * ответ сервера на пару «врач + день», перезапрашиваются на каждую смену
+ * того или другого, и отказ по ним не должен прятать уже выбранного врача.
+ * @param draft черновик целиком: выбор врача, дня, слота и жалоба. Правила
  * («что ещё не заполнено», «жалоба слишком длинная») живут в домене — форму
  * нельзя проверить ни скриншотом, ни запросом.
  * @param bookFailure отказ подтверждения вместе с ответом сервера (issue #34).
@@ -33,7 +32,7 @@ data class DoctorBookingState(
     val placeName: String = "",
     val doctors: ScreenState<List<Doctor>> = ScreenState.Loading,
     val dates: List<LocalDate> = emptyList(),
-    val times: List<LocalTime> = emptyList(),
+    val slots: ScreenState<List<DoctorSlot>> = ScreenState.Loading,
     val draft: DoctorAppointmentDraft = DoctorAppointmentDraft(),
     val isBooking: Boolean = false,
     val bookFailure: ApiFailure? = null,
@@ -53,10 +52,11 @@ data class DoctorBookingState(
 sealed interface DoctorBookingEvent : UiEvent {
     data class DoctorSelected(val doctorId: String) : DoctorBookingEvent
     data class DateSelected(val date: LocalDate) : DoctorBookingEvent
-    data class TimeSelected(val time: LocalTime) : DoctorBookingEvent
+    data class SlotSelected(val slot: DoctorSlot) : DoctorBookingEvent
     data class ComplaintChanged(val text: String) : DoctorBookingEvent
 
     data object DoctorsRetry : DoctorBookingEvent
+    data object SlotsRetry : DoctorBookingEvent
     data object BookClicked : DoctorBookingEvent
 
     /** «Мои записи к врачу» — с экрана подтверждения. */

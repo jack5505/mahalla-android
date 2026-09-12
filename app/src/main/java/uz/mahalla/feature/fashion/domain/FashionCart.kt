@@ -1,5 +1,7 @@
 package uz.mahalla.feature.fashion.domain
 
+import uz.mahalla.core.format.TextJoiner
+
 /**
  * Строка корзины одежды (`CartItemResponse`).
  *
@@ -23,21 +25,21 @@ data class FashionCartItem(
 ) {
     val totalSum: Long get() = serverTotalSum ?: (unitPriceSum * quantity)
 
-    /** «Qora · L» — то, чем один вариант отличается от соседнего в списке. */
-    val variantLabel: String
-        get() = listOfNotNull(
-            colorName?.takeIf(String::isNotBlank),
-            size?.takeIf(String::isNotBlank),
-        ).joinToString(" · ")
+    /**
+     * «Qora · L» — то, чем один вариант отличается от соседнего в списке.
+     * Разделитель — шаблон `R.string.text_joined_with_dot`, который резолвит
+     * вызывающая сторона: домен — обычный Kotlin, без доступа к ресурсам.
+     */
+    fun variantLabel(joinTemplate: String): String = TextJoiner.join(joinTemplate, colorName, size)
 }
 
 /**
  * Корзина целиком.
  *
  * Она **общая на все магазины** — `GET fashion/cart` отдаёт один список, и у
- * каждой строки свой `storeId`. А `PlaceOrderRequest` принимает ровно один
- * `placeId`, то есть заказ оформляется по одному магазину за раз. Поэтому
- * корзина показывается разделами: [stores].
+ * каждой строки свой `storeId`. А `FashionPlaceOrderRequest` принимает ровно
+ * один `storeId`, то есть заказ оформляется по одному магазину за раз.
+ * Поэтому корзина показывается разделами: [stores].
  */
 data class FashionCart(
     val items: List<FashionCartItem> = emptyList(),

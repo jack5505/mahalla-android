@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -245,7 +246,14 @@ fun BookingCard(
         }
         Spacer(modifier = Modifier.size(Spacing.item))
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-            CardMeta(icon = Icons.Outlined.Schedule, text = "${booking.dateLabel} · ${booking.timeLabel}")
+            CardMeta(
+                icon = Icons.Outlined.Schedule,
+                text = TextJoiner.join(
+                    stringResource(R.string.text_joined_with_dot),
+                    booking.dateLabel,
+                    booking.timeLabel,
+                ),
+            )
             Text(
                 text = booking.guestsLabel,
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),

@@ -27,6 +27,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonState
@@ -283,7 +284,8 @@ private fun BarberService.note(): String? {
     val duration = durationMinutes?.let {
         pluralStringResource(R.plurals.booking_duration_minutes, it, it)
     }
-    return listOfNotNull(price, duration).takeIf { it.isNotEmpty() }?.joinToString(" · ")
+    return listOfNotNull(price, duration).takeIf { it.isNotEmpty() }
+        ?.let { TextJoiner.join(stringResource(R.string.text_joined_with_dot), it) }
 }
 
 @Composable

@@ -341,11 +341,28 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 |---|---|
 | GET | `places/nearby` |
 | GET | `places/map-bounds` |
+| GET | `places` (`ids=`) |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places?ids=`** — заведения пачкой по id (issue #182, снимает
+клиентскую часть #150), снят со схемы при сверке issue #92:
+
+```
+GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
+→ List<Summary> {id, name, category, address, lat, lng, isAvailable,
+    ratingAvg, ratingCount, distanceMeters, logoUrl, subscriptionPlan}
+```
+
+`ids` обязателен и повторяемый. Ответ разбирается тем же `PlaceSummaryDto`,
+что у `nearby`/`map-bounds` — полей достаточно, `subscriptionPlan` клиенту не
+нужен и не разбирается. Лимита на число `ids` в схеме нет; клиент режет
+список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
+ограничение длины запроса на сервере — это не подтверждено ручкой, только
+предосторожность.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
@@ -406,15 +423,19 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
 
-**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
-оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
-#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
-fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
-`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
-(состав берётся из серверной корзины `fashion/cart*`), зато есть
-`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
-`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
-пути больше нет.
+**`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
+2026-09-10, issue #167; исправлено в issue #221). У пути свой
+`FashionPlaceOrderRequest`, отдельный от `FoodPlaceOrderRequest` «Еды»:
+обязателен **`storeId`** (а не `placeId`), поля `items` нет вовсе (состав
+заказа сервер берёт из серверной корзины `fashion/cart*`, которую клиент уже
+ведёт). Клиент отправляет `FashionPlaceOrderRequestDto` (`storeId`,
+`fulfillment`, `paymentMethod`, `deliveryAddress`).
+
+Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
+**сознательно не шлёт**: на экране оформления нет ни выбора точки на карте,
+ни поля промокода. Не проверено живым запросом (`401` до валидации тела,
+`CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
+(`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
 ## FoodApi ✅
 
@@ -447,13 +468,16 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | POST | `freelancers/{id}/orders` |
 | GET | `freelancers/orders/my` |
 
-**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
-(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
-title, description, priceAmount, durationMinutes, isActive}`, а клиент
-разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
-мастера будет пустое название и цена 0. До развода коллизии обе ручки
-выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
-только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
+**`freelancers/{id}/services` отдавала не ту схему, которой её разбирали**
+(сверено 2026-09-10, issue #216, исправлено). Здесь `FreelancerServiceResponse
+{id, freelancerId, title, description, priceAmount, durationMinutes,
+isActive}`, а клиент до исправления разбирал ответ барберским `ServiceDto`
+(`name`, `price`) — у каждой услуги мастера было пустое название и цена 0. До
+развода коллизии обе ручки выглядели как одна схема `ServiceResponse`, отсюда
+и ошибка; не всплыла она на стенде только потому, что каталог мастеров там
+пуст. Теперь ответ разбирает свой `FreelancerServiceDto`
+(`FreelancerApi.kt`), домен — общий `BarberService` барбершопа: набор полей на
+экране один и тот же, а `freelancerId` уже известен вызывающей стороне.
 
 ## GamingApi ⚠️ частично
 
@@ -494,8 +518,11 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181); тем же путём «мои записи» дотягивают имя врача для больничной записи (issue #219) |
+| GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -515,15 +542,23 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `contract/booking.sh`.
 
 Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
-общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
-теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
-никогда — на экране «мои записи» она останется без имени врача (issue #219).
+общих полей хватает на всё, что показывает экран, а `complaint` теряется —
+экран его не показывает. `serviceName` у больничной записи не приходит
+никогда: `doctorId` в `AppointmentDto` теперь объявлен, и «мои записи»
+дотягивают имя врача отдельным запросом `GET hospitals/doctors/{id}` на
+карточки без него (issue #219, `DefaultHospitalRepository.withDoctorNames`).
+Список «мои активности» (`ActivityRepository`, issue #73) этот запрос не
+делает — карточка записи к врачу там остаётся без подписи (issue #266).
 
-Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
-`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
-свободные слоты; приложение вместо них рисует сетку времени из
-`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
-бизнес-панельные
+**Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
+`GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и
+показывает ответ сервера как есть — `DoctorSchedule`, клиентская сетка
+времени, ушла вместе со своим тестом. `startTime` записи уходит той же
+строкой, что пришла в слоте, без разбора в `LocalTime` и повторной сборки:
+лишний шаг «разобрали → собрали заново» уже один раз стоил вертикали брони
+пяти часов расхождения между UTC и Asia/Tashkent (issue #144).
+
+Ручки больниц, которые клиент по-прежнему **не** объявляет — бизнес-панельные
 `POST hospitals/places/{placeId}/doctors`,
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
