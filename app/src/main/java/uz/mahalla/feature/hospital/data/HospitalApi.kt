@@ -32,8 +32,8 @@ import uz.mahalla.feature.hospital.domain.DoctorSlot
  * `HospitalAppointmentResponse`, у брони — `AppointmentBookingResponse`
  * (issue #167). Общего в них хватает на всё, что показывает экран
  * (`id`, `apptDate`, `startTime`, `status`, `createdAt`), поэтому DTO пока
- * один; `doctorId` и `complaint` больничного ответа в него не входят и
- * теряются (issue #219).
+ * один; `doctorId` теперь в нём объявлен (issue #219), а `complaint` по
+ * прежнему не входит и теряется — экран его нигде не показывает.
  */
 interface HospitalApi {
 
@@ -41,7 +41,16 @@ interface HospitalApi {
     @GET("hospitals/places/{placeId}/doctors")
     suspend fun doctors(@Path("placeId") placeId: String): ApiResponse<List<DoctorDto>>
 
-    /** Карточка врача (issue #181). `data` — `DoctorResponse`, та же схема, что и в списке. */
+    /**
+     * Карточка врача (issue #181). `data` — `DoctorResponse`, та же схема, что
+     * и в списке.
+     *
+     * Помимо своего экрана нужна ещё для одного случая: у записи к врачу в
+     * «моих записях» (`HospitalAppointmentResponse`) есть `doctorId`, но нет
+     * ни имени врача, ни `placeId`, чтобы получить его через [doctors], —
+     * единственный способ подписать карточку врачом, а не заглушкой
+     * «Врач не указан» (issue #219).
+     */
     @GET("hospitals/doctors/{id}")
     suspend fun doctor(@Path("id") doctorId: String): ApiResponse<DoctorDto>
 

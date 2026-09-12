@@ -341,11 +341,28 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 |---|---|
 | GET | `places/nearby` |
 | GET | `places/map-bounds` |
+| GET | `places` (`ids=`) |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places?ids=`** — заведения пачкой по id (issue #182, снимает
+клиентскую часть #150), снят со схемы при сверке issue #92:
+
+```
+GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
+→ List<Summary> {id, name, category, address, lat, lng, isAvailable,
+    ratingAvg, ratingCount, distanceMeters, logoUrl, subscriptionPlan}
+```
+
+`ids` обязателен и повторяемый. Ответ разбирается тем же `PlaceSummaryDto`,
+что у `nearby`/`map-bounds` — полей достаточно, `subscriptionPlan` клиенту не
+нужен и не разбирается. Лимита на число `ids` в схеме нет; клиент режет
+список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
+ограничение длины запроса на сервере — это не подтверждено ручкой, только
+предосторожность.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
@@ -501,7 +518,7 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
-| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181) |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181); тем же путём «мои записи» дотягивают имя врача для больничной записи (issue #219) |
 | GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
@@ -525,9 +542,13 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `contract/booking.sh`.
 
 Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
-общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
-теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
-никогда — на экране «мои записи» она останется без имени врача (issue #219).
+общих полей хватает на всё, что показывает экран, а `complaint` теряется —
+экран его не показывает. `serviceName` у больничной записи не приходит
+никогда: `doctorId` в `AppointmentDto` теперь объявлен, и «мои записи»
+дотягивают имя врача отдельным запросом `GET hospitals/doctors/{id}` на
+карточки без него (issue #219, `DefaultHospitalRepository.withDoctorNames`).
+Список «мои активности» (`ActivityRepository`, issue #73) этот запрос не
+делает — карточка записи к врачу там остаётся без подписи (issue #266).
 
 **Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
 `GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и

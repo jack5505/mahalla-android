@@ -218,6 +218,14 @@ sealed interface ActivityTarget {
  * в маппере, issue #149); `null` — источник её не сообщает.
  * @param note короткое уточнение под заголовком: номер заказа, место в зале,
  * название услуги. Всё, что бэкенд даёт человекочитаемым.
+ * @param placeId заведение источника. Ни один из пяти ответов названия не
+ * отдаёт (issue #150), только его — билет кино не отдаёт и его: у
+ * `CinemaTicket` в ответе только `sessionId`. `null` — резолвить нечего.
+ * @param placeName название заведения, дорезолвленное отдельным запросом
+ * (issue #182, `GET places?ids=`) — бэкенд его напрямую не отдаёт нигде.
+ * `null` — либо [placeId] нет, либо резолв не удался; строка в обоих случаях
+ * остаётся с видом активности вместо названия, как до этой задачи.
+ * @param placeLogoUrl логотип заведения, тем же запросом.
  */
 data class Activity(
     val id: String,
@@ -228,6 +236,9 @@ data class Activity(
     val amount: Long? = null,
     val note: String? = null,
     val target: ActivityTarget = ActivityTarget.None,
+    val placeId: String? = null,
+    val placeName: String? = null,
+    val placeLogoUrl: String? = null,
 ) {
 
     /** Ключ строки в `LazyColumn`: id уникален только внутри своей ручки. */

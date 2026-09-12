@@ -63,6 +63,7 @@ private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
     placeId = placeId?.takeIf { it.isNotBlank() },
     serviceId = serviceId?.takeIf { it.isNotBlank() },
     serviceName = serviceName?.takeIf { it.isNotBlank() },
+    doctorId = doctorId?.takeIf { it.isNotBlank() },
     priceSum = price.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     date = parseServerLocalDate(apptDate),
     startTime = parseServerLocalTime(startTime),
