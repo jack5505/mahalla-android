@@ -175,7 +175,8 @@ class BusinessRepositoryTest {
         val dashboard = (repository(api = api).dashboard("p-1") as ApiResult.Success).data
 
         assertEquals(listOf("totalOrders", "revenue"), dashboard.metrics.map { it.key })
-        assertEquals(listOf(12L, 500_000L), dashboard.metrics.map { it.value })
+        // "revenue" — деньги (тийины бэкенда, issue #149): 500_000 → 5_000 сум.
+        assertEquals(listOf(12L, 5_000L), dashboard.metrics.map { it.value })
     }
 
     @Test
@@ -210,7 +211,8 @@ class BusinessRepositoryTest {
         val order = page.items.single()
         assertEquals(OrderStatus.ReadyForPickup, order.status)
         assertEquals(DeliveryMethod.Delivery, order.method)
-        assertEquals(64_000L, order.lines.single().totalPriceSum)
+        // unitPrice=32_000 тийин × 2 = 64_000 тийин → 640 сум (issue #149).
+        assertEquals(640L, order.lines.single().totalPriceSum)
         assertEquals(false, page.hasMore)
     }
 
@@ -325,7 +327,8 @@ class BusinessRepositoryTest {
         val sent = api.createdItem!!
         assertEquals("s-1", sent.menuId)
         assertEquals("Osh", sent.name)
-        assertEquals(32_000L, sent.price)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 32000 → 3_200_000.
+        assertEquals(3_200_000L, sent.price)
         assertNull(sent.description)
         assertNull(sent.prepMinutes)
         assertNull(sent.isHalal)

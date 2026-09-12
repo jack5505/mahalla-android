@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -25,6 +27,7 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
@@ -51,6 +54,8 @@ class RootViewModelTest {
     val temporaryFolder = TemporaryFolder()
 
     private val mainDispatcher = UnconfinedTestDispatcher()
+
+    private val sessionExpiry = SessionExpiry()
 
     @Before
     fun setUp() {
@@ -155,9 +160,45 @@ class RootViewModelTest {
         val settings = SettingsDataStore(newDataStore())
         settings.setOnboardingCompleted(true)
 
-        val viewModel = viewModel(settings)
+        val viewModel = viewModel(
+            settings = settings,
+            authRepository = FakeAuthRepository(initialAuthorized = true),
+        )
 
         assertFalse(viewModel.awaitReady().startWithOnboarding)
+    }
+
+    @Test
+    fun `a completed onboarding without a session still starts with login`() = runTest {
+        // Сессия умерла между запусками (refresh не прошёл, устройство
+        // отозвали): в основном графе каждый запрос ответит 401, и человек
+        // увидит экран ошибок вместо приложения (issue #138).
+        val settings = SettingsDataStore(newDataStore())
+        settings.setOnboardingCompleted(true)
+
+        val ready = viewModel(
+            settings = settings,
+            authRepository = FakeAuthRepository(initialAuthorized = false),
+        ).awaitReady()
+
+        assertTrue(ready.startWithOnboarding)
+        assertFalse("токенов нет — PIN проверять нечем", ready.resumeOnboardingAtPin)
+    }
+
+    @Test
+    fun `the root forwards the session expiry event and not an empty flow`() = runTest {
+        // Корень — единственный, кто может увести на вход с любого экрана;
+        // уход проверяет `SessionExpiryEffectTest`, а здесь — что событие до
+        // него вообще доезжает, а не теряется в пустом flow.
+        val viewModel = viewModel(SettingsDataStore(newDataStore()))
+        viewModel.awaitReady()
+
+        val expired = async { viewModel.sessionExpired.first() }
+        // Подписка `async` начинается на первом же шаге планировщика.
+        runCurrent()
+        sessionExpiry.notifyExpired()
+
+        assertEquals(Unit, expired.await())
     }
 
     @Test
@@ -240,6 +281,7 @@ class RootViewModelTest {
         BackendUrlStore(settings, BUILD_URL, overrideEnabled),
         BackendCertificatePin(settings, overrideEnabled),
         AppUpdateGate(versionRepository),
+        sessionExpiry,
     )
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =

@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessMenuItem
 import uz.mahalla.feature.business.domain.BusinessMenuSection
@@ -48,10 +49,10 @@ internal fun BusinessOrderDto.toDomain(): BusinessOrder? {
         payment = PaymentMethod.fromApi(paymentMethod),
         // Отрицательных сумм у заказа не бывает: `-500` в чеке кухня прочитала
         // бы как скидку, а это была бы ошибка сервера, а не скидка.
-        itemsSum = itemsAmount.orZero(),
-        deliverySum = deliveryAmount.orZero(),
-        discountSum = discountAmount.orZero(),
-        totalSum = totalAmount.orZero(),
+        itemsSum = itemsAmount.toSomOrZero(),
+        deliverySum = deliveryAmount.toSomOrZero(),
+        discountSum = discountAmount.toSomOrZero(),
+        totalSum = totalAmount.toSomOrZero(),
         address = deliveryAddress?.trim()?.takeIf(String::isNotEmpty),
         lines = items.mapNotNull(BusinessOrderItemDto::toDomain),
         createdAt = parseServerInstant(createdAt),
@@ -70,10 +71,13 @@ private fun BusinessOrderItemDto.toDomain(): BusinessOrderLine? {
         itemId = itemId.orEmpty(),
         name = title,
         quantity = count,
-        unitPriceSum = unitPrice.orZero(),
-        // Сервер, промолчавший об итоге строки, считается умножением: показать
-        // «0 so'm» за две порции хуже, чем посчитать самим.
-        totalPriceSum = totalPrice?.coerceAtLeast(0) ?: (unitPrice.orZero() * count),
+        unitPriceSum = unitPrice.toSomOrZero(),
+        // Сервер, промолчавший об итоге строки, считается умножением в
+        // тийинах и переводится в сумы один раз, как и весь остальной проект
+        // (issue #149): показать «0 so'm» за две порции хуже, чем посчитать
+        // самим.
+        totalPriceSum = totalPrice?.tiyinToSom()?.coerceAtLeast(0)
+            ?: (unitPrice.orZero() * count).tiyinToSom().coerceAtLeast(0),
     )
 }
 
@@ -115,7 +119,7 @@ internal fun MenuItemDto.toDomain(): BusinessMenuItem? {
         id = itemId,
         name = name?.trim().orEmpty(),
         description = description?.trim()?.takeIf(String::isNotEmpty),
-        priceSum = price.orZero(),
+        priceSum = price.toSomOrZero(),
         prepMinutes = prepMinutes?.takeIf { it > 0 },
         // Молчание сервера — «в продаже»: увести всё меню в стоп-лист из-за
         // пропавшего поля хуже, чем показать лишнюю позицию (issue #9).
@@ -125,3 +129,6 @@ internal fun MenuItemDto.toDomain(): BusinessMenuItem? {
 }
 
 private fun Long?.orZero(): Long = this?.coerceAtLeast(0) ?: 0
+
+/** Тийины бэкенда → целые сумы, как и везде в проекте (issue #149). */
+private fun Long?.toSomOrZero(): Long = (this ?: 0).tiyinToSom().coerceAtLeast(0)

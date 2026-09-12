@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
@@ -47,7 +48,6 @@ import uz.mahalla.feature.onboarding.ui.PhoneInputScreen
 import uz.mahalla.feature.onboarding.ui.PinScreen
 import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
-import uz.mahalla.feature.orders.ui.OrdersScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
@@ -58,6 +58,7 @@ import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
+import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
@@ -241,7 +242,20 @@ fun MahallaNavHost(
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
                 )
             }
-            composable<OrdersRoute> { OrdersScreen() }
+            composable<OrdersRoute> {
+                // «Мои активности» (issue #73): один список из всех вертикалей.
+                ActivityScreen(
+                    // Из списка — на статус заказа, тот же экран, что после
+                    // оформления. Возврат «назад» ведёт обратно в список.
+                    onFoodOrderClick = { orderId ->
+                        navController.navigate(OrderStatusRoute(orderId))
+                    },
+                    // Пустое состояние ведёт на главную — это переключение
+                    // таба, а не переход вглубь: `navigateToTab` не растит
+                    // стек и сохраняет состояние табов.
+                    onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
+                )
+            }
             composable<WalletRoute> { WalletScreen() }
             composable<ProfileRoute> {
                 ProfileScreen(
@@ -254,6 +268,11 @@ fun MahallaNavHost(
                     onLoggedOut = {
                         navController.navigate(WelcomeRoute) {
                             popUpTo(MainGraph) { inclusive = true }
+                            // Запрос с прошлым токеном мог доехать до 401
+                            // ровно в этот момент, и на вход уже увёл корень
+                            // (issue #138) — второй welcome в стеке означал бы
+                            // «назад» на экран входа с экрана входа.
+                            launchSingleTop = true
                         }
                     },
                     // «Кто вы» и анкеты (issue #84): в онбординге шаг можно
@@ -385,7 +404,19 @@ fun MahallaNavHost(
                 onOpenBusiness = { placeId, placeName ->
                     navController.navigate(BusinessRoute(placeId, placeName))
                 },
+                // «Сотрудники» (issue #189) — доступно только владельцу,
+                // экран сам не покажет действие сотруднику или заявке на
+                // модерации.
+                onManageStaff = { placeId -> navController.navigate(PlaceStaffRoute(placeId)) },
                 onBack = { navController.navigateUp() },
+                // Витрина аптеки в режиме владельца (issue #252): та же
+                // витрина, что открыта покупателю с карточки места, только
+                // с уже подтверждённым `isOwner` — товар аптеки своего
+                // `ownerId` не отдаёт, а «Мои заведения» уже сверились по
+                // `places/my`.
+                onManageProducts = { placeId, placeName ->
+                    navController.navigate(PharmacyRoute(placeId, placeName, isOwner = true))
+                },
             )
         }
 
@@ -417,6 +448,12 @@ fun MahallaNavHost(
 
         composable<BusinessMenuRoute> {
             BusinessMenuScreen(onBack = { navController.navigateUp() })
+        }
+
+        // «Сотрудники» заведения (issue #189) — открывается со своей карточки
+        // в «Моих заведениях», возврат ведёт туда же.
+        composable<PlaceStaffRoute> {
+            PlaceStaffScreen(onBack = { navController.navigateUp() })
         }
 
         // Подписка (issue #103) — вне обоих графов, как «мои заведения»:
@@ -607,12 +644,19 @@ fun MahallaNavHost(
             MyAppointmentsScreen(
                 // Новое время выбирают на экране записи: календарь и слоты уже
                 // там. Услуга едет маршрутом — менять её при переносе нельзя.
-                onReschedule = { appointmentId, placeId, serviceId ->
+                // Вместе с ней едут подпись записи и её прежние день и время
+                // (issue #155): на том экране их больше взять негде, а перенос
+                // без них подтверждают вслепую. День и время — строкой ISO,
+                // формат выберет сам экран.
+                onReschedule = { target ->
                     navController.navigate(
                         BookingRoute(
-                            placeId = placeId,
-                            serviceId = serviceId,
-                            rescheduleId = appointmentId,
+                            placeId = target.placeId,
+                            serviceId = target.serviceId,
+                            rescheduleId = target.appointmentId,
+                            rescheduleLabel = target.serviceName,
+                            rescheduleDate = target.date?.toString().orEmpty(),
+                            rescheduleTime = target.startTime?.toString().orEmpty(),
                         ),
                     ) {
                         // Двойное нажатие иначе кладёт в стек два экрана

@@ -1,6 +1,9 @@
 package uz.mahalla.feature.freelancer.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
@@ -14,6 +17,9 @@ import uz.mahalla.feature.freelancer.domain.FreelancerPage
  *
  * Всё остальное мастера не прячет: без имени он получит подпись от экрана, без
  * специальности, ставки и рейтинга покажется без них.
+ *
+ * `hourlyRate` и `priceAmount` заказа приходят в **тийинах**; в домен они
+ * уходят сумами через `Money.tiyinToSom` (issue #149).
  */
 internal fun FreelancerDto.toDomain(): Freelancer? {
     val freelancerId = id?.takeIf { it.isNotBlank() } ?: return null
@@ -25,13 +31,39 @@ internal fun FreelancerDto.toDomain(): Freelancer? {
         city = city?.trim()?.takeIf { it.isNotEmpty() },
         phone = phone?.trim()?.takeIf { it.isNotEmpty() },
         // Отрицательная ставка — не скидка, а мусор.
-        hourlyRateSum = hourlyRate?.coerceAtLeast(0) ?: 0,
+        hourlyRateSum = hourlyRate.tiyinToSom()?.coerceAtLeast(0) ?: 0,
         experienceYears = experienceYears?.takeIf { it > 0 },
         // Молчание сервера — «мастер берёт заказы»: спрятать кнопку из-за
         // отсутствующего поля хуже, чем показать её и получить честный отказ.
         isAvailable = isAvailable ?: available ?: true,
         ratingAvg = ratingAvg?.coerceAtLeast(0.0) ?: 0.0,
         ratingCount = ratingCount?.coerceAtLeast(0) ?: 0,
+    )
+}
+
+/**
+ * Разбор мягкий, как в каталоге: услуга без `id` отбрасывается — заказать её
+ * нечем (`serviceId` идёт в тело заказа), а в списке она стала бы дубликатом
+ * ключа. Домен переиспользует [BarberService] барбершопа: набор полей на
+ * экране один и тот же, а `freelancerId` уже известен вызывающей стороне
+ * (`route.freelancerId`) и на экран не идёт.
+ *
+ * Выключенные (`isActive: false`) сюда доезжают — отсеивает их
+ * [FreelancerRepository.services], чтобы правило было видно в одном месте
+ * (то же решение, что у брони, issue #97).
+ */
+internal fun FreelancerServiceDto.toDomain(): BarberService? {
+    val serviceId = id?.takeIf { it.isNotBlank() } ?: return null
+    return BarberService(
+        id = serviceId,
+        title = title?.takeIf { it.isNotBlank() }.orEmpty(),
+        description = description?.trim()?.takeIf { it.isNotEmpty() },
+        // Отрицательная цена — не скидка, а мусор.
+        priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
+        durationMinutes = durationMinutes?.takeIf { it > 0 },
+        // Молчание сервера — «услуга оказывается»: спрятать её из-за
+        // отсутствующего флага хуже, чем показать лишнюю.
+        isActive = isActive ?: active ?: true,
     )
 }
 
@@ -68,7 +100,7 @@ private fun FreelancerOrderDto.order(orderId: String) = FreelancerOrder(
     freelancerId = freelancerId?.takeIf { it.isNotBlank() },
     serviceId = serviceId?.takeIf { it.isNotBlank() },
     serviceTitle = serviceTitle?.trim()?.takeIf { it.isNotEmpty() },
-    priceSum = priceAmount?.coerceAtLeast(0) ?: 0,
+    priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     status = FreelancerOrderStatus.fromApi(status),
     scheduledAt = parseServerInstant(scheduledAt),
     address = address?.trim()?.takeIf { it.isNotEmpty() },
@@ -82,12 +114,10 @@ internal fun FreelancerOrderPageDto.toDomain(): FreelancerOrderPage = Freelancer
 )
 
 /**
- * Одно правило на обе страницы: `last`, иначе `page`/`totalPages`, иначе
- * останавливаемся. Полное молчание сервера о страницах — повод не показать
- * хвост списка, а не зациклить догрузку одной и той же страницы.
+ * Одно правило на обе страницы — общий [hasMorePages] (issue #142).
+ *
+ * Номер страницы берётся из ответа: запрошенного здесь нет — мапперы
+ * вызываются с одной только DTO.
  */
-private fun hasMore(page: Int?, totalPages: Int?, last: Boolean?): Boolean = when {
-    last != null -> !last
-    totalPages != null -> (page ?: 0) + 1 < totalPages
-    else -> false
-}
+private fun hasMore(page: Int?, totalPages: Int?, last: Boolean?): Boolean =
+    hasMorePages(page = page, totalPages = totalPages, last = last)

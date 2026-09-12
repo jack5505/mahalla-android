@@ -1,8 +1,13 @@
 package uz.mahalla.feature.fashion.data
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,7 +47,7 @@ class FashionOrderRepositoryTest {
     }
 
     @Test
-    fun `order carries variant ids as item ids`() = runTest {
+    fun `order carries the store id and no items`() = runTest {
         server.enqueue(envelope("""{"id":"o-1"}"""))
 
         val orderId = (
@@ -58,16 +63,16 @@ class FashionOrderRepositoryTest {
 
         val request = server.takeRequest()
         assertEquals("/fashion/orders", request.path)
-        val body = request.body.readUtf8()
-        assertTrue(body.contains(""""placeId":"$STORE""""))
-        // В корзине бэкенда строка ключуется вариантом — заказывают
-        // конкретный размер конкретного цвета, а не товар.
-        assertTrue(body.contains(""""itemId":"v-1""""))
-        assertTrue(body.contains(""""quantity":2"""))
-        assertTrue(body.contains(""""itemId":"v-2""""))
-        assertTrue(body.contains(""""fulfillment":"DELIVERY""""))
-        assertTrue(body.contains(""""paymentMethod":"WALLET""""))
-        assertTrue(body.contains(""""deliveryAddress":"Amir Temur 1""""))
+        val body = request.bodyJson()
+        // Состав заказа сервер берёт из своей корзины (`fashion/cart*`), а
+        // координаты и промокод — не отправляются: на экране их некому
+        // заполнить (issue #221). Проверка набора ключей целиком — иначе
+        // опечатка в имени поля прошла бы мимо `assertFalse`-подстрок.
+        assertEquals(setOf("storeId", "fulfillment", "paymentMethod", "deliveryAddress"), body.keys)
+        assertEquals(STORE, body["storeId"]?.jsonPrimitive?.content)
+        assertEquals("DELIVERY", body["fulfillment"]?.jsonPrimitive?.content)
+        assertEquals("WALLET", body["paymentMethod"]?.jsonPrimitive?.content)
+        assertEquals("Amir Temur 1", body["deliveryAddress"]?.jsonPrimitive?.content)
         assertEquals("o-1", orderId)
     }
 
@@ -116,10 +121,10 @@ class FashionOrderRepositoryTest {
                 """{"content":[
                      {"id":"o-1","orderNumber":"CL-42","placeId":"$STORE","vertical":"CLOTHING",
                       "status":"ACCEPTED","fulfillment":"DELIVERY","paymentMethod":"WALLET",
-                      "itemsAmount":480000,"deliveryAmount":20000,"totalAmount":500000,
+                      "itemsAmount":48000000,"deliveryAmount":2000000,"totalAmount":50000000,
                       "createdAt":"2026-09-05T10:00:00",
                       "items":[{"itemType":"VARIANT","itemId":"v-1","itemName":"Oq ko'ylak",
-                                "quantity":2,"unitPrice":240000,"totalPrice":480000}]},
+                                "quantity":2,"unitPrice":24000000,"totalPrice":48000000}]},
                      {"orderNumber":"CL-43"}],
                    "page":0,"totalPages":2,"last":false}""",
             ),
@@ -137,6 +142,7 @@ class FashionOrderRepositoryTest {
         assertEquals("o-1", order.id)
         assertEquals("CL-42", order.number)
         assertEquals(OrderStatus.Confirmed, order.status)
+        // Суммы приезжают в тийинах (issue #149): 50 000 000 → 500 000 сум.
         assertEquals(500_000L, order.totals.totalSum)
         assertEquals("Oq ko'ylak", order.lines.single().name)
         // Jackson отдаёт `LocalDateTime` без зоны — иначе дата пуста у всех.
@@ -248,6 +254,9 @@ class FashionOrderRepositoryTest {
         .setResponseCode(200)
         .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
         .setBody("""{"success":true}""")
+
+    private fun RecordedRequest.bodyJson(): JsonObject =
+        Json.parseToJsonElement(body.readUtf8()).jsonObject
 
     private companion object {
         const val STORE = "11111111-1111-1111-1111-111111111111"

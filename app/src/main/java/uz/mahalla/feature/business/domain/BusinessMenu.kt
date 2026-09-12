@@ -84,9 +84,10 @@ data class NewMenuItemForm(
         const val MAX_DESCRIPTION_LENGTH = 1000
 
         /**
-         * `@Min(1000)` у `CreateItemRequest.price`. То есть цены дешевле
-         * тысячи сумов бэкенд не примет — и сказать об этом до отправки
-         * честнее, чем показать его 400.
+         * Ограничение приложения, не бэкенда: `@Min(1000)` у
+         * `CreateItemRequest.price` — это тийины (issue #149), то есть 10
+         * сумов, а тысяча сумов за позицию меню — разумный минимум сам по
+         * себе.
          */
         const val MIN_PRICE_SUM = 1_000L
 

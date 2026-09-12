@@ -7,6 +7,8 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentSections
 import uz.mahalla.feature.booking.domain.AppointmentVertical
+import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Состояние экрана «Мои записи» (issue #97; врачи — issue #99).
@@ -52,6 +54,28 @@ data class MyAppointmentsState(
      */
     val canReschedule: Boolean get() = vertical == AppointmentVertical.Barber
 }
+
+/**
+ * Что переносят: всё, чего экран переноса о записи сам не узнает (issue #155).
+ *
+ * Одним объектом, а не шестью аргументами подряд: половина из них — строки, и
+ * перепутанные местами `placeId` и `serviceId` компилятор бы не заметил.
+ *
+ * @param placeId и [serviceId] — без них `POST appointments` не примут; пустыми
+ * они сюда не попадают (`Appointment.canReschedule`).
+ * @param serviceName подпись записи в списке. Пусто — сервер не назвал услугу;
+ * тогда её имя ищется в каталоге заведения, если он ответит.
+ * @param date и [startTime] — прежние день и время. Оба необязательны по
+ * контракту (`AppointmentResponse`), и показывается то, что есть.
+ */
+data class RescheduleTarget(
+    val appointmentId: String,
+    val placeId: String,
+    val serviceId: String,
+    val serviceName: String = "",
+    val date: LocalDate? = null,
+    val startTime: LocalTime? = null,
+)
 
 sealed interface MyAppointmentsEvent : UiEvent {
     /**

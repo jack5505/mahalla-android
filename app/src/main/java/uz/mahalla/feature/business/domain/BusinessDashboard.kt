@@ -1,5 +1,6 @@
 package uz.mahalla.feature.business.domain
 
+import uz.mahalla.core.format.tiyinToSom
 import java.util.Locale
 
 /**
@@ -107,7 +108,11 @@ data class BusinessDashboard(
             metrics = raw.mapNotNull { (key, value) ->
                 val name = key.trim()
                 if (name.isEmpty() || value == null) return@mapNotNull null
-                BusinessMetric(key = name, value = value)
+                val kind = BusinessMetricKind.of(name)
+                // Деньги сервер отдаёт в тийинах, как и весь остальной проект
+                // (issue #149) — счётчики (заказы, просмотры) делить не на что.
+                val amount = if (kind == BusinessMetricKind.Money) value.tiyinToSom() else value
+                BusinessMetric(key = name, value = amount, kind = kind)
             },
         )
     }

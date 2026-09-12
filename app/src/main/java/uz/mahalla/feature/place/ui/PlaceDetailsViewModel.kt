@@ -5,12 +5,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -32,6 +35,7 @@ class PlaceDetailsViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val promotions: PromotionsRepository,
     private val profileStore: UserProfileStore,
+    private val analytics: AnalyticsTracker,
     private val clock: Clock,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<PlaceDetailsState, PlaceDetailsEvent, PlaceDetailsEffect>(PlaceDetailsState()) {
@@ -41,6 +45,11 @@ class PlaceDetailsViewModel @Inject constructor(
     init {
         load()
         loadPromotions()
+        // `VIEW` — единственное событие, которое не ждёт ответа сервера:
+        // карточку открыли, даже если её содержимое не приехало. Отправляется
+        // один раз на создание ViewModel, а не на каждый `Retry`, иначе один
+        // просмотр в панели превратится в несколько.
+        analytics.track(AnalyticsEvents.placeViewed(placeId))
         viewModelScope.launch {
             // Свой отзыв узнаётся по id аккаунта, и профиль лежит локально —
             // отдельного `GET /users/me` у бэкенда нет (issue #61).
@@ -88,6 +97,16 @@ class PlaceDetailsViewModel @Inject constructor(
             }
 
             PlaceDetailsEvent.ReviewDeleteConfirmed -> deleteReview()
+
+            is PlaceDetailsEvent.GalleryPhotoDeleteRequested -> updateState {
+                copy(galleryDeletePending = event.photo, galleryDeleteFailure = null)
+            }
+
+            PlaceDetailsEvent.GalleryPhotoDeleteDismissed -> updateState {
+                copy(galleryDeletePending = null)
+            }
+
+            PlaceDetailsEvent.GalleryPhotoDeleteConfirmed -> deleteGalleryPhoto()
         }
     }
 
@@ -144,6 +163,7 @@ class PlaceDetailsViewModel @Inject constructor(
 
                 is ApiResult.Success -> {
                     updateState { copy(reviewForm = null) }
+                    analytics.track(AnalyticsEvents.reviewSubmitted(placeId))
                     // Рейтинг места пересчитывает сервер: считать его на клиенте
                     // значит разойтись с выдачей на главной.
                     load(silent = true)
@@ -174,6 +194,40 @@ class PlaceDetailsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Удаление своего фото (issue #185) — **оптимистичное**: файл необратим, и
+     * ждать ответа сервера, прежде чем убрать его из ленты, только удлиняет
+     * то же самое ожидание для человека. Отказ возвращает фото на место и
+     * показывает причину текстом сервера — молчаливого 403 быть не должно.
+     */
+    private fun deleteGalleryPhoto() {
+        val photo = currentState.galleryDeletePending ?: return
+
+        updateState {
+            copy(galleryDeletePending = null, galleryDeleteFailure = null)
+                .withPhotos(data?.photos.orEmpty() - photo)
+        }
+        viewModelScope.launch {
+            when (val result = repository.deleteMediaFile(photo.id)) {
+                is ApiResult.Success -> Unit
+                is ApiResult.Failure -> updateState {
+                    // Возвращаем именно удалённое фото в **текущий** список, а
+                    // не переигрываем весь снимок «до удаления» целиком: пока
+                    // запрос летел, карточка могла обновиться отдельным силент-
+                    // перезапросом (issue #76), и грубый откат стёр бы его.
+                    val photos = data?.photos.orEmpty()
+                    val restored = if (photo in photos) photos else photos + photo
+                    withPhotos(restored).copy(galleryDeleteFailure = result.failure)
+                }
+            }
+        }
+    }
+
+    private fun PlaceDetailsState.withPhotos(photos: List<MediaFile>): PlaceDetailsState {
+        val content = details as? ScreenState.Content<PlaceDetails> ?: return this
+        return copy(details = content.copy(data = content.data.copy(photos = photos)))
+    }
+
     private fun updateForm(transform: ReviewFormState.() -> ReviewFormState) {
         updateState { copy(reviewForm = reviewForm?.transform()) }
     }
@@ -198,11 +252,20 @@ class PlaceDetailsViewModel @Inject constructor(
     private fun onAction(action: PlaceAction) {
         val details = currentState.data ?: return
         when (action) {
+            // Событие уходит вместе с эффектом, а не вместо него: если
+            // телефона или координат нет, действия не было — нажали по
+            // кнопке, которой на экране быть не должно (`PlaceActions`).
             PlaceAction.Call -> details.contacts.phone
-                ?.let { emitEffect(PlaceDetailsEffect.Dial(it)) }
+                ?.let {
+                    analytics.track(AnalyticsEvents.placeCalled(placeId))
+                    emitEffect(PlaceDetailsEffect.Dial(it))
+                }
 
             PlaceAction.Route -> details.place.point
-                ?.let { emitEffect(PlaceDetailsEffect.OpenRoute(it, details.place.name)) }
+                ?.let {
+                    analytics.track(AnalyticsEvents.routeRequested(placeId))
+                    emitEffect(PlaceDetailsEffect.OpenRoute(it, details.place.name))
+                }
 
             PlaceAction.Queue,
             PlaceAction.Booking,

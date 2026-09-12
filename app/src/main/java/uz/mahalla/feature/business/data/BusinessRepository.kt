@@ -1,5 +1,6 @@
 package uz.mahalla.feature.business.data
 
+import uz.mahalla.core.format.Money
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -283,8 +284,11 @@ class DefaultBusinessRepository @Inject constructor(
                 body = CreateMenuItemRequest(
                     menuId = trimmed.sectionId,
                     name = trimmed.name,
-                    // Валидатор уже подтвердил, что цена — число в границах.
-                    price = trimmed.priceOrNull() ?: NewMenuItemForm.MIN_PRICE_SUM,
+                    // Валидатор уже подтвердил, что цена — число в границах;
+                    // форма принимает сумы, бэкенд — тийины (issue #149).
+                    price = Money.somToTiyin(
+                        trimmed.priceOrNull() ?: NewMenuItemForm.MIN_PRICE_SUM,
+                    ),
                     description = trimmed.description.takeIf(String::isNotEmpty),
                     prepMinutes = trimmed.prepMinutesOrNull(),
                     isHalal = trimmed.isHalal.takeIf { it },

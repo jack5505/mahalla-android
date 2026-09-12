@@ -188,14 +188,24 @@ class FakeOrderRepository : OrderRepository {
     var createdWith: Pair<Cart, CheckoutForm>? = null
         private set
 
+    /** Ключи идемпотентности всех попыток — по ним видно, повтор это или новый заказ. */
+    val createKeys = mutableListOf<String>()
+
+    val createCount: Int get() = createKeys.size
+
     var repeatedOrderId: String? = null
         private set
 
     var loadCount: Int = 0
         private set
 
-    override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<String> {
+    override suspend fun create(
+        cart: Cart,
+        form: CheckoutForm,
+        idempotencyKey: String,
+    ): ApiResult<String> {
         createdWith = cart to form
+        createKeys += idempotencyKey
         return created
     }
 

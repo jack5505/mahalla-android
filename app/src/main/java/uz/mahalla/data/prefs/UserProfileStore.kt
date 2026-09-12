@@ -14,26 +14,39 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Кто вошёл: имя, номер и аватар аккаунта.
+ * Кто вошёл: имя, номер, аватар и то, что о человеке знает сервер.
  *
- * Данные приезжают **только** в ответе на вход (`verify-otp`, `setup-pin`,
- * `pin-login`, `telegram/check`): `GET /users/me` у бэкенда нет, спросить
- * профиль отдельно нечем. Поэтому его сохраняет репозиторий авторизации, а
- * профиль читает из хранилища.
+ * Данные приезжают в ответе на вход (`verify-otp`, `setup-pin`, `pin-login`,
+ * `telegram/check`) — его сохраняет репозиторий авторизации, а профиль читает
+ * из хранилища. `GET /users/me` у бэкенда есть, но приложение его ещё не
+ * зовёт (issue #170), так что вход — пока единственный источник.
  *
  * @param fullName пустое имя — нормальный случай: у нового пользователя
  * бэкенд его не знает (по этому же признаку считается `isNewUser`).
+ * @param serverRole роль в правах бэкенда (`USER`, `FOOD_OWNER`, `ADMIN`, …)
+ * строкой как приехала; разбирает её `ServerRole`. Менять её приложение не
+ * может — это делает админ через `PUT admin/users/{id}/role` (issue #237).
+ * Локальная роль из анкеты лежит отдельно, в `AppSettings.roleId`, и значит
+ * другое.
+ * @param verificationStatus статус проверки (`UNVERIFIED`, `SMS_VERIFIED`,
+ * `FULL_VERIFIED`) строкой; разбирает её `VerificationStatus`.
+ * @param accountStatus статус аккаунта (`ACTIVE`, `TEMP_BLOCKED`, …) строкой;
+ * разбирает её `AccountStatus`.
  */
 data class UserProfile(
     val id: String? = null,
     val phone: String? = null,
     val fullName: String? = null,
     val avatarUrl: String? = null,
+    val serverRole: String? = null,
+    val verificationStatus: String? = null,
+    val accountStatus: String? = null,
 ) {
 
     /** Пусто — входа ещё не было либо ответ пришёл без блока `user`. */
     val isEmpty: Boolean
-        get() = id == null && phone == null && fullName == null && avatarUrl == null
+        get() = id == null && phone == null && fullName == null && avatarUrl == null &&
+            serverRole == null && verificationStatus == null && accountStatus == null
 
     /**
      * Инициалы для аватара-заглушки: «Jahongir Sabirov» → «JS». Картинок в
@@ -80,6 +93,9 @@ class DataStoreUserProfileStore @Inject constructor(
                 phone = preferences[PreferenceKeys.ProfilePhone],
                 fullName = preferences[PreferenceKeys.ProfileFullName],
                 avatarUrl = preferences[PreferenceKeys.ProfileAvatarUrl],
+                serverRole = preferences[PreferenceKeys.ProfileServerRole],
+                verificationStatus = preferences[PreferenceKeys.ProfileVerificationStatus],
+                accountStatus = preferences[PreferenceKeys.ProfileAccountStatus],
             )
         }
         .distinctUntilChanged()
@@ -100,6 +116,9 @@ class DataStoreUserProfileStore @Inject constructor(
             preferences.put(PreferenceKeys.ProfilePhone, profile.phone)
             preferences.put(PreferenceKeys.ProfileFullName, profile.fullName)
             preferences.put(PreferenceKeys.ProfileAvatarUrl, profile.avatarUrl)
+            preferences.put(PreferenceKeys.ProfileServerRole, profile.serverRole)
+            preferences.put(PreferenceKeys.ProfileVerificationStatus, profile.verificationStatus)
+            preferences.put(PreferenceKeys.ProfileAccountStatus, profile.accountStatus)
         }
     }
 
@@ -109,6 +128,9 @@ class DataStoreUserProfileStore @Inject constructor(
             preferences.remove(PreferenceKeys.ProfilePhone)
             preferences.remove(PreferenceKeys.ProfileFullName)
             preferences.remove(PreferenceKeys.ProfileAvatarUrl)
+            preferences.remove(PreferenceKeys.ProfileServerRole)
+            preferences.remove(PreferenceKeys.ProfileVerificationStatus)
+            preferences.remove(PreferenceKeys.ProfileAccountStatus)
         }
     }
 

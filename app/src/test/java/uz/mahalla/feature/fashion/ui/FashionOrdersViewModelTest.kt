@@ -54,6 +54,10 @@ class FashionOrdersViewModelTest {
         // стоит.
         val viewModel = viewModel()
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(FashionOrdersEvent.ScreenResumed)
+        assertEquals(listOf(0), repository.requestedPages)
+
         viewModel.onEvent(FashionOrdersEvent.ScreenResumed)
 
         assertEquals(listOf(0, 0), repository.requestedPages)
