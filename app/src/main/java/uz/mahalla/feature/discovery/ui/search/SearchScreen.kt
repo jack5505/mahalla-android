@@ -38,7 +38,6 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
-import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.ui.toCardUi
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
