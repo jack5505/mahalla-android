@@ -850,6 +850,19 @@
     <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
     <string name="subscription_feature_api_access">API orqali kirish</string>
     <string name="subscription_analytics">Tahlil: %1$s</string>
+    <string name="subscription_status_expiring">Tugayapti</string>
+    <string name="subscription_next_charge">Keyingi to\'lov</string>
+    <string name="subscription_renew">Obunani uzaytirish</string>
+    <string name="subscription_renew_until">Uzaytirsangiz, taxminan %1$s gacha ishlaydi.</string>
+    <string name="subscription_notice_renewed">Obuna uzaytirildi.</string>
+    <string name="subscription_charges_title">To\'lovlar tarixi</string>
+    <string name="subscription_charges_empty">Obuna uchun hali pul yechilmagan.</string>
+    <string name="subscription_charges_more">Yana ko\'rsatish</string>
+    <string name="subscription_charge_no_date">Sanasi ko\'rsatilmagan</string>
+    <string name="subscription_charge_pending">Bajarilmoqda</string>
+    <string name="subscription_charge_failed">O\'tmadi</string>
+    <string name="subscription_charge_cancelled">Bekor qilingan</string>
+    <string name="subscription_charge_refunded">Qaytarilgan</string>
 
     <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
     <string name="cinema_title">Afisha</string>

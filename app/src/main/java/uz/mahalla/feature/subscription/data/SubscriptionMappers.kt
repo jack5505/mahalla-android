@@ -3,9 +3,12 @@ package uz.mahalla.feature.subscription.data
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.feature.subscription.domain.BillingPeriod
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionCharge
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
 
@@ -82,6 +85,47 @@ internal fun SubscriptionDto.toDomain(): Subscription {
         isActive = isActive ?: active ?: (SubscriptionStatus.fromServer(status) == SubscriptionStatus.Active),
         inGracePeriod = inGracePeriod ?: false,
     )
+}
+
+/**
+ * Списание за подписку. Платёж **не про подписку** отбрасывается здесь же: у
+ * ручки нет фильтра по назначению, и в истории подписки пополнению кошелька
+ * взяться неоткуда. Платёж без `id` отбрасывается по той же причине, что и
+ * операция кошелька: в `LazyColumn` он дубликат ключа, а отличить его от
+ * соседнего всё равно нечем.
+ *
+ * `amount` — тийины, как и все целые денежные поля бэкенда (issue #149).
+ */
+internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
+    val chargeId = id?.takeIf { it.isNotBlank() } ?: return null
+    if (!SubscriptionCharge.isSubscriptionPurpose(purpose)) return null
+    return SubscriptionCharge(
+        id = chargeId,
+        // Отрицательное списание — ошибка сервера: «−49 000» в истории платежей
+        // не значит ничего.
+        amountSum = (amount ?: 0).tiyinToSom().coerceAtLeast(0),
+        status = ChargeStatus.fromServer(status),
+        provider = ChargeProvider.fromServer(provider),
+        purpose = purpose?.takeIf { it.isNotBlank() },
+        errorMessage = errorMessage?.takeIf { it.isNotBlank() },
+        createdAt = parseServerInstant(createdAt),
+    )
+}
+
+/**
+ * Есть ли у сервера ещё страницы платежей. Считается как у кошелька: по
+ * `last`, а без него — по `page`/`totalPages`. Полного молчания о страницах
+ * достаточно, чтобы остановиться: лучше не показать хвост истории, чем
+ * зациклить догрузку одной и той же страницы.
+ *
+ * @param requestedPage номер запрошенной страницы: сервер, не вернувший
+ * `page`, отдаёт дефолтный `0`, и «следующей» навсегда осталась бы первая
+ * (issue #53).
+ */
+internal fun PaymentTransactionPageDto.hasMore(requestedPage: Int): Boolean = when {
+    last != null -> !last
+    totalPages != null -> requestedPage + 1 < totalPages
+    else -> false
 }
 
 private const val MAX_PERCENT = 100
