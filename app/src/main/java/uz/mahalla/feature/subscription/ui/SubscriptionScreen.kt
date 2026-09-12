@@ -54,10 +54,15 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.subscription.domain.BillingPeriod
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.PlanFeature
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionCharge
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
+import uz.mahalla.feature.subscription.domain.SubscriptionStage
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
+import uz.mahalla.feature.subscription.domain.stage
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -141,6 +146,8 @@ fun SubscriptionContentScreen(
                 state.actionFailure?.let { failure ->
                     item(key = "action-failure") { InlineFailure(failure = failure) }
                 }
+
+                chargeItems(state = state, onEvent = onEvent)
 
                 item(key = "plans-header") {
                     SectionHeader(title = stringResource(R.string.subscription_plans_title))
@@ -263,8 +270,11 @@ private fun CurrentCard(
                 )
             }
             MahallaBadge(
-                text = stringResource(subscription.status.labelRes()),
-                tone = subscription.status.tone(),
+                // Бейджем — состояние для человека, а не поле `status`: у
+                // «истекает» статуса у бэкенда нет вовсе, а это самое важное,
+                // что можно сказать о подписке (задача 9.3).
+                text = stringResource(subscription.stage.labelRes()),
+                tone = subscription.stage.tone(),
             )
         }
 
@@ -303,6 +313,16 @@ private fun CurrentCard(
             )
         }
 
+        // Дата следующего списания — не расчёт, а тот же `expiresAt`, взятый
+        // тогда, когда списание вообще будет: автопродление включено и подписка
+        // ещё действует (задача 9.2).
+        state.nextChargeAt?.let { nextChargeAt ->
+            InfoRow(
+                label = stringResource(R.string.subscription_next_charge),
+                value = DateTimeFormatters.date(nextChargeAt),
+            )
+        }
+
         // Остаток дней считает сервер: у него есть грейс-период, и свой расчёт
         // от даты разошёлся бы с ним в самый неудобный момент.
         subscription.daysRemaining?.let { days ->
@@ -325,6 +345,36 @@ private fun CurrentCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.warning,
             )
+        }
+
+        // Продление (задача 9.2) — там, где подписка сама не продлится: срок
+        // вышел, идёт грейс-период или подписка отменена. У действующей
+        // подписки кнопки нет: `subscribe` не обещает прибавить срок к
+        // оплаченному, и «продление», обнулившее оплаченные дни, — потерянные
+        // деньги.
+        if (state.renewablePlan != null) {
+            MahallaButton(
+                text = stringResource(R.string.subscription_renew),
+                onClick = { onEvent(SubscriptionEvent.RenewClicked) },
+                modifier = Modifier.padding(top = Spacing.gap),
+                state = ButtonState(
+                    enabled = !state.isBusy || state.isRenewing,
+                    loading = state.isRenewing,
+                ),
+            )
+            // Прогноз, а не обещание: срок назовёт сервер в ответе на
+            // продление, и подписан он поэтому как «примерно до».
+            state.renewsUntil?.let { renewsUntil ->
+                Text(
+                    text = stringResource(
+                        R.string.subscription_renew_until,
+                        DateTimeFormatters.date(renewsUntil),
+                    ),
+                    modifier = Modifier.padding(top = Spacing.item),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.fgMuted,
+                )
+            }
         }
 
         if (subscription.canToggleAutoRenew) {
@@ -352,6 +402,174 @@ private fun CurrentCard(
                 ),
             )
         }
+    }
+}
+
+/**
+ * История списаний (задача 9.3).
+ *
+ * Секция целиком спрятана, пока не о чем говорить: у человека без подписки и
+ * без платежей заголовок «история списаний» с пустотой под ним — шум на самом
+ * частом состоянии экрана. Скелетон показывается по той же причине только
+ * рядом с подпиской: пока неизвестно даже, есть ли она, место под историю
+ * занимать незачем.
+ *
+ * Состояния разложены руками, а не через `ScreenStateHost`: тот прокручивается
+ * сам (см. [planItems]).
+ */
+private fun LazyListScope.chargeItems(
+    state: SubscriptionState,
+    onEvent: (SubscriptionEvent) -> Unit,
+) {
+    val charges = state.charges
+    val hasSubscription = state.current is ScreenState.Content
+    if (!hasSubscription && charges !is ScreenState.Content) return
+
+    item(key = "charges-header") {
+        SectionHeader(title = stringResource(R.string.subscription_charges_title))
+    }
+
+    when (charges) {
+        is ScreenState.Loading -> item(key = "charges-loading") {
+            ListSkeleton(itemCount = CHARGE_SKELETONS)
+        }
+
+        // Пусто — не ошибка: за подписку могли ещё не списывать (пробный
+        // период, первый день).
+        is ScreenState.Empty -> item(key = "charges-empty") {
+            Text(
+                text = stringResource(R.string.subscription_charges_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+
+        is ScreenState.Error -> item(key = "charges-error") {
+            InlineFailure(
+                failure = charges.failure,
+                onRetry = { onEvent(SubscriptionEvent.ChargesRetry) },
+            )
+        }
+
+        is ScreenState.Content -> items(charges.data, key = SubscriptionCharge::id) { charge ->
+            ChargeCard(charge = charge)
+        }
+    }
+
+    // Кнопка догрузки нужна и у **пустой** истории: фильтр по назначению
+    // клиентский, и «списаний нет» может значить всего лишь «на просмотренных
+    // страницах платежей их не было» (см. `CHARGES_MAX_PAGES_PER_REQUEST`).
+    // Без неё продолжить было бы нечем, а «за подписку не списывали» осталось
+    // бы ложью про деньги.
+    val hasTail = charges is ScreenState.Content || charges is ScreenState.Empty
+    if (hasTail && (state.chargesHasMore || state.chargesLoadMoreFailure != null)) {
+        item(key = "charges-more") {
+            ChargesLoadMore(state = state, onEvent = onEvent)
+        }
+    }
+}
+
+/**
+ * Строка истории: когда, сколько и чем платили. Прошедшее списание бейджа не
+ * получает — его исход и так очевиден; незавершённое, неудавшееся и
+ * возвращённое, наоборот, то, ради чего в историю и заходят.
+ */
+@Composable
+private fun ChargeCard(charge: SubscriptionCharge, modifier: Modifier = Modifier) {
+    val colors = LocalMahallaColors.current
+    MahallaCard(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = charge.createdAt
+                        ?.let(DateTimeFormatters::dateTime)
+                        ?: stringResource(R.string.subscription_charge_no_date),
+                    style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                charge.provider.labelRes()?.let { providerRes ->
+                    Text(
+                        text = stringResource(providerRes),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.fgMuted,
+                    )
+                }
+            }
+            Text(
+                text = MoneyFormatter.withCurrency(
+                    charge.amountSum,
+                    stringResource(R.string.currency_uzs),
+                ),
+                style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+
+        charge.status.labelRes()?.let { statusRes ->
+            Row(modifier = Modifier.padding(top = Spacing.item)) {
+                MahallaBadge(
+                    text = stringResource(statusRes),
+                    tone = charge.status.tone(),
+                )
+            }
+        }
+
+        // Причина отказа — текстом сервера: своего объяснения у приложения нет,
+        // а «платёж не прошёл» без причины — это вопрос в поддержку (issue #34).
+        charge.errorMessage?.let { message ->
+            Text(
+                text = message,
+                modifier = Modifier.padding(top = Spacing.item),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/**
+ * Хвост истории — кнопкой, а не догрузкой по концу списка (как в кошельке,
+ * issue #62): под историей идут тарифы, и автотриггер срабатывал бы у каждого,
+ * кто просто доскроллил до них.
+ */
+@Composable
+private fun ChargesLoadMore(
+    state: SubscriptionState,
+    onEvent: (SubscriptionEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        state.chargesLoadMoreFailure?.let { failure ->
+            Text(
+                text = failure.userMessage(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+            failure.server?.let { MahallaErrorDetails(server = it) }
+        }
+        MahallaButton(
+            text = stringResource(
+                if (state.chargesLoadMoreFailure != null) {
+                    R.string.action_retry
+                } else {
+                    R.string.subscription_charges_more
+                },
+            ),
+            onClick = { onEvent(SubscriptionEvent.ChargesLoadMore) },
+            variant = MahallaButtonVariant.Secondary,
+            fillWidth = false,
+            state = ButtonState(
+                enabled = !state.isLoadingMoreCharges,
+                loading = state.isLoadingMoreCharges,
+            ),
+        )
     }
 }
 
@@ -418,9 +636,13 @@ private fun PlanCard(
     val colors = LocalMahallaColors.current
     val subscription = state.subscription
     val isCurrentPlan = subscription != null && plan.isSameCode(subscription.planCode)
-    // «Ваш тариф» — только когда совпадает и период: у той же подписки,
-    // оплаченной помесячно, переход на год остаётся осмысленным действием.
-    val isCurrentExactly = isCurrentPlan && subscription?.billingPeriod == state.period
+    // Кнопки нет только у того тарифа, который уже оформлен **и продолжится
+    // сам**: у той же подписки, оплаченной помесячно, переход на год остаётся
+    // осмысленным действием, а у истёкшей и отменённой осмысленно и то же
+    // самое ещё раз — иначе вернуть свой тариф было бы нечем (задача 9.2).
+    val isCurrentExactly = isCurrentPlan &&
+        subscription?.billingPeriod == state.period &&
+        state.renewablePlan == null
 
     MahallaCard(modifier = modifier) {
         Row(
@@ -434,7 +656,9 @@ private fun PlanCard(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
-            if (isCurrentPlan) {
+            // «Ваш тариф» — только у той подписки, которая действует: зелёный
+            // бейдж на тарифе истёкшей подписки говорил бы, что всё в порядке.
+            if (isCurrentPlan && state.renewablePlan == null) {
                 MahallaBadge(
                     text = stringResource(R.string.subscription_current_plan),
                     tone = MahallaTone.Success,
@@ -480,8 +704,15 @@ private fun PlanCard(
         // человек и так получает без подписки.
         if (plan.isPaid && !isCurrentExactly) {
             MahallaButton(
+                // «Сменить период оплаты» — только там, где период и правда
+                // меняется: у истёкшей и отменённой подписки это то же самое
+                // оформление заново, менять там нечего.
                 text = stringResource(
-                    if (isCurrentPlan) R.string.subscription_change_period else R.string.subscription_subscribe,
+                    if (isCurrentPlan && state.renewablePlan == null) {
+                        R.string.subscription_change_period
+                    } else {
+                        R.string.subscription_subscribe
+                    },
                 ),
                 onClick = { onEvent(SubscriptionEvent.SubscribeClicked(plan.code)) },
                 modifier = Modifier.padding(top = Spacing.gap),
@@ -652,19 +883,51 @@ private fun InlineFailure(
  * здесь — как у статусов заведения в «Моих заведениях» (issue #94).
  */
 @StringRes
-private fun SubscriptionStatus.labelRes(): Int = when (this) {
-    SubscriptionStatus.Active -> R.string.subscription_status_active
-    SubscriptionStatus.Expired -> R.string.subscription_status_expired
-    SubscriptionStatus.Cancelled -> R.string.subscription_status_cancelled
-    SubscriptionStatus.Unknown -> R.string.subscription_status_unknown
+private fun SubscriptionStage.labelRes(): Int = when (this) {
+    SubscriptionStage.Active -> R.string.subscription_status_active
+    SubscriptionStage.ExpiringSoon -> R.string.subscription_status_expiring
+    SubscriptionStage.Expired -> R.string.subscription_status_expired
+    SubscriptionStage.Cancelled -> R.string.subscription_status_cancelled
+    SubscriptionStage.Unknown -> R.string.subscription_status_unknown
 }
 
-/** Незнакомый статус — нейтральный тон: пугать плашкой из-за него незачем. */
-private fun SubscriptionStatus.tone(): MahallaTone = when (this) {
-    SubscriptionStatus.Active -> MahallaTone.Success
-    SubscriptionStatus.Expired -> MahallaTone.Warning
-    SubscriptionStatus.Cancelled -> MahallaTone.Error
-    SubscriptionStatus.Unknown -> MahallaTone.Neutral
+/** Незнакомое состояние — нейтральный тон: пугать плашкой из-за него незачем. */
+private fun SubscriptionStage.tone(): MahallaTone = when (this) {
+    SubscriptionStage.Active -> MahallaTone.Success
+    SubscriptionStage.ExpiringSoon, SubscriptionStage.Expired -> MahallaTone.Warning
+    SubscriptionStage.Cancelled -> MahallaTone.Error
+    SubscriptionStage.Unknown -> MahallaTone.Neutral
+}
+
+/** Исход платежа: прошедшее списание бейджа не получает — оно и так понятно. */
+@StringRes
+private fun ChargeStatus.labelRes(): Int? = when (this) {
+    ChargeStatus.Pending -> R.string.subscription_charge_pending
+    ChargeStatus.Failed -> R.string.subscription_charge_failed
+    ChargeStatus.Cancelled -> R.string.subscription_charge_cancelled
+    ChargeStatus.Refunded -> R.string.subscription_charge_refunded
+    ChargeStatus.Paid, ChargeStatus.Unknown -> null
+}
+
+private fun ChargeStatus.tone(): MahallaTone = when (this) {
+    ChargeStatus.Failed -> MahallaTone.Error
+    ChargeStatus.Refunded -> MahallaTone.Info
+    else -> MahallaTone.Warning
+}
+
+/**
+ * Названия платёжных систем. Строки переиспользуются от пополнения кошелька
+ * (issue #93) и checkout'а «Еды»: это те же самые бренды и то же самое «наличными»
+ * — свои копии разъехались бы при первой же правке. Незнакомый провайдер
+ * остаётся без подписи: показывать человеку `UZCARD_V2` незачем.
+ */
+@StringRes
+private fun ChargeProvider.labelRes(): Int? = when (this) {
+    ChargeProvider.Payme -> R.string.wallet_top_up_provider_payme
+    ChargeProvider.Click -> R.string.wallet_top_up_provider_click
+    ChargeProvider.Uzum -> R.string.wallet_top_up_provider_uzum
+    ChargeProvider.Cash -> R.string.checkout_payment_cash
+    ChargeProvider.Unknown -> null
 }
 
 @StringRes
@@ -688,6 +951,7 @@ private fun PlanFeature.labelRes(): Int = when (this) {
 private fun SubscriptionNotice.labelRes(): Int = when (this) {
     SubscriptionNotice.Subscribed -> R.string.subscription_notice_subscribed
     SubscriptionNotice.TrialStarted -> R.string.subscription_notice_trial
+    SubscriptionNotice.Renewed -> R.string.subscription_notice_renewed
     SubscriptionNotice.Cancelled -> R.string.subscription_notice_cancelled
 }
 
@@ -695,6 +959,7 @@ private fun SubscriptionNotice.labelRes(): Int = when (this) {
 private const val UZBEK_TAG = "uz"
 
 private const val PLAN_SKELETONS = 3
+private const val CHARGE_SKELETONS = 2
 private val FEATURE_ICON = 18.dp
 
 @ThemeLanguagePreviews
@@ -716,6 +981,26 @@ private fun SubscriptionScreenPreview() {
                         isActive = true,
                     ),
                 ),
+                charges = ScreenState.Content(
+                    listOf(
+                        SubscriptionCharge(
+                            id = "charge-1",
+                            amountSum = 49_000,
+                            status = ChargeStatus.Paid,
+                            provider = ChargeProvider.Payme,
+                            createdAt = Instant.parse("2026-09-04T09:00:00Z"),
+                        ),
+                        SubscriptionCharge(
+                            id = "charge-2",
+                            amountSum = 49_000,
+                            status = ChargeStatus.Failed,
+                            provider = ChargeProvider.Click,
+                            errorMessage = "Kartada mablag' yetarli emas",
+                            createdAt = Instant.parse("2026-08-04T09:00:00Z"),
+                        ),
+                    ),
+                ),
+                now = Instant.parse("2026-09-08T09:00:00Z"),
                 plans = ScreenState.Content(
                     listOf(
                         SubscriptionPlan(

@@ -53,7 +53,7 @@ class ActivityScreenTest {
 
     private val events = mutableListOf<ActivityEvent>()
 
-    private val loadMore: String get() = compose.activity.getString(R.string.activity_load_more)
+    private val loadMore: String get() = compose.activity.getString(R.string.action_load_more)
     private val retry: String get() = compose.activity.getString(R.string.action_retry)
 
     @Test

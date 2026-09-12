@@ -122,6 +122,7 @@ fun ProfileScreen(
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
@@ -164,6 +165,7 @@ fun ProfileScreen(
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
+        onOpenSavedPlaces = onOpenSavedPlaces,
         onChangeServer = onChangeServer,
         onPickAvatar = pickAvatar,
     )
@@ -185,6 +187,7 @@ fun ProfileContentScreen(
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
     onPickAvatar: () -> Unit = {},
 ) {
@@ -289,6 +292,16 @@ fun ProfileContentScreen(
                 subtitle = stringResource(R.string.subscription_profile_subtitle),
                 onClick = onOpenSubscription,
             )
+
+            // «Избранное» (issue #75): единственный вход в сохранённые места —
+            // на самой карточке кнопка только добавляет и убирает.
+            if (onOpenSavedPlaces != null) {
+                MahallaListItem(
+                    title = stringResource(R.string.profile_saved_places),
+                    subtitle = stringResource(R.string.profile_saved_places_subtitle),
+                    onClick = onOpenSavedPlaces,
+                )
+            }
 
             Text(
                 text = stringResource(R.string.profile_language),

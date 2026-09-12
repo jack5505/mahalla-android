@@ -1,6 +1,6 @@
 # Контракт бэкенда
 
-Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-06).
+Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-08).
 Базовый путь: `https://api.mahalla.uz/api/v1/` (release),
 `https://189-74-96-232.nip.io/api/v1/` (debug) — `BuildConfig.API_BASE_URL`.
 
@@ -677,6 +677,24 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
 
+## SocialApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы
+ответов сняты со схемы стенда (`/v3/api-docs`) и curl'ами, issue #75, но
+успешный путь не проверен: все семь ручек требуют Bearer, а входа в CI нет.
+Тело нового комментария springdoc описал как `Map<String,String>` — имя ключа
+(`text`) взято из `CommentResponse`, это предположение.
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/status` |
+| POST | `places/{placeId}/like` |
+| POST | `places/{placeId}/save` |
+| GET | `places/{placeId}/comments` |
+| POST | `places/{placeId}/comments` |
+| DELETE | `comments/{id}` |
+| GET | `saved-places` |
+
 ## PlaceStaffApi ✅
 
 `app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
@@ -705,17 +723,39 @@ DTO→домен, но в интерфейсе не показан: задача
 
 ## SubscriptionsApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/subscription/data/SubscriptionsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/subscription/data/SubscriptionsApi.kt` — пути и поля сверены со схемой стенда (`/v3/api-docs`, issue #103 от 2026-09-04, перепроверено 2026-09-08). **Успешные ответы под токеном не проверены**: все семь ручек требуют Bearer, а SMS-кода в CI нет — приходит `401` до валидации тела.
 
-| Метод | Путь |
-|---|---|
-| GET | `subscriptions/plans` |
-| GET | `subscriptions/current` |
-| POST | `subscriptions/subscribe` |
-| POST | `subscriptions/business/subscribe` |
-| POST | `subscriptions/trial` |
-| POST | `subscriptions/cancel` |
-| PUT | `subscriptions/auto-renew` |
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `subscriptions/plans` | query `audience` (`USER`\|`BUSINESS`, дефолт `USER`) → `[PlanResponse]` |
+| GET | `subscriptions/current` | → `UserSubscriptionResponse`; пустой `data`, `404` и код `*NOT_FOUND` = «подписки нет» |
+| POST | `subscriptions/subscribe` | тело `{planCode, billingPeriod}` (`MONTHLY`\|`YEARLY`) |
+| POST | `subscriptions/business/subscribe` | то же тело, своя ручка для `audience=BUSINESS` |
+| POST | `subscriptions/trial` | **query** `planCode`, тела нет |
+| POST | `subscriptions/cancel` | **query** `reason` (у сервера свой дефолт), тела нет |
+| PUT | `subscriptions/auto-renew` | тело `{autoRenew}` |
+
+## PaymentsApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/subscription/data/PaymentsApi.kt` — сверен со схемой стенда 2026-09-08, живым ответом нет (ручка под Bearer).
+
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `payments/transactions` | query `page`/`size` (дефолт `0`/`20`) → `PageResponsePaymentTransaction` |
+
+Что важно:
+
+- **Фильтра по назначению у ручки нет** — приезжают все платежи человека, и
+  списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
+- Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
+  `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
+  `purpose`, `purposeId`, `errorMessage`) — **без пары `amountSom`**, поэтому
+  единицу `amount` вывести нечем и она читается как тийины (у кошелька она
+  выводится из пары, issue #62). **Проверить первым же живым ответом.**
+- `GET payments/subscription` не используется: отдаёт строго меньше, чем
+  `subscriptions/current` (`plan` перечислением, без `daysRemaining`,
+  `isTrial` и грейс-периода). `POST payments/subscription/activate` принимает
+  `Map<String,String>` — поля неизвестны, использовать нечем.
 
 ## AppVersionApi ⚠️
 

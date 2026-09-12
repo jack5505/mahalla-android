@@ -55,6 +55,7 @@ import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
 import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
+import uz.mahalla.feature.social.ui.saved.SavedPlacesScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
@@ -299,6 +300,9 @@ fun MahallaNavHost(
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
                     onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    // «Избранное» (issue #75): на карточке места кнопка только
+                    // добавляет и убирает, посмотреть список можно отсюда.
+                    onOpenSavedPlaces = { navController.navigate(SavedPlacesRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -427,6 +431,14 @@ fun MahallaNavHost(
         // а возврат ведёт обратно на главную.
         composable<SearchRoute> {
             SearchScreen(
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // «Избранное» (issue #75): открывается из профиля, возврат — туда же.
+        composable<SavedPlacesRoute> {
+            SavedPlacesScreen(
                 onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
                 onBack = { navController.navigateUp() },
             )
