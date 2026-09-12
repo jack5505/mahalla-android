@@ -13,7 +13,6 @@ import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.food.data.CreatedOrderDto
 import uz.mahalla.feature.food.data.OrderViewDto
-import uz.mahalla.feature.food.data.PlaceOrderRequestDto
 
 /**
  * Вертикаль «Одежда» (issue #108) — самый большой контроллер бэкенда.
@@ -87,18 +86,14 @@ interface FashionApi {
     suspend fun removeCartItem(@Path("variantId") variantId: String): ApiResponse<JsonElement>
 
     /**
-     * Оформление. Тело — тот же `PlaceOrderRequest`, что у «Еды»: на момент
-     * написания это была одна схема на два пути. Из ответа разбирается только
-     * идентификатор: см. KDoc интерфейса.
-     *
-     * **Схемы разъехались, и это, похоже, сломано** (issue #221, найдено при
-     * сверке в issue #167): у пути теперь свой `FashionPlaceOrderRequest` —
-     * обязателен `storeId`, а не `placeId`, поля `items` нет вовсе (состав
-     * берётся из серверной корзины), зато есть `deliveryLat`/`deliveryLng` и
-     * `promoCode`. Правится в issue #221 вместе с тестом на тело.
+     * Оформление. Своя схема, не общая с «Едой» (issue #221, найдено при
+     * сверке в issue #167): у [FashionPlaceOrderRequestDto] обязателен
+     * `storeId`, а не `placeId`, и `items` в теле нет вовсе — состав заказа
+     * сервер берёт из своей корзины (`fashion/cart*`). Из ответа разбирается
+     * только идентификатор: см. KDoc интерфейса.
      */
     @POST("fashion/orders")
-    suspend fun createOrder(@Body body: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
+    suspend fun createOrder(@Body body: FashionPlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
 
     /**
      * Свои заказы. `fashion/orders/my` отдаёт то же самое, но в перекрытой
@@ -235,6 +230,26 @@ data class CartItemDto(
 data class AddToCartRequestDto(
     @SerialName("variantId") val variantId: String,
     @SerialName("quantity") val quantity: Int,
+)
+
+/**
+ * `FashionPlaceOrderRequest` — своя схема, не общая с «Едой» (issue #221):
+ * обязателен [storeId], а не `placeId`, и поля `items` нет вовсе — состав
+ * заказа сервер берёт из своей корзины (`fashion/cart*`), которую клиент уже
+ * ведёт.
+ *
+ * Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
+ * не шлёт: на экране оформления нет ни выбора точки на карте, ни поля
+ * промокода, а угаданные координаты хуже, чем их отсутствие.
+ */
+@Serializable
+data class FashionPlaceOrderRequestDto(
+    @SerialName("storeId") val storeId: String,
+    /** `DELIVERY` / `PICKUP` / `DINE_IN`. */
+    @SerialName("fulfillment") val fulfillment: String,
+    /** `WALLET` / `CASH`. */
+    @SerialName("paymentMethod") val paymentMethod: String,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
 )
 
 /**

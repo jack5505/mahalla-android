@@ -35,9 +35,9 @@ data class FashionCartItem(
  * Корзина целиком.
  *
  * Она **общая на все магазины** — `GET fashion/cart` отдаёт один список, и у
- * каждой строки свой `storeId`. А `PlaceOrderRequest` принимает ровно один
- * `placeId`, то есть заказ оформляется по одному магазину за раз. Поэтому
- * корзина показывается разделами: [stores].
+ * каждой строки свой `storeId`. А `FashionPlaceOrderRequest` принимает ровно
+ * один `storeId`, то есть заказ оформляется по одному магазину за раз.
+ * Поэтому корзина показывается разделами: [stores].
  */
 data class FashionCart(
     val items: List<FashionCartItem> = emptyList(),

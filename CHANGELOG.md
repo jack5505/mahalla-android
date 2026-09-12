@@ -1659,6 +1659,38 @@ SMS, оба PIN-шага, Telegram) сверяет `user.id`: тот же — а
 
 **Прогнано:** `testDebugUnitTest`, `assembleDebug`, `lintDebug` — зелёные.
 
+## Услуги мастеров разбирались схемой барбершопа (issue #216, 2026-09-11)
+
+Побочная находка ревью контракта по issue #154: у бэкенда `FreelancerApi.services`
+(`GET freelancers/{id}/services`) и `BookingApi.services`
+(`GET barber-services/places/{placeId}`) — разные схемы (`FreelancerServiceResponse`
+с `title`/`priceAmount` против `AppointmentServiceResponse` с `name`/`price`), а
+клиент разбирал обе одним барберским `ServiceDto`. У каждой услуги мастера было
+пустое название и цена 0. Не всплывало на стенде, потому что каталог мастеров
+там пуст (`GET freelancers` → `content: []`) — пустой список не отличить от
+списка пустых карточек.
+
+**Что сделано.** Заведён свой `FreelancerServiceDto` (`FreelancerApi.kt`) со
+своими именами полей и свой маппер в домен `BarberService` (переиспользуется —
+набор полей на экране совпадает, а `freelancerId` там не нужен: он уже известен
+вызывающей стороне из аргумента запроса). `docs/API-CONTRACT.md` и KDoc
+`ServiceDto`/`BarberService` обновлены — раздел `FreelancerApi` больше не
+описывает баг как живой.
+
+Живую контрактную фикстуру для `freelancers/{id}/services` снять не вышло:
+пока каталог мастеров на стенде пуст, услугу для сверки взять неоткуда —
+блокирует не код, а данные на стороне бэкенда. Регрессия закреплена тестом на
+`MockWebServer` (`FreelancerRepositoryTest`).
+
+Из смежных пунктов issue #154 — коллизии `BookRequest`/`GamingBookRequest` и
+`OrderResponse` у еды/одежды/мастеров — не тронуто: `BookRequest` и
+`GamingBookRequest` уже перепроверены по чтению схемы (см. `BookingApi ✅` и
+`GamingApi` в контракте), а сквозной проход по `OrderResponse` и остальным
+DTO, где имена всё ещё выведены, заведён отдельной issue #235 — дублировать
+его здесь не стали.
+
+**Прогнано:** `testDebugUnitTest`, `assembleDebug` — зелёные.
+
 ## Больницы: имя врача в «моих записях» вместо заглушки «Врач не указан» (issue #219, 2026-09-11)
 
 `HospitalAppointmentResponse` не называет врача — только `doctorId`. Клиент
