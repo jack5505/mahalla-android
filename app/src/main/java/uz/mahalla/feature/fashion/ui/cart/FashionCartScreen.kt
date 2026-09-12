@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
@@ -205,7 +206,8 @@ private fun CartLineCard(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        item.variantLabel.takeIf(String::isNotBlank)?.let { label ->
+        item.variantLabel(stringResource(R.string.text_joined_with_dot))
+            .takeIf(String::isNotBlank)?.let { label ->
             Text(
                 text = label,
                 modifier = Modifier.padding(top = Spacing.item / 2),

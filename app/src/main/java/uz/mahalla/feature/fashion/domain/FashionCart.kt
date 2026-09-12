@@ -1,5 +1,7 @@
 package uz.mahalla.feature.fashion.domain
 
+import uz.mahalla.core.format.TextJoiner
+
 /**
  * Строка корзины одежды (`CartItemResponse`).
  *
@@ -23,12 +25,12 @@ data class FashionCartItem(
 ) {
     val totalSum: Long get() = serverTotalSum ?: (unitPriceSum * quantity)
 
-    /** «Qora · L» — то, чем один вариант отличается от соседнего в списке. */
-    val variantLabel: String
-        get() = listOfNotNull(
-            colorName?.takeIf(String::isNotBlank),
-            size?.takeIf(String::isNotBlank),
-        ).joinToString(" · ")
+    /**
+     * «Qora · L» — то, чем один вариант отличается от соседнего в списке.
+     * Разделитель — шаблон `R.string.text_joined_with_dot`, который резолвит
+     * вызывающая сторона: домен — обычный Kotlin, без доступа к ресурсам.
+     */
+    fun variantLabel(joinTemplate: String): String = TextJoiner.join(joinTemplate, colorName, size)
 }
 
 /**
