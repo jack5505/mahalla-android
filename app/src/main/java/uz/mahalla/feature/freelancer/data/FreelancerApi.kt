@@ -8,7 +8,6 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
-import uz.mahalla.feature.booking.data.ServiceDto
 
 /**
  * Вертикаль «Мастера» (issue #107): каталог фрилансеров, их услуги и заказы.
@@ -64,15 +63,14 @@ interface FreelancerApi {
      * freelancerId, title, description, priceAmount, durationMinutes,
      * isActive}` (сверено по живому `/v3/api-docs` 2026-09-10).
      *
-     * **Разбирается не той схемой.** Здесь стоит барберский [ServiceDto]
-     * (`name`, `price`) — след коллизии springdoc: пока обе ручки выглядели
-     * одной `ServiceResponse`, разница была не видна. У каждой услуги мастера
-     * будет пустое название и цена 0 — живой баг, issue #216: нужен свой
-     * `FreelancerServiceDto` и маппер. Тип здесь намеренно не тронут — правка
-     * идёт вместе с тестами и фикстурой в #216, а не «заодно».
+     * До issue #216 сюда был подставлен барберский `ServiceDto` (`name`,
+     * `price`) — след коллизии springdoc, когда обе ручки выглядели одной
+     * `ServiceResponse`. У каждой услуги мастера было пустое название и цена
+     * 0; не всплывало на стенде только потому, что каталог мастеров пуст.
+     * Разбирается своим [FreelancerServiceDto].
      */
     @GET("freelancers/{id}/services")
-    suspend fun services(@Path("id") freelancerId: String): ApiResponse<List<ServiceDto>>
+    suspend fun services(@Path("id") freelancerId: String): ApiResponse<List<FreelancerServiceDto>>
 
     /** Заказать услугу. Требует Bearer. */
     @POST("freelancers/{id}/orders")
@@ -141,6 +139,32 @@ data class FreelancerDto(
     @SerialName("available") val available: Boolean? = null,
     @SerialName("ratingAvg") val ratingAvg: Double? = null,
     @SerialName("ratingCount") val ratingCount: Int? = null,
+)
+
+/**
+ * `FreelancerServiceResponse` (issue #216). До развода коллизии springdoc это
+ * имя занимал барберский `ServiceResponse`, поэтому клиент разбирал ответ
+ * этой ручки чужим `ServiceDto` (`name`, `price`) — у каждой услуги мастера
+ * было пустое название и цена 0. Схема прочитана по живому `/v3/api-docs`
+ * 2026-09-10, поля свои и с барбершопом не пересекаются: `title` вместо
+ * `name`, `priceAmount` вместо `price`, плюс `description`, которого у
+ * барбершопа нет вовсе.
+ *
+ * `isActive` принимается и под именем `active` — то же правило, что у
+ * `isActive`/`active` барбершопа (issue #81, #94): Jackson сериализует
+ * boolean-геттер то так, то так.
+ */
+@Serializable
+data class FreelancerServiceDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("freelancerId") val freelancerId: String? = null,
+    @SerialName("title") val title: String? = null,
+    @SerialName("description") val description: String? = null,
+    /** Тийины; в сумы переводит маппер — `Money.tiyinToSom` (issue #149). */
+    @SerialName("priceAmount") val priceAmount: Long? = null,
+    @SerialName("durationMinutes") val durationMinutes: Int? = null,
+    @SerialName("isActive") val isActive: Boolean? = null,
+    @SerialName("active") val active: Boolean? = null,
 )
 
 /** `PageResponseProfileResponse`. */
