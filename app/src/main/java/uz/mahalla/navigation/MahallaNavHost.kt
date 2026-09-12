@@ -238,7 +238,7 @@ fun MahallaNavHost(
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
                 )
             }
-            composable<OrdersRoute> {
+            composable<ActivitiesRoute> {
                 // «Мои активности» (issue #73): один список из всех вертикалей.
                 ActivityScreen(
                     // Из списка — на статус заказа, тот же экран, что после

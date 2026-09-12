@@ -16,7 +16,7 @@ enum class BottomNavItem(
     val icon: ImageVector,
 ) {
     Discovery(DiscoveryRoute, R.string.nav_discovery, Icons.Outlined.Search),
-    Orders(OrdersRoute, R.string.nav_orders, Icons.AutoMirrored.Outlined.ReceiptLong),
+    Activities(ActivitiesRoute, R.string.nav_orders, Icons.AutoMirrored.Outlined.ReceiptLong),
     Wallet(WalletRoute, R.string.nav_wallet, Icons.Outlined.AccountBalanceWallet),
     Profile(ProfileRoute, R.string.nav_profile, Icons.Outlined.Person),
 }

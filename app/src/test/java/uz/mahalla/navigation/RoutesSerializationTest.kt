@@ -199,7 +199,7 @@ class RoutesSerializationTest {
             serializer<BiometricRoute>().descriptor.serialName,
             serializer<GeoRoute>().descriptor.serialName,
             serializer<DiscoveryRoute>().descriptor.serialName,
-            serializer<OrdersRoute>().descriptor.serialName,
+            serializer<ActivitiesRoute>().descriptor.serialName,
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
