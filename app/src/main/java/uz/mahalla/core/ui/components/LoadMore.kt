@@ -49,7 +49,11 @@ fun LoadMoreAuto(
     modifier: Modifier = Modifier,
 ) {
     if (failure != null) {
-        LoadMoreFailure(failure = failure, onRetry = onLoadMore, modifier = modifier)
+        LoadMoreFailure(
+            failure = failure,
+            onRetry = onLoadMore,
+            modifier = modifier.padding(Spacing.gap),
+        )
         return
     }
 
@@ -63,7 +67,10 @@ fun LoadMoreAuto(
         // Место под крутилку держится всегда: иначе список дёргается на
         // высоту индикатора каждый раз, когда страница догрузилась.
         if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.size(MahallaComponentDefaults.loadMoreIndicatorSize))
+            CircularProgressIndicator(
+                modifier = Modifier.size(MahallaComponentDefaults.loadMoreIndicatorSize),
+                strokeWidth = MahallaComponentDefaults.progressStrokeWidth,
+            )
         } else {
             Spacer(modifier = Modifier.size(MahallaComponentDefaults.loadMoreIndicatorSize))
         }

@@ -93,13 +93,17 @@ class LoadMoreTest {
     @Test
     fun `auto - does not ask again while the item count stays the same`() {
         val itemCount = mutableStateOf(5)
-        setAutoContent(itemCount)
+        val isLoading = mutableStateOf(false)
+        setAutoContent(itemCount, isLoading = isLoading)
         assertEquals(1, loadMoreCalls)
 
-        // Пересборка без реального изменения ключа — ровно то, из-за чего
-        // ломался старый триггер на курсоре (issue #151): здесь ключ —
-        // количество строк, и оно не сдвинулось.
-        compose.runOnIdle { itemCount.value = itemCount.value }
+        // Меняем isLoading, а не itemCount: это гарантированно перерисует
+        // компонент (в отличие от присвоения state тем же значением, которое
+        // Compose даже не считает записью). Ключ эффекта — itemCount, он не
+        // сдвинулся, поэтому это регресс-тест именно на старый баг (issue
+        // #151): триггер на курсоре перезапускал сам себя при любой
+        // пересборке, а не только при реальном росте списка.
+        compose.runOnIdle { isLoading.value = true }
         compose.waitForIdle()
 
         assertEquals(1, loadMoreCalls)
@@ -142,12 +146,16 @@ class LoadMoreTest {
         compose.waitForIdle()
     }
 
-    private fun setAutoContent(itemCount: MutableState<Int>, failure: ApiFailure? = null) {
+    private fun setAutoContent(
+        itemCount: MutableState<Int>,
+        failure: ApiFailure? = null,
+        isLoading: MutableState<Boolean> = mutableStateOf(false),
+    ) {
         compose.setContent {
             MahallaTheme {
                 LoadMoreAuto(
                     itemCount = itemCount.value,
-                    isLoading = false,
+                    isLoading = isLoading.value,
                     failure = failure,
                     onLoadMore = { loadMoreCalls++ },
                 )
