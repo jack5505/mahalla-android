@@ -52,8 +52,21 @@ class TokenAuthenticator @Inject constructor(
     private val clock: Clock,
 ) : Authenticator {
 
+    /** Под тем же `synchronized(this)`, что и остальное состояние ниже. */
+    private var consecutiveAmbiguousRefreshes = 0
+
+    /**
+     * Пути, чей повтор со свежим токеном всё равно упёрся в 401 (issue #197).
+     * Не чистится по успешному refresh: следующий такой путь получит СВОЙ
+     * токен и своё «дал сдачи», а сравнивать их между собой не с чем — важно
+     * само число разных ручек, а не то, каким токеном каждая отказала.
+     */
+    private val pathsRejectingFreshToken = mutableSetOf<String>()
+
     override fun authenticate(route: Route?, response: Response): Request? {
-        if (attemptCount(response) >= MAX_ATTEMPTS) return null
+        if (attemptCount(response) >= MAX_ATTEMPTS) {
+            return synchronized(this) { giveUpOn(response) }
+        }
 
         val staleToken = response.request.header(HEADER_AUTHORIZATION)
             ?.removePrefix(BEARER_PREFIX)
@@ -96,6 +109,7 @@ class TokenAuthenticator @Inject constructor(
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
                     sessionExpiry.notifyExpired()
+                    consecutiveAmbiguousRefreshes = 0
                     return@synchronized null
                 }
                 // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать
@@ -109,8 +123,21 @@ class TokenAuthenticator @Inject constructor(
                     response.close()
                     throw cause
                 }
+                // Ни отказ сессии, ни сетевая беда — тело не разобралось
+                // (вокзальный Wi-Fi) или контракт сломан (`data.tokens`
+                // переехал). Отличить одно от другого нечем, но после
+                // нескольких подряд таких ответов «подождать» уже не
+                // объяснение: приложение иначе виснет в «везде 401» без
+                // самолечения (issue #198).
+                if (++consecutiveAmbiguousRefreshes >= AMBIGUOUS_REFRESH_LIMIT) {
+                    runBlocking { sessionStore.clear() }
+                    sessionExpiry.notifyExpired()
+                    consecutiveAmbiguousRefreshes = 0
+                }
                 return@synchronized null
             }
+
+            consecutiveAmbiguousRefreshes = 0
 
             runBlocking {
                 sessionStore.save(
@@ -173,6 +200,31 @@ class TokenAuthenticator @Inject constructor(
         .build()
 
     /**
+     * Повтор с токеном, который сама сессия только что подтвердила годным,
+     * всё равно упёрся в 401 — а больше попыток нет (issue #197).
+     *
+     * Это не обязательно смерть сессии: ручка, отвечающая 401 вместо 403
+     * (роль, подписка, бизнес-панель), выглядела бы отсюда точно так же, а
+     * разлогинивать за неё человека, у которого всё остальное работает,
+     * нельзя. Поэтому не рвём сессию на первой же такой ручке, а копим
+     * РАЗНЫЕ пути: если несколько разных ручек подряд не признают токен,
+     * который сессия сама только что сочла свежим, — дело не в одной ручке.
+     */
+    private fun giveUpOn(response: Response): Request? {
+        runBlocking { sessionStore.current() } ?: return null
+        val path = response.request.url.encodedPath
+        if (
+            pathsRejectingFreshToken.add(path) &&
+            pathsRejectingFreshToken.size >= REJECTING_PATHS_LIMIT
+        ) {
+            runBlocking { sessionStore.clear() }
+            sessionExpiry.notifyExpired()
+            pathsRejectingFreshToken.clear()
+        }
+        return null
+    }
+
+    /**
      * Сколько раз этот запрос уже упирался в 401. Считать всю цепочку
      * `priorResponse` нельзя: туда попадают и редиректы, так что после одного
      * 3xx лимит был бы исчерпан и refresh не случился бы вообще.
@@ -190,6 +242,12 @@ class TokenAuthenticator @Inject constructor(
     companion object {
         /** Один исходный запрос + один повтор после refresh. */
         const val MAX_ATTEMPTS = 2
+
+        /** Подряд (issue #198) — не «когда-нибудь по счётчику за всё время». */
+        private const val AMBIGUOUS_REFRESH_LIMIT = 3
+
+        /** Разных ручек (issue #197) — одной мало, это её личная проблема. */
+        private const val REJECTING_PATHS_LIMIT = 2
 
         private const val HTTP_UNAUTHORIZED = 401
 
