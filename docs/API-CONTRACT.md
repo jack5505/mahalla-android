@@ -179,6 +179,12 @@ TrackEventRequest: {
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
 
+`AuthDeviceInfo` (поле `device` у всех, кроме `setup-pin` и `logout`):
+`deviceId` и `platform` (`ANDROID|IOS|WEB`) обязательны, `deviceName` ≤ 200,
+`osVersion` ≤ 50, `appVersion` ≤ 20, **`fcmToken` ≤ 500**. Последнее — это
+единственный способ отдать бэкенду токен пушей: отдельной ручки регистрации
+устройства у него нет (эпик 11, см. раздел NotificationsApi).
+
 ## users/me ✅ — своего `*Api.kt` ещё нет
 
 Профиль на сервере. Снято чтением живого `/v3/api-docs` 2026-09-10 (issue #237); приложение эти ручки пока **не зовёт** — issue #170. Девять KDoc в коде утверждали, что их у бэкенда нет вовсе; там, где правки касались файла, KDoc исправлен, остальные — по мере работы.
@@ -592,16 +598,45 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
 любой другой) отвечает текстом, а не молчанием.
 
-## NotificationsApi ⚠️
+## NotificationsApi ✅ пути
 
-`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — пути и набор значений `type` сверены по схеме стенда (`GET /v3/api-docs`, 2026-09-09, эпик 11). Тела под токеном не сверены: `401` приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
 
-| Метод | Путь |
-|---|---|
-| GET | `notifications` |
-| GET | `notifications/unread-count` |
-| PUT | `notifications/read-all` |
-| PUT | `notifications/{id}/read` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `notifications` | `PageResponseNotificationResponse` |
+| GET | `notifications/unread-count` | число в `data` |
+| PUT | `notifications/read-all` | `ApiResponseVoid` |
+| PUT | `notifications/{id}/read` | `ApiResponseVoid` |
+
+`NotificationResponse.type` — ровно 13 значений: `WALKIN_REQUEST`,
+`WALKIN_ACCEPTED`, `WALKIN_DECLINED`, `WALKIN_COUNTER`, `WALKIN_COMPLETE`,
+`APPOINTMENT_BOOKED`, `APPOINTMENT_CONFIRMED`, `APPOINTMENT_REMINDER`,
+`ORDER_PLACED`, `ORDER_STATUS_UPDATED`, `REVIEW_ADDED`, `PROMOTION_CREATED`,
+`SUBSCRIPTION_EXPIRES`. `NotificationType.Unknown` при этом остаётся: список
+открытый, и незнакомый тип показывается, а не прячется.
+
+### Пуши (эпик 11) — чего в контракте НЕТ
+
+Сверено по полной схеме 2026-09-09, это не догадка:
+
+- **ручки регистрации устройства нет** — ни `devices`, ни `push/register`, ни
+  чего-либо подобного. Единственное место, куда клиент может положить токен, —
+  поле `fcmToken` внутри `AuthDeviceInfo`, то есть тела `auth/send-otp`,
+  `auth/verify-otp`, `auth/pin-login`, `auth/refresh`, `auth/telegram/*`.
+  Ограничение поля — 500 символов. Токен из-за этого уезжает не сразу, а с
+  ближайшим продлением сессии (см. `PushTokenRegistrar`, ADR 0009);
+- **серверных настроек уведомлений нет** — ни категорий, ни тихих часов.
+  Настройки локальные, в DataStore;
+- **схемы payload'а FCM нет.** Клиент читает `data` по именам полей
+  `NotificationResponse` — `id`, `type`, `entityId`, `title`, `body`
+  (`PushMessage.of`). Это имена самого бэкенда, но **не подтверждённые**:
+  сверить, когда бэкенд начнёт слать пуши.
+
+**Просьба к бэкенду:** слать **data-сообщения**. Сообщение с блоком
+`notification` в фоне показывает сама библиотека Firebase, минуя
+`MahallaMessagingService`, — тогда не работают ни каналы по категориям, ни
+тихие часы, ни переход по deep link'у на нужный экран.
 
 ## PharmacyApi ✅
 

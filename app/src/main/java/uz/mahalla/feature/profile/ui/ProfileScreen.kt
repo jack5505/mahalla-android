@@ -108,6 +108,9 @@ import java.time.Instant
  * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
  * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
  * пробный период и отмена нужны обоим.
+ * @param onOpenNotificationSettings открыть настройки уведомлений (эпик 11).
+ * Строка в профиле, а не только в центре уведомлений: выключить маркетинг
+ * человек идёт в настройки приложения, а не в список пришедших сообщений.
  */
 @Composable
 fun ProfileScreen(
@@ -121,6 +124,7 @@ fun ProfileScreen(
     onOpenMyFreelancerOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
@@ -164,6 +168,7 @@ fun ProfileScreen(
         onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
+        onOpenNotificationSettings = onOpenNotificationSettings,
         modifier = modifier,
         onOpenSavedPlaces = onOpenSavedPlaces,
         onChangeServer = onChangeServer,
@@ -186,6 +191,7 @@ fun ProfileContentScreen(
     onOpenMyFreelancerOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
@@ -291,6 +297,15 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.subscription_profile_entry),
                 subtitle = stringResource(R.string.subscription_profile_subtitle),
                 onClick = onOpenSubscription,
+            )
+
+            // Уведомления (эпик 11): категории и тихие часы. Тот же экран
+            // открывается из центра уведомлений — второго набора настроек не
+            // заводим, разошлись бы при первой правке.
+            MahallaListItem(
+                title = stringResource(R.string.notification_settings_title),
+                subtitle = stringResource(R.string.notification_settings_profile_subtitle),
+                onClick = onOpenNotificationSettings,
             )
 
             // «Избранное» (issue #75): единственный вход в сохранённые места —
@@ -799,6 +814,7 @@ private fun ProfilePreview() {
             onOpenMyTickets = {},
             onOpenMyFashionOrders = {},
             onOpenSubscription = {},
+            onOpenNotificationSettings = {},
         )
     }
 }

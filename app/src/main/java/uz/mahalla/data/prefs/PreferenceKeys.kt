@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 
 /**
  * Ключи DataStore в одном месте (эпик 1.4): их легко пересматривать при
@@ -100,4 +101,25 @@ internal object PreferenceKeys {
      * бы и номер в очереди, и возможность отменить запись.
      */
     val WalkInTickets = stringPreferencesKey("queue_walkin_tickets")
+
+    /**
+     * Токен FCM (эпик 11). Хранится, потому что отправить его отдельно **нечем**:
+     * ручки регистрации устройства у бэкенда нет (сверка по `/v3/api-docs`
+     * 2026-09-09), и токен уезжает полем `AuthDeviceInfo.fcmToken` вместе со
+     * следующим запросом авторизации. Между приходом токена и этим запросом
+     * его надо где-то держать.
+     */
+    val FcmToken = stringPreferencesKey("push_fcm_token")
+
+    /**
+     * Выключенные категории уведомлений (эпик 11) — идентификаторы каналов
+     * (`NotificationCategory.id`). Именно выключенные: новая категория тогда
+     * по умолчанию включена, а не потеряна при обновлении приложения.
+     */
+    val MutedNotificationCategories = stringSetPreferencesKey("push_muted_categories")
+
+    /** Тихие часы (эпик 11): включены и границы в минутах от полуночи. */
+    val QuietHoursEnabled = booleanPreferencesKey("push_quiet_hours_enabled")
+    val QuietHoursFrom = intPreferencesKey("push_quiet_hours_from")
+    val QuietHoursTo = intPreferencesKey("push_quiet_hours_to")
 }

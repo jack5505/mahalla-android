@@ -976,6 +976,36 @@
     <string name="gaming_status_cancelled">Отменена</string>
     <string name="gaming_status_unknown">Состояние неизвестно</string>
 
+    <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
+    <string name="notification_channel_orders">Заказы</string>
+    <string name="notification_channel_orders_description">Заказ принят, готовится, в пути.</string>
+    <string name="notification_channel_queue">Очередь</string>
+    <string name="notification_channel_queue_description">Состояние талона и приближение вашей очереди.</string>
+    <string name="notification_channel_bookings">Записи</string>
+    <string name="notification_channel_bookings_description">Записи к мастеру и врачу, напоминания.</string>
+    <string name="notification_channel_payments">Платежи</string>
+    <string name="notification_channel_payments_description">Подписка, списания и кошелёк.</string>
+    <string name="notification_channel_marketing">Акции</string>
+    <string name="notification_channel_marketing_description">Скидки и предложения.</string>
+    <string name="notification_channel_other">Прочее</string>
+    <string name="notification_channel_other_description">Сообщения, не попавшие в остальные категории.</string>
+
+    <string name="notification_permission_title">Уведомления выключены</string>
+    <string name="notification_permission_description">Без разрешения сообщения о заказах, очереди и записях не придут — их видно только в этом списке.</string>
+    <string name="notification_permission_allow">Разрешить</string>
+    <string name="notification_permission_open_settings">Настройки системы</string>
+
+    <string name="notification_settings_title">Настройки уведомлений</string>
+    <string name="notification_settings_profile_subtitle">Категории и тихие часы</string>
+    <string name="notification_settings_categories">Категории</string>
+    <string name="notification_settings_quiet_hours">Тихие часы</string>
+    <string name="notification_settings_quiet_hours_enabled">Включить тихие часы</string>
+    <string name="notification_settings_quiet_hours_description">В это время уведомления приходят без звука.</string>
+    <string name="notification_settings_quiet_hours_from">Начало</string>
+    <string name="notification_settings_quiet_hours_to">Конец</string>
+    <string name="notification_settings_quiet_hours_selected">Выбрано</string>
+    <string name="notification_settings_push_unavailable">В этой сборке push не настроен: сообщения видны только в центре уведомлений.</string>
+
     <!-- Мои активности (issue #73) -->
     <string name="activity_title">Мои активности</string>
     <string name="activity_filter_active">Активные</string>

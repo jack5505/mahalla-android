@@ -984,6 +984,36 @@
     <string name="gaming_status_cancelled">Bekor qilindi</string>
     <string name="gaming_status_unknown">Holati aniq emas</string>
 
+    <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
+    <string name="notification_channel_orders">Buyurtmalar</string>
+    <string name="notification_channel_orders_description">Buyurtma qabul qilindi, tayyorlanmoqda, yetkazilmoqda.</string>
+    <string name="notification_channel_queue">Navbat</string>
+    <string name="notification_channel_queue_description">Talon holati va navbatingiz yaqinlashgani haqida.</string>
+    <string name="notification_channel_bookings">Yozuvlar</string>
+    <string name="notification_channel_bookings_description">Usta va shifokorga yozuvlar, eslatmalar.</string>
+    <string name="notification_channel_payments">To\'lovlar</string>
+    <string name="notification_channel_payments_description">Obuna, hisobdan yechish va hamyon haqida.</string>
+    <string name="notification_channel_marketing">Aksiyalar</string>
+    <string name="notification_channel_marketing_description">Chegirmalar va takliflar.</string>
+    <string name="notification_channel_other">Boshqalar</string>
+    <string name="notification_channel_other_description">Yuqoridagi turkumlarga kirmagan xabarlar.</string>
+
+    <string name="notification_permission_title">Bildirishnomalar o\'chirilgan</string>
+    <string name="notification_permission_description">Ruxsatsiz buyurtma, navbat va yozuv haqidagi xabarlar kelmaydi. Ularni faqat shu ro\'yxatda ko\'rasiz.</string>
+    <string name="notification_permission_allow">Ruxsat berish</string>
+    <string name="notification_permission_open_settings">Tizim sozlamalari</string>
+
+    <string name="notification_settings_title">Bildirishnoma sozlamalari</string>
+    <string name="notification_settings_profile_subtitle">Turkumlar va tinch soatlar</string>
+    <string name="notification_settings_categories">Turkumlar</string>
+    <string name="notification_settings_quiet_hours">Tinch soatlar</string>
+    <string name="notification_settings_quiet_hours_enabled">Tinch soatlarni yoqish</string>
+    <string name="notification_settings_quiet_hours_description">Bu vaqtda bildirishnomalar ovozsiz keladi.</string>
+    <string name="notification_settings_quiet_hours_from">Boshlanishi</string>
+    <string name="notification_settings_quiet_hours_to">Tugashi</string>
+    <string name="notification_settings_quiet_hours_selected">Tanlangan</string>
+    <string name="notification_settings_push_unavailable">Bu yig\'malada push xizmati sozlanmagan: xabarlar faqat bildirishnomalar markazida ko\'rinadi.</string>
+
     <!-- Мои активности (issue #73) -->
     <string name="activity_title">Mening amallarim</string>
     <string name="activity_filter_active">Faol</string>
