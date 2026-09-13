@@ -1,5 +1,6 @@
 package uz.mahalla.feature.freelancer.data
 
+import uz.mahalla.core.format.Money
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -263,7 +264,10 @@ class DefaultFreelancerRepository @Inject constructor(
                     phone = trimmed.phoneDigits
                         .takeIf(String::isNotEmpty)
                         ?.let(phoneValidator::toE164),
-                    hourlyRate = trimmed.hourlyRate,
+                    // Форма даёт сумы, бэкенд принимает тийины (issue #149,
+                    // #236): без Money.somToTiyin ставка мастера уходила бы в
+                    // сто раз меньше задуманной.
+                    hourlyRate = trimmed.hourlyRate?.let { Math.toIntExact(Money.somToTiyin(it.toLong())) },
                     experienceYears = trimmed.experienceYears,
                 ),
             ).ensureSuccess()
@@ -279,7 +283,9 @@ class DefaultFreelancerRepository @Inject constructor(
 
         val body = FreelancerServiceRequest(
             title = trimmed.title,
-            priceAmount = price,
+            // Форма даёт сумы, бэкенд принимает тийины (issue #149, #236):
+            // без Money.somToTiyin мастер выставил бы услугу в сто раз дешевле.
+            priceAmount = Money.somToTiyin(price),
             description = trimmed.description.takeIf(String::isNotEmpty),
             durationMinutes = trimmed.duration,
         )

@@ -592,9 +592,10 @@ class FreelancerRepositoryTest {
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/freelancers/me", request.path)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 80 000 → 8 000 000.
         assertEquals(
             """{"name":"Aziz Karimov","profession":"Santexnik","bio":"Quvurlar",""" +
-                """"city":"Toshkent","phone":"+998901234567","hourlyRate":80000,""" +
+                """"city":"Toshkent","phone":"+998901234567","hourlyRate":8000000,""" +
                 """"experienceYears":7}""",
             request.body.readUtf8(),
         )
@@ -646,8 +647,9 @@ class FreelancerRepositoryTest {
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/freelancers/me/services", request.path)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 150 000 → 15 000 000.
         assertEquals(
-            """{"title":"Kran almashtirish","priceAmount":150000,""" +
+            """{"title":"Kran almashtirish","priceAmount":15000000,""" +
                 """"description":"Materiallar mijoznikidan","durationMinutes":60}""",
             request.body.readUtf8(),
         )
@@ -666,7 +668,7 @@ class FreelancerRepositoryTest {
         val request = server.takeRequest()
         assertEquals("PUT", request.method)
         assertEquals("/freelancers/me/services/s-1", request.path)
-        assertEquals("""{"title":"Kran","priceAmount":170000}""", request.body.readUtf8())
+        assertEquals("""{"title":"Kran","priceAmount":17000000}""", request.body.readUtf8())
     }
 
     @Test
