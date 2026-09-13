@@ -2,6 +2,7 @@ package uz.mahalla.feature.promotions.data
 
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
@@ -54,18 +55,10 @@ class DefaultPromotionsRepository @Inject constructor(
  * не показать хвост, чем зациклить догрузку одной и той же страницы (то же
  * правило, что у уведомлений, issue #81).
  */
-internal fun PromotionPageDto.toDomain(): PromotionPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return PromotionPage(
-        items = content.mapNotNull(PromotionDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun PromotionPageDto.toDomain(): PromotionPage = PromotionPage(
+    items = content.mapNotNull(PromotionDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 /**
  * Разбор мягкий, как в каталоге (issue #53).

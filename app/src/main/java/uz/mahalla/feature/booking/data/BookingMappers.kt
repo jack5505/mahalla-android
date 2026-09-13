@@ -4,6 +4,7 @@ import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
@@ -73,16 +74,8 @@ private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
 )
 
 /** См. [AppointmentPage.hasMore] — правило подсчёта живёт там. */
-internal fun AppointmentPageDto.toDomain(): AppointmentPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return AppointmentPage(
-        items = content.mapNotNull(AppointmentDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun AppointmentPageDto.toDomain(): AppointmentPage = AppointmentPage(
+    items = content.mapNotNull(AppointmentDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
