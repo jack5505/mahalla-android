@@ -19,8 +19,9 @@ import uz.mahalla.feature.role.domain.UserRole
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
  * показываем строку «сетевые запросы». В release её нет.
- * @param profile кто вошёл. Приезжает с ответом на вход и лежит в DataStore;
- * `GET /users/me` у бэкенда есть, но приложение его ещё не зовёт (issue #170).
+ * @param profile кто вошёл. Источник — `GET /users/me`, перечитанный при
+ * открытии экрана (issue #170); пока ответа нет или он не пришёл, здесь
+ * лежит то, что сохранил вход — экран не бывает пустым.
  * @param sessions устройства, на которых открыт вход.
  * @param pendingSessionId строка списка, на которой сейчас идёт запрос:
  * отзыв и доверие блокируются точечно, а не всем экраном.
@@ -30,6 +31,7 @@ import uz.mahalla.feature.role.domain.UserRole
  * @param confirmRevoke устройство, которое собираются отозвать.
  * @param loggingOut выход уже идёт: повторные нажатия не плодят запросов.
  * @param avatarUpload загрузка фото профиля (issue #101).
+ * @param nameEdit редактирование имени через `PUT users/me` (issue #170).
  */
 data class ProfileState(
     val settings: AppSettings = AppSettings(),
@@ -42,6 +44,7 @@ data class ProfileState(
     val confirmRevoke: DeviceSession? = null,
     val loggingOut: Boolean = false,
     val avatarUpload: AvatarUpload = AvatarUpload(),
+    val nameEdit: NameEdit = NameEdit(),
 ) : UiState {
 
     /** Роль из анкеты — локальный выбор человека (issue #84). */
@@ -81,6 +84,30 @@ data class AvatarUpload(
     val failure: ApiFailure? = null,
 )
 
+/**
+ * Редактирование имени (issue #170): `PUT users/me` принимает `fullName`
+ * ≤ 200 символов (`docs/API-CONTRACT.md`).
+ *
+ * @param editing поле открыто на редактирование — иначе шапка просто
+ * показывает `profile.fullName`.
+ * @param draft то, что человек сейчас набирает; своё поле, а не
+ * `profile.fullName` напрямую — иначе ответ `GET`, перечитавшего профиль
+ * посреди набора текста, стёр бы недописанное имя.
+ * @param saving запрос уже идёт: повторное нажатие «сохранить» не плодит
+ * второй.
+ * @param failure отказ сохранения — текстом сервера (issue #34), а не молча.
+ */
+data class NameEdit(
+    val editing: Boolean = false,
+    val draft: String = "",
+    val saving: Boolean = false,
+    val failure: ApiFailure? = null,
+) {
+    companion object {
+        const val MAX_LENGTH = 200
+    }
+}
+
 sealed interface ProfileEvent : UiEvent {
     data class LanguageSelected(val language: AppLanguage) : ProfileEvent
     data class ThemeSelected(val mode: ThemeMode) : ProfileEvent
@@ -109,6 +136,16 @@ sealed interface ProfileEvent : UiEvent {
 
     /** Отмена загрузки: файл дописан не будет, сервер его не получит. */
     data object AvatarUploadCancelled : ProfileEvent
+
+    /** Нажали на имя в шапке (issue #170): открыть поле редактирования. */
+    data object NameEditRequested : ProfileEvent
+
+    data class NameDraftChanged(val value: String) : ProfileEvent
+
+    /** Закрыть поле без сохранения — не считается отказом, сервер не звался. */
+    data object NameEditCancelled : ProfileEvent
+
+    data object NameSaveRequested : ProfileEvent
 }
 
 sealed interface ProfileEffect : UiEffect {

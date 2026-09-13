@@ -66,8 +66,9 @@ class PlaceDetailsViewModel @Inject constructor(
         // просмотр в панели превратится в несколько.
         analytics.track(AnalyticsEvents.placeViewed(placeId))
         viewModelScope.launch {
-            // Свой отзыв узнаётся по id аккаунта, и профиль лежит локально —
-            // отдельного `GET /users/me` у бэкенда нет (issue #61).
+            // Свой отзыв узнаётся по id аккаунта: он уже лежит в
+            // UserProfileStore (issue #61), и звать `GET /users/me` (issue
+            // #170) ради того, что и так известно, здесь незачем.
             val userId = profileStore.current().id
             updateState { copy(userId = userId) }
         }

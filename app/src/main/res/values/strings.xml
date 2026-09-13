@@ -694,6 +694,11 @@
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
 
+    <!-- Профиль на сервере (issue #170) -->
+    <string name="profile_name_edit_action">Ismni tahrirlash</string>
+    <string name="profile_name_edit_label">Ism</string>
+    <string name="profile_name_edit_required">Ism kiritilishi shart</string>
+
     <!-- Загрузка изображений (issue #101) -->
     <string name="profile_avatar_title">Profil rasmi</string>
     <string name="profile_avatar_present">Rasm yuklangan</string>

@@ -34,6 +34,7 @@ import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeHttpInspector
 import uz.mahalla.testutil.FakeMediaRepository
+import uz.mahalla.testutil.FakeProfileRepository
 import uz.mahalla.testutil.FakeSessionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
 import uz.mahalla.testutil.MainDispatcherRule
@@ -87,6 +88,219 @@ class ProfileViewModelTest {
         val viewModel = viewModel(profileStore = FakeUserProfileStore(profile))
 
         assertEquals(profile, viewModel.state.value.profile)
+    }
+
+    // --- Профиль на сервере (issue #170) ---
+
+    @Test
+    fun `profile is read from the server when the screen opens`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+
+        viewModel(profileStore = store, profile = profile)
+
+        assertEquals(1, profile.refreshCount)
+    }
+
+    @Test
+    fun `failed profile read keeps what the login already knows`() = runTest {
+        val loginProfile = UserProfile(phone = "+998901234567", fullName = "Alisher Usmonov")
+        val store = FakeUserProfileStore(loginProfile)
+        val profile = FakeProfileRepository(store).apply {
+            refreshResult = ApiResult.Failure(ApiError.NoConnection)
+        }
+
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        // Отказ `GET users/me` не опустошает шапку — на ней остаётся то, что
+        // уже сохранил вход.
+        assertEquals(loginProfile, viewModel.state.value.profile)
+    }
+
+    @Test
+    fun `returning to the screen re-reads the profile`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        // Первый resume — это открытие экрана, `GET` уже запросил `init`.
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+        assertEquals(1, profile.refreshCount)
+
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+
+        // Профиль мог смениться на другом устройстве или в бизнес-панели,
+        // пока приложение было в фоне.
+        assertEquals(2, profile.refreshCount)
+    }
+
+    @Test
+    fun `resume does not re-read the profile while a name save is in flight`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val gate = CompletableDeferred<Unit>()
+        val profile = FakeProfileRepository(store, gate = gate)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+        assertEquals(1, profile.refreshCount)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        // `GET`, запущенный поверх ещё не пришедшего `PUT`, мог бы приехать
+        // раньше и потом быть переписанным им — но мог и позже, стерев
+        // только что сохранённое имя. Резюм в это время `GET` не зовёт вовсе.
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+        assertEquals(1, profile.refreshCount)
+
+        gate.complete(Unit)
+    }
+
+    // --- Редактирование имени (issue #170) ---
+
+    @Test
+    fun `editing the name starts from what is already known`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val viewModel = viewModel(profileStore = store)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+
+        val nameEdit = viewModel.state.value.nameEdit
+        assertTrue(nameEdit.editing)
+        assertEquals("Alisher Usmonov", nameEdit.draft)
+    }
+
+    @Test
+    fun `saved name goes to the server and closes the editor`() = runTest {
+        val store = FakeUserProfileStore(
+            UserProfile(id = "u-1", phone = "+998901234567", fullName = "Alisher Usmonov"),
+        )
+        val profile = FakeProfileRepository(store)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        assertEquals(listOf("Jahongir Sabirov" to null), profile.updates)
+        assertFalse(viewModel.state.value.nameEdit.editing)
+        assertEquals("Jahongir Sabirov", viewModel.state.value.profile.fullName)
+        // Номер запись имени не трогает: `PUT` шлёт только изменённое поле.
+        assertEquals("+998901234567", viewModel.state.value.profile.phone)
+    }
+
+    @Test
+    fun `refused name save shows the server reason and keeps the draft`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store).apply {
+            updateResult = ApiResult.Failure(ApiError.Business("VALIDATION_ERROR"))
+        }
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        val nameEdit = viewModel.state.value.nameEdit
+        assertTrue(nameEdit.editing)
+        assertFalse(nameEdit.saving)
+        assertEquals("Jahongir Sabirov", nameEdit.draft)
+        assertEquals(ApiError.Business("VALIDATION_ERROR"), nameEdit.failure?.error)
+        // Имя на сервере не менялось — старое и осталось.
+        assertEquals("Alisher Usmonov", store.current().fullName)
+    }
+
+    @Test
+    fun `blank name is not sent`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("   "))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        assertTrue(profile.updates.isEmpty())
+        assertTrue(viewModel.state.value.nameEdit.editing)
+    }
+
+    @Test
+    fun `name longer than the server limit is not sent`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("x".repeat(NameEdit.MAX_LENGTH + 1)))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        // Сервер отклонил бы это `VALIDATION_ERROR`: показываем то же самое,
+        // не тратя запрос.
+        assertTrue(profile.updates.isEmpty())
+        assertTrue(viewModel.state.value.nameEdit.editing)
+    }
+
+    @Test
+    fun `avatar upload waits for an in-flight name save`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val gate = CompletableDeferred<Unit>()
+        val profile = FakeProfileRepository(store, gate = gate)
+        val media = FakeMediaRepository(
+            result = ApiResult.Success(MediaFile(id = "m-9", url = "https://cdn.mahalla.uz/a.jpg")),
+        )
+        val viewModel = viewModel(profileStore = store, profile = profile, media = media)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+        // Имя ещё в полёте (ждёт gate) — второй `PUT` не должен стартовать и
+        // получить ответ раньше первого.
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        assertTrue(media.uploads.isEmpty())
+        assertEquals(listOf("Jahongir Sabirov" to null), profile.updates)
+
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun `name save waits for an in-flight avatar upload`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+        val gate = CompletableDeferred<Unit>()
+        val media = FakeMediaRepository(
+            result = ApiResult.Success(MediaFile(id = "m-9", url = "https://cdn.mahalla.uz/a.jpg")),
+            gate = gate,
+        )
+        val viewModel = viewModel(profileStore = store, profile = profile, media = media)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameSaveRequested)
+
+        // Аватар ещё грузится — имя не отправлено: оба `PUT` переписывают
+        // профиль целиком, и ответ, приехавший не в том порядке, стёр бы
+        // только что сохранённое поле.
+        assertTrue(profile.updates.isEmpty())
+
+        gate.complete(Unit)
+    }
+
+    @Test
+    fun `cancelling the edit does not touch the server`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(fullName = "Alisher Usmonov"))
+        val profile = FakeProfileRepository(store)
+        val viewModel = viewModel(profileStore = store, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.NameEditRequested)
+        viewModel.onEvent(ProfileEvent.NameDraftChanged("Jahongir Sabirov"))
+        viewModel.onEvent(ProfileEvent.NameEditCancelled)
+
+        assertFalse(viewModel.state.value.nameEdit.editing)
+        assertTrue(profile.updates.isEmpty())
+        assertEquals("Alisher Usmonov", store.current().fullName)
     }
 
     @Test
@@ -240,19 +454,23 @@ class ProfileViewModelTest {
     // --- Фото профиля (issue #101) ---
 
     @Test
-    fun `uploaded photo is remembered next to the rest of the profile`() = runTest {
+    fun `uploaded photo is sent to the server via PUT users-me`() = runTest {
         val store = FakeUserProfileStore(
             UserProfile(id = "u-1", phone = "+998901234567", fullName = "Alisher Usmonov"),
         )
+        val profile = FakeProfileRepository(store)
         val media = FakeMediaRepository(
             result = ApiResult.Success(MediaFile(id = "m-9", url = "https://cdn.mahalla.uz/a.jpg")),
         )
-        val viewModel = viewModel(profileStore = store, media = media)
+        val viewModel = viewModel(profileStore = store, media = media, profile = profile)
 
         viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
 
+        // `PUT` — не запись в обход сервера: адрес уходит туда же, откуда его
+        // потом читает `GET`.
+        assertEquals(listOf(null to "https://cdn.mahalla.uz/a.jpg"), profile.updates)
         assertEquals("https://cdn.mahalla.uz/a.jpg", store.current().avatarUrl)
-        // Имя и номер запись аватара не трогает: `save` пишет все поля разом.
+        // Имя и номер запись аватара не трогает: `PUT` шлёт только `avatarUrl`.
         assertEquals("Alisher Usmonov", store.current().fullName)
         assertEquals("+998901234567", store.current().phone)
         assertFalse(viewModel.state.value.avatarUpload.inProgress)
@@ -327,6 +545,27 @@ class ProfileViewModelTest {
         assertEquals("https://cdn.mahalla.uz/old.jpg", store.current().avatarUrl)
     }
 
+    @Test
+    fun `refused PUT after a successful upload explains itself`() = runTest {
+        val store = FakeUserProfileStore(UserProfile(avatarUrl = "https://cdn.mahalla.uz/old.jpg"))
+        val profile = FakeProfileRepository(store).apply {
+            updateResult = ApiResult.Failure(ApiError.Business("VALIDATION_ERROR"))
+        }
+        val media = FakeMediaRepository(
+            result = ApiResult.Success(MediaFile(id = "m-9", url = "https://cdn.mahalla.uz/a.jpg")),
+        )
+        val viewModel = viewModel(profileStore = store, media = media, profile = profile)
+
+        viewModel.onEvent(ProfileEvent.AvatarPicked(SOURCE))
+
+        // Файл уже лежит на сервере (`ownerId` — загрузивший), но профиль его
+        // ещё не знает: отказ `PUT` показываем, а старый адрес не стираем.
+        val upload = viewModel.state.value.avatarUpload
+        assertFalse(upload.inProgress)
+        assertEquals(ApiError.Business("VALIDATION_ERROR"), requireNotNull(upload.failure).error)
+        assertEquals("https://cdn.mahalla.uz/old.jpg", store.current().avatarUrl)
+    }
+
     private fun viewModel(
         inspector: HttpInspector = FakeHttpInspector(),
         profileStore: FakeUserProfileStore = FakeUserProfileStore(),
@@ -334,6 +573,7 @@ class ProfileViewModelTest {
         auth: FakeAuthRepository = FakeAuthRepository(),
         settings: SettingsDataStore = SettingsDataStore(newDataStore()),
         media: FakeMediaRepository = FakeMediaRepository(),
+        profile: FakeProfileRepository = FakeProfileRepository(profileStore),
     ) = ProfileViewModel(
         settingsDataStore = settings,
         localeManager = RecreatingLocaleManager,
@@ -342,6 +582,7 @@ class ProfileViewModelTest {
         sessionsRepository = sessions,
         authRepository = auth,
         mediaRepository = media,
+        profileRepository = profile,
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
