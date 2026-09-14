@@ -20,6 +20,7 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
 import java.io.File
 
@@ -91,6 +92,36 @@ class RoleRepositoryTest {
         assertEquals("Jahongir", stored.fullName)
         assertEquals("u-1", stored.id)
         assertEquals("+998901234567", stored.phone)
+    }
+
+    @Test
+    fun `empty storage means an unknown server role`() = runTest {
+        assertEquals(ServerRole.Unknown, repository().current().serverRole)
+    }
+
+    @Test
+    fun `server role comes from the same profile that stores the name`() = runTest {
+        val dataStore = newDataStore()
+        val profileStore = DataStoreUserProfileStore(dataStore)
+        profileStore.save(UserProfile(id = "u-1", serverRole = "FOOD_OWNER"))
+        val repository = DataStoreRoleRepository(SettingsDataStore(dataStore), profileStore)
+
+        assertEquals(ServerRole.FoodOwner, repository.current().serverRole)
+    }
+
+    @Test
+    fun `filling in the customer form does not erase a server role already known`() = runTest {
+        // Настоящий FOOD_OWNER, который анкету покупателя заполнил уже после
+        // входа: права не должны пропасть (issue #244).
+        val dataStore = newDataStore()
+        val profileStore = DataStoreUserProfileStore(dataStore)
+        profileStore.save(UserProfile(id = "u-1", serverRole = "FOOD_OWNER"))
+        val repository = DataStoreRoleRepository(SettingsDataStore(dataStore), profileStore)
+
+        repository.saveCustomer(CustomerForm(fullName = "Jahongir", city = City.TASHKENT))
+
+        assertEquals(ServerRole.FoodOwner, repository.current().serverRole)
+        assertEquals(UserRole.Customer, repository.current().role)
     }
 
     @Test
