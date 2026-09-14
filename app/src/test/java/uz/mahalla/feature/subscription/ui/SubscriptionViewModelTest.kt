@@ -792,6 +792,29 @@ class SubscriptionViewModelTest {
         assertTrue(viewModel.state.value.charges is ScreenState.Content)
     }
 
+    @Test
+    fun `a retry of the history does not start a second request while a refresh is in flight`() =
+        runTest {
+            // Issue #271: pull-to-refresh уже тянет историю в `loadJob`, а
+            // ошибка на экране (например, от предыдущей загрузки) оставляет
+            // видимой кнопку «повторить» поверх идущего обновления.
+            val repository = FakeSubscriptionRepository().apply {
+                plans = ApiResult.Success(listOf(plan()))
+                currentAnswers = mutableListOf(ApiResult.Success(subscription()))
+            }
+            val viewModel = viewModel(repository)
+            // Обновление потянуло историю и повисло на ответе сервера.
+            repository.chargeGate = CompletableDeferred()
+            viewModel.onEvent(SubscriptionEvent.Refreshed)
+
+            viewModel.onEvent(SubscriptionEvent.ChargesRetry)
+
+            // Один запрос от `init`, один от `Refreshed` — «повторить» не
+            // добавил третьего поверх ещё не завершённого.
+            assertEquals(listOf(0, 0), repository.chargeRequests)
+            repository.chargeGate?.complete(Unit)
+        }
+
     /** Состояние подписки, приехавшей на экран. */
     private fun SubscriptionState.stage(): SubscriptionStage =
         (current as ScreenState.Content).data.stage
