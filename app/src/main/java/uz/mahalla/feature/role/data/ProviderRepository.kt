@@ -1,5 +1,6 @@
 package uz.mahalla.feature.role.data
 
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -146,18 +147,10 @@ class DefaultProviderRepository @Inject constructor(
 }
 
 /** См. [MyPlacePage.hasMore] — правило подсчёта живёт там. */
-internal fun MyPlacePageDto.toDomain(): MyPlacePage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return MyPlacePage(
-        items = content.mapNotNull(MyPlaceDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun MyPlacePageDto.toDomain(): MyPlacePage = MyPlacePage(
+    items = content.mapNotNull(MyPlaceDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): запись без `id` отбрасывается —
