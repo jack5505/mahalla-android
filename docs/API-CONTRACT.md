@@ -651,12 +651,27 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 
 ## PromotionsApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/promotions/data/PromotionsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/promotions/data/PromotionsApi.kt`. Обе
+читающие ручки сняты живыми curl'ами 2026-09-04 (заметка «⚠️» относится к
+`POST` ниже, не к ним).
 
 | Метод | Путь |
 |---|---|
 | GET | `promotions/platform` |
 | GET | `promotions/places/{placeId}` |
+| POST | `promotions/places/{placeId}` |
+
+**`POST places/{placeId}`** (issue #252, владелец заводит акцию) — тело
+`CreatePromotionRequest` не сверено живым запросом (нужен Bearer владельца
+заведения, `CONTRACT_REFRESH_TOKEN` в песочнице не задан). Поля повторяют уже
+подтверждённые поля ответа `Promotion` того же контроллера (`title`,
+`description`, `promoType`, `discountPercent`, `discountAmount`,
+`minOrderAmount`, `promoCode`) — не выведены по аналогии с другой вертикалью,
+а взяты у собственной схемы контроллера. Клиент создаёт только три вида
+акции (`PERCENT_OFF`, `FIXED_OFF`, `FREE_DELIVERY`) — `BUY_X_GET_Y`,
+`HAPPY_HOUR`, `FLASH_SALE` требуют дополнительных условий, для которых на
+клиенте нет ни формы, ни подтверждённой схемы. При расхождении смотреть
+сюда в первую очередь и подтвердить настоящим curl'ом до релиза.
 
 ## WalkInApi ⚠️
 

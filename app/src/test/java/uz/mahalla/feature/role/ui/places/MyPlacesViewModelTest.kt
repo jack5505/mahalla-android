@@ -17,10 +17,13 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.CreatablePromoType
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
+import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeProviderRepository
 import uz.mahalla.testutil.MainDispatcherRule
 
@@ -40,7 +43,7 @@ class MyPlacesViewModelTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
 
-        val state = MyPlacesViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         val place = (state.places as ScreenState.Content).data.single()
         assertEquals("p-1", place.id)
@@ -52,7 +55,7 @@ class MyPlacesViewModelTest {
     fun `an empty answer is an empty state, not an error`() = runTest {
         val repository = FakeProviderRepository()
 
-        val state = MyPlacesViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         assertTrue(state.places is ScreenState.Empty)
         assertFalse(state.hasMore)
@@ -63,7 +66,7 @@ class MyPlacesViewModelTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = ApiResult.Failure(failure(ApiError.Unauthorized))
 
-        val state = MyPlacesViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         assertEquals(ApiError.Unauthorized, (state.places as ScreenState.Error).failure.error)
     }
@@ -72,7 +75,7 @@ class MyPlacesViewModelTest {
     fun `coming back rereads the list because moderation decides without the app`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         // Первый resume — это открытие экрана, список уже запросил `init`.
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
@@ -93,7 +96,7 @@ class MyPlacesViewModelTest {
         // Заведение может приехать на двух страницах, если список изменился
         // между запросами: дубликат ключа роняет LazyColumn.
         repository.pages[1] = page(listOf(place("p-1"), place("p-2")), hasMore = false)
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.LoadMore)
 
@@ -111,7 +114,7 @@ class MyPlacesViewModelTest {
         val repository = FakeProviderRepository()
         repository.pages[0] = page(listOf(place("p-1")), hasMore = true)
         repository.pages[1] = ApiResult.Failure(failure(ApiError.NoConnection))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.LoadMore)
 
@@ -125,7 +128,7 @@ class MyPlacesViewModelTest {
     fun `an active place opens its card in the catalog`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.PlaceClicked("p-1"))
 
@@ -136,7 +139,7 @@ class MyPlacesViewModelTest {
     fun `an application under moderation leads nowhere`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
         val effects = mutableListOf<MyPlacesEffect>()
         backgroundScope.launch { viewModel.effects.toList(effects) }
 
@@ -151,7 +154,7 @@ class MyPlacesViewModelTest {
 
     @Test
     fun `empty list leads to the provider form`() = runTest {
-        val viewModel = MyPlacesViewModel(FakeProviderRepository())
+        val viewModel = viewModel(FakeProviderRepository())
 
         viewModel.onEvent(MyPlacesEvent.RegisterPlaceRequested)
 
@@ -165,7 +168,7 @@ class MyPlacesViewModelTest {
             listOf(place("p-1", PlaceModerationStatus.Active).copy(isAvailable = true)),
         )
         repository.toggleResult = ApiResult.Success(false)
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.AvailabilityToggled("p-1"))
 
@@ -186,7 +189,7 @@ class MyPlacesViewModelTest {
             listOf(place("p-1", PlaceModerationStatus.Active).copy(isAvailable = true)),
         )
         repository.toggleResult = ApiResult.Failure(failure(ApiError.Forbidden))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.AvailabilityToggled("p-1"))
 
@@ -204,7 +207,7 @@ class MyPlacesViewModelTest {
                 place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Staff),
             ),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.AvailabilityToggled("p-1"))
 
@@ -216,7 +219,7 @@ class MyPlacesViewModelTest {
     fun `an application under moderation has no availability switch either`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.AvailabilityToggled("p-1"))
 
@@ -229,7 +232,7 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(
             listOf(place("p-1", category = PlaceCategory.Pharmacy).copy(name = "Dori-Darmon")),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
 
@@ -248,7 +251,7 @@ class MyPlacesViewModelTest {
                     .copy(staffRole = PlaceStaffRole.Staff),
             ),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
         val effects = mutableListOf<MyPlacesEffect>()
         backgroundScope.launch { viewModel.effects.toList(effects) }
 
@@ -258,12 +261,100 @@ class MyPlacesViewModelTest {
     }
 
     @Test
+    fun `the owner opens a promotion form for any category, not only pharmacy`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", category = PlaceCategory.Food).copy(name = "Osh Markazi")),
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+
+        val form = viewModel.state.value.promotionForm
+        assertEquals("p-1", form?.placeId)
+        assertEquals("Osh Markazi", form?.placeName)
+    }
+
+    @Test
+    fun `a staff member cannot open the promotion form`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1").copy(staffRole = PlaceStaffRole.Staff)),
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+
+        assertNull(viewModel.state.value.promotionForm)
+    }
+
+    @Test
+    fun `an incomplete promotion draft never reaches the network`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1")))
+        val promotions = FakePromotionsRepository()
+        val viewModel = viewModel(repository, promotions)
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+
+        viewModel.onEvent(MyPlacesEvent.PromotionSubmitted)
+
+        assertTrue(promotions.createRequests.isEmpty())
+        assertTrue(viewModel.state.value.promotionForm?.submitAttempted == true)
+    }
+
+    @Test
+    fun `a submitted promotion closes the form on success`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1")))
+        val promotions = FakePromotionsRepository()
+        val viewModel = viewModel(repository, promotions)
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+        viewModel.onEvent(MyPlacesEvent.PromotionTitleChanged("20% chegirma"))
+        viewModel.onEvent(MyPlacesEvent.PromotionDiscountPercentChanged("20"))
+
+        viewModel.onEvent(MyPlacesEvent.PromotionSubmitted)
+
+        assertEquals(1, promotions.createRequests.size)
+        assertEquals("p-1", promotions.createRequests.single().first)
+        assertEquals("20% chegirma", promotions.createRequests.single().second.title)
+        assertNull(viewModel.state.value.promotionForm)
+    }
+
+    @Test
+    fun `a refused promotion keeps the form open with the server's reason`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1")))
+        val promotions = FakePromotionsRepository()
+        promotions.createResult = ApiResult.Failure(failure(ApiError.Forbidden))
+        val viewModel = viewModel(repository, promotions)
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+        viewModel.onEvent(MyPlacesEvent.PromotionTitleChanged("Aksiya"))
+        viewModel.onEvent(MyPlacesEvent.PromotionTypeChanged(CreatablePromoType.FreeDelivery))
+
+        viewModel.onEvent(MyPlacesEvent.PromotionSubmitted)
+
+        assertEquals(ApiError.Forbidden, viewModel.state.value.promotionForm?.failure?.error)
+    }
+
+    @Test
+    fun `dismissing the promotion form clears it`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1")))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
+
+        viewModel.onEvent(MyPlacesEvent.PromotionFormDismissed)
+
+        assertNull(viewModel.state.value.promotionForm)
+    }
+
+    @Test
     fun `the owner opens staff management`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(
             listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Owner)),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
 
@@ -276,7 +367,7 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(
             listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Manager)),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
         val effects = mutableListOf<MyPlacesEffect>()
         backgroundScope.launch { viewModel.effects.toList(effects) }
 
@@ -284,6 +375,11 @@ class MyPlacesViewModelTest {
 
         assertTrue(effects.isEmpty())
     }
+
+    private fun viewModel(
+        repository: FakeProviderRepository,
+        promotionsRepository: PromotionsRepository = FakePromotionsRepository(),
+    ) = MyPlacesViewModel(repository, promotionsRepository)
 
     private fun page(
         items: List<MyPlace>,

@@ -81,6 +81,21 @@ class MyPlaceTest {
     }
 
     @Test
+    fun `any category owner or manager can add a promotion, not only pharmacy`() {
+        assertTrue(place(category = PlaceCategory.Food).canManagePromotion)
+        assertTrue(
+            place(category = PlaceCategory.Master, staffRole = PlaceStaffRole.Manager)
+                .canManagePromotion,
+        )
+
+        // Рядовой сотрудник не получает кнопку, которая гарантированно откажет.
+        assertFalse(place(staffRole = PlaceStaffRole.Staff).canManagePromotion)
+
+        // Заявка на модерации ещё не значится в каталоге.
+        assertFalse(place(status = PlaceModerationStatus.Pending).canManagePromotion)
+    }
+
+    @Test
     fun `only the owner of an active place manages staff`() {
         assertTrue(place(staffRole = PlaceStaffRole.Owner).canManageStaff)
 
