@@ -316,6 +316,30 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `several unparseable refresh responses end the session`() = runTest {
+        // Один такой ответ прощаем — мало ли что с сетью (см. тест выше).
+        // Но без явного выхода приложение иначе виснет в «везде 401»
+        // навсегда: разбитый контракт сам себя не чинит (issue #198).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val api = catalogApi()
+
+        repeat(2) {
+            server.enqueue(MockResponse().setResponseCode(401))
+            server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+            apiCall { api.place("p-1") }
+            assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+            assertEquals(0, expiryEvents.size)
+        }
+
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        apiCall { api.place("p-1") }
+
+        assertNull("третий подряд — контракт сломан, а не Wi-Fi", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
     fun `a refusal inside a 2xx envelope keeps the session`() = runTest {
         // `success: false` при 200: бэкенд отказы отдаёт с HTTP-кодом
         // (`GlobalExceptionHandler`), так что и это не его ответ.
@@ -423,6 +447,56 @@ class NetworkStackTest {
 
         assertNull(retry)
         assertEquals("refresh даже не запрашивался", 0, server.requestCount)
+    }
+
+    @Test
+    fun `one endpoint repeatedly rejecting a fresh token keeps the session`() = runTest {
+        // Ручка отвечает 401 вместо 403 (роль, подписка, бизнес-панель) — это
+        // её личная проблема, а не повод разлогинить человека, у которого всё
+        // остальное работает (issue #197).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val request = staleRequest()
+        val auth = authenticator()
+
+        repeat(3) {
+            val retry = auth.authenticate(
+                route = null,
+                response = unauthorized(request, prior = unauthorized(request)),
+            )
+            assertNull(retry)
+        }
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `two different endpoints rejecting a fresh token end the session`() = runTest {
+        // Если это не одна ручка, а несколько разных, — токен отвергнут
+        // системно, и это уже сама сессия (issue #197).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val requestA = staleRequest()
+        val requestB = Request.Builder()
+            .url(server.url("/places/p-2"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer stale")
+            .build()
+        val auth = authenticator()
+
+        auth.authenticate(
+            route = null,
+            response = unauthorized(requestA, prior = unauthorized(requestA)),
+        )
+        assertEquals("одной ручки мало", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        val retry = auth.authenticate(
+            route = null,
+            response = unauthorized(requestB, prior = unauthorized(requestB)),
+        )
+
+        assertNull(retry)
+        assertNull(sessionStore.current())
+        assertEquals(1, expiryEvents.size)
     }
 
     @Test

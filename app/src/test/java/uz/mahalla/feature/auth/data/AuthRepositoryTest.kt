@@ -428,66 +428,6 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `refresh without a session does not hit the network`() = runTest {
-        val result = repository().refresh()
-
-        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
-        assertEquals(0, server.requestCount)
-    }
-
-    @Test
-    fun `refresh rotates the token pair and carries the device`() = runTest {
-        sessionStore.save(Session("stale", "r-1", sessionId = "s-1"))
-        server.enqueue(
-            envelope(
-                """{"sessionId":"s-1",
-                   "tokens":{"accessToken":"fresh","refreshToken":"r-2","accessExpiresIn":60}}""",
-            ),
-        )
-
-        val result = repository().refresh()
-
-        assertEquals(ApiResult.Success(Unit), result)
-        assertEquals(
-            Session("fresh", "r-2", FIXED_NOW_EPOCH_SECONDS + 60, sessionId = "s-1"),
-            sessionStore.current(),
-        )
-
-        val request = server.takeRequest()
-        assertEquals("/auth/refresh", request.path)
-        val body = request.bodyJson()
-        assertEquals("r-1", body["refreshToken"]?.jsonPrimitive?.content)
-        assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
-    }
-
-    @Test
-    fun `dead refresh token clears the session`() = runTest {
-        sessionStore.save(Session("stale", "r-1"))
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(401)
-                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
-                .setBody("""{"success":false,"error":{"code":"TOKEN_INVALID"}}"""),
-        )
-
-        val result = repository().refresh()
-
-        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
-        assertNull("сессию с мёртвым refresh хранить нечего", sessionStore.current())
-    }
-
-    @Test
-    fun `refresh keeps the session when the server is broken`() = runTest {
-        sessionStore.save(Session("stale", "r-1"))
-        server.enqueue(MockResponse().setResponseCode(500))
-
-        repository().refresh()
-
-        // 5xx — проблема сервера, а не токена: разлогинивать за это нельзя.
-        assertEquals(Session("stale", "r-1"), sessionStore.current())
-    }
-
-    @Test
     fun `login stores the profile for the profile screen`() = runTest {
         server.enqueue(
             envelope(
