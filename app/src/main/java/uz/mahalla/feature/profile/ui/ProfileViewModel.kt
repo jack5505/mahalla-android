@@ -229,6 +229,11 @@ class ProfileViewModel @Inject constructor(
     /**
      * `GET users/me` при открытии экрана и при возврате на него (issue #170).
      *
+     * Если имя из анкеты покупателя ещё не подтверждено сервером
+     * (`UserProfile.fullNamePendingSync`, issue #234), уходит не `GET`, а
+     * повторный `PUT` — [ProfileRepository.refresh] сам решает, что отправить,
+     * экрану это не видно.
+     *
      * Отказ не трогает состояние: [UserProfileStore] уже хранит то, что
      * сохранил вход, и `profile` в шапке остаётся прежним — не пустым и не
      * заменённым ошибкой. Профиль здесь не главная причина открыть вкладку,
@@ -252,8 +257,17 @@ class ProfileViewModel @Inject constructor(
     private fun saveName() {
         val draft = currentState.nameEdit.draft.trim()
         if (draft.isEmpty() || draft.length > NameEdit.MAX_LENGTH) return
-        // Аватар сохраняется своим `PUT` — см. `uploadAvatar`.
-        if (currentState.nameEdit.saving || avatarJob?.isActive == true) return
+        // Аватар сохраняется своим `PUT` — см. `uploadAvatar`. `profileRefreshJob`
+        // тоже может быть в полёте своим `PUT`, если анкета покупателя ждёт
+        // подтверждения (issue #234, `fullNamePendingSync`) — не хватало бы
+        // только двух одновременных `PUT` на разные имена.
+        if (
+            currentState.nameEdit.saving ||
+            avatarJob?.isActive == true ||
+            profileRefreshJob?.isActive == true
+        ) {
+            return
+        }
         updateState { copy(nameEdit = nameEdit.copy(saving = true, failure = null)) }
         nameSaveJob = viewModelScope.launch {
             when (val result = profileRepository.updateProfile(fullName = draft)) {

@@ -70,6 +70,42 @@ class ProfileRepositoryTest {
     }
 
     @Test
+    fun `refresh sends the pending anketa name via PUT instead of GET`() = runTest {
+        server.enqueue(
+            envelope("""{"id":"u-1","fullName":"Jahongir","avatarUrl":null}"""),
+        )
+        val store = FakeUserProfileStore(
+            UserProfile(fullName = "Jahongir", fullNamePendingSync = true),
+        )
+
+        val result = repository(store).refresh()
+
+        assertTrue(result is ApiResult.Success)
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals(
+            "Jahongir",
+            NetworkFactory.json().parseToJsonElement(request.body.readUtf8())
+                .jsonObject["fullName"]?.jsonPrimitive?.content,
+        )
+        // Сервер подтвердил имя — ждать больше нечего.
+        assertTrue(!store.current().fullNamePendingSync)
+    }
+
+    @Test
+    fun `failed pending sync keeps the flag for the next profile open`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(401))
+        val known = UserProfile(fullName = "Jahongir", fullNamePendingSync = true)
+        val store = FakeUserProfileStore(known)
+
+        val result = repository(store).refresh()
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+        // Не доехало — повторится при следующем открытии профиля, имя не теряется.
+        assertEquals(known, store.current())
+    }
+
+    @Test
     fun `failed refresh does not touch the stored profile`() = runTest {
         server.enqueue(MockResponse().setResponseCode(401))
         val known = UserProfile(phone = "+998901234567", fullName = "Alisher Usmonov")

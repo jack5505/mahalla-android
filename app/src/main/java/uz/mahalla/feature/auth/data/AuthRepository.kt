@@ -404,18 +404,28 @@ class DefaultAuthRepository @Inject constructor(
      * их в том же блоке `user`, и раньше они молча выбрасывались — из-за этого
      * настоящий владелец заведения ничем не отличался от покупателя, а
      * заблокированный аккаунт выглядел сломанным приложением.
+     *
+     * Имя из анкеты покупателя, ещё не подтверждённое сервером
+     * (`UserProfile.fullNamePendingSync`, issue #234), этим ответом не
+     * стирается — вход того же аккаунта (PIN, обновление токена) вообще не
+     * повод для риска: анкету заполняли до входа, а имя в ответе на вход её
+     * не видело. Для другого аккаунта (первый вход, смена номера на
+     * устройстве) флаг не переносится — это не то же самое ожидание.
      */
     private suspend fun saveProfile(user: UserDto?) {
         if (user == null) return
+        val current = userProfileStore.current()
+        val stillPending = current.fullNamePendingSync && current.id == user.id
         userProfileStore.save(
             UserProfile(
                 id = user.id,
                 phone = user.phone,
-                fullName = user.fullName,
+                fullName = if (stillPending) current.fullName else user.fullName,
                 avatarUrl = user.avatarUrl,
                 serverRole = user.role,
                 verificationStatus = user.verificationStatus,
                 accountStatus = user.accountStatus,
+                fullNamePendingSync = stillPending,
             ),
         )
     }

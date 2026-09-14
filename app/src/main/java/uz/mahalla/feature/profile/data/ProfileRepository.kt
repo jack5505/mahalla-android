@@ -20,6 +20,13 @@ interface ProfileRepository {
      * источник истины один. Отказ (сети, сервера) не трогает уже сохранённый
      * профиль: то, что приехало со входом, остаётся на экране, а не
      * очищается несостоявшимся ответом.
+     *
+     * Имя из анкеты покупателя (`RoleRepository.saveCustomer`, issue #234)
+     * пишется в [UserProfileStore] раньше, чем доезжает до сервера — анкета не
+     * должна запирать человека до ответа сети. Пока оно не подтверждено
+     * (`fullNamePendingSync`), [refresh] шлёт его через `PUT`, а не `GET`:
+     * обычный `GET` вернул бы `fullName = null` и стёр бы то, что сервер ещё
+     * не видел.
      */
     suspend fun refresh(): ApiResult<Unit>
 
@@ -40,8 +47,16 @@ class DefaultProfileRepository @Inject constructor(
     private val userProfileStore: UserProfileStore,
 ) : ProfileRepository {
 
-    override suspend fun refresh(): ApiResult<Unit> = apiCall {
-        userProfileStore.save(profileApi.getMe().payload().toUserProfile())
+    override suspend fun refresh(): ApiResult<Unit> {
+        val pendingFullName = userProfileStore.current()
+            .takeIf { it.fullNamePendingSync }
+            ?.fullName
+            ?.takeIf { it.isNotBlank() }
+        return if (pendingFullName != null) {
+            updateProfile(fullName = pendingFullName)
+        } else {
+            apiCall { userProfileStore.save(profileApi.getMe().payload().toUserProfile()) }
+        }
     }
 
     override suspend fun updateProfile(fullName: String?, avatarUrl: String?): ApiResult<Unit> =
