@@ -7,6 +7,8 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.role.data.ProviderRepository
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
@@ -23,10 +25,12 @@ import javax.inject.Inject
 @HiltViewModel
 class MyPlacesViewModel @Inject constructor(
     private val repository: ProviderRepository,
+    private val promotionsRepository: PromotionsRepository,
 ) : MviViewModel<MyPlacesState, MyPlacesEvent, MyPlacesEffect>(MyPlacesState()) {
 
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
+    private var promotionJob: Job? = null
     private var loadedPage = 0
 
     init {
@@ -51,6 +55,28 @@ class MyPlacesViewModel @Inject constructor(
                 emitEffect(MyPlacesEffect.OpenProviderForm)
             is MyPlacesEvent.ManageProductsClicked -> manageProducts(event.placeId)
             is MyPlacesEvent.ManageStaffClicked -> manageStaff(event.placeId)
+
+            is MyPlacesEvent.AddPromotionClicked -> onAddPromotionClicked(event.placeId)
+            MyPlacesEvent.PromotionFormDismissed -> {
+                // Отменяет и незавершённый запрос: иначе его поздний ответ
+                // застал бы уже другую, вновь открытую форму (issue #252).
+                promotionJob?.cancel()
+                updateState { copy(promotionForm = null) }
+            }
+            is MyPlacesEvent.PromotionTitleChanged ->
+                updatePromotionDraft { withTitle(event.value) }
+            is MyPlacesEvent.PromotionDescriptionChanged ->
+                updatePromotionDraft { withDescription(event.value) }
+            is MyPlacesEvent.PromotionTypeChanged -> updatePromotionDraft { withType(event.value) }
+            is MyPlacesEvent.PromotionDiscountPercentChanged ->
+                updatePromotionDraft { withDiscountPercent(event.value) }
+            is MyPlacesEvent.PromotionDiscountAmountChanged ->
+                updatePromotionDraft { withDiscountAmount(event.value) }
+            is MyPlacesEvent.PromotionMinOrderChanged ->
+                updatePromotionDraft { withMinOrderAmount(event.value) }
+            is MyPlacesEvent.PromotionCodeChanged ->
+                updatePromotionDraft { withPromoCode(event.value) }
+            MyPlacesEvent.PromotionSubmitted -> submitPromotion()
         }
     }
 
@@ -218,5 +244,47 @@ class MyPlacesViewModel @Inject constructor(
         val place = placeOrNull(placeId) ?: return
         if (!place.canManageProducts) return
         emitEffect(MyPlacesEffect.OpenPharmacyManagement(place.id, place.name))
+    }
+
+    /** Кнопка скрыта не тому, кому нельзя, — проверка здесь на всякий случай. */
+    private fun onAddPromotionClicked(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManagePromotion) return
+        promotionJob?.cancel()
+        updateState {
+            copy(promotionForm = NewPromotionFormState(placeId = place.id, placeName = place.name))
+        }
+    }
+
+    private inline fun updatePromotionDraft(
+        crossinline transform: NewPromotionDraft.() -> NewPromotionDraft,
+    ) {
+        updateState {
+            copy(
+                promotionForm = promotionForm?.let {
+                    it.copy(draft = it.draft.transform(), failure = null)
+                },
+            )
+        }
+    }
+
+    private fun submitPromotion() {
+        val form = currentState.promotionForm ?: return
+        if (form.submitting) return
+        if (!form.draft.canSubmit) {
+            updateState { copy(promotionForm = form.copy(submitAttempted = true)) }
+            return
+        }
+
+        updateState { copy(promotionForm = form.copy(submitting = true, failure = null)) }
+        promotionJob = viewModelScope.launch {
+            when (val result = promotionsRepository.createPromotion(form.placeId, form.draft)) {
+                is ApiResult.Failure -> updateState {
+                    copy(promotionForm = promotionForm?.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> updateState { copy(promotionForm = null) }
+            }
+        }
     }
 }

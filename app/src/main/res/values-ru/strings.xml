@@ -303,6 +303,20 @@
     <string name="promo_min_order">На заказ от %1$s</string>
     <string name="promo_code">Промокод: %1$s</string>
     <string name="promo_until">До %1$s</string>
+    <!-- Акция заведения (issue #252): владелец заводит акцию из «Моих заведений». -->
+    <string name="promotion_field_title">Заголовок</string>
+    <string name="promotion_field_title_invalid">Введите заголовок</string>
+    <string name="promotion_field_description">Описание</string>
+    <string name="promotion_type_percent_off">Скидка в процентах</string>
+    <string name="promotion_type_fixed_off">Скидка суммой</string>
+    <string name="promotion_type_free_delivery">Бесплатная доставка</string>
+    <string name="promotion_field_discount_percent">Скидка, %</string>
+    <string name="promotion_field_discount_percent_invalid">Введите число от 1 до 100</string>
+    <string name="promotion_field_discount_amount">Скидка, сум</string>
+    <string name="promotion_field_discount_amount_invalid">Введите сумму</string>
+    <string name="promotion_field_min_order">Минимальный заказ, сум (необязательно)</string>
+    <string name="promotion_field_code">Промокод (необязательно)</string>
+    <string name="promotion_create_submit">Добавить</string>
 
     <string name="distance_meters">%1$s м</string>
     <string name="distance_kilometers">%1$s км</string>
@@ -556,6 +570,9 @@
     <string name="my_places_available_description">Если выключить, в каталоге заведение будет закрытым.</string>
     <!-- Управление витриной аптеки (issue #252). -->
     <string name="my_places_manage_products">Управлять товарами</string>
+    <!-- Акция заведения (issue #252) — доступна любой категории. -->
+    <string name="my_places_add_promotion">Добавить акцию</string>
+    <string name="my_places_new_promotion_title">Новая акция</string>
     <string name="my_places_status_pending">На модерации</string>
     <string name="my_places_status_active">Активно</string>
     <string name="my_places_status_suspended">Приостановлено</string>
