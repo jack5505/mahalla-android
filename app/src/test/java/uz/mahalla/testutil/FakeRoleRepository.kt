@@ -35,7 +35,9 @@ class FakeRoleRepository(initial: RoleProfile = RoleProfile()) : RoleRepository 
     override suspend fun saveCustomer(form: CustomerForm): Boolean {
         savedForms += form
         if (writeFailure) return false
-        state.value = RoleProfile(role = UserRole.Customer, customer = form.trimmed())
+        // `copy`, не пересборка с нуля: анкета не должна стирать серверную
+        // роль, если она уже известна (issue #244).
+        state.value = state.value.copy(role = UserRole.Customer, customer = form.trimmed())
         return true
     }
 }

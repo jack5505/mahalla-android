@@ -2105,3 +2105,50 @@ PIN» и лимит попыток через выход его не теряю�
 отказ чтения не опустошает шапку, редактирование и отказ сохранения имени,
 пустое имя не уходит на сервер, отмена редактирования не трогает сеть, аватар
 после загрузки уходит в `PUT`, отказ `PUT` после успешной загрузки).
+
+---
+
+## Аудиторию тарифов подписки выбирают права, а не только анкета (issue #244)
+
+`SubscriptionViewModel.audience()` выбирала набор тарифов только по локальной
+анкете (`role == UserRole.Provider`) — хотя после issue #237 у приложения уже
+есть серверная роль, и `ProfileState.showMyPlaces` («Мои заведения») по ней
+считается. Расхождение было видно человеку: настоящий `FOOD_OWNER`, анкету не
+заполнявший, видел «Мои заведения» в профиле и покупательские тарифы в
+подписках.
+
+Правило вынесено в одну функцию — `providesServices(formRole, serverRole)`
+(`feature/role/domain/ProvidesServices.kt`): анкета продавца **или** серверная
+роль. Её зовут оба места:
+
+- `ProfileState.showMyPlaces` — раньше условие было записано на месте, теперь
+  зовёт общую функцию;
+- `SubscriptionViewModel.audience()` — вместо `role == UserRole.Provider`.
+
+`RoleProfile` (`RoleRepository.kt`) получил поле `serverRole: ServerRole`.
+Источник — `UserProfileStore`, который `DataStoreRoleRepository` уже держал
+ради имени из анкеты; читать роль было неоткуда не пришлось.
+
+**Остальные читатели `RoleRepository` не тронуты** — роль им не нужна вовсе:
+`FreelancerProfileViewModel`, `CheckoutViewModel`, `FashionCheckoutViewModel`
+берут из профиля только `customer.address`. `RoleViewModel`,
+`CustomerFormViewModel`, `ProviderFormViewModel` — это сама анкета, там
+`role` и значит анкету, а не права.
+
+Заодно исправлен `FakeRoleRepository.saveCustomer` в тестовой утилите: он
+пересобирал `RoleProfile` с нуля и откатывал `serverRole` в `Unknown` —
+фейк прятал ровно тот сценарий, ради которого написана задача (владелец
+заведения заполнил анкету покупателя). Теперь `copy`.
+
+**Известный компромисс:** issue #243 (локальная анкета переживает вход под
+другим номером) актуальна и здесь — «продавец» из чужой сессии покажет
+бизнес-тарифы. Правило от этого не хуже прежнего (оно шире анкеты, не уже) и
+станет строже само после #243.
+
+Новые тесты: `ProvidesServicesTest` (анкета, серверная роль, конфликт «анкета
+покупателя + `CINEMA_OWNER`», обычный `USER`, `ADMIN`), `RoleRepositoryTest`
+(+3: пустой `serverRole` по умолчанию, роль из `UserProfileStore`, анкета
+покупателя не стирает уже известную роль), `SubscriptionViewModelTest` (+2:
+`FOOD_OWNER` без анкеты → `Business`, `ADMIN` без анкеты → `User`).
+
+Проверено: `./gradlew testDebugUnitTest`, `assembleDebug`, `lintDebug`.
