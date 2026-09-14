@@ -63,13 +63,14 @@ object NetworkFactory {
         }
 
     /**
-     * Основной клиент: адрес бэкенда → координаты → Bearer → инспектор, плюс
-     * refresh по 401.
+     * Основной клиент: адрес бэкенда → координаты → язык → Bearer → инспектор,
+     * плюс refresh по 401.
      *
      * Порядок не косметика. Инспектор добавляется последним, поэтому получает
      * запрос ровно в том виде, в каком тот уйдёт в сеть: с фактическим хостом
      * (его подставил [BackendUrlInterceptor], issue #26), с координатами
-     * ([GeoHeaderInterceptor], issue #53) и с уже проставленным
+     * ([GeoHeaderInterceptor], issue #53), с `Accept-Language`
+     * ([LanguageHeaderInterceptor], issue #242) и с уже проставленным
      * `Authorization`. Стоя первым, он показывал бы адрес сборки и запрос без
      * заголовков — то есть отвечал бы не на тот вопрос, ради которого нужен.
      *
@@ -83,12 +84,14 @@ object NetworkFactory {
         authInterceptor: Interceptor,
         authenticator: Authenticator,
         geoHeaderInterceptor: Interceptor? = null,
+        languageHeaderInterceptor: Interceptor? = null,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
     ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
         .apply { geoHeaderInterceptor?.let(::addInterceptor) }
+        .apply { languageHeaderInterceptor?.let(::addInterceptor) }
         .addInterceptor(authInterceptor)
         .apply { inspector?.let(::addInterceptor) }
         .authenticator(authenticator)
@@ -104,12 +107,14 @@ object NetworkFactory {
     fun refreshClient(
         backendUrlInterceptor: Interceptor,
         geoHeaderInterceptor: Interceptor? = null,
+        languageHeaderInterceptor: Interceptor? = null,
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
     ): OkHttpClient = clientBuilder(logBodies, certificatePin)
         .addInterceptor(backendUrlInterceptor)
         .apply { geoHeaderInterceptor?.let(::addInterceptor) }
+        .apply { languageHeaderInterceptor?.let(::addInterceptor) }
         .apply { inspector?.let(::addInterceptor) }
         .build()
 

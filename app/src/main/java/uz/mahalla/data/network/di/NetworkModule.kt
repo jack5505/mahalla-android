@@ -19,6 +19,7 @@ import uz.mahalla.data.network.BackendUrlOverride
 import uz.mahalla.data.network.BaseUrl
 import uz.mahalla.data.network.CleartextPolicy
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.LanguageHeaderInterceptor
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.data.network.OkHttpBackendReachability
 import uz.mahalla.data.network.RefreshClient
@@ -77,12 +78,14 @@ object NetworkModule {
     fun provideRefreshClient(
         backendUrlInterceptor: BackendUrlInterceptor,
         geoHeaderInterceptor: GeoHeaderInterceptor,
+        languageHeaderInterceptor: LanguageHeaderInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
         @BackendUrlOverride overrideEnabled: Boolean,
     ): OkHttpClient = NetworkFactory.refreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
         geoHeaderInterceptor = geoHeaderInterceptor,
+        languageHeaderInterceptor = languageHeaderInterceptor,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
         certificatePin = certificatePin.takeIf { overrideEnabled },
@@ -109,6 +112,7 @@ object NetworkModule {
         tokenAuthenticator: TokenAuthenticator,
         backendUrlInterceptor: BackendUrlInterceptor,
         geoHeaderInterceptor: GeoHeaderInterceptor,
+        languageHeaderInterceptor: LanguageHeaderInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
         @BackendUrlOverride overrideEnabled: Boolean,
@@ -117,6 +121,7 @@ object NetworkModule {
         authInterceptor = authInterceptor,
         authenticator = tokenAuthenticator,
         geoHeaderInterceptor = geoHeaderInterceptor,
+        languageHeaderInterceptor = languageHeaderInterceptor,
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
         certificatePin = certificatePin.takeIf { overrideEnabled },
