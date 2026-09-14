@@ -18,6 +18,7 @@ import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.gaming.data.GamingApi
 import uz.mahalla.feature.gaming.data.GamingBookingDto
 import uz.mahalla.feature.hospital.data.HospitalApi
+import uz.mahalla.feature.hospital.data.HospitalRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -71,6 +72,7 @@ class DefaultActivityRepository @Inject constructor(
     private val gamingApi: GamingApi,
     private val bookingApi: BookingApi,
     private val hospitalApi: HospitalApi,
+    private val hospitalRepository: HospitalRepository,
     private val cinemaApi: CinemaApi,
     private val placeNameResolver: PlaceNameResolver,
 ) : ActivityRepository {
@@ -171,8 +173,13 @@ class DefaultActivityRepository @Inject constructor(
 
         ActivitySource.DoctorAppointments -> apiCall {
             val dto = hospitalApi.myAppointments(page = page, size = size).payload()
+            // `HospitalAppointmentResponse` не называет врача, только
+            // `doctorId` (issue #219) — читается напрямую `HospitalApi`, в
+            // обход `HospitalRepository.myAppointments`, поэтому имя
+            // дотягивается тем же общим методом отдельно (issue #266).
+            val content = hospitalRepository.withDoctorNames(dto.content)
             SourcePage(
-                items = dto.content.mapNotNull { it.toActivity(ActivitySource.DoctorAppointments) },
+                items = content.mapNotNull { it.toActivity(ActivitySource.DoctorAppointments) },
                 hasMore = hasMorePages(page, dto.totalPages, dto.last),
             )
         }
