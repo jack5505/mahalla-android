@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -549,6 +550,47 @@ class AuthRepositoryTest {
         // Чужие права в профиле — это лишние строки в меню у того, у кого их
         // нет: поле, которого в ответе нет, стирается вместе с остальными.
         assertNull(userProfileStore.current().serverRole)
+    }
+
+    @Test
+    fun `re-login of the same account does not wipe a name the server has not confirmed yet`() =
+        runTest {
+            // Анкета покупателя сохранила имя локально и ждёт `PUT` (issue #234) —
+            // сервер о нём ещё не знает, отсюда `fullName = null` в ответе на вход.
+            userProfileStore.save(
+                UserProfile(id = "u-1", fullName = "Jahongir", fullNamePendingSync = true),
+            )
+            server.enqueue(
+                envelope(
+                    """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                       "user":{"id":"u-1","phone":"+998901234567","fullName":null}}""",
+                ),
+            )
+
+            repository().verifyCode("otp-1", "123456")
+
+            val profile = userProfileStore.current()
+            assertEquals("Jahongir", profile.fullName)
+            assertTrue(profile.fullNamePendingSync)
+        }
+
+    @Test
+    fun `login of a different account does not inherit a pending name`() = runTest {
+        userProfileStore.save(
+            UserProfile(id = "u-old", fullName = "Jahongir", fullNamePendingSync = true),
+        )
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-new","phone":"+998901234567","fullName":null}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        val profile = userProfileStore.current()
+        assertNull(profile.fullName)
+        assertFalse(profile.fullNamePendingSync)
     }
 
     @Test
