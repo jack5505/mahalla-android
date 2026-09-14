@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,8 +50,10 @@ import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaDialog
 import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaSwitchRow
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
@@ -205,6 +209,8 @@ fun ProfileContentScreen(
                 profile = state.profile,
                 verification = state.verification,
                 account = state.account,
+                nameEdit = state.nameEdit,
+                onEvent = onEvent,
             )
 
             AvatarUploadSection(
@@ -404,6 +410,8 @@ private fun ProfileHeader(
     profile: UserProfile,
     verification: VerificationStatus,
     account: AccountStatus,
+    nameEdit: NameEdit,
+    onEvent: (ProfileEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     MahallaCard(modifier = modifier) {
@@ -448,12 +456,24 @@ private fun ProfileHeader(
                 }
             }
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = profile.fullName?.takeIf { it.isNotBlank() }
-                        ?: stringResource(R.string.profile_name_unknown),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                if (nameEdit.editing) {
+                    NameEditor(nameEdit = nameEdit, onEvent = onEvent)
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = profile.fullName?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.profile_name_unknown),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        MahallaIconButton(
+                            icon = Icons.Outlined.Edit,
+                            contentDescription = stringResource(R.string.profile_name_edit_action),
+                            onClick = { onEvent(ProfileEvent.NameEditRequested) },
+                        )
+                    }
+                }
                 Text(
                     text = profile.phone?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.profile_phone_unknown),
@@ -479,6 +499,61 @@ private fun ProfileHeader(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Поле редактирования имени (issue #170): `draft` — состояние ViewModel, а не
+ * `TextFieldValue` в композиции (`.claude/rules/compose-ui.md`) — источник
+ * асинхронный, ответ `PUT` может прийти раньше следующей рекомпозиции.
+ */
+@Composable
+private fun NameEditor(
+    nameEdit: NameEdit,
+    onEvent: (ProfileEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
+        val tooLong = nameEdit.draft.length > NameEdit.MAX_LENGTH
+        MahallaTextField(
+            value = nameEdit.draft,
+            onValueChange = { onEvent(ProfileEvent.NameDraftChanged(it)) },
+            label = stringResource(R.string.profile_name_edit_label),
+            enabled = !nameEdit.saving,
+            errorText = when {
+                nameEdit.draft.isBlank() -> stringResource(R.string.profile_name_edit_required)
+                // Та же граница и та же строка, что у анкеты покупателя
+                // (issue #84) — обе читают `fullName` ≤ 200 из одного и того
+                // же контракта `PUT users/me`.
+                tooLong -> pluralStringResource(
+                    R.plurals.role_error_too_long,
+                    NameEdit.MAX_LENGTH,
+                    NameEdit.MAX_LENGTH,
+                )
+
+                else -> nameEdit.failure?.userMessage()
+            },
+        )
+        nameEdit.failure?.server?.let { server -> MahallaErrorDetails(server = server) }
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
+            MahallaButton(
+                text = stringResource(R.string.action_save),
+                onClick = { onEvent(ProfileEvent.NameSaveRequested) },
+                variant = MahallaButtonVariant.Primary,
+                state = ButtonState(
+                    enabled = nameEdit.draft.isNotBlank() && !tooLong,
+                    loading = nameEdit.saving,
+                ),
+                fillWidth = false,
+            )
+            MahallaButton(
+                text = stringResource(R.string.action_cancel),
+                onClick = { onEvent(ProfileEvent.NameEditCancelled) },
+                variant = MahallaButtonVariant.Ghost,
+                state = ButtonState(enabled = !nameEdit.saving),
+                fillWidth = false,
+            )
         }
     }
 }

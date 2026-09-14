@@ -688,6 +688,11 @@
     <string name="appointment_status_no_show">Вы не пришли</string>
     <string name="appointment_status_unknown">Состояние неизвестно</string>
 
+    <!-- Профиль на сервере (issue #170) -->
+    <string name="profile_name_edit_action">Изменить имя</string>
+    <string name="profile_name_edit_label">Имя</string>
+    <string name="profile_name_edit_required">Введите имя</string>
+
     <!-- Загрузка изображений (issue #101) -->
     <string name="profile_avatar_title">Фото профиля</string>
     <string name="profile_avatar_present">Фото загружено</string>
