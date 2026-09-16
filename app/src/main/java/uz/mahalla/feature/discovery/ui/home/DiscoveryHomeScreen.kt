@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material3.MaterialTheme
@@ -328,15 +327,19 @@ private fun LazyListScope.placeSection(
             onAction = { onEvent(DiscoveryHomeEvent.SearchClicked) },
         )
     }
-    // Линии между строками рисует список, а не сама строка: под последней
-    // она не нужна (макет 1a).
-    itemsIndexed(items = places, key = { _, place -> "$key-${place.id}" }) { index, place ->
+    // Строки секции — одной ячейкой: секция не длиннее шести мест
+    // (`HomeSections.SECTION_LIMIT`), а `spacedBy` списка между отдельными
+    // ячейками прибавлял бы 20dp над каждой линией и ни одного под ней.
+    // Линии рисует список, не строка: под последней она не нужна (макет 1a).
+    item(key = "$key-rows") {
         Column {
-            if (index > 0) MahallaDivider()
-            PlaceCard(
-                place = place.toCardUi(),
-                onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
-            )
+            places.forEachIndexed { index, place ->
+                if (index > 0) MahallaDivider()
+                PlaceCard(
+                    place = place.toCardUi(),
+                    onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
+                )
+            }
         }
     }
 }

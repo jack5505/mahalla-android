@@ -1,6 +1,7 @@
 package uz.mahalla.feature.discovery.ui.search
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -124,9 +125,10 @@ fun SearchContent(
                     )
                 },
             ) { places ->
+                // Без `spacedBy`: строки мест несут отступ сами, а линия между
+                // ними должна стоять ровно посередине (макет 1a).
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.gap),
                     contentPadding = PaddingValues(bottom = Spacing.gutter),
                 ) {
                     itemsIndexed(items = places, key = { _, place -> place.id }) { index, place ->
@@ -140,12 +142,14 @@ fun SearchContent(
                     }
                     if (state.hasMore) {
                         item(key = "load-more") {
-                            LoadMoreAuto(
-                                itemCount = places.size,
-                                isLoading = state.isLoadingMore,
-                                failure = state.loadMoreFailure,
-                                onLoadMore = { onEvent(SearchEvent.LoadMore) },
-                            )
+                            Box(modifier = Modifier.padding(top = Spacing.gap)) {
+                                LoadMoreAuto(
+                                    itemCount = places.size,
+                                    isLoading = state.isLoadingMore,
+                                    failure = state.loadMoreFailure,
+                                    onLoadMore = { onEvent(SearchEvent.LoadMore) },
+                                )
+                            }
                         }
                     }
                 }

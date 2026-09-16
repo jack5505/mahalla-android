@@ -36,6 +36,7 @@ import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeBiometricAvailability
 import uz.mahalla.testutil.FakeHttpInspector
 import uz.mahalla.testutil.FakeMediaRepository
+import uz.mahalla.testutil.FakePreferencesDataStore
 import uz.mahalla.testutil.FakeProfileRepository
 import uz.mahalla.testutil.FakeSessionsRepository
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -569,10 +570,12 @@ class ProfileViewModelTest {
     }
 
     // --- Тумблер «Вход по отпечатку» (макет 2d) ---
+    // DataStore здесь в памяти: у пути записи нет эффекта, за которым можно
+    // подождать, а файловый DataStore на IO не всегда успевал за таймаут.
 
     @Test
     fun `enabling biometrics asks for the system prompt before writing the flag`() = runTest {
-        val settings = SettingsDataStore(newDataStore())
+        val settings = SettingsDataStore(FakePreferencesDataStore())
         val viewModel = viewModel(settings = settings, biometrics = FakeBiometricAvailability(BiometricStatus.Available))
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
@@ -585,31 +588,29 @@ class ProfileViewModelTest {
 
     @Test
     fun `a confirmed prompt turns biometrics on`() = runTest {
-        val settings = SettingsDataStore(newDataStore())
+        val settings = SettingsDataStore(FakePreferencesDataStore())
         val viewModel = viewModel(settings = settings)
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
         viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded)
 
-        // Запись идёт на IO-диспетчере DataStore, а эффекта, за которым можно
-        // было бы подождать, у этого пути нет — ждём само значение в потоке.
-        assertTrue(settings.settings.first { it.biometricEnabled }.biometricEnabled)
+        assertTrue(settings.current().biometricEnabled)
     }
 
     @Test
     fun `disabling biometrics writes the flag without a prompt`() = runTest {
-        val settings = SettingsDataStore(newDataStore())
+        val settings = SettingsDataStore(FakePreferencesDataStore())
         settings.setBiometricEnabled(true)
         val viewModel = viewModel(settings = settings)
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = false))
 
-        assertFalse(settings.settings.first { !it.biometricEnabled }.biometricEnabled)
+        assertFalse(settings.current().biometricEnabled)
     }
 
     @Test
     fun `a failed prompt is explained and cleared by the next attempt`() = runTest {
-        val settings = SettingsDataStore(newDataStore())
+        val settings = SettingsDataStore(FakePreferencesDataStore())
         val viewModel = viewModel(settings = settings)
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
@@ -628,7 +629,7 @@ class ProfileViewModelTest {
      */
     @Test
     fun `without a sensor there is no row and without enrolment nothing is written`() = runTest {
-        val settings = SettingsDataStore(newDataStore())
+        val settings = SettingsDataStore(FakePreferencesDataStore())
         val noSensor = viewModel(settings = settings, biometrics = FakeBiometricAvailability(BiometricStatus.NoHardware))
         assertFalse(noSensor.state.value.showsBiometricRow)
 

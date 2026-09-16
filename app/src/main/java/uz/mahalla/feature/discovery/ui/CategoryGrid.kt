@@ -4,8 +4,11 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,13 +62,20 @@ fun CategoryGrid(
         verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
         tiles.chunked(columns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
+            // Ряд ростом с самую высокую плитку: подпись в две строки («Игровые
+            // зоны») иначе делала бы свою плитку выше соседних.
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            ) {
                 row.forEach { tile ->
                     CategoryTile(
                         labelRes = tile.labelRes,
                         icon = tile.icon,
                         onClick = tile.onClick,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                 }
                 // Добивка пустыми ячейками: без неё последний неполный ряд

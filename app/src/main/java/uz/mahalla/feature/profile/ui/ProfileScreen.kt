@@ -378,7 +378,10 @@ fun ProfileContentScreen(
                             R.string.onboarding_biometric_not_enrolled
                         },
                     ),
-                    enabled = enrolled,
+                    // Выключить можно и без отпечатков: их могли удалить в
+                    // настройках устройства уже после включения, и запертый
+                    // включённый тумблер не дал бы снять флаг.
+                    enabled = enrolled || state.settings.biometricEnabled,
                 )
                 if (state.biometricPromptFailed) {
                     Text(

@@ -132,15 +132,18 @@ fun WalletContentScreen(
         MahallaTopBar(
             title = stringResource(R.string.wallet_title),
             brandMark = true,
-            meta = if (subscription?.expiresAt != null && subscription.isActive) {
-                stringResource(
+            // В грейс-периоде «до 12.10» с прошедшей датой врало бы про срок —
+            // тогда та же подпись, что у плашки карточки ниже: «истекает».
+            meta = when {
+                subscription == null -> null
+                subscription.inGracePeriod -> stringResource(R.string.subscription_status_expiring)
+                subscription.isActive && subscription.expiresAt != null -> stringResource(
                     R.string.wallet_header_subscription,
                     subscription.planName?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.subscription_plan_unnamed),
                     DateTimeFormatters.date(subscription.expiresAt),
                 )
-            } else {
-                null
+                else -> null
             },
         )
         MahallaPullToRefresh(

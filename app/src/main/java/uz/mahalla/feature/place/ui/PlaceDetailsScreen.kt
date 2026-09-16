@@ -962,7 +962,9 @@ private val META_ROW_PADDING = 9.dp
 /**
  * Прайс (макет 1b): «название …… цена» с пунктирной отводкой. Цена без
  * валюты, как в макете, — на карточке места других чисел с валютой нет, а
- * «сум» в каждой строке съедал бы место у названия.
+ * «сум» в каждой строке съедал бы место у названия. Услуга без цены —
+ * без цены: «бесплатно» из макета сказать нечем, ноль у бэкенда значит
+ * «не названа».
  *
  * Строки не нажимаются: запись начинается кнопкой «Забронировать» — там
  * услугу выбирают заново вместе со днём и временем.
@@ -987,15 +989,16 @@ private fun ServicesBlock(services: List<BarberService>, modifier: Modifier = Mo
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 DottedLeader(modifier = Modifier.weight(1f))
-                Text(
-                    text = if (service.priceSum > 0) {
-                        MoneyFormatter.amount(service.priceSum)
-                    } else {
-                        stringResource(R.string.price_free)
-                    },
-                    style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                // Ноль у `priceSum` — «цена не названа», а не «бесплатно»
+                // (см. BarberService): экран записи такую цену не показывает,
+                // и карточка места не должна обещать больше него.
+                service.priceSum.takeIf { it > 0 }?.let { price ->
+                    Text(
+                        text = MoneyFormatter.amount(price),
+                        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
         }
     }
