@@ -614,6 +614,7 @@
     <string name="home_focus_open_ticket">Navbatni ochish</string>
     <string name="home_focus_open_place">Joy</string>
     <string name="category_all">Hammasi</string>
+    <string name="home_focus_updated_at">%1$s da yangilangan</string>
     <string name="home_focus_rating">reyting %1$s</string>
     <string name="wallet_header_subscription">%1$s %2$s gacha</string>
     <string name="place_services_title">Xizmatlar</string>

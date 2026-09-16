@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
+import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -77,6 +78,10 @@ fun FocusCard(
             // призраком на фоне. Показываем его только пока оно свежее.
             ghostNumber = ticket.queuePosition?.takeIf { queueInfoIsCurrent }?.toString(),
             kicker = stringResource(R.string.home_focus_ticket_kicker),
+            // «обновлено 9:30» — момент, на который известны позиция и
+            // состояние (макет 1d): перечитать талон нечем, и без времени
+            // числа выглядели бы живыми.
+            kickerMeta = stringResource(R.string.home_focus_updated_at, DateTimeFormatters.time(ticket.receivedAt)),
             title = ticket.placeName.takeIf { it.isNotBlank() }
                 ?: stringResource(R.string.queue_title),
             subtitle = ticket.focusSubtitle(queueInfoIsCurrent),
@@ -96,6 +101,7 @@ fun FocusCard(
             modifier = modifier,
             ghostNumber = null,
             kicker = stringResource(R.string.home_focus_nearest_kicker),
+            kickerMeta = null,
             title = nearestOpenPlace.name,
             subtitle = stringResource(
                 R.string.text_joined_with_dot,
@@ -154,6 +160,7 @@ private fun WalkInStatus.focusLabelRes(): Int = when (this) {
 private fun FocusSurface(
     ghostNumber: String?,
     kicker: String,
+    kickerMeta: String?,
     title: String,
     subtitle: String,
     caption: String?,
@@ -191,11 +198,25 @@ private fun FocusSurface(
             }
         }
         Column(modifier = Modifier.padding(Spacing.card)) {
-            Text(
-                text = kicker,
-                style = MaterialTheme.typography.labelLarge,
-                color = OnGradientMuted,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = if (ghostNumber == null) 0.dp else GhostGutter),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = kicker,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = OnGradientMuted,
+                )
+                if (kickerMeta != null) {
+                    Text(
+                        text = kickerMeta,
+                        style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                        color = OnGradientMuted,
+                    )
+                }
+            }
             Text(
                 text = title,
                 // Правый отступ — чтобы заголовок не заезжал под призрачное
