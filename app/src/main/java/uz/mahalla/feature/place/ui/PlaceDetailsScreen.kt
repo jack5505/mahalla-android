@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -94,6 +95,7 @@ import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.feature.social.domain.PlaceComment
+import uz.mahalla.ui.theme.FocusHeadline
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -182,10 +184,10 @@ fun PlaceDetailsContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(
-            title = state.data?.place?.name ?: stringResource(R.string.place_title),
-            onBack = onBack,
-        )
+        // Название переехало в тело экрана крупным заголовком (макет 1b), в
+        // шапке остаётся только «назад»: иначе имя места читается дважды —
+        // глазами и TalkBack.
+        MahallaTopBar(title = "", onBack = onBack)
         ScreenStateHost(
             state = state.details,
             onRetry = { onEvent(PlaceDetailsEvent.Retry) },
@@ -656,6 +658,13 @@ private fun GalleryPhoto(
 /** Скрим под кнопкой удаления: без него белая иконка теряется на светлом фото. */
 private val GALLERY_DELETE_SCRIM = Color.Black.copy(alpha = 0.45f)
 
+/**
+ * Шапка карточки места (макет 1b): кикер категории, крупное название,
+ * строка меты под ним.
+ *
+ * Без карточки вокруг: в макете заголовок лежит прямо на фоне экрана, а рамка
+ * вокруг названия делала бы его одним из блоков, а не заголовком.
+ */
 @Composable
 private fun Summary(
     details: PlaceDetails,
@@ -663,7 +672,7 @@ private fun Summary(
     modifier: Modifier = Modifier,
 ) {
     val place = details.place
-    MahallaCard(modifier = modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
@@ -671,7 +680,7 @@ private fun Summary(
             Text(
                 text = stringResource(place.category.labelRes),
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = LocalMahallaColors.current.fgMuted,
             )
             MahallaBadge(
@@ -683,6 +692,14 @@ private fun Summary(
                 tone = if (openNow == true) MahallaTone.Success else MahallaTone.Neutral,
             )
         }
+        Text(
+            text = place.name,
+            modifier = Modifier
+                .padding(top = Spacing.item / 2)
+                .semantics { heading() },
+            style = FocusHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Row(
             modifier = Modifier.padding(top = Spacing.item),
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -699,18 +716,27 @@ private fun Summary(
                 } else {
                     stringResource(R.string.place_no_rating)
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = distanceLabel(place.distanceMeters),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = LocalMahallaColors.current.fgMuted,
             )
         }
     }
 }
 
+/**
+ * Действия места. Первые два — в ряд, как в макете 1b («Взять талон» рядом с
+ * «Забронировать»): это самая частая пара, и растянутые на всю ширину кнопки
+ * друг под другом занимали бы экран целиком.
+ *
+ * Остальные (у мест с несколькими вертикалями их бывает до четырёх) остаются
+ * колонкой ниже: макет такого случая не рисует, а втискивать четыре кнопки в
+ * ряд значит обрезать подписи.
+ */
 @Composable
 private fun Actions(
     actions: List<PlaceAction>,
@@ -721,22 +747,35 @@ private fun Actions(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        actions.forEachIndexed { index, action ->
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
+            actions.take(SIDE_BY_SIDE_ACTIONS).forEachIndexed { index, action ->
+                MahallaButton(
+                    text = stringResource(action.labelRes()),
+                    onClick = { onEvent(PlaceDetailsEvent.ActionClicked(action)) },
+                    modifier = Modifier.weight(1f),
+                    // Первое действие — основное; остальные не должны спорить с
+                    // ним за внимание.
+                    variant = if (index == 0) {
+                        MahallaButtonVariant.Primary
+                    } else {
+                        MahallaButtonVariant.Secondary
+                    },
+                    icon = action.icon(),
+                )
+            }
+        }
+        actions.drop(SIDE_BY_SIDE_ACTIONS).forEach { action ->
             MahallaButton(
                 text = stringResource(action.labelRes()),
                 onClick = { onEvent(PlaceDetailsEvent.ActionClicked(action)) },
-                // Первое действие — основное; остальные не должны спорить с ним
-                // за внимание.
-                variant = if (index == 0) {
-                    MahallaButtonVariant.Primary
-                } else {
-                    MahallaButtonVariant.Secondary
-                },
+                variant = MahallaButtonVariant.Secondary,
                 icon = action.icon(),
             )
         }
     }
 }
+
+private const val SIDE_BY_SIDE_ACTIONS = 2
 
 @Composable
 private fun Hours(
