@@ -45,9 +45,11 @@
     <string name="http_inspector_subtitle">Ilova serverga qanday so\'rovlar yuborayotganini ko\'rish</string>
 
     <!-- Онбординг: welcome -->
-    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
-    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
-    <string name="onboarding_welcome_action">Kirish yoki ro\'yxatdan o\'tish</string>
+    <string name="onboarding_welcome_kicker">MAHALLA</string>
+    <string name="onboarding_welcome_title">Uyingiz yaqinidagi hamma narsa — bitta ilovada</string>
+    <string name="onboarding_welcome_subtitle">Dorixona, ovqat, shifokor, ustalar va kino. Navbatga talon va bron — qo\'ng\'iroqsiz.</string>
+    <string name="onboarding_welcome_action">Boshlash</string>
+    <string name="onboarding_welcome_consent">Davom etish orqali siz shartlar va siyosatga rozilik bildirasiz</string>
     <string name="onboarding_welcome_language">Ilova tili</string>
 
     <!-- Онбординг: телефон -->
