@@ -102,6 +102,7 @@
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
     <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
+    <string name="pin_pad_backspace">Raqamni o\'chirish</string>
 
     <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Biometrika bilan kirish</string>

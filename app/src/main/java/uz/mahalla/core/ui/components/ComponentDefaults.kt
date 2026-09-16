@@ -41,6 +41,9 @@ object MahallaComponentDefaults {
     val otpCellWidth: Dp = 64.dp
     val otpCellHeight: Dp = 68.dp
 
+    /** Клавиша нампада PIN (макет 0e) — сама по себе больше цели нажатия. */
+    val pinPadKeySize: Dp = 60.dp
+
     // --- Discovery (эпик 4) ---
 
     /** Плитка категории на главной: квадратная, иконка над подписью. */
@@ -122,6 +125,7 @@ object MahallaComponentDefaults {
         "segment" to segmentMinHeight,
         "navItem" to navItemMinHeight,
         "otpCell" to otpCellHeight,
+        "pinPadKey" to pinPadKeySize,
         "categoryTile" to categoryTileMinHeight,
         "searchEntry" to searchEntryMinHeight,
         "mapMarker" to mapMarkerMinSize,

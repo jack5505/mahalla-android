@@ -65,6 +65,8 @@ class TouchTargetTest {
             "segment",
             "navItem",
             "otpCell",
+            // Редизайн «Focus»: клавиша нампада PIN (макет 0e).
+            "pinPadKey",
             // Эпик 4: плитка категории, строка поиска на главной, метка карты.
             "categoryTile",
             "searchEntry",

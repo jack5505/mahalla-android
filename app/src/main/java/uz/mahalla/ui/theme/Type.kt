@@ -122,6 +122,14 @@ val FocusOtpDigit = TextStyle(
     lineHeight = 32.sp,
 )
 
+/** Цифра на клавише нампада PIN (шаг 0e). */
+val FocusPinKey = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.Medium,
+    fontSize = 22.sp,
+    lineHeight = 26.sp,
+)
+
 /** Заголовок шторки бронирования, «Активных талонов нет». */
 val FocusTitleSheet = TextStyle(
     fontFamily = Inter,
