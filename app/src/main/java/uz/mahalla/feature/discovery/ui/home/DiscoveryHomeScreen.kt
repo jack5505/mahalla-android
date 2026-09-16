@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -318,7 +319,9 @@ private fun LazyListScope.placeSection(
         // которую каталог знает: `isOpenNow` приходит с каждым местом.
         SectionHeader(
             title = stringResource(titleRes),
-            meta = stringResource(R.string.home_open_count, places.count(Place::isOpenNow), places.size),
+            meta = places.count(Place::isOpenNow).let { open ->
+                pluralStringResource(R.plurals.home_open_count, open, open, places.size)
+            },
             actionLabel = stringResource(R.string.action_see_all),
             onAction = { onEvent(DiscoveryHomeEvent.SearchClicked) },
         )
