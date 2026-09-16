@@ -631,6 +631,7 @@
     <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
     <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
     <string name="queue_stat_wait">daqiqa</string>
+    <string name="queue_stat_wait_hours">soat</string>
     <string name="queue_stat_taken">olindi</string>
     <string name="queue_cancel">Navbatni bekor qilish</string>
     <string name="queue_cancel_keep">Qoldirish</string>

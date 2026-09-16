@@ -3,12 +3,16 @@ package uz.mahalla.feature.onboarding.ui
 import android.app.Activity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -98,7 +102,7 @@ private fun WelcomeContent(
     val languages = AppLanguage.entries
     val onGradient = Color(0xFFE8DEFF) // primaryContainer — вторичный текст на градиенте
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(
@@ -125,7 +129,20 @@ private fun WelcomeContent(
                 .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)), CircleShape),
         )
 
-        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        // Экран прокручивается, но только когда содержимое не влезло:
+        // `heightIn(min = maxHeight)` держит колонку ровно в высоту экрана,
+        // пока места хватает, — и тогда работает прижатие к низу. На крупном
+        // системном шрифте (заголовок 36sp, две кнопки, сегмент языка и
+        // подпись согласия) колонка перерастает экран и начинает скроллиться,
+        // а не обрезает заголовок, как это делал `fillMaxSize` без прокрутки.
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -140,7 +157,9 @@ private fun WelcomeContent(
             }
 
             Column(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .padding(top = Spacing.gap)
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.Bottom,
             ) {
                 Text(

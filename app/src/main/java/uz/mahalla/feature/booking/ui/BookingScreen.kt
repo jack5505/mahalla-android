@@ -383,6 +383,9 @@ private fun SlotsBlock(
                     selected = slot == state.selectedTime,
                     onClick = { onEvent(BookingEvent.TimeSelected(slot)) },
                     modifier = Modifier.weight(1f),
+                    // Ячейка сетки узкая (≈79dp на 393dp экране), и галочка
+                    // выбранного слота переносила бы время на вторую строку.
+                    showSelectedIcon = false,
                 )
             }
             val tail = slots.data.size % SLOT_COLUMNS

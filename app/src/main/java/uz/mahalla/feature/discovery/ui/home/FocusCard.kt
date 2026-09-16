@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -154,16 +155,23 @@ private fun FocusSurface(
             .semantics(mergeDescendants = true) {},
     ) {
         if (ghostNumber != null) {
-            Text(
-                text = ghostNumber,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 8.dp, y = (-30).dp),
-                style = FocusGhostNumeral.merge(TabularNums),
-                // Декорация: число уже сказано подписью под заголовком, и
-                // второй раз TalkBack читать его не должен.
-                color = Color.White.copy(alpha = GhostAlpha),
-            )
+            // matchParentSize — чтобы 118dp цифра не задавала высоту карточки:
+            // она декорация в углу, а высоту держит текстовый блок. Заодно на
+            // крупном системном шрифте карточка не раздувается вслед за ней.
+            Box(modifier = Modifier.matchParentSize()) {
+                Text(
+                    text = ghostNumber,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 8.dp, y = (-30).dp)
+                        // Число уже сказано подписью под заголовком: без этого
+                        // mergeDescendants родителя втягивает его в озвучку, и
+                        // TalkBack читает позицию дважды.
+                        .clearAndSetSemantics {},
+                    style = FocusGhostNumeral.merge(TabularNums),
+                    color = Color.White.copy(alpha = GhostAlpha),
+                )
+            }
         }
         Column(modifier = Modifier.padding(Spacing.card)) {
             Text(

@@ -44,13 +44,18 @@ fun MahallaTopBar(
     val backLabel = stringResource(R.string.action_back)
     TopAppBar(
         title = {
-            Text(
-                text = title,
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // Пустой заголовок — это не заголовок: на экранах, где название
+            // переехало в тело (карточка места, шаги онбординга), TalkBack
+            // иначе объявляет безымянный заголовок перед кнопкой «назад».
+            if (title.isNotBlank()) {
+                Text(
+                    text = title,
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         },
         modifier = modifier,
         navigationIcon = {

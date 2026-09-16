@@ -365,9 +365,14 @@ private fun TicketStats(
         horizontalArrangement = Arrangement.spacedBy(Spacing.gap * 2),
     ) {
         wait?.let {
+            // До часа — минуты числом, дальше «1:35» и подпись «часов»:
+            // «95 минут» человек всё равно пересчитывает в уме.
+            val hours = it >= MINUTES_IN_HOUR
             TicketStat(
-                value = it.toString(),
-                label = stringResource(R.string.queue_stat_wait),
+                value = if (hours) DateTimeFormatters.waitingTime(it.toLong()) else it.toString(),
+                label = stringResource(
+                    if (hours) R.string.queue_stat_wait_hours else R.string.queue_stat_wait,
+                ),
                 // Вслух «9 минут», а не «9, минут»: цифра и подпись разнесены
                 // только визуально.
                 description = pluralStringResource(R.plurals.queue_wait_minutes, it, it),
@@ -548,3 +553,5 @@ private fun QueueTicketPreview() {
         )
     }
 }
+
+private const val MINUTES_IN_HOUR = 60

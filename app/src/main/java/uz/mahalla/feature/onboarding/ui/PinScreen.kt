@@ -71,8 +71,8 @@ private fun PinContent(
         MahallaPinDots(state = state.pin, isError = state.error != null)
         state.errorText()?.let { OnboardingError(it) }
         MahallaPinPad(
-            onDigit = { digit -> onEvent(PinEvent.PinChanged(state.pin.code + digit)) },
-            onBackspace = { onEvent(PinEvent.PinChanged(state.pin.code.dropLast(1))) },
+            onDigit = { digit -> onEvent(PinEvent.DigitPressed(digit)) },
+            onBackspace = { onEvent(PinEvent.BackspacePressed) },
             enabled = !state.busy,
         )
         // Отказ бэкенда на PIN-шаге входа (issue #51): текст сервера точнее

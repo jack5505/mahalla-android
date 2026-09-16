@@ -625,6 +625,7 @@
     <string name="queue_position_unknown">Место появится, когда мастер подтвердит запись.</string>
     <string name="queue_position_outdated">Очередь могла измениться: дождитесь следующего сообщения.</string>
     <string name="queue_stat_wait">минут</string>
+    <string name="queue_stat_wait_hours">часов</string>
     <string name="queue_stat_taken">взят</string>
     <string name="queue_cancel">Отменить запись</string>
     <string name="queue_cancel_keep">Оставить</string>

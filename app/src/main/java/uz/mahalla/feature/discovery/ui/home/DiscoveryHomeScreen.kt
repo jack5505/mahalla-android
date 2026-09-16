@@ -145,14 +145,21 @@ private fun HomeList(
     ) {
         // Фокус-карточка — первым блоком (макет 1a/1d): она отвечает на
         // вопрос «что мне сейчас», и всё остальное на экране — уже поиск.
-        item(key = "focus") {
-            FocusCard(
-                ticket = state.ticket,
-                queueInfoIsCurrent = state.ticketQueueInfoIsCurrent,
-                nearestOpenPlace = state.nearestOpenPlace,
-                onOpenTicket = { onEvent(DiscoveryHomeEvent.TicketClicked) },
-                onOpenPlace = { onEvent(DiscoveryHomeEvent.PlaceClicked(it)) },
-            )
+        //
+        // Ячейка заводится только когда карточке есть что сказать: пустая
+        // всё равно получила бы от `spacedBy` свои 20dp, и над строкой поиска
+        // висела бы дыра — на холодном старте (каталог ещё грузится) и ночью,
+        // когда рядом ничего не открыто.
+        if (state.ticket != null || state.nearestOpenPlace != null) {
+            item(key = "focus") {
+                FocusCard(
+                    ticket = state.ticket,
+                    queueInfoIsCurrent = state.ticketQueueInfoIsCurrent,
+                    nearestOpenPlace = state.nearestOpenPlace,
+                    onOpenTicket = { onEvent(DiscoveryHomeEvent.TicketClicked) },
+                    onOpenPlace = { onEvent(DiscoveryHomeEvent.PlaceClicked(it)) },
+                )
+            }
         }
 
         item(key = "search") {
