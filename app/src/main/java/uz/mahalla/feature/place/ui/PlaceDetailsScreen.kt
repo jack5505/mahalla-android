@@ -201,7 +201,23 @@ fun PlaceDetailsContent(
         // Название переехало в тело экрана крупным заголовком (макет 1b), в
         // шапке остаётся только «назад»: иначе имя места читается дважды —
         // глазами и TalkBack.
-        MahallaTopBar(title = "", onBack = onBack)
+        // Мета шапки — «180 м · 09:00 – 18:00» (макет 1b): расстояние и часы на
+        // сегодня. Появляется вместе с карточкой; пока она грузится, шапка
+        // пустая, а не с прочерками.
+        val loadedPlace = state.data?.place
+        val todayHours = state.week.firstOrNull { it.dayOfWeek == state.today }
+        MahallaTopBar(
+            title = "",
+            onBack = onBack,
+            meta = loadedPlace?.let { place ->
+                val distance = distanceLabel(place.distanceMeters)
+                if (todayHours != null) {
+                    stringResource(R.string.text_joined_with_dot, distance, todayHours.label())
+                } else {
+                    distance
+                }
+            },
+        )
         ScreenStateHost(
             state = state.details,
             onRetry = { onEvent(PlaceDetailsEvent.Retry) },
@@ -732,11 +748,6 @@ private fun Summary(
                 },
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = distanceLabel(place.distanceMeters),
-                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                color = LocalMahallaColors.current.fgMuted,
             )
         }
     }

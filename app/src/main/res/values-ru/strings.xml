@@ -607,6 +607,7 @@
     <string name="home_focus_ticket_position">В очереди · %1$d</string>
     <string name="home_focus_open_ticket">Открыть талон</string>
     <string name="home_focus_open_place">Место</string>
+    <string name="home_open_count">открыто %1$d из %2$d</string>
     <string name="home_focus_rating">рейтинг %1$s</string>
     <string name="wallet_header_subscription">%1$s до %2$s</string>
     <string name="place_services_title">Услуги</string>

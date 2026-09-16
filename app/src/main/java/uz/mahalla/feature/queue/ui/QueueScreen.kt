@@ -286,10 +286,13 @@ private fun TicketBlock(
         state.cancelFailure?.let { OnboardingApiError(failure = it) }
 
         if (state.canCancel || state.isCancelling) {
+            // Отмена — outlined, не красная (макет 2a): человек снимает свою
+            // запись, а не ломает что-то. Красным остаётся подтверждение в
+            // диалоге — там решение уже необратимо.
             MahallaButton(
                 text = stringResource(R.string.queue_cancel),
                 onClick = { onEvent(QueueEvent.CancelClicked) },
-                variant = MahallaButtonVariant.Destructive,
+                variant = MahallaButtonVariant.Ghost,
                 state = ButtonState(loading = state.isCancelling),
             )
         }

@@ -407,6 +407,8 @@ fun MahallaListItem(
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
+    /** Счётчик или подпись справа от заголовка («открыто 4 из 6», макет 1a), tnum. */
+    meta: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
@@ -423,6 +425,18 @@ fun SectionHeader(
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        if (meta != null) {
+            Text(
+                text = meta,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = Spacing.item),
+                style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                color = LocalMahallaColors.current.fgMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (actionLabel != null && onAction != null) {
             Box(
                 modifier = Modifier

@@ -314,8 +314,11 @@ private fun LazyListScope.placeSection(
     if (places.isEmpty()) return
 
     item(key = "$key-header") {
+        // «открыто 4 из 6» (макет 1a: «6 из 6») — единственная цифра секции,
+        // которую каталог знает: `isOpenNow` приходит с каждым местом.
         SectionHeader(
             title = stringResource(titleRes),
+            meta = stringResource(R.string.home_open_count, places.count(Place::isOpenNow), places.size),
             actionLabel = stringResource(R.string.action_see_all),
             onAction = { onEvent(DiscoveryHomeEvent.SearchClicked) },
         )

@@ -146,7 +146,7 @@ fun BookingContent(
             state.bookFailure?.let { InlineFailure(failure = it) }
 
             if (state.selectedServiceId != null) {
-                SummaryBlock(state = state, onEvent = onEvent)
+                SummaryBlock(state = state, onEvent = onEvent, onCancel = onBack)
             }
         }
     }
@@ -407,6 +407,7 @@ private fun SlotsBlock(
 private fun SummaryBlock(
     state: BookingState,
     onEvent: (BookingEvent) -> Unit,
+    onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMahallaColors.current
@@ -477,19 +478,32 @@ private fun SummaryBlock(
                 R.string.booking_submit
             },
         )
-        MahallaButton(
-            text = if (time == null) {
-                submitLabel
-            } else {
-                stringResource(
-                    R.string.text_joined_with_dot,
-                    submitLabel,
-                    DateTimeFormatters.time(time),
-                )
-            },
-            onClick = { onEvent(BookingEvent.BookClicked) },
-            state = ButtonState(enabled = state.canBook, loading = state.isBooking),
-        )
+        // «Отмена» рядом с подтверждением (макет 1c): выход с экрана, куда
+        // пришли за одним решением, должен быть под рукой, а не только в шапке.
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
+            MahallaButton(
+                text = stringResource(R.string.action_cancel),
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                variant = MahallaButtonVariant.Ghost,
+                state = ButtonState(enabled = !state.isBooking),
+            )
+            MahallaButton(
+                text = if (time == null) {
+                    submitLabel
+                } else {
+                    stringResource(
+                        R.string.text_joined_with_dot,
+                        submitLabel,
+                        DateTimeFormatters.time(time),
+                    )
+                },
+                onClick = { onEvent(BookingEvent.BookClicked) },
+                // Подтверждению — больше места: подпись с временем длиннее.
+                modifier = Modifier.weight(SUBMIT_WEIGHT),
+                state = ButtonState(enabled = state.canBook, loading = state.isBooking),
+            )
+        }
     }
 }
 
@@ -732,3 +746,6 @@ private fun BookingDonePreview() {
 
 /** Четыре колонки слотов — как в макете 1c. */
 private const val SLOT_COLUMNS = 4
+
+/** Кнопка подтверждения шире «Отмены»: в ней ещё и время. */
+private const val SUBMIT_WEIGHT = 1.6f
