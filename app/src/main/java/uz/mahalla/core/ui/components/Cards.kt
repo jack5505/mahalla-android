@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -273,6 +274,9 @@ fun BookingCard(
 fun MahallaCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    // Радиус карточки в макете зависит от её роли: плитка 16dp, карточка
+    // талона и «пусто» — 24dp, ряд «Mahalla+» — 20dp.
+    shape: Shape = MaterialTheme.shapes.medium,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -280,7 +284,7 @@ fun MahallaCard(
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .semantics(mergeDescendants = true) {},
-        shape = MaterialTheme.shapes.medium,
+        shape = shape,
         colors = CardDefaults.cardColors(
             // surfaceVariant, а не surface: в палитре редизайна фон экрана и
             // surface — один и тот же #fdf8ff, и карточка на нём была бы

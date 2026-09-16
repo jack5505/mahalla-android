@@ -625,8 +625,8 @@
     <string name="queue_position_label">Navbatdagi o\'rningiz</string>
     <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
     <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
-    <string name="queue_wait_label">Taxminiy kutish: %1$s</string>
-    <string name="queue_wait_hours">%1$s soat</string>
+    <string name="queue_stat_wait">daqiqa</string>
+    <string name="queue_stat_taken">olindi</string>
     <string name="queue_cancel">Navbatni bekor qilish</string>
     <string name="queue_cancel_keep">Qoldirish</string>
     <string name="queue_cancel_confirm_title">Navbatni bekor qilasizmi?</string>
