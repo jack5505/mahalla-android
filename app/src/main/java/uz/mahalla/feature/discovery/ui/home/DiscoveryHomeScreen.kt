@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Handyman
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +30,7 @@ import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -310,11 +312,16 @@ private fun LazyListScope.placeSection(
             onAction = { onEvent(DiscoveryHomeEvent.SearchClicked) },
         )
     }
-    items(items = places, key = { "$key-${it.id}" }) { place ->
-        PlaceCard(
-            place = place.toCardUi(),
-            onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
-        )
+    // Линии между строками рисует список, а не сама строка: под последней
+    // она не нужна (макет 1a).
+    itemsIndexed(items = places, key = { _, place -> "$key-${place.id}" }) { index, place ->
+        Column {
+            if (index > 0) MahallaDivider()
+            PlaceCard(
+                place = place.toCardUi(),
+                onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
+            )
+        }
     }
 }
 
