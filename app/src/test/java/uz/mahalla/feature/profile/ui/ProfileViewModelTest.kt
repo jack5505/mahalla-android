@@ -28,10 +28,12 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.media.domain.MediaRejection
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeBiometricAvailability
 import uz.mahalla.testutil.FakeHttpInspector
 import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakeProfileRepository
@@ -566,6 +568,91 @@ class ProfileViewModelTest {
         assertEquals("https://cdn.mahalla.uz/old.jpg", store.current().avatarUrl)
     }
 
+    // --- Тумблер «Вход по отпечатку» (макет 2d) ---
+
+    @Test
+    fun `enabling biometrics asks for the system prompt before writing the flag`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        val viewModel = viewModel(settings = settings, biometrics = FakeBiometricAvailability(BiometricStatus.Available))
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+
+        assertEquals(ProfileEffect.ShowBiometricPrompt, viewModel.effects.first())
+        // Флаг пишется только после подтверждения: закрытый диалог не должен
+        // оставить «биометрия включена».
+        assertFalse(settings.current().biometricEnabled)
+    }
+
+    @Test
+    fun `a confirmed prompt turns biometrics on`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        val viewModel = viewModel(settings = settings)
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+        viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded)
+
+        // Запись идёт на IO-диспетчере DataStore, а эффекта, за которым можно
+        // было бы подождать, у этого пути нет — ждём само значение в потоке.
+        assertTrue(settings.settings.first { it.biometricEnabled }.biometricEnabled)
+    }
+
+    @Test
+    fun `disabling biometrics writes the flag without a prompt`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        settings.setBiometricEnabled(true)
+        val viewModel = viewModel(settings = settings)
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = false))
+
+        assertFalse(settings.settings.first { !it.biometricEnabled }.biometricEnabled)
+    }
+
+    @Test
+    fun `a failed prompt is explained and cleared by the next attempt`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        val viewModel = viewModel(settings = settings)
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+        viewModel.onEvent(ProfileEvent.BiometricPromptFailed)
+        assertTrue(viewModel.state.value.biometricPromptFailed)
+        assertFalse(settings.current().biometricEnabled)
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+
+        assertFalse(viewModel.state.value.biometricPromptFailed)
+    }
+
+    /**
+     * Без датчика строки нет вовсе; без отпечатков она есть, но выключена — и
+     * событие включения, если доехало, флаг не пишет.
+     */
+    @Test
+    fun `without a sensor there is no row and without enrolment nothing is written`() = runTest {
+        val settings = SettingsDataStore(newDataStore())
+        val noSensor = viewModel(settings = settings, biometrics = FakeBiometricAvailability(BiometricStatus.NoHardware))
+        assertFalse(noSensor.state.value.showsBiometricRow)
+
+        val notEnrolled = viewModel(settings = settings, biometrics = FakeBiometricAvailability(BiometricStatus.NotEnrolled))
+        assertTrue(notEnrolled.state.value.showsBiometricRow)
+
+        notEnrolled.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+
+        assertFalse(settings.current().biometricEnabled)
+    }
+
+    @Test
+    fun `returning to the screen re-reads biometric availability`() = runTest {
+        // Отпечаток добавили в настройках устройства и вернулись в профиль.
+        val biometrics = FakeBiometricAvailability(BiometricStatus.NotEnrolled)
+        val viewModel = viewModel(biometrics = biometrics)
+        assertEquals(BiometricStatus.NotEnrolled, viewModel.state.value.biometricStatus)
+
+        biometrics.status = BiometricStatus.Available
+        viewModel.onEvent(ProfileEvent.ScreenResumed)
+
+        assertEquals(BiometricStatus.Available, viewModel.state.value.biometricStatus)
+    }
+
     private fun viewModel(
         inspector: HttpInspector = FakeHttpInspector(),
         profileStore: FakeUserProfileStore = FakeUserProfileStore(),
@@ -574,6 +661,7 @@ class ProfileViewModelTest {
         settings: SettingsDataStore = SettingsDataStore(newDataStore()),
         media: FakeMediaRepository = FakeMediaRepository(),
         profile: FakeProfileRepository = FakeProfileRepository(profileStore),
+        biometrics: FakeBiometricAvailability = FakeBiometricAvailability(),
     ) = ProfileViewModel(
         settingsDataStore = settings,
         localeManager = RecreatingLocaleManager,
@@ -583,6 +671,7 @@ class ProfileViewModelTest {
         authRepository = auth,
         mediaRepository = media,
         profileRepository = profile,
+        biometricAvailability = biometrics,
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */

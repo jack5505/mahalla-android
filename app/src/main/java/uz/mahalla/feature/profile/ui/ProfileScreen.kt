@@ -38,6 +38,8 @@ import androidx.lifecycle.Lifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.locale.AppLanguage
+import uz.mahalla.core.ui.biometric.findFragmentActivity
+import uz.mahalla.core.ui.biometric.showBiometricPrompt
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaAsyncImage
@@ -62,6 +64,7 @@ import uz.mahalla.core.ui.userMessage
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.media.ui.mediaMessage
 import uz.mahalla.feature.media.ui.rememberPhotoPicker
 import uz.mahalla.feature.onboarding.domain.City
@@ -134,6 +137,9 @@ fun ProfileScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val promptTitle = stringResource(R.string.onboarding_biometric_prompt_title)
+    val promptSubtitle = stringResource(R.string.onboarding_biometric_prompt_subtitle)
+    val promptNegative = stringResource(R.string.action_cancel)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -141,6 +147,25 @@ fun ProfileScreen(
                 ProfileEffect.RecreateActivity -> (context as? Activity)?.recreate()
                 is ProfileEffect.OpenHttpInspector -> context.startActivity(effect.intent)
                 ProfileEffect.LoggedOut -> onLoggedOut()
+
+                ProfileEffect.ShowBiometricPrompt -> {
+                    val activity = context.findFragmentActivity()
+                    if (activity == null) {
+                        // Без FragmentActivity (превью, тесты) промпт показать
+                        // нечем — тумблер честно остаётся выключенным.
+                        viewModel.onEvent(ProfileEvent.BiometricPromptFailed)
+                    } else {
+                        showBiometricPrompt(
+                            activity = activity,
+                            title = promptTitle,
+                            subtitle = promptSubtitle,
+                            negativeLabel = promptNegative,
+                            onSuccess = { viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded) },
+                            onCancelled = { viewModel.onEvent(ProfileEvent.BiometricPromptCancelled) },
+                            onFailed = { viewModel.onEvent(ProfileEvent.BiometricPromptFailed) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -337,6 +362,32 @@ fun ProfileContentScreen(
                 selectedIndex = themeModes.indexOf(state.settings.themeMode),
                 onSelect = { index -> onEvent(ProfileEvent.ThemeSelected(themeModes[index])) },
             )
+
+            // Тумблер отпечатка (макет 2d). Только при наличии датчика; без
+            // зарегистрированных отпечатков — выключен с объяснением.
+            if (state.showsBiometricRow) {
+                val enrolled = state.biometricStatus == BiometricStatus.Available
+                MahallaSwitchRow(
+                    title = stringResource(R.string.profile_biometric_title),
+                    checked = state.settings.biometricEnabled,
+                    onCheckedChange = { onEvent(ProfileEvent.BiometricToggled(it)) },
+                    description = stringResource(
+                        if (enrolled) {
+                            R.string.profile_biometric_description
+                        } else {
+                            R.string.onboarding_biometric_not_enrolled
+                        },
+                    ),
+                    enabled = enrolled,
+                )
+                if (state.biometricPromptFailed) {
+                    Text(
+                        text = stringResource(R.string.onboarding_biometric_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
 
             if (onChangeServer != null) {
                 MahallaListItem(
