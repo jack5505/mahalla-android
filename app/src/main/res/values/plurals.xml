@@ -70,6 +70,12 @@
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
 
+    <!-- Подпись под линией фокус-карточки на главной (макет 1a). -->
+    <plurals name="home_focus_wait">
+        <item quantity="one">~%1$d daqiqa kutish</item>
+        <item quantity="other">~%1$d daqiqa kutish</item>
+    </plurals>
+
     <!-- Бронь (issue #97): длительность услуги. -->
     <plurals name="booking_duration_minutes">
         <item quantity="one">%1$d daqiqa</item>

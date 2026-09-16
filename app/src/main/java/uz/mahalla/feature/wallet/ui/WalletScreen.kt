@@ -125,7 +125,24 @@ fun WalletContentScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.wallet_title))
+        // Мета шапки — «Mahalla+ до 12.10» (общая шапка макета): срок подписки
+        // есть в состоянии ради карточки ниже, а здесь он на виду и без
+        // прокрутки.
+        val subscription = state.subscription
+        MahallaTopBar(
+            title = stringResource(R.string.wallet_title),
+            brandMark = true,
+            meta = if (subscription?.expiresAt != null && subscription.isActive) {
+                stringResource(
+                    R.string.wallet_header_subscription,
+                    subscription.planName?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.subscription_plan_unnamed),
+                    DateTimeFormatters.date(subscription.expiresAt),
+                )
+            } else {
+                null
+            },
+        )
         MahallaPullToRefresh(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(WalletEvent.Refreshed) },

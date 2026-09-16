@@ -80,8 +80,10 @@ private fun CategoryTile(
         color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
+        // Отступ плитки 12dp, а не 18: при четырёх колонках на 393dp плитка
+        // ≈79dp, и с отступом карточки подписи не осталось бы места.
         Column(
-            modifier = Modifier.padding(Spacing.card),
+            modifier = Modifier.padding(horizontal = Spacing.item / 2, vertical = Spacing.item),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Spacing.item / 2, Alignment.CenterVertically),
         ) {
@@ -102,7 +104,8 @@ private fun CategoryTile(
             }
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelLarge,
+                // Label S по макету (подписи категорий 10–10.5).
+                style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -111,7 +114,8 @@ private fun CategoryTile(
     }
 }
 
-private const val DEFAULT_COLUMNS = 3
+/** Четыре колонки — как в макете 1a («Рядом с домом»). */
+private const val DEFAULT_COLUMNS = 4
 
 @ThemeLanguagePreviews
 @Composable

@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -16,12 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
+import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.preview.LargeFontPreviews
@@ -76,6 +80,12 @@ fun FocusCard(
             title = ticket.placeName.takeIf { it.isNotBlank() }
                 ?: stringResource(R.string.queue_title),
             subtitle = ticket.focusSubtitle(queueInfoIsCurrent),
+            // Ожидание — только пока свежее, как и позиция. Заполнения у линии
+            // нет: доля «сколько прошло» из одного числа минут не выводится.
+            caption = ticket.estimatedWaitMinutes
+                ?.takeIf { queueInfoIsCurrent }
+                ?.let { pluralStringResource(R.plurals.home_focus_wait, it, it) },
+            progress = 0f,
             primaryLabel = stringResource(R.string.home_focus_open_ticket),
             onPrimary = onOpenTicket,
             secondaryLabel = stringResource(R.string.home_focus_open_place),
@@ -92,6 +102,11 @@ fun FocusCard(
                 stringResource(nearestOpenPlace.category.labelRes),
                 distanceLabel(nearestOpenPlace.distanceMeters),
             ),
+            // Рейтинг под линией, заполнение — доля от пяти: единственное число
+            // места, у которого есть честный максимум.
+            caption = RatingFormatter.format(nearestOpenPlace.rating, nearestOpenPlace.reviewCount)
+                ?.let { stringResource(R.string.home_focus_rating, it) },
+            progress = (nearestOpenPlace.rating / MAX_RATING).toFloat().coerceIn(0f, 1f),
             primaryLabel = stringResource(R.string.home_focus_open_place),
             onPrimary = { onOpenPlace(nearestOpenPlace.id) },
             secondaryLabel = null,
@@ -141,6 +156,8 @@ private fun FocusSurface(
     kicker: String,
     title: String,
     subtitle: String,
+    caption: String?,
+    progress: Float,
     primaryLabel: String,
     onPrimary: () -> Unit,
     secondaryLabel: String?,
@@ -196,6 +213,31 @@ private fun FocusSurface(
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = OnGradientMuted,
             )
+            if (caption != null) {
+                // Линия 1dp с заполнением и подпись под ней (макет 1a). Линия
+                // декоративна и из семантики исключена: число сказано подписью.
+                Box(
+                    modifier = Modifier
+                        .padding(top = Spacing.item)
+                        .fillMaxWidth()
+                        .height(ProgressLineHeight)
+                        .background(Color.White.copy(alpha = ProgressTrackAlpha))
+                        .clearAndSetSemantics {},
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .background(ProgressFill),
+                    )
+                }
+                Text(
+                    text = caption,
+                    modifier = Modifier.padding(top = Spacing.item / 2),
+                    style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                    color = OnGradientMuted,
+                )
+            }
             Row(
                 modifier = Modifier.padding(top = Spacing.card),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.item),
@@ -223,6 +265,12 @@ private fun FocusSurface(
 private val OnGradientMuted = Color(0xFFE8DEFF)
 
 private const val GhostAlpha = 0.14f
+
+/** Заполнение линии прогресса — `#b9a3f0` из макета, то же, что акцент снекбара. */
+private val ProgressFill = Color(0xFFB9A3F0)
+private const val ProgressTrackAlpha = 0.18f
+private val ProgressLineHeight = 1.dp
+private const val MAX_RATING = 5.0
 
 /** Место под призрачное число: заголовок в него не заезжает. */
 private val GhostGutter = 64.dp

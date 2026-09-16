@@ -83,10 +83,12 @@ class DiscoveryHomeViewModel @Inject constructor(
     private fun readTicket() {
         viewModelScope.launch {
             val ticket = tickets.activeAny()
+            val now = clock.instant()
             updateState {
                 copy(
                     ticket = ticket,
-                    ticketQueueInfoIsCurrent = ticket?.showsQueueInfo(clock.instant()) == true,
+                    ticketQueueInfoIsCurrent = ticket?.showsQueueInfo(now) == true,
+                    openedAt = now,
                 )
             }
         }

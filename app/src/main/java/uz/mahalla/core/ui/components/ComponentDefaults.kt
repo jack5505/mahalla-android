@@ -46,8 +46,8 @@ object MahallaComponentDefaults {
 
     // --- Discovery (эпик 4) ---
 
-    /** Плитка категории на главной: квадратная, иконка над подписью. */
-    val categoryTileMinHeight: Dp = 88.dp
+    /** Плитка категории на главной: иконка над подписью, 76dp по макету 1a. */
+    val categoryTileMinHeight: Dp = 76.dp
 
     /** Строка-кнопка «Поиск» на главной — открывает экран поиска. */
     val searchEntryMinHeight: Dp = fieldMinHeight

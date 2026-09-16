@@ -9,6 +9,7 @@ import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.queue.domain.WalkInTicket
+import java.time.Instant
 
 /** Содержимое главной (эпик 4.1): блоки «рядом» и «рекомендации». */
 @Immutable
@@ -49,6 +50,12 @@ data class DiscoveryHomeState(
      * нельзя, а пересчитать его нечем.
      */
     val ticketQueueInfoIsCurrent: Boolean = false,
+    /**
+     * Момент, на который собран экран — мета шапки «9:30 · вторник» (общая
+     * шапка макета). Ставится при загрузке и на каждом возврате на экран, а
+     * не тикает каждую минуту: это подпись «когда это было», а не часы.
+     */
+    val openedAt: Instant? = null,
 ) : UiState {
 
     /**

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,12 +51,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
@@ -90,7 +96,9 @@ import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.components.SkeletonBox
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.discovery.ui.distanceLabel
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
@@ -304,6 +312,10 @@ private fun DetailsList(
             item(key = "meta") {
                 MetaTable(details = details, state = state, onEvent = onEvent)
             }
+        }
+
+        if (state.services.isNotEmpty()) {
+            item(key = "services") { ServicesBlock(services = state.services) }
         }
 
         reviews(state = state, onEvent = onEvent)
@@ -844,7 +856,7 @@ private fun MetaTable(
             otherDays.forEach { day ->
                 add {
                     MetaRow(
-                        key = stringResource(day.dayOfWeek.labelRes()),
+                        key = stringResource(day.dayOfWeek.fullLabelRes()),
                         value = day.label(),
                     )
                 }
@@ -935,6 +947,76 @@ private fun MetaRow(
 
 /** Строки таблицы меты — 9dp по макету; цель нажатия добирается `heightIn`. */
 private val META_ROW_PADDING = 9.dp
+
+/**
+ * Прайс (макет 1b): «название …… цена» с пунктирной отводкой. Цена без
+ * валюты, как в макете, — на карточке места других чисел с валютой нет, а
+ * «сум» в каждой строке съедал бы место у названия.
+ *
+ * Строки не нажимаются: запись начинается кнопкой «Забронировать» — там
+ * услугу выбирают заново вместе со днём и временем.
+ */
+@Composable
+private fun ServicesBlock(services: List<BarberService>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        SectionHeader(title = stringResource(R.string.place_services_title))
+        services.forEach { service ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = META_ROW_PADDING)
+                    .semantics(mergeDescendants = true) {},
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = service.title.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.booking_service_unnamed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                DottedLeader(modifier = Modifier.weight(1f))
+                Text(
+                    text = if (service.priceSum > 0) {
+                        MoneyFormatter.amount(service.priceSum)
+                    } else {
+                        stringResource(R.string.price_free)
+                    },
+                    style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+    }
+}
+
+/** Пунктир между названием и ценой — 1dp, `outlineVariant`. Декорация. */
+@Composable
+private fun DottedLeader(modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Box(
+        modifier = modifier
+            .height(LEADER_HEIGHT)
+            .clearAndSetSemantics {}
+            .drawBehind {
+                val y = size.height / 2
+                drawLine(
+                    color = color,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = LEADER_STROKE.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(LEADER_DASH.toPx(), LEADER_GAP.toPx()),
+                    ),
+                )
+            },
+    )
+}
+
+private val LEADER_HEIGHT = 12.dp
+private val LEADER_STROKE = 1.dp
+private val LEADER_DASH = 2.dp
+private val LEADER_GAP = 3.dp
 
 /**
  * Акции заведения (issue #104). Секции нет, пока акций нет: заголовок над
@@ -1217,15 +1299,6 @@ private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Route -> Icons.Outlined.Directions
 }
 
-private fun DayOfWeek.labelRes(): Int = when (this) {
-    DayOfWeek.MONDAY -> R.string.day_monday
-    DayOfWeek.TUESDAY -> R.string.day_tuesday
-    DayOfWeek.WEDNESDAY -> R.string.day_wednesday
-    DayOfWeek.THURSDAY -> R.string.day_thursday
-    DayOfWeek.FRIDAY -> R.string.day_friday
-    DayOfWeek.SATURDAY -> R.string.day_saturday
-    DayOfWeek.SUNDAY -> R.string.day_sunday
-}
 
 /**
  * Набирать номер и строить маршрут умеют не все устройства (и не все

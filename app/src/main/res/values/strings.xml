@@ -134,7 +134,7 @@
     <string name="city_qarshi">Qarshi</string>
 
     <!-- Основные разделы -->
-    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_title">Yaqinda nima bor</string>
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_available">Sarflash mumkin</string>
     <string name="wallet_balance_total">Hisobda</string>
@@ -187,6 +187,8 @@
     <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
     <string name="profile_saved_places">Saqlangan joylar</string>
     <string name="profile_saved_places_subtitle">Saqlangan joylar ro\'yxati</string>
+    <string name="profile_biometric_title">Barmoq izi bilan kirish</string>
+    <string name="profile_biometric_description">Hamyon PIN-kodi o\'rniga</string>
     <string name="profile_devices_title">Mening qurilmalarim</string>
     <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
     <string name="profile_device_unknown">Noma\'lum qurilma</string>
@@ -611,6 +613,10 @@
     <string name="home_focus_ticket_position">Navbatda · %1$d</string>
     <string name="home_focus_open_ticket">Navbatni ochish</string>
     <string name="home_focus_open_place">Joy</string>
+    <string name="home_focus_rating">reyting %1$s</string>
+    <string name="wallet_header_subscription">%1$s %2$s gacha</string>
+    <string name="place_services_title">Xizmatlar</string>
+    <string name="price_free">bepul</string>
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
     <string name="queue_field_name">Ismingiz</string>

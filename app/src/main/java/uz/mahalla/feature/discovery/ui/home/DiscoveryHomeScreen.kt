@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
@@ -38,6 +39,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -49,6 +51,7 @@ import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import java.time.Instant
 
 /**
  * Главная (эпик 4.1): категории, «рядом», рекомендации.
@@ -110,7 +113,12 @@ fun DiscoveryHomeContentScreen(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.discovery_title), actions = actions)
+        MahallaTopBar(
+            title = stringResource(R.string.discovery_title),
+            brandMark = true,
+            meta = state.openedAt?.let { headerMeta(it) },
+            actions = actions,
+        )
         MahallaPullToRefresh(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(DiscoveryHomeEvent.Refresh) },
@@ -323,6 +331,21 @@ private fun LazyListScope.placeSection(
             )
         }
     }
+}
+
+/**
+ * Мета шапки «9:30 · вторник» (общая шапка макета). День недели — строчными:
+ * в макете он подпись, а не заголовок; ресурсы `day_*` заглавные, потому что
+ * их же показывает таблица часов на карточке места.
+ */
+@Composable
+private fun headerMeta(openedAt: Instant): String {
+    val weekday = stringResource(openedAt.atZone(DateTimeFormatters.AppZone).dayOfWeek.fullLabelRes())
+    return stringResource(
+        R.string.text_joined_with_dot,
+        DateTimeFormatters.time(openedAt),
+        weekday.lowercase(),
+    )
 }
 
 /** Данные из кэша подписываются явно — иначе устаревшее выглядит свежим. */
