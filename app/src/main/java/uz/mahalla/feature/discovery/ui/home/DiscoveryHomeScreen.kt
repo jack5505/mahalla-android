@@ -20,6 +20,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.result.ApiFailure
@@ -60,9 +62,16 @@ fun DiscoveryHomeScreen(
     onNotificationsClick: () -> Unit,
     onFreelancersClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onTicketClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: DiscoveryHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Талон могли отменить на экране очереди, а срок жизни его чисел — две
+    // минуты: возврат на главную обязан перечитать его из хранилища.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.onEvent(DiscoveryHomeEvent.ScreenResumed)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -70,6 +79,8 @@ fun DiscoveryHomeScreen(
                 is DiscoveryHomeEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 is DiscoveryHomeEffect.OpenSearch -> onSearchClick(effect.category)
                 DiscoveryHomeEffect.OpenMap -> onMapClick()
+                is DiscoveryHomeEffect.OpenTicket ->
+                    onTicketClick(effect.placeId, effect.placeName)
             }
         }
     }
@@ -132,6 +143,18 @@ private fun HomeList(
         verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         contentPadding = PaddingValues(horizontal = Spacing.gutter, vertical = Spacing.gutter),
     ) {
+        // Фокус-карточка — первым блоком (макет 1a/1d): она отвечает на
+        // вопрос «что мне сейчас», и всё остальное на экране — уже поиск.
+        item(key = "focus") {
+            FocusCard(
+                ticket = state.ticket,
+                queueInfoIsCurrent = state.ticketQueueInfoIsCurrent,
+                nearestOpenPlace = state.nearestOpenPlace,
+                onOpenTicket = { onEvent(DiscoveryHomeEvent.TicketClicked) },
+                onOpenPlace = { onEvent(DiscoveryHomeEvent.PlaceClicked(it)) },
+            )
+        }
+
         item(key = "search") {
             SearchEntryButton(
                 onClick = { onEvent(DiscoveryHomeEvent.SearchClicked) },

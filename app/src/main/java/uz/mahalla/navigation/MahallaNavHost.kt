@@ -237,6 +237,11 @@ fun MahallaNavHost(
                     // Каталог мастеров (issue #107): отдельная ветка, мастер
                     // не заведение.
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
+                    // Фокус-карточка с талоном ведёт на очередь того
+                    // заведения, где талон взят.
+                    onTicketClick = { placeId, placeName ->
+                        navController.navigate(QueueRoute(placeId, placeName))
+                    },
                 )
             }
             composable<OrdersRoute> {

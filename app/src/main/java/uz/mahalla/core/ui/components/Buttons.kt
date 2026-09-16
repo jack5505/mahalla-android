@@ -43,7 +43,7 @@ import uz.mahalla.ui.theme.Spacing
  * заливкой позади (приветственный экран онбординга, фокус-карточка на
  * главной): обычная `Primary` на таком фоне не видна.
  */
-enum class MahallaButtonVariant { Primary, Secondary, Ghost, Destructive, OnColor }
+enum class MahallaButtonVariant { Primary, Secondary, Ghost, Destructive, OnColor, OnColorGhost }
 
 /**
  * Состояние кнопки. `loading` не сводится к `enabled = false`: выключенная
@@ -166,8 +166,17 @@ private fun MahallaButtonVariant.buttonColors(): ButtonColors {
             containerColor = Color.White,
             contentColor = scheme.primary,
         )
+
+        // Вторая кнопка на градиенте: полупрозрачная заливка вместо белой,
+        // чтобы не спорить с основной за внимание (макет 1a).
+        MahallaButtonVariant.OnColorGhost -> ButtonDefaults.buttonColors(
+            containerColor = Color.White.copy(alpha = ON_COLOR_GHOST_ALPHA),
+            contentColor = Color.White,
+        )
     }
 }
+
+private const val ON_COLOR_GHOST_ALPHA = 0.16f
 
 @Composable
 private fun MahallaButtonVariant.border(): BorderStroke? =

@@ -44,6 +44,7 @@ class ComponentStateTest {
                 MahallaButtonVariant.Ghost,
                 MahallaButtonVariant.Destructive,
                 MahallaButtonVariant.OnColor,
+                MahallaButtonVariant.OnColorGhost,
             ),
             MahallaButtonVariant.entries.toList(),
         )

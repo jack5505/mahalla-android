@@ -599,6 +599,11 @@
     <string name="image_gallery_of">Фотографии: %1$s</string>
 
     <!-- Очередь (walk-in, issue #96) -->
+    <string name="home_focus_ticket_kicker">Ваш талон</string>
+    <string name="home_focus_nearest_kicker">Ближе всего сейчас</string>
+    <string name="home_focus_ticket_position">В очереди · %1$d</string>
+    <string name="home_focus_open_ticket">Открыть талон</string>
+    <string name="home_focus_open_place">Место</string>
     <string name="queue_title">Очередь</string>
     <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
     <string name="queue_field_name">Ваше имя</string>
