@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -281,7 +282,10 @@ fun MahallaCard(
             .semantics(mergeDescendants = true) {},
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            // surfaceVariant, а не surface: в палитре редизайна фон экрана и
+            // surface — один и тот же #fdf8ff, и карточка на нём была бы
+            // невидима. Заливка карточек в макете — #f1ecf7.
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         // Тень не используем — глубина в макете задаётся фоном и рамкой.
@@ -289,6 +293,22 @@ fun MahallaCard(
     ) {
         Column(modifier = Modifier.padding(Spacing.card), content = content)
     }
+}
+
+/**
+ * Линия между строками списка — 1dp по макету редизайна.
+ *
+ * Отдельным компонентом, потому что в макете разделитель несёт ту же роль, что
+ * раньше несла карточка вокруг каждой строки: списки операций, меты места и
+ * настроек рисуются рядами с линиями, а не стопкой карточек.
+ */
+@Composable
+fun MahallaDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier,
+        thickness = MahallaComponentDefaults.borderWidth,
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
 }
 
 /**

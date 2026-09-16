@@ -168,7 +168,7 @@ private fun CheckoutBar(
     val currency = stringResource(R.string.currency_uzs)
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(

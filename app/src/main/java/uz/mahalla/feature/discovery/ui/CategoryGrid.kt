@@ -76,7 +76,8 @@ private fun CategoryTile(
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) {},
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
+        // Плитка категории в макете — #f1ecf7 на фоне экрана #fdf8ff.
+        color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
