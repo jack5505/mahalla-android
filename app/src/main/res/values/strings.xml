@@ -362,7 +362,8 @@
     <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
     <string name="place_hours_around_the_clock">Kunu tun</string>
     <string name="place_hours_day_off">Dam olish kuni</string>
-    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_meta_address">Manzil</string>
+    <string name="place_meta_phone">Telefon</string>
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>

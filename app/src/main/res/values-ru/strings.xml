@@ -356,7 +356,8 @@
     <string name="place_hours_unknown">Часы работы неизвестны</string>
     <string name="place_hours_around_the_clock">Круглосуточно</string>
     <string name="place_hours_day_off">Выходной</string>
-    <string name="place_contacts_title">Контакты</string>
+    <string name="place_meta_address">Адрес</string>
+    <string name="place_meta_phone">Телефон</string>
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
