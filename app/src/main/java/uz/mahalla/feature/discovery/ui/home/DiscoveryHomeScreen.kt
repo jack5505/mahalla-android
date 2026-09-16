@@ -184,6 +184,8 @@ private fun HomeList(
             CategoryGrid(
                 categories = state.categories,
                 onCategoryClick = { onEvent(DiscoveryHomeEvent.CategoryClicked(it)) },
+                // «Все» — тот же поиск без предвыбранной категории.
+                onAllClick = { onEvent(DiscoveryHomeEvent.SearchClicked) },
             )
         }
 

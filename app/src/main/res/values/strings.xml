@@ -613,6 +613,7 @@
     <string name="home_focus_ticket_position">Navbatda · %1$d</string>
     <string name="home_focus_open_ticket">Navbatni ochish</string>
     <string name="home_focus_open_place">Joy</string>
+    <string name="category_all">Hammasi</string>
     <string name="home_focus_rating">reyting %1$s</string>
     <string name="wallet_header_subscription">%1$s %2$s gacha</string>
     <string name="place_services_title">Xizmatlar</string>

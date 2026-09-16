@@ -1,5 +1,6 @@
 package uz.mahalla.feature.discovery.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -15,10 +18,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import uz.mahalla.R
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
@@ -38,18 +43,28 @@ fun CategoryGrid(
     categories: List<PlaceCategory>,
     onCategoryClick: (PlaceCategory) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Плитка «Все» первой (макет 1a): каталог без фильтра. `null` — плитки нет
+     * (в поиске, где категория уже выбрана, она была бы лишней).
+     */
+    onAllClick: (() -> Unit)? = null,
     columns: Int = DEFAULT_COLUMNS,
 ) {
+    val tiles: List<Tile> = buildList {
+        if (onAllClick != null) add(Tile(R.string.category_all, Icons.Outlined.Apps, onAllClick))
+        categories.forEach { add(Tile(it.labelRes, it.icon) { onCategoryClick(it) }) }
+    }
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        categories.chunked(columns).forEach { row ->
+        tiles.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
-                row.forEach { category ->
+                row.forEach { tile ->
                     CategoryTile(
-                        category = category,
-                        onClick = { onCategoryClick(category) },
+                        labelRes = tile.labelRes,
+                        icon = tile.icon,
+                        onClick = tile.onClick,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -63,13 +78,21 @@ fun CategoryGrid(
     }
 }
 
+/** Плитка сетки: категория каталога либо «Все». */
+private data class Tile(
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+    val onClick: () -> Unit,
+)
+
 @Composable
 private fun CategoryTile(
-    category: PlaceCategory,
+    @StringRes labelRes: Int,
+    icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val label = stringResource(category.labelRes)
+    val label = stringResource(labelRes)
     Surface(
         modifier = modifier
             .heightIn(min = MahallaComponentDefaults.categoryTileMinHeight)
@@ -92,7 +115,7 @@ private fun CategoryTile(
                 color = LocalMahallaColors.current.accentSoft,
             ) {
                 Icon(
-                    imageVector = category.icon,
+                    imageVector = icon,
                     // Подпись под иконкой уже названа — TalkBack не должен
                     // читать одно и то же дважды.
                     contentDescription = null,
@@ -121,6 +144,6 @@ private const val DEFAULT_COLUMNS = 4
 @Composable
 private fun CategoryGridPreview() {
     PreviewSurface {
-        CategoryGrid(categories = PlaceCategory.selectable, onCategoryClick = {})
+        CategoryGrid(categories = PlaceCategory.selectable, onCategoryClick = {}, onAllClick = {})
     }
 }
