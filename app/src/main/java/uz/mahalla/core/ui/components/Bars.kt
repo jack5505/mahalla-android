@@ -244,6 +244,12 @@ fun MahallaBottomNav(
 private fun MahallaBarsPreview() {
     PreviewSurface {
         MahallaTopBar(title = stringResource(R.string.place_title), onBack = {})
+        MahallaTopBar(
+            title = stringResource(R.string.wallet_title),
+            brandMark = true,
+            kicker = "Hamyon",
+            meta = "Mahalla+ · 12.10",
+        )
         MahallaBottomNav(
             items = listOf(
                 NavItemUi("discovery", stringResource(R.string.nav_discovery), Icons.Outlined.Home),
