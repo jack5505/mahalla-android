@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.sp
 import uz.mahalla.R
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
-import uz.mahalla.ui.theme.LocalMahallaColors
 
 /**
  * Верхняя панель экрана. Заголовок помечен `heading()` — с ним TalkBack
@@ -112,11 +111,12 @@ fun MahallaBottomNav(
     onSelect: (NavItemUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val mahalla = LocalMahallaColors.current
+    val scheme = MaterialTheme.colorScheme
     NavigationBar(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        // surfaceVariant = surfaceContainer из design_handoff_mahalla_focus/README.md.
+        containerColor = scheme.surfaceVariant,
+        contentColor = scheme.onSurface,
     ) {
         items.forEach { item ->
             NavigationBarItem(
@@ -137,11 +137,11 @@ fun MahallaBottomNav(
                 alwaysShowLabel = true,
                 modifier = Modifier.heightIn(min = MahallaComponentDefaults.navItemMinHeight),
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                    indicatorColor = mahalla.accentSoft,
-                    unselectedIconColor = mahalla.fgMuted,
-                    unselectedTextColor = mahalla.fgMuted,
+                    selectedIconColor = scheme.onPrimaryContainer,
+                    selectedTextColor = scheme.onPrimaryContainer,
+                    indicatorColor = scheme.primaryContainer,
+                    unselectedIconColor = scheme.onSurfaceVariant,
+                    unselectedTextColor = scheme.onSurfaceVariant,
                 ),
             )
         }
