@@ -81,6 +81,7 @@ private fun PhoneInputContent(
         title = stringResource(R.string.onboarding_phone_title),
         modifier = modifier,
         subtitle = stringResource(R.string.onboarding_phone_subtitle),
+        stepLabel = OnboardingStepNumber.Phone.label(),
         onBack = onBack,
         footer = {
             // Telegram первым и основной кнопкой: этот путь бесплатный для

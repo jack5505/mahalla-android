@@ -39,10 +39,17 @@ class TouchTargetTest {
         assertTrue(Spacing.buttonHeight < MahallaComponentDefaults.buttonMinHeight)
     }
 
+    /**
+     * Ячейка кода после редизайна (64×68) больше цели нажатия по обеим
+     * сторонам — но ширина здесь предел, а не факт: на шестизначном коде поле
+     * сжимает ячейки под экран. Поэтому нижнюю границу стережёт высота, а
+     * ширина проверяется только как «не меньше цели нажатия при коде из
+     * четырёх цифр» — именно этот случай рисует макет.
+     */
     @Test
-    fun `otp row is tall enough even with narrow cells`() {
-        assertTrue(MahallaComponentDefaults.otpCellWidth < MIN_TOUCH_TARGET)
-        assertEquals(MIN_TOUCH_TARGET, MahallaComponentDefaults.otpCellHeight)
+    fun `otp cells are at least as large as the touch target`() {
+        assertTrue(MahallaComponentDefaults.otpCellWidth >= MIN_TOUCH_TARGET)
+        assertTrue(MahallaComponentDefaults.otpCellHeight >= MIN_TOUCH_TARGET)
     }
 
     @Test

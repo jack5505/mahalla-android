@@ -28,9 +28,18 @@ object MahallaComponentDefaults {
     val segmentMinHeight: Dp = minTouchTarget
     val navItemMinHeight: Dp = minTouchTarget
 
-    /** Ячейка OTP: ширина меньше 48dp, но строка целиком выше цели нажатия. */
-    val otpCellWidth: Dp = 44.dp
-    val otpCellHeight: Dp = minTouchTarget
+    /**
+     * Ячейка кода из SMS и PIN — 64×68 по макету
+     * (`design_handoff_mahalla_focus/README.md`, шаг 0c).
+     *
+     * [otpCellWidth] — **предел**, а не фиксированная ширина: длину кода задаёт
+     * бэкенд (`challenge.codeLength`), и шесть ячеек по 64dp с зазорами не
+     * влезают в экран 393dp. Поле сжимает ячейки под доступную ширину и
+     * упирается в этот максимум, поэтому на четырёх цифрах выходит ровно макет,
+     * а на шести — узкие ячейки вместо обрезанного ряда.
+     */
+    val otpCellWidth: Dp = 64.dp
+    val otpCellHeight: Dp = 68.dp
 
     // --- Discovery (эпик 4) ---
 

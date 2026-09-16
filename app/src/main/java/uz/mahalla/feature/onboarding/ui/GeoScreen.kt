@@ -73,6 +73,7 @@ private fun GeoContent(
         title = stringResource(R.string.onboarding_geo_title),
         modifier = modifier,
         subtitle = stringResource(R.string.onboarding_geo_subtitle),
+        stepLabel = OnboardingStepNumber.Geo.label(),
         footer = {
             if (state.stage == GeoStage.Explain) {
                 MahallaButton(

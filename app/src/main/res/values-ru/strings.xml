@@ -48,6 +48,7 @@
     <string name="onboarding_welcome_language">Язык приложения</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Шаг %1$d из %2$d</string>
     <string name="onboarding_phone_title">Ваш номер телефона</string>
     <string name="onboarding_phone_subtitle">Пришлём код подтверждения в SMS.</string>
     <string name="onboarding_phone_label">Номер телефона</string>

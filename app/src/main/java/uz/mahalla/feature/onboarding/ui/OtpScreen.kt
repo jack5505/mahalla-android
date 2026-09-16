@@ -94,6 +94,7 @@ private fun OtpContent(
         } else {
             stringResource(R.string.onboarding_otp_sent_to, state.phone)
         },
+        stepLabel = OnboardingStepNumber.Otp.label(),
         onBack = onBack,
         footer = {
             MahallaButton(

@@ -53,6 +53,7 @@
     <string name="onboarding_welcome_language">Ilova tili</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Qadam %1$d / %2$d</string>
     <string name="onboarding_phone_title">Telefon raqamingiz</string>
     <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
     <string name="onboarding_phone_label">Telefon raqami</string>

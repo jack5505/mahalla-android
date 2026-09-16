@@ -89,6 +89,7 @@ private fun BiometricContent(
         title = stringResource(R.string.onboarding_biometric_title),
         modifier = modifier,
         subtitle = stringResource(R.string.onboarding_biometric_subtitle),
+        stepLabel = OnboardingStepNumber.Biometric.label(),
         footer = {
             MahallaButton(
                 text = stringResource(R.string.onboarding_biometric_action),

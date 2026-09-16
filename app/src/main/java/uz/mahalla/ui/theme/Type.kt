@@ -114,6 +114,14 @@ val FocusHeadline = TextStyle(
     letterSpacing = (-0.26).sp,
 )
 
+/** Цифра в ячейке кода из SMS (шаг 0c). Мержить с [TabularNums]. */
+val FocusOtpDigit = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 28.sp,
+    lineHeight = 32.sp,
+)
+
 /** Заголовок шторки бронирования, «Активных талонов нет». */
 val FocusTitleSheet = TextStyle(
     fontFamily = Inter,

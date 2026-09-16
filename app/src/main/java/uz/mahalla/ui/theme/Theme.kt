@@ -40,7 +40,8 @@ fun MahallaTheme(
  * (`.claude/rules/compose-ui.md`) важнее визуального макета.
  */
 object Spacing {
-    val gutter = 20.dp // поля экрана (онбординг — 24dp, см. каждый экран отдельно)
+    val gutter = 20.dp // поля экрана
+    val onboardingGutter = 24.dp // у онбординга поля шире — так в макете
     val card = 18.dp // внутренний отступ карточки/блока
     val item = 12.dp // вертикальный отступ строки списка
     val gap = 20.dp // расстояние между блоками в колонке (18-22dp)

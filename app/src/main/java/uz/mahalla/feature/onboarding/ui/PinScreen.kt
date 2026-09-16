@@ -57,6 +57,10 @@ private fun PinContent(
         title = stringResource(state.stage.titleRes()),
         modifier = modifier,
         subtitle = stringResource(R.string.onboarding_pin_subtitle),
+        // На разблокировке счётчика нет: это не шаг регистрации, а вход в уже
+        // заведённое приложение — «Шаг 3 из 5» там означал бы, что впереди
+        // ещё два.
+        stepLabel = OnboardingStepNumber.Pin.label().takeIf { state.stage != PinStage.Unlock },
         footer = {
             if (state.stage == PinStage.Unlock) {
                 MahallaButton(
