@@ -114,6 +114,14 @@ val FocusHeadline = TextStyle(
     letterSpacing = (-0.26).sp,
 )
 
+/** Заголовок шапки таба рядом со знаком M (общая шапка макета): Title 22/600. */
+val FocusTitleHeader = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 22.sp,
+    lineHeight = 26.sp,
+)
+
 /** Цифра в ячейке кода из SMS (шаг 0c). Мержить с [TabularNums]. */
 val FocusOtpDigit = TextStyle(
     fontFamily = Inter,

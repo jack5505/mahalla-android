@@ -197,7 +197,7 @@ fun ProfileContentScreen(
     onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.profile_title))
+        MahallaTopBar(title = stringResource(R.string.profile_title), brandMark = true)
         Column(
             modifier = Modifier
                 .fillMaxSize()
