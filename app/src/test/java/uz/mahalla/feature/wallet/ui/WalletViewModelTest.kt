@@ -14,6 +14,8 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionStatus
 import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpOrder
 import uz.mahalla.feature.wallet.domain.TopUpProvider
@@ -21,6 +23,7 @@ import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
+import uz.mahalla.testutil.FakeSubscriptionRepository
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
 
@@ -34,12 +37,17 @@ class WalletViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
+    private val subscriptions = FakeSubscriptionRepository()
+
+    private fun viewModel(repository: FakeWalletRepository) =
+        WalletViewModel(repository, subscriptions)
+
     @Test
     fun `balance and history are loaded on open`() = runTest {
         val repository = FakeWalletRepository(Wallet(balanceSum = 500_000, availableSum = 480_000))
         repository.defaultPage = page(listOf(transaction("t-1")), hasMore = false)
 
-        val state = WalletViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         assertEquals(480_000L, (state.wallet as ScreenState.Content).data.availableSum)
         assertEquals(
@@ -54,7 +62,7 @@ class WalletViewModelTest {
     fun `an empty history is not an error`() = runTest {
         val repository = FakeWalletRepository()
 
-        val state = WalletViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         assertTrue(state.wallet is ScreenState.Content)
         assertTrue(state.transactions is ScreenState.Empty)
@@ -65,7 +73,7 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository()
         repository.defaultPage = ApiResult.Failure(ApiError.Timeout)
 
-        val state = WalletViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         assertTrue(state.wallet is ScreenState.Content)
         assertEquals(ApiError.Timeout, (state.transactions as ScreenState.Error).error)
@@ -81,7 +89,7 @@ class WalletViewModelTest {
             ),
         )
 
-        val state = WalletViewModel(repository).state.value
+        val state = viewModel(repository).state.value
 
         // Текст сервера точнее нашего «нет доступа» (issue #34).
         assertEquals("Bloklangan", (state.wallet as ScreenState.Error).failure.serverMessage)
@@ -92,7 +100,7 @@ class WalletViewModelTest {
     fun `retry asks the failed endpoint only`() = runTest {
         val repository = FakeWalletRepository()
         repository.defaultPage = ApiResult.Failure(ApiError.Timeout)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         repository.defaultPage = page(listOf(transaction("t-1")), hasMore = false)
         viewModel.onEvent(WalletEvent.TransactionsRetry)
@@ -108,7 +116,7 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository()
         repository.pages[0] = page(listOf(transaction("t-1")), hasMore = true)
         repository.pages[1] = page(listOf(transaction("t-2")), hasMore = false)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         assertTrue(viewModel.state.value.hasMore)
         viewModel.onEvent(WalletEvent.LoadMore)
@@ -133,7 +141,7 @@ class WalletViewModelTest {
         // История пополнилась между запросами — та же операция уехала на
         // вторую страницу. Дубликат ключа уронил бы LazyColumn.
         repository.pages[1] = page(listOf(transaction("t-1"), transaction("t-2")), hasMore = false)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.LoadMore)
 
@@ -149,7 +157,7 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository()
         repository.pages[0] = page(listOf(transaction("t-1")), hasMore = true)
         repository.pages[1] = ApiResult.Failure(ApiError.NoConnection)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.LoadMore)
 
@@ -169,7 +177,7 @@ class WalletViewModelTest {
     @Test
     fun `returning to the screen rereads the balance`() = runTest {
         val repository = FakeWalletRepository()
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         // Первый resume — это открытие экрана, баланс уже запросил `init`.
         viewModel.onEvent(WalletEvent.ScreenResumed)
@@ -187,7 +195,7 @@ class WalletViewModelTest {
     fun `refresh does not blank the screen and ends when both answers arrive`() = runTest {
         val repository = FakeWalletRepository()
         repository.defaultPage = page(listOf(transaction("t-1")), hasMore = false)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.Refreshed)
 
@@ -207,7 +215,7 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository(
             Wallet(balanceSum = 500_000, availableSum = 500_000),
         )
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.TopUpClicked)
 
@@ -220,7 +228,7 @@ class WalletViewModelTest {
     fun `top up is not offered without a balance`() = runTest {
         val repository = FakeWalletRepository()
         repository.wallet = ApiResult.Failure(ApiError.NoConnection)
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.TopUpClicked)
 
@@ -233,7 +241,7 @@ class WalletViewModelTest {
     fun `top up is not offered for a blocked wallet`() = runTest {
         val repository = FakeWalletRepository(Wallet(status = WalletStatus.Blocked))
 
-        assertFalse(WalletViewModel(repository).state.value.canTopUp)
+        assertFalse(viewModel(repository).state.value.canTopUp)
     }
 
     /**
@@ -243,7 +251,7 @@ class WalletViewModelTest {
     @Test
     fun `reasons are shown only after the first attempt`() = runTest {
         val repository = FakeWalletRepository()
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
         viewModel.onEvent(WalletEvent.TopUpClicked)
 
         assertTrue(requireNotNull(viewModel.state.value.topUp).visibleErrors.isEmpty())
@@ -263,7 +271,7 @@ class WalletViewModelTest {
     fun `a filled draft opens the payment form of the provider`() = runTest {
         val repository = FakeWalletRepository()
         repository.topUp = ApiResult.Success(TopUpOrder("https://checkout.paycom.uz/abc"))
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(WalletEvent.TopUpClicked)
         viewModel.onEvent(WalletEvent.TopUpAmountChanged("250 000"))
@@ -293,7 +301,7 @@ class WalletViewModelTest {
     @Test
     fun `balance is reread after the payment, not counted on the client`() = runTest {
         val repository = FakeWalletRepository(Wallet(balanceSum = 0, availableSum = 0))
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
         viewModel.onEvent(WalletEvent.TopUpClicked)
         viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
         viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Click))
@@ -327,7 +335,7 @@ class WalletViewModelTest {
                 ServerError(httpCode = 502, message = "Payme javob bermadi"),
             ),
         )
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
         viewModel.onEvent(WalletEvent.TopUpClicked)
         viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
         viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Uzum))
@@ -349,7 +357,7 @@ class WalletViewModelTest {
     @Test
     fun `a device without a browser is told about it`() = runTest {
         val repository = FakeWalletRepository()
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
         viewModel.onEvent(WalletEvent.TopUpClicked)
         viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
         viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
@@ -371,7 +379,7 @@ class WalletViewModelTest {
     @Test
     fun `the notice about a started payment is dismissable`() = runTest {
         val repository = FakeWalletRepository()
-        val viewModel = WalletViewModel(repository)
+        val viewModel = viewModel(repository)
         viewModel.onEvent(WalletEvent.TopUpClicked)
         viewModel.onEvent(WalletEvent.TopUpAmountChanged("250000"))
         viewModel.onEvent(WalletEvent.TopUpProviderSelected(TopUpProvider.Payme))
@@ -381,6 +389,50 @@ class WalletViewModelTest {
         viewModel.onEvent(WalletEvent.PaymentNoticeDismissed)
 
         assertEquals(null, viewModel.state.value.paymentStarted)
+    }
+
+    // --- Карточка «Mahalla+» (макет 2c) ---
+
+    @Test
+    fun `the subscription card shows the active subscription`() = runTest {
+        val repository = FakeWalletRepository()
+        subscriptions.currentAnswers = mutableListOf(
+            ApiResult.Success(
+                Subscription(planName = "Mahalla+", status = SubscriptionStatus.Active, isActive = true),
+            ),
+        )
+
+        val state = viewModel(repository).state.value
+
+        assertEquals("Mahalla+", state.subscription?.planName)
+    }
+
+    /**
+     * За балансом сюда приходят, за подпиской — нет: её отказ прячет карточку
+     * и не трогает деньги, которые уже приехали.
+     */
+    @Test
+    fun `a failed subscription hides the card but keeps the balance`() = runTest {
+        val repository = FakeWalletRepository(Wallet(balanceSum = 500_000, availableSum = 480_000))
+        subscriptions.currentAnswers = mutableListOf(ApiResult.Failure(ApiFailure(ApiError.Timeout)))
+
+        val state = viewModel(repository).state.value
+
+        assertEquals(null, state.subscription)
+        assertTrue("баланс не должен пострадать", state.wallet is ScreenState.Content)
+    }
+
+    @Test
+    fun `a click on the card opens the subscription screen`() = runTest {
+        val repository = FakeWalletRepository()
+        subscriptions.currentAnswers = mutableListOf(
+            ApiResult.Success(Subscription(planName = "Mahalla+")),
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(WalletEvent.SubscriptionClicked)
+
+        assertEquals(WalletEffect.OpenSubscription, viewModel.effects.first())
     }
 
     private fun page(

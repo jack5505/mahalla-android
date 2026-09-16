@@ -1,7 +1,15 @@
 package uz.mahalla.core.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Home
@@ -17,22 +25,38 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import uz.mahalla.R
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.ui.theme.FocusTitleHeader
 import uz.mahalla.ui.theme.LocalMahallaColors
+import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 
 /**
  * Верхняя панель экрана. Заголовок помечен `heading()` — с ним TalkBack
  * начинает обход экрана с названия, а не с кнопки «назад».
+ *
+ * Шапка таба по макету («Шапка (общая)»): круглый знак M, над заголовком
+ * кикер, справа мета. Экраны-детали с «назад» этим не пользуются — у них
+ * заголовок либо в панели, либо в теле.
+ *
+ * @param brandMark знак M слева от заголовка — только на четырёх табах.
+ * @param kicker подпись над заголовком (Label). Опциональна: честного текста
+ * для неё есть не у каждого таба.
+ * @param meta подпись справа (Label, tnum) — «Mahalla+ до 12 окт» и подобное.
+ * Ставится перед [actions], чтобы не мешать кнопкам.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,18 +64,48 @@ fun MahallaTopBar(
     title: String,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+    brandMark: Boolean = false,
+    kicker: String? = null,
+    meta: String? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val backLabel = stringResource(R.string.action_back)
     TopAppBar(
         title = {
-            Text(
-                text = title,
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (brandMark) BrandMark()
+                Column {
+                    if (kicker != null) {
+                        Text(
+                            text = kicker,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = LocalMahallaColors.current.fgMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    // Пустой заголовок — это не заголовок: на экранах, где
+                    // название переехало в тело (карточка места, шаги
+                    // онбординга), TalkBack иначе объявляет безымянный
+                    // заголовок перед кнопкой «назад».
+                    if (title.isNotBlank()) {
+                        Text(
+                            text = title,
+                            modifier = Modifier.semantics { heading() },
+                            style = if (brandMark) {
+                                FocusTitleHeader
+                            } else {
+                                MaterialTheme.typography.headlineSmall
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         },
         modifier = modifier,
         navigationIcon = {
@@ -63,7 +117,19 @@ fun MahallaTopBar(
                 )
             }
         },
-        actions = actions,
+        actions = {
+            if (meta != null) {
+                Text(
+                    text = meta,
+                    modifier = Modifier.padding(end = Spacing.gutter),
+                    style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                    color = LocalMahallaColors.current.fgMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            actions()
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.background,
             titleContentColor = MaterialTheme.colorScheme.onBackground,
@@ -72,6 +138,30 @@ fun MahallaTopBar(
         ),
     )
 }
+
+/**
+ * Знак M — круг 38dp цветом `primary` с белой буквой (макет: «Шапка (общая)»).
+ * Буква — литерал, а не ресурс: это глиф бренда, он один на все языки, как и
+ * на приветственном экране. Для TalkBack знак пуст: рядом стоит заголовок.
+ */
+@Composable
+private fun BrandMark(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(BrandMarkSize)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .clearAndSetSemantics {},
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "M",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+private val BrandMarkSize = 38.dp
 
 @Immutable
 data class NavItemUi(
@@ -112,11 +202,12 @@ fun MahallaBottomNav(
     onSelect: (NavItemUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val mahalla = LocalMahallaColors.current
+    val scheme = MaterialTheme.colorScheme
     NavigationBar(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+        // surfaceVariant = surfaceContainer из design_handoff_mahalla_focus/README.md.
+        containerColor = scheme.surfaceVariant,
+        contentColor = scheme.onSurface,
     ) {
         items.forEach { item ->
             NavigationBarItem(
@@ -137,11 +228,11 @@ fun MahallaBottomNav(
                 alwaysShowLabel = true,
                 modifier = Modifier.heightIn(min = MahallaComponentDefaults.navItemMinHeight),
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                    indicatorColor = mahalla.accentSoft,
-                    unselectedIconColor = mahalla.fgMuted,
-                    unselectedTextColor = mahalla.fgMuted,
+                    selectedIconColor = scheme.onPrimaryContainer,
+                    selectedTextColor = scheme.onPrimaryContainer,
+                    indicatorColor = scheme.primaryContainer,
+                    unselectedIconColor = scheme.onSurfaceVariant,
+                    unselectedTextColor = scheme.onSurfaceVariant,
                 ),
             )
         }
@@ -153,6 +244,12 @@ fun MahallaBottomNav(
 private fun MahallaBarsPreview() {
     PreviewSurface {
         MahallaTopBar(title = stringResource(R.string.place_title), onBack = {})
+        MahallaTopBar(
+            title = stringResource(R.string.wallet_title),
+            brandMark = true,
+            kicker = "Hamyon",
+            meta = "Mahalla+ · 12.10",
+        )
         MahallaBottomNav(
             items = listOf(
                 NavItemUi("discovery", stringResource(R.string.nav_discovery), Icons.Outlined.Home),

@@ -21,6 +21,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.text.KeyboardOptions
@@ -38,6 +40,7 @@ import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaDialog
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
@@ -50,6 +53,8 @@ import uz.mahalla.feature.queue.domain.WalkInRequestError
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.queue.domain.WalkInStatusFlow
 import uz.mahalla.feature.queue.domain.WalkInTicket
+import uz.mahalla.ui.theme.FocusDisplayTicket
+import uz.mahalla.ui.theme.FocusTitleSheet
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -187,7 +192,7 @@ private fun TicketBlock(
 ) {
     val ticket = state.ticket ?: return
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-        MahallaCard {
+        MahallaCard(shape = MaterialTheme.shapes.large) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -195,12 +200,22 @@ private fun TicketBlock(
             ) {
                 Text(
                     text = stringResource(R.string.queue_ticket_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = LocalMahallaColors.current.fgMuted,
                 )
                 MahallaBadge(
                     text = stringResource(ticket.status.labelRes()),
                     tone = ticket.status.tone(),
+                )
+            }
+
+            QueueNumbers(ticket = ticket, isCurrent = state.queueInfoIsCurrent)
+
+            if (ticket.placeName.isNotBlank()) {
+                Text(
+                    text = ticket.placeName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
@@ -212,7 +227,9 @@ private fun TicketBlock(
                 )
             }
 
-            QueueNumbers(ticket = ticket, isCurrent = state.queueInfoIsCurrent)
+            MahallaDivider(modifier = Modifier.padding(vertical = Spacing.item))
+
+            TicketStats(ticket = ticket, isCurrent = state.queueInfoIsCurrent)
 
             ticket.counterTime?.let { time ->
                 Text(
@@ -269,10 +286,13 @@ private fun TicketBlock(
         state.cancelFailure?.let { OnboardingApiError(failure = it) }
 
         if (state.canCancel || state.isCancelling) {
+            // Отмена — outlined, не красная (макет 2a): человек снимает свою
+            // запись, а не ломает что-то. Красным остаётся подтверждение в
+            // диалоге — там решение уже необратимо.
             MahallaButton(
                 text = stringResource(R.string.queue_cancel),
                 onClick = { onEvent(QueueEvent.CancelClicked) },
-                variant = MahallaButtonVariant.Destructive,
+                variant = MahallaButtonVariant.Ghost,
                 state = ButtonState(loading = state.isCancelling),
             )
         }
@@ -280,8 +300,9 @@ private fun TicketBlock(
 }
 
 /**
- * Позиция и ожидание. Числа показываются только пока они свежие — иначе
- * вместо них объяснение: очередь двигают чужие отмены, а перечитать её нечем.
+ * Место в очереди — крупным числом (макет 2a). Показывается только пока оно
+ * свежее: очередь двигают чужие отмены, а перечитать её нечем, и 48dp цифра
+ * из прошлого часа врала бы убедительнее любой подписи.
  */
 @Composable
 private fun QueueNumbers(
@@ -291,7 +312,7 @@ private fun QueueNumbers(
 ) {
     val position = ticket.queuePosition
     val wait = ticket.estimatedWaitMinutes
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
+    Column(modifier = modifier) {
         when {
             position == null && wait == null -> Text(
                 text = stringResource(R.string.queue_position_unknown),
@@ -305,41 +326,97 @@ private fun QueueNumbers(
                 color = LocalMahallaColors.current.fgMuted,
             )
 
-            else -> {
-                position?.let {
-                    Text(
-                        text = stringResource(R.string.queue_position_label),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalMahallaColors.current.fgMuted,
-                    )
-                    Text(
-                        // Моноширинные цифры: номер не должен «дёргаться».
-                        text = it.toString(),
-                        style = MaterialTheme.typography.headlineLarge.merge(TabularNums),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                wait?.let {
-                    Text(
-                        text = stringResource(R.string.queue_wait_label, waitText(it)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalMahallaColors.current.fgMuted,
-                    )
-                }
+            position != null -> {
+                Text(
+                    text = stringResource(R.string.queue_position_label),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = LocalMahallaColors.current.fgMuted,
+                )
+                Text(
+                    // Моноширинные цифры: номер не должен «дёргаться».
+                    text = position.toString(),
+                    style = FocusDisplayTicket.merge(TabularNums),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
+
+            // Позиции нет, но ожидание есть — его покажет строка цифр ниже.
+            else -> Unit
         }
     }
 }
 
-/** До часа — минуты, дальше `ч:мм` (`DateTimeFormatters.waitingTime`). */
+/**
+ * Ряд цифр под линией: ожидание и время, когда талон взят (макет 2a).
+ *
+ * Ожидание — число из того же ответа, что и позиция, поэтому исчезает вместе
+ * с ней, когда данные устарели. Время записи не устаревает никогда: это
+ * записанный факт, а не движущееся число.
+ */
 @Composable
-private fun waitText(minutes: Int): String = if (minutes < MINUTES_IN_HOUR) {
-    pluralStringResource(R.plurals.queue_wait_minutes, minutes, minutes)
-} else {
-    stringResource(
-        R.string.queue_wait_hours,
-        DateTimeFormatters.waitingTime(minutes.toLong()),
-    )
+private fun TicketStats(
+    ticket: WalkInTicket,
+    isCurrent: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val wait = ticket.estimatedWaitMinutes?.takeIf { isCurrent }
+    val createdAt = ticket.createdAt
+    if (wait == null && createdAt == null) return
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.gap * 2),
+    ) {
+        wait?.let {
+            // До часа — минуты числом, дальше «1:35» и подпись «часов»:
+            // «95 минут» человек всё равно пересчитывает в уме.
+            val hours = it >= MINUTES_IN_HOUR
+            TicketStat(
+                value = if (hours) DateTimeFormatters.waitingTime(it.toLong()) else it.toString(),
+                label = stringResource(
+                    if (hours) R.string.queue_stat_wait_hours else R.string.queue_stat_wait,
+                ),
+                // Вслух «9 минут», а не «9, минут»: цифра и подпись разнесены
+                // только визуально.
+                description = pluralStringResource(R.plurals.queue_wait_minutes, it, it),
+            )
+        }
+        createdAt?.let {
+            TicketStat(
+                value = DateTimeFormatters.time(it),
+                label = stringResource(R.string.queue_stat_taken),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TicketStat(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+    description: String? = null,
+) {
+    Column(
+        modifier = modifier.then(
+            if (description == null) {
+                Modifier
+            } else {
+                Modifier.clearAndSetSemantics { contentDescription = description }
+            },
+        ),
+    ) {
+        Text(
+            text = value,
+            style = FocusTitleSheet.merge(TabularNums),
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+    }
 }
 
 @Composable
@@ -436,7 +513,6 @@ private fun WalkInStatus.tone(): MahallaTone = when (this) {
     WalkInStatus.Unknown -> MahallaTone.Neutral
 }
 
-private const val MINUTES_IN_HOUR = 60
 
 @ThemeLanguagePreviews
 @Composable
@@ -480,3 +556,5 @@ private fun QueueTicketPreview() {
         )
     }
 }
+
+private const val MINUTES_IN_HOUR = 60

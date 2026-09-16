@@ -237,6 +237,11 @@ fun MahallaNavHost(
                     // Каталог мастеров (issue #107): отдельная ветка, мастер
                     // не заведение.
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
+                    // Фокус-карточка с талоном ведёт на очередь того
+                    // заведения, где талон взят.
+                    onTicketClick = { placeId, placeName ->
+                        navController.navigate(QueueRoute(placeId, placeName))
+                    },
                 )
             }
             composable<OrdersRoute> {
@@ -253,7 +258,13 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> { WalletScreen() }
+            composable<WalletRoute> {
+                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                // строка в профиле (issue #103).
+                WalletScreen(
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                )
+            }
             composable<ProfileRoute> {
                 ProfileScreen(
                     // Вышли (issue #61): сессии и PIN больше нет, поэтому весь

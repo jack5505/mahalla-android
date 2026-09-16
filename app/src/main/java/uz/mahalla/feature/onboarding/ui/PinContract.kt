@@ -84,6 +84,21 @@ data class PinState(
 sealed interface PinEvent : UiEvent {
     data class PinChanged(val raw: String) : PinEvent
 
+    /**
+     * Нажата цифра на нампаде (макет 0e).
+     *
+     * Именно цифра, а не собранная строка: экран знает код только на момент
+     * последней композиции, и два нажатия, пришедшие до следующей, собрали бы
+     * строку из одного и того же снимка — вторая цифра потерялась бы. На
+     * границе «задайте PIN» → «повторите» это ещё и портит ввод: поле там
+     * очищается синхронно, и цифра, дописанная к устаревшему коду, мгновенно
+     * заполнила бы повтор чужими цифрами и дала «PIN-коды не совпали».
+     */
+    data class DigitPressed(val digit: Char) : PinEvent
+
+    /** Стирание последней цифры — по той же причине отдельным событием. */
+    data object BackspacePressed : PinEvent
+
     /** «Забыли PIN» — выход и вход заново по номеру телефона. */
     data object ForgotPin : PinEvent
     data object ErrorDismissed : PinEvent

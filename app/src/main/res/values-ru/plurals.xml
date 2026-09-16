@@ -70,6 +70,22 @@
         <item quantity="other">%1$d минуты</item>
     </plurals>
 
+    <!-- Подпись под линией фокус-карточки на главной (макет 1a). -->
+    <plurals name="home_focus_wait">
+        <item quantity="one">~%1$d минута ожидания</item>
+        <item quantity="few">~%1$d минуты ожидания</item>
+        <item quantity="many">~%1$d минут ожидания</item>
+        <item quantity="other">~%1$d минуты ожидания</item>
+    </plurals>
+
+    <!-- «открыто N из M» у секции мест на главной; количество — N. -->
+    <plurals name="home_open_count">
+        <item quantity="one">открыто %1$d из %2$d</item>
+        <item quantity="few">открыто %1$d из %2$d</item>
+        <item quantity="many">открыто %1$d из %2$d</item>
+        <item quantity="other">открыто %1$d из %2$d</item>
+    </plurals>
+
     <!-- Бронь (issue #97): длительность услуги. -->
     <plurals name="booking_duration_minutes">
         <item quantity="one">%1$d минута</item>

@@ -45,17 +45,20 @@
     <string name="http_inspector_subtitle">Ilova serverga qanday so\'rovlar yuborayotganini ko\'rish</string>
 
     <!-- Онбординг: welcome -->
-    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
-    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
-    <string name="onboarding_welcome_action">Kirish yoki ro\'yxatdan o\'tish</string>
+    <string name="onboarding_welcome_kicker">MAHALLA</string>
+    <string name="onboarding_welcome_title">Uyingiz yaqinidagi hamma narsa — bitta ilovada</string>
+    <string name="onboarding_welcome_subtitle">Dorixona, ovqat, shifokor, ustalar va kino. Navbatga talon va bron — qo\'ng\'iroqsiz.</string>
+    <string name="onboarding_welcome_action">Boshlash</string>
+    <string name="onboarding_welcome_consent">Davom etish orqali siz shartlar va siyosatga rozilik bildirasiz</string>
     <string name="onboarding_welcome_language">Ilova tili</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Qadam %1$d / %2$d</string>
     <string name="onboarding_phone_title">Telefon raqamingiz</string>
     <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
     <string name="onboarding_phone_label">Telefon raqami</string>
     <string name="onboarding_phone_action">Kodni olish</string>
-    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_phone_error">Raqamning 9 ta raqamini kiriting</string>
     <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
     <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
     <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
@@ -99,6 +102,7 @@
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
     <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
+    <string name="pin_pad_backspace">Raqamni o\'chirish</string>
 
     <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Biometrika bilan kirish</string>
@@ -130,7 +134,7 @@
     <string name="city_qarshi">Qarshi</string>
 
     <!-- Основные разделы -->
-    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_title">Yaqinda nima bor</string>
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_available">Sarflash mumkin</string>
     <string name="wallet_balance_total">Hisobda</string>
@@ -183,6 +187,8 @@
     <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
     <string name="profile_saved_places">Saqlangan joylar</string>
     <string name="profile_saved_places_subtitle">Saqlangan joylar ro\'yxati</string>
+    <string name="profile_biometric_title">Barmoq izi bilan kirish</string>
+    <string name="profile_biometric_description">Hamyon PIN-kodi o\'rniga</string>
     <string name="profile_devices_title">Mening qurilmalarim</string>
     <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
     <string name="profile_device_unknown">Noma\'lum qurilma</string>
@@ -358,7 +364,8 @@
     <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
     <string name="place_hours_around_the_clock">Kunu tun</string>
     <string name="place_hours_day_off">Dam olish kuni</string>
-    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_meta_address">Manzil</string>
+    <string name="place_meta_phone">Telefon</string>
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
@@ -601,6 +608,16 @@
     <string name="image_gallery_of">%1$s suratlari</string>
 
     <!-- Очередь (walk-in, issue #96) -->
+    <string name="home_focus_ticket_kicker">Sizning navbatingiz</string>
+    <string name="home_focus_nearest_kicker">Hozir eng yaqin</string>
+    <string name="home_focus_ticket_position">Navbatda · %1$d</string>
+    <string name="home_focus_open_ticket">Navbatni ochish</string>
+    <string name="home_focus_open_place">Joy</string>
+    <string name="category_all">Hammasi</string>
+    <string name="home_focus_updated_at">%1$s da yangilangan</string>
+    <string name="home_focus_rating">reyting %1$s</string>
+    <string name="wallet_header_subscription">%1$s %2$s gacha</string>
+    <string name="place_services_title">Xizmatlar</string>
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
     <string name="queue_field_name">Ismingiz</string>
@@ -621,8 +638,9 @@
     <string name="queue_position_label">Navbatdagi o\'rningiz</string>
     <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
     <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
-    <string name="queue_wait_label">Taxminiy kutish: %1$s</string>
-    <string name="queue_wait_hours">%1$s soat</string>
+    <string name="queue_stat_wait">daqiqa</string>
+    <string name="queue_stat_wait_hours">soat</string>
+    <string name="queue_stat_taken">olindi</string>
     <string name="queue_cancel">Navbatni bekor qilish</string>
     <string name="queue_cancel_keep">Qoldirish</string>
     <string name="queue_cancel_confirm_title">Navbatni bekor qilasizmi?</string>

@@ -18,15 +18,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -34,6 +39,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -45,6 +51,7 @@ import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import java.time.Instant
 
 /**
  * Главная (эпик 4.1): категории, «рядом», рекомендации.
@@ -60,9 +67,16 @@ fun DiscoveryHomeScreen(
     onNotificationsClick: () -> Unit,
     onFreelancersClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onTicketClick: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: DiscoveryHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Талон могли отменить на экране очереди, а срок жизни его чисел — две
+    // минуты: возврат на главную обязан перечитать его из хранилища.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.onEvent(DiscoveryHomeEvent.ScreenResumed)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -70,6 +84,8 @@ fun DiscoveryHomeScreen(
                 is DiscoveryHomeEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 is DiscoveryHomeEffect.OpenSearch -> onSearchClick(effect.category)
                 DiscoveryHomeEffect.OpenMap -> onMapClick()
+                is DiscoveryHomeEffect.OpenTicket ->
+                    onTicketClick(effect.placeId, effect.placeName)
             }
         }
     }
@@ -97,7 +113,12 @@ fun DiscoveryHomeContentScreen(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.discovery_title), actions = actions)
+        MahallaTopBar(
+            title = stringResource(R.string.discovery_title),
+            brandMark = true,
+            meta = state.openedAt?.let { headerMeta(it) },
+            actions = actions,
+        )
         MahallaPullToRefresh(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(DiscoveryHomeEvent.Refresh) },
@@ -132,6 +153,25 @@ private fun HomeList(
         verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         contentPadding = PaddingValues(horizontal = Spacing.gutter, vertical = Spacing.gutter),
     ) {
+        // Фокус-карточка — первым блоком (макет 1a/1d): она отвечает на
+        // вопрос «что мне сейчас», и всё остальное на экране — уже поиск.
+        //
+        // Ячейка заводится только когда карточке есть что сказать: пустая
+        // всё равно получила бы от `spacedBy` свои 20dp, и над строкой поиска
+        // висела бы дыра — на холодном старте (каталог ещё грузится) и ночью,
+        // когда рядом ничего не открыто.
+        if (state.ticket != null || state.nearestOpenPlace != null) {
+            item(key = "focus") {
+                FocusCard(
+                    ticket = state.ticket,
+                    queueInfoIsCurrent = state.ticketQueueInfoIsCurrent,
+                    nearestOpenPlace = state.nearestOpenPlace,
+                    onOpenTicket = { onEvent(DiscoveryHomeEvent.TicketClicked) },
+                    onOpenPlace = { onEvent(DiscoveryHomeEvent.PlaceClicked(it)) },
+                )
+            }
+        }
+
         item(key = "search") {
             SearchEntryButton(
                 onClick = { onEvent(DiscoveryHomeEvent.SearchClicked) },
@@ -143,6 +183,8 @@ private fun HomeList(
             CategoryGrid(
                 categories = state.categories,
                 onCategoryClick = { onEvent(DiscoveryHomeEvent.CategoryClicked(it)) },
+                // «Все» — тот же поиск без предвыбранной категории.
+                onAllClick = { onEvent(DiscoveryHomeEvent.SearchClicked) },
             )
         }
 
@@ -274,18 +316,47 @@ private fun LazyListScope.placeSection(
     if (places.isEmpty()) return
 
     item(key = "$key-header") {
+        // «открыто 4 из 6» (макет 1a: «6 из 6») — единственная цифра секции,
+        // которую каталог знает: `isOpenNow` приходит с каждым местом.
         SectionHeader(
             title = stringResource(titleRes),
+            meta = places.count(Place::isOpenNow).let { open ->
+                pluralStringResource(R.plurals.home_open_count, open, open, places.size)
+            },
             actionLabel = stringResource(R.string.action_see_all),
             onAction = { onEvent(DiscoveryHomeEvent.SearchClicked) },
         )
     }
-    items(items = places, key = { "$key-${it.id}" }) { place ->
-        PlaceCard(
-            place = place.toCardUi(),
-            onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
-        )
+    // Строки секции — одной ячейкой: секция не длиннее шести мест
+    // (`HomeSections.SECTION_LIMIT`), а `spacedBy` списка между отдельными
+    // ячейками прибавлял бы 20dp над каждой линией и ни одного под ней.
+    // Линии рисует список, не строка: под последней она не нужна (макет 1a).
+    item(key = "$key-rows") {
+        Column {
+            places.forEachIndexed { index, place ->
+                if (index > 0) MahallaDivider()
+                PlaceCard(
+                    place = place.toCardUi(),
+                    onClick = { onEvent(DiscoveryHomeEvent.PlaceClicked(place.id)) },
+                )
+            }
+        }
     }
+}
+
+/**
+ * Мета шапки «9:30 · вторник» (общая шапка макета). День недели — строчными:
+ * в макете он подпись, а не заголовок; ресурсы `day_*` заглавные, потому что
+ * их же показывает таблица часов на карточке места.
+ */
+@Composable
+private fun headerMeta(openedAt: Instant): String {
+    val weekday = stringResource(openedAt.atZone(DateTimeFormatters.AppZone).dayOfWeek.fullLabelRes())
+    return stringResource(
+        R.string.text_joined_with_dot,
+        DateTimeFormatters.time(openedAt),
+        weekday.lowercase(),
+    )
 }
 
 /** Данные из кэша подписываются явно — иначе устаревшее выглядит свежим. */
