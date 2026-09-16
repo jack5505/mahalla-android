@@ -51,6 +51,8 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionStatus
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
@@ -72,6 +74,7 @@ import java.time.Instant
 @Composable
 fun WalletScreen(
     modifier: Modifier = Modifier,
+    onOpenSubscription: () -> Unit = {},
     viewModel: WalletViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -91,6 +94,8 @@ fun WalletScreen(
                     if (!context.openPaymentForm(effect.url)) {
                         viewModel.onEvent(WalletEvent.PaymentOpenFailed)
                     }
+
+                WalletEffect.OpenSubscription -> onOpenSubscription()
             }
         }
     }
@@ -149,6 +154,18 @@ fun WalletContentScreen(
                         )
                     }
                 }
+                // Карточка «Mahalla+» между кнопками и историей (макет 2c).
+                // Нет подписки — нет и карточки: предлагать её отсюда некуда,
+                // тарифы живут на своём экране в профиле.
+                state.subscription?.let { subscription ->
+                    item(key = "subscription") {
+                        SubscriptionCard(
+                            subscription = subscription,
+                            onClick = { onEvent(WalletEvent.SubscriptionClicked) },
+                        )
+                    }
+                }
+
                 item(key = "history-header") {
                     SectionHeader(title = stringResource(R.string.wallet_history_title))
                 }
@@ -320,6 +337,75 @@ private fun BalanceCard(
             // `wallet`, `wallet/transactions`, `wallet/top-up`), и кнопка вела
             // бы в никуда.
         }
+    }
+}
+
+/**
+ * Карточка подписки (макет 2c): название тарифа, срок и состояние.
+ *
+ * Тональная заливка `secondaryContainer` — та же, что у макетного `#e8deff`:
+ * карточка должна отличаться и от фона экрана, и от строк истории под ней.
+ *
+ * Состояние подписки не пересчитывается на клиенте: у бэкенда есть
+ * грейс-период и собственный счёт дней (`Subscription.daysRemaining`), и
+ * вывод «активна» из даты окончания разошёлся бы с ним ровно в тот день,
+ * когда это важнее всего.
+ */
+@Composable
+private fun SubscriptionCard(
+    subscription: Subscription,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MahallaCard(
+        modifier = modifier,
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = subscription.planName?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.subscription_plan_unnamed),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                subscription.expiresAt?.let { expiresAt ->
+                    Text(
+                        text = stringResource(
+                            R.string.text_joined_with_dot,
+                            stringResource(R.string.subscription_expires),
+                            DateTimeFormatters.date(expiresAt),
+                        ),
+                        style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+            }
+            MahallaBadge(
+                text = stringResource(subscription.badgeRes()),
+                tone = if (subscription.isActive) MahallaTone.Accent else MahallaTone.Neutral,
+            )
+        }
+    }
+}
+
+/**
+ * Подпись состояния на карточке. Пробный период важнее статуса: «активна» у
+ * пробной подписки скрывает, что она закончится сама.
+ */
+private fun Subscription.badgeRes(): Int = when {
+    isTrial -> R.string.subscription_trial_badge
+    inGracePeriod -> R.string.subscription_status_expiring
+    else -> when (status) {
+        SubscriptionStatus.Active -> R.string.subscription_status_active
+        SubscriptionStatus.Expired -> R.string.subscription_status_expired
+        SubscriptionStatus.Cancelled -> R.string.subscription_status_cancelled
+        SubscriptionStatus.Unknown -> R.string.subscription_status_unknown
     }
 }
 

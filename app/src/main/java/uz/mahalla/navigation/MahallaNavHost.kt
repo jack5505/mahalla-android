@@ -258,7 +258,13 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> { WalletScreen() }
+            composable<WalletRoute> {
+                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                // строка в профиле (issue #103).
+                WalletScreen(
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                )
+            }
             composable<ProfileRoute> {
                 ProfileScreen(
                     // Вышли (issue #61): сессии и PIN больше нет, поэтому весь
