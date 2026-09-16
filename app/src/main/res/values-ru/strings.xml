@@ -53,7 +53,7 @@
     <string name="onboarding_phone_subtitle">Пришлём код подтверждения в SMS.</string>
     <string name="onboarding_phone_label">Номер телефона</string>
     <string name="onboarding_phone_action">Получить код</string>
-    <string name="onboarding_phone_error">Неверный номер телефона</string>
+    <string name="onboarding_phone_error">Введите 9 цифр номера</string>
     <string name="onboarding_phone_consent">Согласен с условиями публичной оферты</string>
     <string name="onboarding_phone_consent_link">Читать оферту</string>
     <string name="onboarding_phone_consent_required">Чтобы продолжить, примите оферту</string>

@@ -135,28 +135,50 @@ fun MahallaPhoneField(
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
-        OutlinedTextField(
-            value = fieldValue,
-            onValueChange = { input ->
-                val masked = PhoneFieldFormatter.apply(input.text, input.selection.end)
-                fieldValue = TextFieldValue(masked.text, TextRange(masked.caret))
-                onDigitsChange(PhoneFieldFormatter.digitsOf(masked.text))
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = MahallaComponentDefaults.fieldMinHeight),
-            enabled = enabled,
-            singleLine = true,
-            isError = errorText != null,
-            label = { Text(label) },
-            prefix = { Text(text = "+$COUNTRY_CODE", style = MaterialTheme.typography.titleMedium) },
-            textStyle = MaterialTheme.typography.titleMedium.merge(TabularNums),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone,
-                imeAction = imeAction,
-            ),
-            shape = MaterialTheme.shapes.small,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Код страны — отдельной плашкой (макет 0b), а не префиксом внутри
+            // поля: он не редактируется, и вид «поля» ему только мешал. Для
+            // TalkBack плашка пуста — код входит в описание самого поля.
+            Box(
+                modifier = Modifier
+                    .height(MahallaComponentDefaults.fieldMinHeight)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
+                    .padding(horizontal = Spacing.card)
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+$COUNTRY_CODE",
+                    style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            OutlinedTextField(
+                value = fieldValue,
+                onValueChange = { input ->
+                    val masked = PhoneFieldFormatter.apply(input.text, input.selection.end)
+                    fieldValue = TextFieldValue(masked.text, TextRange(masked.caret))
+                    onDigitsChange(PhoneFieldFormatter.digitsOf(masked.text))
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = MahallaComponentDefaults.fieldMinHeight)
+                    .semantics { contentDescription = "$label, +$COUNTRY_CODE" },
+                enabled = enabled,
+                singleLine = true,
+                isError = errorText != null,
+                label = { Text(label) },
+                textStyle = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = imeAction,
+                ),
+                shape = MaterialTheme.shapes.small,
+            )
+        }
         FieldSupportingText(supportingText = null, errorText = errorText)
     }
 }

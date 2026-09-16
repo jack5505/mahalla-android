@@ -58,7 +58,7 @@
     <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
     <string name="onboarding_phone_label">Telefon raqami</string>
     <string name="onboarding_phone_action">Kodni olish</string>
-    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_phone_error">Raqamning 9 ta raqamini kiriting</string>
     <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
     <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
     <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
