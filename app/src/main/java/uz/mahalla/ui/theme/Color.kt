@@ -60,6 +60,12 @@ val FocusLightScheme: ColorScheme = lightColorScheme(
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFF9DEDC),
     onErrorContainer = Color(0xFF410E0B),
+    // Инверсные роли — это снекбар из макета (`#2b2440` с текстом `#fdf8ff` и
+    // акцентом `#b9a3f0`). Отдельные роли, а не тон `Neutral`: тем же тоном
+    // красятся бейджи («закрыто», «отменён»), и тёмными они стать не должны.
+    inverseSurface = Color(0xFF2B2440),
+    inverseOnSurface = Color(0xFFFDF8FF),
+    inversePrimary = Color(0xFFB9A3F0),
 )
 
 val FocusLightColors = MahallaColors(
@@ -102,6 +108,11 @@ val FocusDarkScheme: ColorScheme = darkColorScheme(
     onError = Color(0xFF45100D),
     errorContainer = Color(0xFF401D1B),
     onErrorContainer = Color(0xFFFFDAD7),
+    // В тёмной теме инверсия работает в другую сторону: снекбар светлый на
+    // тёмном экране.
+    inverseSurface = Color(0xFFEFE9F2),
+    inverseOnSurface = Color(0xFF1D1429),
+    inversePrimary = Color(0xFF5B3FC4),
 )
 
 val FocusDarkColors = MahallaColors(
