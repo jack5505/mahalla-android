@@ -16,9 +16,10 @@ import javax.inject.Inject
 /**
  * «Мои заказы у мастеров» (issue #107).
  *
- * Список перечитывается на каждом возврате на экран: статус меняет мастер
- * (`PUT freelancers/orders/{orderId}/status`, его кабинет — эпик #16), и
- * показанное час назад «ждёт ответа» ничего не стоит.
+ * Список перечитывается на каждом возврате на экран: статус меняет мастер,
+ * из своего экрана входящих заказов
+ * ([uz.mahalla.feature.freelancer.ui.orders.MyFreelancerIncomingOrdersViewModel],
+ * issue #190), и показанное час назад «ждёт ответа» ничего не стоит.
  */
 @HiltViewModel
 class MyFreelancerOrdersViewModel @Inject constructor(

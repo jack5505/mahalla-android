@@ -496,6 +496,82 @@ class FreelancerRepositoryTest {
         assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
     }
 
+    // --- Входящие заказы мастера (issue #190) ---
+
+    @Test
+    fun `incoming orders are paged and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"o-1","serviceTitle":"Kran","priceAmount":15000000,
+                   "status":"PENDING","address":"Chilonzor 7"}],"page":1,"totalPages":2,
+                   "last":true}""",
+            ),
+        )
+
+        val page = (repository().incomingOrders(page = 1) as ApiResult.Success).data
+
+        assertEquals("/freelancers/me/orders?page=1&size=20", server.takeRequest().path)
+        assertEquals(listOf("o-1"), page.items.map { it.id })
+        assertEquals(FreelancerOrderStatus.Pending, page.items.first().status)
+        assertFalse(page.hasMore)
+    }
+
+    @Test
+    fun `accepting an order sends the status body to the right path`() = runTest {
+        server.enqueue(envelope("""{"id":"o-1","status":"ACCEPTED"}"""))
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Accepted)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/freelancers/orders/o-1/status", request.path)
+        assertEquals("""{"status":"ACCEPTED"}""", request.body.readUtf8())
+        assertTrue(result is ApiResult.Success)
+    }
+
+    /**
+     * Ответ смены статуса без `id` — успех, а не отказ разбора: статус на
+     * сервере уже сменился, а `updateOrderStatus` не разбирает ответ как
+     * заказ (тот же урок, что у `saveMyService`: строгий разбор ответа записи
+     * не должен превращать удавшуюся операцию в ошибку экрана).
+     */
+    @Test
+    fun `status change with an id-less response is still a success`() = runTest {
+        server.enqueue(envelope("""{"status":"REJECTED"}"""))
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Rejected)
+
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `blank order id never reaches the network`() = runTest {
+        val result = repository().updateOrderStatus(" ", FreelancerOrderStatus.Completed)
+
+        assertEquals(
+            ApiError.Business(FreelancerRepository.INVALID_ORDER_ID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `unauthorized status change is a failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"UNAUTHORIZED",
+                       "message":"Kirish uchun autentifikatsiya talab qilinadi"}}""",
+                ),
+        )
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Accepted)
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+    }
+
     // --- Кабинет мастера (issue #71) ---
 
     /**
