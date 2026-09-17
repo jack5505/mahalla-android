@@ -84,12 +84,18 @@ enum class AppointmentVertical {
  * ([DateTimeFormatters.AppZone]). Оба необязательны: запись без времени
  * показывается как есть, а не прячется.
  * @param priceSum цена услуги на момент записи; ноль — «не названа».
+ * @param doctorId запись к врачу (issue #99): `doctorId` из
+ * `HospitalAppointmentResponse`, `null` у записи к мастеру. Сервер не называет
+ * врача в [serviceName] (схема этого поля вовсе не знает), поэтому имя
+ * дотягивается отдельным запросом по этому id —
+ * [uz.mahalla.feature.hospital.data.DefaultHospitalRepository] (issue #219).
  */
 data class Appointment(
     val id: String,
     val placeId: String? = null,
     val serviceId: String? = null,
     val serviceName: String? = null,
+    val doctorId: String? = null,
     val priceSum: Long = 0,
     val date: LocalDate? = null,
     val startTime: LocalTime? = null,

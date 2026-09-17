@@ -72,6 +72,11 @@ class MyTicketsViewModelTest {
         val viewModel = viewModel()
         runCurrent()
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyTicketsEvent.ScreenResumed)
+        runCurrent()
+        assertEquals(listOf(0), repository.requestedPages)
+
         viewModel.onEvent(MyTicketsEvent.ScreenResumed)
         runCurrent()
 

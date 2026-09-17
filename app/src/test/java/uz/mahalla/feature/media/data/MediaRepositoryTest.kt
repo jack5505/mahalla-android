@@ -203,6 +203,73 @@ class MediaRepositoryTest {
         assertNull("HTML сообщением для человека не становится", failure.serverMessage)
     }
 
+    // --- Галерея сущности и удаление (issue #185) ---
+
+    @Test
+    fun `entity gallery is parsed from the list`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"m-1","url":"https://cdn.mahalla.uz/m-1.jpg",
+                   |"thumbnailUrl":"https://cdn.mahalla.uz/m-1-thumb.jpg","ownerId":"u-1"},
+                   |{"id":"m-2","url":"https://cdn.mahalla.uz/m-2.jpg"}]"""
+                    .trimMargin()
+                    .replace("\n", ""),
+            ),
+        )
+
+        val result = repository().mediaForEntity("place-1")
+
+        val request = server.takeRequest()
+        assertEquals("/media/entity/place-1", request.path)
+        val files = (result as ApiResult.Success).data
+        assertEquals(listOf("m-1", "m-2"), files.map { it.id })
+        assertEquals("u-1", files.first().ownerId)
+        assertNull("чужого поля у файла без ownerId не выдумываем", files.last().ownerId)
+    }
+
+    @Test
+    fun `an empty entity gallery is an empty list, not a failure`() = runTest {
+        server.enqueue(envelope("[]"))
+
+        val result = repository().mediaForEntity("place-1")
+
+        assertEquals(emptyList<Any>(), (result as ApiResult.Success).data)
+    }
+
+    @Test
+    fun `a file without a url is dropped, not the whole gallery`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"m-1","url":"https://cdn.mahalla.uz/m-1.jpg"},{"id":"m-2"}]""",
+            ),
+        )
+
+        val files = (repository().mediaForEntity("place-1") as ApiResult.Success).data
+
+        assertEquals(listOf("m-1"), files.map { it.id })
+    }
+
+    @Test
+    fun `deleting a file goes to DELETE media by id`() = runTest {
+        server.enqueue(envelope("{}"))
+
+        val result = repository().deleteMedia("m-1")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/media/m-1", request.path)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `deleting someone else file is reported, not swallowed`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val result = repository().deleteMedia("m-1")
+
+        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+    }
+
     /**
      * Отмена — обычная отмена корутины: Retrofit обрывает вызов, и результата
      * не будет вовсе. Сервер молчит (`NO_RESPONSE`), то есть проверяется ровно

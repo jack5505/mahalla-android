@@ -10,13 +10,19 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.profile.domain.AccountStatus
 import uz.mahalla.feature.profile.domain.DeviceSession
+import uz.mahalla.data.security.BiometricStatus
+import uz.mahalla.feature.profile.domain.VerificationStatus
+import uz.mahalla.feature.role.domain.ServerRole
+import uz.mahalla.feature.role.domain.UserRole
 
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
  * показываем строку «сетевые запросы». В release её нет.
- * @param profile кто вошёл. Приезжает с ответом на вход и лежит в DataStore:
- * `GET /users/me` у бэкенда нет (issue #61).
+ * @param profile кто вошёл. Источник — `GET /users/me`, перечитанный при
+ * открытии экрана (issue #170); пока ответа нет или он не пришёл, здесь
+ * лежит то, что сохранил вход — экран не бывает пустым.
  * @param sessions устройства, на которых открыт вход.
  * @param pendingSessionId строка списка, на которой сейчас идёт запрос:
  * отзыв и доверие блокируются точечно, а не всем экраном.
@@ -26,6 +32,7 @@ import uz.mahalla.feature.profile.domain.DeviceSession
  * @param confirmRevoke устройство, которое собираются отозвать.
  * @param loggingOut выход уже идёт: повторные нажатия не плодят запросов.
  * @param avatarUpload загрузка фото профиля (issue #101).
+ * @param nameEdit редактирование имени через `PUT users/me` (issue #170).
  */
 data class ProfileState(
     val settings: AppSettings = AppSettings(),
@@ -38,7 +45,43 @@ data class ProfileState(
     val confirmRevoke: DeviceSession? = null,
     val loggingOut: Boolean = false,
     val avatarUpload: AvatarUpload = AvatarUpload(),
-) : UiState
+    val nameEdit: NameEdit = NameEdit(),
+    /**
+     * Биометрия на устройстве (макет 2d, тумблер «Вход по отпечатку»).
+     * Перечитывается на каждом возврате на экран: отпечаток могли добавить в
+     * настройках устройства и вернуться.
+     */
+    val biometricStatus: BiometricStatus = BiometricStatus.NoHardware,
+    /** Системный промпт не подтвердил — тумблер остался выключенным, и это объяснено словами. */
+    val biometricPromptFailed: Boolean = false,
+) : UiState {
+
+    /** Тумблер отпечатка есть только там, где есть датчик: без него он ничего не включит. */
+    val showsBiometricRow: Boolean
+        get() = biometricStatus == BiometricStatus.Available || biometricStatus == BiometricStatus.NotEnrolled
+
+    /** Роль из анкеты — локальный выбор человека (issue #84). */
+    val formRole: UserRole? get() = UserRole.fromStoredValue(settings.roleId)
+
+    /** Права на сервере: их приложение не выбирает и не меняет (issue #237). */
+    val serverRole: ServerRole get() = ServerRole.fromServer(profile.serverRole)
+
+    val verification: VerificationStatus
+        get() = VerificationStatus.fromServer(profile.verificationStatus)
+
+    val account: AccountStatus get() = AccountStatus.fromServer(profile.accountStatus)
+
+    /**
+     * Показывать ли «Мои заведения» (issue #237).
+     *
+     * Два условия, а не одно: анкета продавца — это заявка, а не право, и
+     * человек может её не заполнять; серверная роль — право, и владелец
+     * заведения, который анкету не заполнял, до issue #237 своего заведения в
+     * приложении не находил вовсе. Ложное «да» стоит пустого списка, ложное
+     * «нет» — спрятанного бизнеса.
+     */
+    val showMyPlaces: Boolean get() = formRole == UserRole.Provider || serverRole.isProvider
+}
 
 /**
  * Состояние загрузки фото профиля (issue #101).
@@ -54,9 +97,43 @@ data class AvatarUpload(
     val failure: ApiFailure? = null,
 )
 
+/**
+ * Редактирование имени (issue #170): `PUT users/me` принимает `fullName`
+ * ≤ 200 символов (`docs/API-CONTRACT.md`).
+ *
+ * @param editing поле открыто на редактирование — иначе шапка просто
+ * показывает `profile.fullName`.
+ * @param draft то, что человек сейчас набирает; своё поле, а не
+ * `profile.fullName` напрямую — иначе ответ `GET`, перечитавшего профиль
+ * посреди набора текста, стёр бы недописанное имя.
+ * @param saving запрос уже идёт: повторное нажатие «сохранить» не плодит
+ * второй.
+ * @param failure отказ сохранения — текстом сервера (issue #34), а не молча.
+ */
+data class NameEdit(
+    val editing: Boolean = false,
+    val draft: String = "",
+    val saving: Boolean = false,
+    val failure: ApiFailure? = null,
+) {
+    companion object {
+        const val MAX_LENGTH = 200
+    }
+}
+
 sealed interface ProfileEvent : UiEvent {
     data class LanguageSelected(val language: AppLanguage) : ProfileEvent
     data class ThemeSelected(val mode: ThemeMode) : ProfileEvent
+
+    /**
+     * Тумблер «Вход по отпечатку». Включение флаг не пишет — сначала системный
+     * промпт: иначе человек, закрывший диалог, получил бы «биометрия включена»
+     * без единого подтверждения (то же правило, что на шаге онбординга).
+     */
+    data class BiometricToggled(val enabled: Boolean) : ProfileEvent
+    data object BiometricPromptSucceeded : ProfileEvent
+    data object BiometricPromptFailed : ProfileEvent
+    data object BiometricPromptCancelled : ProfileEvent
     data object HttpInspectorRequested : ProfileEvent
 
     /** Экран вернулся на передний план: список устройств мог устареть. */
@@ -82,11 +159,24 @@ sealed interface ProfileEvent : UiEvent {
 
     /** Отмена загрузки: файл дописан не будет, сервер его не получит. */
     data object AvatarUploadCancelled : ProfileEvent
+
+    /** Нажали на имя в шапке (issue #170): открыть поле редактирования. */
+    data object NameEditRequested : ProfileEvent
+
+    data class NameDraftChanged(val value: String) : ProfileEvent
+
+    /** Закрыть поле без сохранения — не считается отказом, сервер не звался. */
+    data object NameEditCancelled : ProfileEvent
+
+    data object NameSaveRequested : ProfileEvent
 }
 
 sealed interface ProfileEffect : UiEffect {
     /** До API 33 смену языка применяет только пересоздание Activity. */
     data object RecreateActivity : ProfileEffect
+
+    /** Системный BiometricPrompt живёт в Activity — показывает его экран. */
+    data object ShowBiometricPrompt : ProfileEffect
 
     /** Экран инспектора трафика: интент отдаёт сама библиотека (issue #30). */
     data class OpenHttpInspector(val intent: Intent) : ProfileEffect

@@ -145,6 +145,10 @@ class FashionCartViewModelTest {
     fun `returning to the screen re-reads the cart`() = runTest {
         val viewModel = viewModel()
 
+        // Первый resume — это открытие экрана, корзина уже запросила `init`.
+        viewModel.onEvent(FashionCartEvent.ScreenResumed)
+        assertEquals(1, repository.cartRequests)
+
         viewModel.onEvent(FashionCartEvent.ScreenResumed)
 
         assertEquals(2, repository.cartRequests)

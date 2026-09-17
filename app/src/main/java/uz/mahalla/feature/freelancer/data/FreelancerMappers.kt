@@ -3,6 +3,7 @@ package uz.mahalla.feature.freelancer.data
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.paging.hasMorePages
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderPage
@@ -37,6 +38,30 @@ internal fun FreelancerDto.toDomain(): Freelancer? {
         isAvailable = isAvailable ?: available ?: true,
         ratingAvg = ratingAvg?.coerceAtLeast(0.0) ?: 0.0,
         ratingCount = ratingCount?.coerceAtLeast(0) ?: 0,
+    )
+}
+
+/**
+ * Услуга мастера. Разбор мягкий, как у услуг заведения (issue #97): без `id`
+ * отбрасывается — заказать её нечем (`serviceId` обязателен в теле заказа), а
+ * в списке она стала бы дубликатом ключа.
+ *
+ * Выключенные (`isActive: false`) сюда доезжают: клиенту их отсеивает
+ * [FreelancerRepository.services], а в кабинете мастера они видны — это его
+ * услуги, и молча спрятать их значило бы соврать про состав.
+ */
+internal fun FreelancerServiceDto.toDomain(): BarberService? {
+    val serviceId = id?.takeIf { it.isNotBlank() } ?: return null
+    return BarberService(
+        id = serviceId,
+        title = title?.trim()?.takeIf { it.isNotEmpty() }.orEmpty(),
+        description = description?.trim()?.takeIf { it.isNotEmpty() },
+        // Отрицательная цена — не скидка, а мусор.
+        priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
+        durationMinutes = durationMinutes?.takeIf { it > 0 },
+        // Молчание сервера — «услуга оказывается»: спрятать её из-за
+        // отсутствующего флага хуже, чем показать лишнюю.
+        isActive = isActive ?: active ?: true,
     )
 }
 

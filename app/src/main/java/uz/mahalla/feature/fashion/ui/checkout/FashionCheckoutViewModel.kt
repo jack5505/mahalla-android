@@ -172,8 +172,6 @@ class FashionCheckoutViewModel @Inject constructor(
 
                 is ApiResult.Success -> {
                     updateState { copy(isSubmitting = false, orderCreated = true) }
-                    // `storeId` магазина одежды — это и есть `placeId`:
-                    // `PlaceOrderRequest` принимает ровно один (`Routes.kt`).
                     analytics.track(
                         AnalyticsEvents.ordered(storeId, AnalyticsVertical.Fashion),
                     )

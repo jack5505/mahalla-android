@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
  *
  * 1. доступность (2.4) проверяется обычным unit-тестом — `TouchTargetTest`
  *    сверяет каждую цель нажатия с 48dp, не поднимая Compose;
- * 2. визуальная высота по макету (`Spacing.buttonHeight` = 44dp) меньше
+ * 2. визуальная высота по макету (`Spacing.buttonHeight` = 46dp) меньше
  *    минимальной цели нажатия, поэтому «сколько занимает» и «куда можно
  *    попасть пальцем» — разные величины и живут раздельно.
  */
@@ -28,14 +28,26 @@ object MahallaComponentDefaults {
     val segmentMinHeight: Dp = minTouchTarget
     val navItemMinHeight: Dp = minTouchTarget
 
-    /** Ячейка OTP: ширина меньше 48dp, но строка целиком выше цели нажатия. */
-    val otpCellWidth: Dp = 44.dp
-    val otpCellHeight: Dp = minTouchTarget
+    /**
+     * Ячейка кода из SMS и PIN — 64×68 по макету
+     * (`design_handoff_mahalla_focus/README.md`, шаг 0c).
+     *
+     * [otpCellWidth] — **предел**, а не фиксированная ширина: длину кода задаёт
+     * бэкенд (`challenge.codeLength`), и шесть ячеек по 64dp с зазорами не
+     * влезают в экран 393dp. Поле сжимает ячейки под доступную ширину и
+     * упирается в этот максимум, поэтому на четырёх цифрах выходит ровно макет,
+     * а на шести — узкие ячейки вместо обрезанного ряда.
+     */
+    val otpCellWidth: Dp = 64.dp
+    val otpCellHeight: Dp = 68.dp
+
+    /** Клавиша нампада PIN (макет 0e) — сама по себе больше цели нажатия. */
+    val pinPadKeySize: Dp = 60.dp
 
     // --- Discovery (эпик 4) ---
 
-    /** Плитка категории на главной: квадратная, иконка над подписью. */
-    val categoryTileMinHeight: Dp = 88.dp
+    /** Плитка категории на главной: иконка над подписью, 76dp по макету 1a. */
+    val categoryTileMinHeight: Dp = 76.dp
 
     /** Строка-кнопка «Поиск» на главной — открывает экран поиска. */
     val searchEntryMinHeight: Dp = fieldMinHeight
@@ -95,6 +107,9 @@ object MahallaComponentDefaults {
     val skeletonLineHeight: Dp = 12.dp
     val borderWidth: Dp = 1.dp
 
+    /** Спиннер в хвосте списка (`LoadMoreAuto`) — крупнее, чем внутри кнопки. */
+    val loadMoreIndicatorSize: Dp = 24.dp
+
     /**
      * Все цели нажатия кита — для теста доступности. Любой новый интерактивный
      * компонент добавляется сюда же, иначе его никто не проверит.
@@ -110,6 +125,7 @@ object MahallaComponentDefaults {
         "segment" to segmentMinHeight,
         "navItem" to navItemMinHeight,
         "otpCell" to otpCellHeight,
+        "pinPadKey" to pinPadKeySize,
         "categoryTile" to categoryTileMinHeight,
         "searchEntry" to searchEntryMinHeight,
         "mapMarker" to mapMarkerMinSize,

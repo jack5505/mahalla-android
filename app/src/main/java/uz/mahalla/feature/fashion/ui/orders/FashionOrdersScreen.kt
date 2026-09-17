@@ -28,6 +28,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -39,7 +40,6 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.fashion.ui.FashionFailure
-import uz.mahalla.feature.fashion.ui.FashionLoadMore
 import uz.mahalla.feature.fashion.ui.labelRes
 import uz.mahalla.feature.fashion.ui.priceText
 import uz.mahalla.feature.fashion.ui.tone
@@ -165,8 +165,9 @@ private fun LazyListScope.orderItems(
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    FashionLoadMore(
+                    LoadMoreAuto(
                         itemCount = orders.data.size,
+                        isLoading = state.isLoadingMore,
                         failure = state.loadMoreFailure,
                         onLoadMore = { onEvent(FashionOrdersEvent.LoadMore) },
                     )

@@ -140,6 +140,71 @@ class SettingsDataStoreTest {
         assertFalse(ThemeMode.LIGHT.isDark(systemInDarkTheme = true))
     }
 
+    // Анкета помнит, чья она (issue #243): выход её не стирает, а вход под
+    // другим аккаунтом — стирает.
+
+    @Test
+    fun `signing in as another account wipes the form but keeps the city`() = runTest {
+        val store = SettingsDataStore(newDataStore())
+        store.claimFor("u-1")
+        store.setUserRole("provider")
+        store.setDeliveryAddress("Chilonzor 5")
+        store.setCityId("tashkent")
+
+        store.claimFor("u-2")
+
+        // Иначе в оформление заказа подставился бы адрес прежнего человека.
+        val settings = store.current()
+        assertNull(settings.roleId)
+        assertNull(settings.deliveryAddress)
+        // Город — про место, а не про человека.
+        assertEquals("tashkent", settings.cityId)
+    }
+
+    @Test
+    fun `signing in again as the same account keeps the form`() = runTest {
+        val store = SettingsDataStore(newDataStore())
+        store.claimFor("u-1")
+        store.setUserRole("provider")
+        store.setDeliveryAddress("Chilonzor 5")
+
+        // «Забыли PIN» — это выход и вход заново тем же человеком.
+        store.claimFor("u-1")
+
+        val settings = store.current()
+        assertEquals("provider", settings.roleId)
+        assertEquals("Chilonzor 5", settings.deliveryAddress)
+    }
+
+    @Test
+    fun `a form without a known owner is treated as foreign`() = runTest {
+        val store = SettingsDataStore(newDataStore())
+        // Анкета, заполненная до того, как появился владелец.
+        store.setUserRole("customer")
+        store.setDeliveryAddress("Chilonzor 5")
+
+        store.claimFor("u-1")
+
+        assertNull(store.current().roleId)
+        assertNull(store.current().deliveryAddress)
+    }
+
+    @Test
+    fun `signing in without an account id wipes the form and forgets the owner`() = runTest {
+        val store = SettingsDataStore(newDataStore())
+        store.claimFor("u-1")
+        store.setUserRole("provider")
+
+        store.claimFor(null)
+        assertNull(store.current().roleId)
+
+        // Анкета, заполненная после такого входа, ничья: прежний владелец,
+        // вернувшись, получить её не должен.
+        store.setUserRole("customer")
+        store.claimFor("u-1")
+        assertNull(store.current().roleId)
+    }
+
     /** DataStore, у которого чтение и запись всегда падают. */
     private class FailingDataStore : DataStore<Preferences> {
         override val data: Flow<Preferences> = flow { throw IOException("storage is gone") }

@@ -6,6 +6,7 @@ import okhttp3.MultipartBody
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.media.domain.MediaFile
 import javax.inject.Inject
@@ -44,6 +45,15 @@ interface MediaRepository {
         entityId: String? = null,
         onProgress: (percent: Int) -> Unit = {},
     ): ApiResult<MediaFile>
+
+    /**
+     * Галерея сущности — заведения, отзыва (issue #185). Разбор мягкий: файл
+     * без `url` пропускается, а не роняет список целиком (`.claude/rules/network.md`).
+     */
+    suspend fun mediaForEntity(entityId: String): ApiResult<List<MediaFile>>
+
+    /** Удалить свой файл. Чей он — проверяет бэкенд, а не клиент. */
+    suspend fun deleteMedia(id: String): ApiResult<Unit>
 
     companion object {
         /** Имя части в `multipart/form-data` — из схемы `media/upload`. */
@@ -95,6 +105,15 @@ class DefaultMediaRepository @Inject constructor(
                 ?: throw SerializationException("media/upload responded without url")
         }
     }
+
+    override suspend fun mediaForEntity(entityId: String): ApiResult<List<MediaFile>> = apiCall {
+        // mapNotNull, а не toDomain + throw, как в uploadImage: один битый файл
+        // в списке не повод остаться без всей галереи.
+        api.forEntity(entityId).payload().mapNotNull { it.toDomain() }
+    }
+
+    override suspend fun deleteMedia(id: String): ApiResult<Unit> =
+        apiCall { api.delete(id).ensureSuccess() }
 
     /**
      * Проценты, а не байты: экрану нужна полоска, а не арифметика. Одно и то

@@ -9,6 +9,8 @@ import uz.mahalla.data.network.payload
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionCharge
+import uz.mahalla.feature.subscription.domain.SubscriptionChargePage
 import uz.mahalla.feature.subscription.domain.SubscriptionPlan
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -49,15 +51,46 @@ interface SubscriptionRepository {
 
     suspend fun setAutoRenew(enabled: Boolean): ApiResult<Unit>
 
+    /**
+     * История списаний за подписку (задача 9.3).
+     *
+     * Своей ручки у неё нет: берётся история платежей
+     * (`GET payments/transactions`) и фильтруется по назначению. Из-за этого
+     * порция истории может занять несколько серверных страниц — с какой
+     * продолжать, говорит [SubscriptionChargePage.nextPage].
+     *
+     * @param fromPage первая страница **сервера**, с которой читать.
+     */
+    suspend fun charges(
+        fromPage: Int = 0,
+        size: Int = CHARGES_PAGE_SIZE,
+    ): ApiResult<SubscriptionChargePage>
+
     companion object {
         /** Код отказа, когда у тарифа нет пробного периода. */
         const val NO_TRIAL_CODE = "SUBSCRIPTION_NO_TRIAL"
+
+        /** Столько же по умолчанию берёт и сам бэкенд. */
+        const val CHARGES_PAGE_SIZE = 20
+
+        /**
+         * Сколько страниц платежей просматривать за один запрос истории.
+         *
+         * Фильтр по назначению клиентский, поэтому страница платежей может не
+         * содержать ни одного списания за подписку (например, у человека
+         * подряд шли пополнения кошелька). Пустой список при непустой истории
+         * читался бы как «за подписку не списывали», поэтому пустые страницы
+         * пропускаются — но не бесконечно: у истории платежей нет предела, и
+         * дальше слово за кнопкой «показать ещё».
+         */
+        const val CHARGES_MAX_PAGES_PER_REQUEST = 5
     }
 }
 
 @Singleton
 class DefaultSubscriptionRepository @Inject constructor(
     private val api: SubscriptionsApi,
+    private val paymentsApi: PaymentsApi,
 ) : SubscriptionRepository {
 
     override suspend fun plans(audience: PlanAudience): ApiResult<List<SubscriptionPlan>> =
@@ -135,6 +168,48 @@ class DefaultSubscriptionRepository @Inject constructor(
 
     override suspend fun setAutoRenew(enabled: Boolean): ApiResult<Unit> =
         apiCall { api.autoRenew(ToggleAutoRenewRequest(autoRenew = enabled)).ensureSuccess() }
+
+    /**
+     * Страницы читаются по одной, пока не наберётся хотя бы одно списание за
+     * подписку либо не кончатся страницы (или разрешённые
+     * [SubscriptionRepository.CHARGES_MAX_PAGES_PER_REQUEST] попытки).
+     *
+     * Отказ по дороге возвращается как отказ: набранного к этому моменту всё
+     * равно нет — цикл продолжается только пока список пуст.
+     */
+    override suspend fun charges(
+        fromPage: Int,
+        size: Int,
+    ): ApiResult<SubscriptionChargePage> {
+        val firstPage = fromPage.coerceAtLeast(0)
+        var page = firstPage
+        val collected = mutableListOf<SubscriptionCharge>()
+        while (true) {
+            val result = apiCall {
+                paymentsApi.transactions(page = page, size = size).payload()
+            }
+            val dto = when (result) {
+                is ApiResult.Failure -> return result
+                is ApiResult.Success -> result.data
+            }
+            collected += dto.content.mapNotNull(PaymentTransactionDto::toDomain)
+            val serverHasMore = dto.hasMore(page)
+            val scanned = page - firstPage + 1
+            page++
+            if (collected.isNotEmpty() ||
+                !serverHasMore ||
+                scanned >= SubscriptionRepository.CHARGES_MAX_PAGES_PER_REQUEST
+            ) {
+                return ApiResult.Success(
+                    SubscriptionChargePage(
+                        items = collected,
+                        hasMore = serverHasMore,
+                        nextPage = page,
+                    ),
+                )
+            }
+        }
+    }
 }
 
 /**

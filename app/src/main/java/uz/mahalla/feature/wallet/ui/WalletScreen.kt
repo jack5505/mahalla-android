@@ -15,8 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,7 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -36,10 +35,12 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaTone
@@ -50,11 +51,14 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.subscription.domain.SubscriptionStatus
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
+import uz.mahalla.ui.theme.FocusDisplayBalance
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -70,6 +74,7 @@ import java.time.Instant
 @Composable
 fun WalletScreen(
     modifier: Modifier = Modifier,
+    onOpenSubscription: () -> Unit = {},
     viewModel: WalletViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -89,6 +94,8 @@ fun WalletScreen(
                     if (!context.openPaymentForm(effect.url)) {
                         viewModel.onEvent(WalletEvent.PaymentOpenFailed)
                     }
+
+                WalletEffect.OpenSubscription -> onOpenSubscription()
             }
         }
     }
@@ -118,7 +125,27 @@ fun WalletContentScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.wallet_title))
+        // Мета шапки — «Mahalla+ до 12.10» (общая шапка макета): срок подписки
+        // есть в состоянии ради карточки ниже, а здесь он на виду и без
+        // прокрутки.
+        val subscription = state.subscription
+        MahallaTopBar(
+            title = stringResource(R.string.wallet_title),
+            brandMark = true,
+            // В грейс-периоде «до 12.10» с прошедшей датой врало бы про срок —
+            // тогда та же подпись, что у плашки карточки ниже: «истекает».
+            meta = when {
+                subscription == null -> null
+                subscription.inGracePeriod -> stringResource(R.string.subscription_status_expiring)
+                subscription.isActive && subscription.expiresAt != null -> stringResource(
+                    R.string.wallet_header_subscription,
+                    subscription.planName?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.subscription_plan_unnamed),
+                    DateTimeFormatters.date(subscription.expiresAt),
+                )
+                else -> null
+            },
+        )
         MahallaPullToRefresh(
             isRefreshing = state.isRefreshing,
             onRefresh = { onEvent(WalletEvent.Refreshed) },
@@ -147,6 +174,18 @@ fun WalletContentScreen(
                         )
                     }
                 }
+                // Карточка «Mahalla+» между кнопками и историей (макет 2c).
+                // Нет подписки — нет и карточки: предлагать её отсюда некуда,
+                // тарифы живут на своём экране в профиле.
+                state.subscription?.let { subscription ->
+                    item(key = "subscription") {
+                        SubscriptionCard(
+                            subscription = subscription,
+                            onClick = { onEvent(WalletEvent.SubscriptionClicked) },
+                        )
+                    }
+                }
+
                 item(key = "history-header") {
                     SectionHeader(title = stringResource(R.string.wallet_history_title))
                 }
@@ -191,15 +230,19 @@ private fun LazyListScope.historyItems(
         }
 
         is ScreenState.Content -> {
-            items(transactions.data, key = WalletTransaction::id) { transaction ->
-                TransactionCard(transaction = transaction)
+            itemsIndexed(transactions.data, key = { _, it -> it.id }) { index, transaction ->
+                Column {
+                    if (index > 0) MahallaDivider()
+                    TransactionCard(transaction = transaction)
+                }
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "history-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = transactions.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(WalletEvent.LoadMore) },
                     )
                 }
             }
@@ -234,6 +277,11 @@ private fun BalanceBlock(
     }
 }
 
+/**
+ * Баланс без карточки вокруг: в макете (2c) он лежит прямо на экране и
+ * отделён от кнопок линией — карточка здесь добавила бы рамку, которой в
+ * макете нет.
+ */
 @Composable
 private fun BalanceCard(
     wallet: Wallet,
@@ -242,17 +290,31 @@ private fun BalanceCard(
     modifier: Modifier = Modifier,
 ) {
     val currency = stringResource(R.string.currency_uzs)
-    MahallaCard(modifier = modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.wallet_available),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelLarge,
             color = LocalMahallaColors.current.fgMuted,
         )
-        Text(
-            text = MoneyFormatter.withCurrency(wallet.availableSum, currency),
-            style = MaterialTheme.typography.displaySmall.merge(TabularNums),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+        // Сумма и валюта — разными кеглями: 40dp число читается с расстояния
+        // вытянутой руки, «so'm» рядом ему в этом только мешал бы.
+        Row(
+            modifier = Modifier.padding(top = Spacing.item / 2),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item / 2),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(
+                text = MoneyFormatter.amount(wallet.availableSum),
+                style = FocusDisplayBalance.merge(TabularNums),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = currency,
+                modifier = Modifier.padding(bottom = Spacing.item / 2),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
         // Строки показываются только когда есть что показывать: у обычного
         // кошелька ни заморозки, ни бонусов нет, и три нуля подряд ничего не
         // объясняют.
@@ -283,13 +345,87 @@ private fun BalanceCard(
         // Заблокированному кошельку платёж всё равно откажут — предлагать
         // заплатить и получить отказ незачем.
         if (canTopUp) {
-            Box(modifier = Modifier.padding(top = Spacing.gap)) {
+            MahallaDivider(modifier = Modifier.padding(top = Spacing.card))
+            Box(modifier = Modifier.padding(top = Spacing.card)) {
                 MahallaButton(
                     text = stringResource(R.string.wallet_top_up),
                     onClick = onTopUp,
                 )
             }
+            // Второй кнопки «Перевести» из макета здесь нет: ручки перевода у
+            // бэкенда не существует (`docs/API-CONTRACT.md`, WalletApi — только
+            // `wallet`, `wallet/transactions`, `wallet/top-up`), и кнопка вела
+            // бы в никуда.
         }
+    }
+}
+
+/**
+ * Карточка подписки (макет 2c): название тарифа, срок и состояние.
+ *
+ * Тональная заливка `secondaryContainer` — та же, что у макетного `#e8deff`:
+ * карточка должна отличаться и от фона экрана, и от строк истории под ней.
+ *
+ * Состояние подписки не пересчитывается на клиенте: у бэкенда есть
+ * грейс-период и собственный счёт дней (`Subscription.daysRemaining`), и
+ * вывод «активна» из даты окончания разошёлся бы с ним ровно в тот день,
+ * когда это важнее всего.
+ */
+@Composable
+private fun SubscriptionCard(
+    subscription: Subscription,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MahallaCard(
+        modifier = modifier,
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = subscription.planName?.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.subscription_plan_unnamed),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                subscription.expiresAt?.let { expiresAt ->
+                    Text(
+                        text = stringResource(
+                            R.string.text_joined_with_dot,
+                            stringResource(R.string.subscription_expires),
+                            DateTimeFormatters.date(expiresAt),
+                        ),
+                        style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+            }
+            MahallaBadge(
+                text = stringResource(subscription.badgeRes()),
+                tone = if (subscription.isActive) MahallaTone.Accent else MahallaTone.Neutral,
+            )
+        }
+    }
+}
+
+/**
+ * Подпись состояния на карточке. Пробный период важнее статуса: «активна» у
+ * пробной подписки скрывает, что она закончится сама.
+ */
+private fun Subscription.badgeRes(): Int = when {
+    isTrial -> R.string.subscription_trial_badge
+    inGracePeriod -> R.string.subscription_status_expiring
+    else -> when (status) {
+        SubscriptionStatus.Active -> R.string.subscription_status_active
+        SubscriptionStatus.Expired -> R.string.subscription_status_expired
+        SubscriptionStatus.Cancelled -> R.string.subscription_status_cancelled
+        SubscriptionStatus.Unknown -> R.string.subscription_status_unknown
     }
 }
 
@@ -317,11 +453,19 @@ private fun AmountRow(label: String, value: String, modifier: Modifier = Modifie
 /**
  * Строка истории. Сумма со знаком и цветом направления — по ней человек
  * отличает пополнение от списания, не читая подписи.
+ *
+ * Ряд с линией снизу, а не карточка на каждую операцию: так в макете (2c), и
+ * на длинной истории стопка карточек читается хуже простого списка.
  */
 @Composable
 private fun TransactionCard(transaction: WalletTransaction, modifier: Modifier = Modifier) {
     val colors = LocalMahallaColors.current
-    MahallaCard(modifier = modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.item)
+            .semantics(mergeDescendants = true) {},
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -332,13 +476,13 @@ private fun TransactionCard(transaction: WalletTransaction, modifier: Modifier =
                     text = transaction.description
                         ?: transaction.type
                         ?: stringResource(R.string.wallet_transaction_default_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 transaction.createdAt?.let { createdAt ->
                     Text(
                         text = DateTimeFormatters.dateTime(createdAt),
-                        style = MaterialTheme.typography.bodySmall.merge(TabularNums),
+                        style = MaterialTheme.typography.labelLarge.merge(TabularNums),
                         color = colors.fgMuted,
                     )
                 }
@@ -346,10 +490,12 @@ private fun TransactionCard(transaction: WalletTransaction, modifier: Modifier =
             Text(
                 text = MoneyFormatter.signedAmount(transaction.signedAmountSum),
                 style = MaterialTheme.typography.titleMedium.merge(TabularNums),
-                // Зелёным выделяется только приход: списание — обычное
-                // событие, красить его тревожным цветом незачем.
+                // Приход выделен цветом, списание — обычным текстом. Цвет
+                // прихода в редизайне фиолетовый (onSecondaryContainer), а не
+                // зелёный: в макете 2c «+300 000» подписано #4a2f9e, и знак «+»
+                // рядом остаётся вторым признаком, не завязанным на цвет.
                 color = if (transaction.direction == TransactionDirection.In) {
-                    colors.success
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
                     MaterialTheme.colorScheme.onSurface
                 },
@@ -417,41 +563,7 @@ private fun InlineFailure(
     }
 }
 
-/**
- * Хвост истории: догрузка следующей страницы по достижению конца списка.
- * Провал показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: WalletState,
-    itemCount: Int,
-    onEvent: (WalletEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(WalletEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(WalletEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
-    }
-}
-
 private const val HISTORY_SKELETONS = 3
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable

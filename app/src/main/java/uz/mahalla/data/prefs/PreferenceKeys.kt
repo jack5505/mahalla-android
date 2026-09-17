@@ -31,6 +31,13 @@ internal object PreferenceKeys {
      */
     val DeliveryAddress = stringPreferencesKey("settings_delivery_address")
 
+    /**
+     * Чья анкета лежит в [UserRole] и [DeliveryAddress] — `id` аккаунта
+     * (issue #243). Профиль при выходе стирается, этот ключ — нет: иначе
+     * вошедшему заново было бы не с чем себя сравнить (`FormOwnership`).
+     */
+    val FormOwnerId = stringPreferencesKey("settings_form_owner_id")
+
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 
@@ -41,14 +48,28 @@ internal object PreferenceKeys {
     val DeviceId = stringPreferencesKey("device_id")
 
     /**
-     * Профиль вошедшего пользователя (issue #61). Приезжает только с ответом
-     * на вход — `GET /users/me` у бэкенда нет, спросить его заново нечем,
-     * поэтому шапка профиля читается отсюда.
+     * Профиль вошедшего пользователя (issue #61). Приезжает с ответом на вход;
+     * `GET /users/me` у бэкенда есть (см. `docs/API-CONTRACT.md`), но
+     * приложение его ещё не зовёт — issue #170. Шапка профиля читается отсюда.
      */
     val ProfileUserId = stringPreferencesKey("profile_user_id")
     val ProfilePhone = stringPreferencesKey("profile_phone")
     val ProfileFullName = stringPreferencesKey("profile_full_name")
     val ProfileAvatarUrl = stringPreferencesKey("profile_avatar_url")
+
+    /**
+     * Что о человеке знает сервер (issue #237): роль в его правах, статус
+     * проверки и статус аккаунта. Хранятся строками ровно как приехали —
+     * разбирает их домен (`ServerRole`, `VerificationStatus`,
+     * `AccountStatus`). Так значение из будущей версии API доедет до экрана
+     * как «неизвестное», а не потеряется при записи.
+     *
+     * Локальный [UserRole] (`settings_user_role`) — не это: он про анкету,
+     * которую человек выбрал сам, и на сервер не уходит вовсе.
+     */
+    val ProfileServerRole = stringPreferencesKey("profile_server_role")
+    val ProfileVerificationStatus = stringPreferencesKey("profile_verification_status")
+    val ProfileAccountStatus = stringPreferencesKey("profile_account_status")
 
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")

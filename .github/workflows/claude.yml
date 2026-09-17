@@ -196,6 +196,12 @@ jobs:
           # prompt не задаём: action сам берёт контекст комментария/issue/ревью.
           branch_prefix: 'claude/'
           use_sticky_comment: 'true'
+          # Модель по умолчанию — Sonnet: Opus выедает лимит подписки
+          # заметно быстрее, а рутинной задаче по issue его запас не нужен.
+          # Для тяжёлой задачи — переменная CLAUDE_MODEL (Settings → Secrets
+          # and variables → Actions → Variables, например claude-opus-5),
+          # файл не трогать.
+          #
           # Модель фиксируем явно: валидный id для API, без тега [1m] —
           # с claude-opus-5[1m] прогон падал сразу (is_error, $0).
           #
@@ -205,7 +211,7 @@ jobs:
           # понадобился — дописывать сюда. Опасные операции по-прежнему
           # режет deny-лист в .claude/settings.json (force-push, sudo, rm -rf).
           claude_args: |
-            --model claude-opus-5
+            --model ${{ vars.CLAUDE_MODEL || 'claude-sonnet-5' }}
             --allowed-tools Bash,Read,Write,Edit,Glob,Grep,WebFetch,WebSearch,Task,Agent,TodoWrite
 
       # Причина падения Claude. Action прячет весь вывод (show_full_output:

@@ -11,14 +11,15 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
+import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.data.prefs.UserProfileStore
-import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.media.data.MediaRepository
+import uz.mahalla.feature.profile.data.ProfileRepository
 import uz.mahalla.feature.profile.data.SessionsRepository
 import uz.mahalla.feature.profile.domain.DeviceSession
 
@@ -26,9 +27,10 @@ import uz.mahalla.feature.profile.domain.DeviceSession
  * Профиль: кто вошёл, настройки приложения, устройства с открытым входом и
  * выход из аккаунта (issue #61).
  *
- * Данные профиля читаются из [UserProfileStore] — их записал вход. Отдельного
- * `GET /users/me` у бэкенда нет, поэтому обновить имя или аватар отсюда
- * нельзя: появится эндпоинт — появится и экран редактирования.
+ * Шапка показывает [UserProfileStore] — его слой, где живёт как ответ входа,
+ * так и уже перечитанный `GET users/me` (issue #170): экран не различает
+ * источник, а [ProfileRepository] пишет один и тот же профиль в одно
+ * хранилище.
  */
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
@@ -39,13 +41,26 @@ class ProfileViewModel @Inject constructor(
     private val sessionsRepository: SessionsRepository,
     private val authRepository: AuthRepository,
     private val mediaRepository: MediaRepository,
+    private val profileRepository: ProfileRepository,
+    private val biometricAvailability: BiometricAvailability,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
     private var avatarJob: Job? = null
 
+    private var sessionsJob: Job? = null
+
+    private var profileRefreshJob: Job? = null
+
+    private var nameSaveJob: Job? = null
+
     init {
-        updateState { copy(httpInspectorAvailable = httpInspector.isAvailable) }
+        updateState {
+            copy(
+                httpInspectorAvailable = httpInspector.isAvailable,
+                biometricStatus = biometricAvailability.status(),
+            )
+        }
         viewModelScope.launch {
             settingsDataStore.settings.collect { loaded ->
                 updateState { copy(settings = loaded) }
@@ -57,6 +72,7 @@ class ProfileViewModel @Inject constructor(
             }
         }
         loadSessions()
+        refreshProfile()
     }
 
     override fun onEvent(event: ProfileEvent) {
@@ -72,6 +88,11 @@ class ProfileViewModel @Inject constructor(
                 settingsDataStore.setThemeMode(event.mode)
             }
 
+            is ProfileEvent.BiometricToggled -> toggleBiometric(event.enabled)
+            ProfileEvent.BiometricPromptSucceeded -> setBiometricEnabled(true)
+            ProfileEvent.BiometricPromptFailed -> updateState { copy(biometricPromptFailed = true) }
+            ProfileEvent.BiometricPromptCancelled -> Unit
+
             // Интента может не быть (сборка без инспектора) — тогда и строки в
             // профиле нет, но событие из старого состояния экрана прилететь
             // может: молча ничего не делаем, а не падаем на startActivity(null).
@@ -80,13 +101,31 @@ class ProfileViewModel @Inject constructor(
             }
 
             // Возврат на экран: вход с другого устройства мог случиться, пока
-            // приложение было в фоне. Пока список грузится или идёт запрос по
-            // строке, перезапрашивать нечего — иначе ответ приедет на уже
-            // сменившееся состояние.
-            ProfileEvent.ScreenResumed ->
-                if (currentState.pendingSessionId == null && !currentState.sessions.isLoading) {
-                    loadSessions(showLoading = false)
-                }
+            // приложение было в фоне. Защита от дубля (первый resume, два
+            // resume подряд) — общая, см. MviViewModel.onScreenResumed (issue
+            // #145, #209); запрос по строке — тем более повод не грузить
+            // список заново, иначе ответ приедет на уже сменившееся состояние.
+            ProfileEvent.ScreenResumed -> {
+                // Отпечаток могли добавить в настройках устройства и вернуться.
+                updateState { copy(biometricStatus = biometricAvailability.status()) }
+                onScreenResumed(
+                    isLoadInFlight = {
+                        currentState.pendingSessionId != null ||
+                            sessionsJob?.isActive == true ||
+                            profileRefreshJob?.isActive == true ||
+                            // Пока идёт своё сохранение имени или аватара, `GET`
+                            // не зовём: оба ответа переписывают профиль целиком,
+                            // и `GET`, обогнавший ещё не пришедший `PUT`, стёр бы
+                            // то, что человек только что сохранил.
+                            nameSaveJob?.isActive == true ||
+                            avatarJob?.isActive == true
+                    },
+                    load = {
+                        loadSessions(showLoading = false)
+                        refreshProfile()
+                    },
+                )
+            }
 
             ProfileEvent.SessionsRetryRequested -> loadSessions()
 
@@ -113,18 +152,34 @@ class ProfileViewModel @Inject constructor(
             is ProfileEvent.AvatarPicked -> uploadAvatar(event.source)
 
             ProfileEvent.AvatarUploadCancelled -> cancelAvatarUpload()
+
+            ProfileEvent.NameEditRequested -> updateState {
+                copy(nameEdit = NameEdit(editing = true, draft = profile.fullName.orEmpty()))
+            }
+
+            is ProfileEvent.NameDraftChanged -> updateState {
+                copy(nameEdit = nameEdit.copy(draft = event.value))
+            }
+
+            ProfileEvent.NameEditCancelled -> {
+                nameSaveJob?.cancel()
+                nameSaveJob = null
+                updateState { copy(nameEdit = NameEdit()) }
+            }
+
+            ProfileEvent.NameSaveRequested -> saveName()
         }
     }
 
     /**
-     * Фото профиля (issue #101): сжать, отправить, запомнить адрес.
+     * Фото профиля (issue #101): сжать, отправить, привязать к аккаунту.
      *
-     * **Адрес сохраняется только локально**, и это не выбор клиента: у бэкенда
-     * нет ни `PUT /users/me`, ни другой ручки, которой можно сообщить аватар
-     * (`UserInfo.avatarUrl` он отдаёт, но принимать не умеет — проверено по
-     * полной схеме). Значит после следующего входа профиль перезапишется
-     * ответом сервера, и адрес пропадёт вместе с ним. Сам файл при этом
-     * остаётся на сервере и числится за загрузившим (`ownerId`).
+     * Отправка на сервер — issue #170: `PUT users/me` принимает `avatarUrl`
+     * (`docs/API-CONTRACT.md`), и его ответом переписывается локальный
+     * профиль целиком — источник истины один. Файл при этом уже лежит на
+     * сервере и числится за загрузившим (`ownerId`) независимо от исхода
+     * `PUT`: отказ здесь не значит, что загрузка не удалась, только что адрес
+     * не привязан к профилю.
      *
      * `entityId` — id пользователя, когда он известен: по нему загруженное
      * потом находится (`GET media/entity/{id}`). `entityType` не отправляется:
@@ -132,7 +187,10 @@ class ProfileViewModel @Inject constructor(
      * и разбирать это придётся руками.
      */
     private fun uploadAvatar(source: String) {
-        if (currentState.avatarUpload.inProgress) return
+        // Имя сохраняется своим `PUT`: два одновременных `PUT` ответили бы в
+        // произвольном порядке, и который приехал позже — тот и остался бы,
+        // даже если сервер обработал их в обратном порядке.
+        if (currentState.avatarUpload.inProgress || nameSaveJob?.isActive == true) return
         updateState { copy(avatarUpload = AvatarUpload(inProgress = true)) }
         avatarJob = viewModelScope.launch {
             val result = mediaRepository.uploadImage(
@@ -145,9 +203,13 @@ class ProfileViewModel @Inject constructor(
                 },
             )
             when (result) {
-                is ApiResult.Success -> {
-                    saveAvatar(result.data.url)
-                    updateState { copy(avatarUpload = AvatarUpload()) }
+                is ApiResult.Success -> when (
+                    val saved = profileRepository.updateProfile(avatarUrl = result.data.url)
+                ) {
+                    is ApiResult.Success -> updateState { copy(avatarUpload = AvatarUpload()) }
+                    is ApiResult.Failure -> updateState {
+                        copy(avatarUpload = AvatarUpload(failure = saved.failure))
+                    }
                 }
 
                 is ApiResult.Failure -> updateState {
@@ -156,21 +218,6 @@ class ProfileViewModel @Inject constructor(
             }
             avatarJob = null
         }
-    }
-
-    /**
-     * Профиль перечитывается перед записью, а не берётся из состояния экрана:
-     * `save` пишет все поля разом, и запись по устаревшему снимку стёрла бы
-     * имя или номер, приехавшие, пока шла загрузка.
-     *
-     * Отказ хранилища не отменяет загрузку: файл на сервере уже лежит, а
-     * молчаливая ошибка записи уходит в отчёты (issue #74).
-     */
-    private suspend fun saveAvatar(url: String) {
-        runCatchingCancellable {
-            val stored: UserProfile = userProfileStore.current()
-            userProfileStore.save(stored.copy(avatarUrl = url))
-        }.reportSwallowed("profile.saveAvatar")
     }
 
     /**
@@ -188,11 +235,76 @@ class ProfileViewModel @Inject constructor(
      * @param showLoading скелетон вместо списка. При обновлении поверх уже
      * показанных устройств он не нужен: список бы мигал на каждом возврате.
      */
-    private fun loadSessions(showLoading: Boolean = true) {
+    /**
+     * Выключить — сразу; включить — только после системного промпта. Без
+     * датчика или без отпечатков включать нечего: строка для этого отключена
+     * на экране, а сюда событие не должно доехать — если доехало, ничего не
+     * пишем.
+     */
+    private fun toggleBiometric(enabled: Boolean) {
+        updateState { copy(biometricPromptFailed = false) }
+        if (!enabled) {
+            setBiometricEnabled(false)
+            return
+        }
+        if (currentState.biometricStatus != BiometricStatus.Available) return
+        emitEffect(ProfileEffect.ShowBiometricPrompt)
+    }
+
+    private fun setBiometricEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            // Настройки могут не записаться (нет места, битый файл) — флаг не
+            // повод падать: PIN остаётся входом, как и в онбординге.
+            runCatchingCancellable { settingsDataStore.setBiometricEnabled(enabled) }
+                .reportSwallowed("settings.setBiometricEnabled")
+        }
+    }
+
+    private fun loadSessions(showLoading: Boolean = true) {
+        sessionsJob = viewModelScope.launch {
             if (showLoading) updateState { copy(sessions = ScreenState.Loading) }
             val result = sessionsRepository.sessions()
             updateState { copy(sessions = result.toListScreenState()) }
+        }
+    }
+
+    /**
+     * `GET users/me` при открытии экрана и при возврате на него (issue #170).
+     *
+     * Отказ не трогает состояние: [UserProfileStore] уже хранит то, что
+     * сохранил вход, и `profile` в шапке остаётся прежним — не пустым и не
+     * заменённым ошибкой. Профиль здесь не главная причина открыть вкладку,
+     * и молчаливо устаревший — не то же самое, что молчаливо пустой.
+     */
+    private fun refreshProfile() {
+        profileRefreshJob = viewModelScope.launch {
+            profileRepository.refresh()
+            profileRefreshJob = null
+        }
+    }
+
+    /**
+     * Сохранить новое имя (issue #170). Пустое имя не отправляется: сервер
+     * читает пустую строку как «снять значение», а стереть имя случайно
+     * нажатием «сохранить» на пустом поле — не то, что должно происходить.
+     * Длиннее `NameEdit.MAX_LENGTH` не отправляется тоже: сервер отклонит его
+     * `VALIDATION_ERROR`, а показать это можно и без похода на сервер
+     * (кнопка «Сохранить» уже неактивна, см. `NameEditor`).
+     */
+    private fun saveName() {
+        val draft = currentState.nameEdit.draft.trim()
+        if (draft.isEmpty() || draft.length > NameEdit.MAX_LENGTH) return
+        // Аватар сохраняется своим `PUT` — см. `uploadAvatar`.
+        if (currentState.nameEdit.saving || avatarJob?.isActive == true) return
+        updateState { copy(nameEdit = nameEdit.copy(saving = true, failure = null)) }
+        nameSaveJob = viewModelScope.launch {
+            when (val result = profileRepository.updateProfile(fullName = draft)) {
+                is ApiResult.Success -> updateState { copy(nameEdit = NameEdit()) }
+                is ApiResult.Failure -> updateState {
+                    copy(nameEdit = nameEdit.copy(saving = false, failure = result.failure))
+                }
+            }
+            nameSaveJob = null
         }
     }
 
