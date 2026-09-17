@@ -3,6 +3,8 @@ package uz.mahalla.testutil
 import kotlinx.coroutines.CompletableDeferred
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.pharmacy.data.PharmacyRepository
+import uz.mahalla.feature.pharmacy.domain.NewPharmacyProductDraft
+import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
 import uz.mahalla.feature.pharmacy.domain.PharmacyProductPage
 
 /**
@@ -41,5 +43,34 @@ class FakePharmacyRepository : PharmacyRepository {
         requests += Request(placeId = placeId, query = query, page = page)
         gate?.await()
         return pages[query to page] ?: defaultPage
+    }
+
+    /** Что именно отправили на создание — по порядку вызовов. */
+    val createRequests = mutableListOf<Pair<String, NewPharmacyProductDraft>>()
+
+    var createResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    override suspend fun createProduct(
+        placeId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<Unit> {
+        createRequests += placeId to draft
+        return createResult
+    }
+
+    /** Что именно отправили на правку остатка — по порядку вызовов. */
+    val stockRequests = mutableListOf<Triple<String, String, Int>>()
+
+    var stockResult: (String, Int) -> ApiResult<PharmacyProduct> = { productId, quantity ->
+        ApiResult.Success(PharmacyProduct(id = productId, name = "", stockQuantity = quantity))
+    }
+
+    override suspend fun updateStock(
+        placeId: String,
+        productId: String,
+        quantity: Int,
+    ): ApiResult<PharmacyProduct> {
+        stockRequests += Triple(placeId, productId, quantity)
+        return stockResult(productId, quantity)
     }
 }

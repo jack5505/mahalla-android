@@ -23,6 +23,7 @@ fun Place.toCardUi(): PlaceCardUi = PlaceCardUi(
     distanceLabel = distanceLabel(distanceMeters),
     isOpen = isOpenNow,
     photoUrl = photoUrl,
+    categoryIcon = category.icon,
 )
 
 /** `450 m` / `1,2 km` — число из форматтера, единица из ресурсов. */

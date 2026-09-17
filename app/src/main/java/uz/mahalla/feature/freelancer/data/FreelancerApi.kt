@@ -2,40 +2,49 @@ package uz.mahalla.feature.freelancer.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
-import uz.mahalla.feature.booking.data.ServiceDto
 
 /**
- * Вертикаль «Мастера» (issue #107): каталог фрилансеров, их услуги и заказы.
+ * Вертикаль «Мастера»: каталог фрилансеров, их услуги, заказы (issue #107) и
+ * кабинет самого мастера — анкета и выставление услуг (issue #71).
  *
- * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы 2026-09-04).
- * Проверено живыми запросами:
+ * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы 2026-09-04,
+ * перепроверен 2026-09-09). Проверено живыми запросами:
  *
  * | запрос | ответ |
  * |---|---|
- * | `GET freelancers` с гео-заголовками | `200`, `content: []` — каталог пуст |
+ * | `GET freelancers` с гео-заголовками | `200`, сегодня двое мастеров |
  * | `GET freelancers` без гео-заголовков | `403 GEO_PERMISSION_REQUIRED` |
  * | `GET freelancers/{uuid}` | `404 NOT_FOUND` «Profil topilmadi» |
  * | `GET freelancers/1` | `400 TYPE_MISMATCH` — `id` это **uuid** |
- * | `GET freelancers/orders/my`, `POST freelancers/{id}/orders` | `401` |
+ * | `GET freelancers/{id}/services` | `200`, поля `title`/`priceAmount` |
+ * | вся ветка `freelancers/me`, `POST .../orders` | `401` до валидации тела |
  *
  * Гео-заголовки ставит `GeoHeaderInterceptor` на обоих клиентах (issue #53),
  * так что вопрос закрыт сам собой.
  *
- * **Каталог, профиль и услуги анонимны**, а всё, что про заказ, требует Bearer.
+ * **Каталог, профиль и услуги анонимны**, всё остальное требует Bearer.
  * Разделять API по двум Retrofit из-за этого незачем: основной клиент просто
  * добавит заголовок, который читающим ручкам не мешает, — а «голый»
  * `@RefreshClient` сломал бы заказ. Поэтому API целиком собирается на
  * **основном** Retrofit.
  *
- * **Кабинет самого мастера** (ветка `freelancers/me`,
- * `PUT freelancers/orders/{orderId}/status`) сюда не входит намеренно: issue
- * #107 прямо оставляет его бизнес-панели (эпик #16).
+ * Входящие заказы мастера (`GET freelancers/me/orders`) и смена их статуса
+ * (`PUT freelancers/orders/{orderId}/status`, issue #190) — черновик:
+ * `CONTRACT_REFRESH_TOKEN` не был задан ни на момент issue, ни в прогоне,
+ * который это писал, так что ни путь, ни тело смены статуса живым запросом
+ * не проверены. Путь и схема ответа выведены из уже подтверждённой
+ * `freelancers/orders/my` — тот же `PageResponseOrderResponse`, только с
+ * другой стороны сделки; тело смены статуса — из `OrderResponse.status`.
+ * Подробности — `docs/API-CONTRACT.md`.
  */
 interface FreelancerApi {
 
@@ -64,15 +73,13 @@ interface FreelancerApi {
      * freelancerId, title, description, priceAmount, durationMinutes,
      * isActive}` (сверено по живому `/v3/api-docs` 2026-09-10).
      *
-     * **Разбирается не той схемой.** Здесь стоит барберский [ServiceDto]
-     * (`name`, `price`) — след коллизии springdoc: пока обе ручки выглядели
-     * одной `ServiceResponse`, разница была не видна. У каждой услуги мастера
-     * будет пустое название и цена 0 — живой баг, issue #216: нужен свой
-     * `FreelancerServiceDto` и маппер. Тип здесь намеренно не тронут — правка
-     * идёт вместе с тестами и фикстурой в #216, а не «заодно».
+     * **Это не `ServiceResponse` барбершопа**: там `name`/`price`, а здесь
+     * `title`/`priceAmount`. До issue #71 услуги фрилансера разбирались
+     * барберским DTO, и у каждой услуги мастера пропадали название и цена;
+     * поэтому здесь свой [FreelancerServiceDto].
      */
     @GET("freelancers/{id}/services")
-    suspend fun services(@Path("id") freelancerId: String): ApiResponse<List<ServiceDto>>
+    suspend fun services(@Path("id") freelancerId: String): ApiResponse<List<FreelancerServiceDto>>
 
     /** Заказать услугу. Требует Bearer. */
     @POST("freelancers/{id}/orders")
@@ -87,6 +94,84 @@ interface FreelancerApi {
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<FreelancerOrderPageDto>
+
+    /**
+     * Входящие заказы мастера (issue #190) — та же сущность, что [myOrders],
+     * но с другой стороны сделки: то, что клиенты заказали у **этого**
+     * мастера, а не то, что он сам заказал. Схема ответа не проверена живым
+     * запросом (`docs/API-CONTRACT.md`), но путь и `PageResponseOrderResponse`
+     * взяты из уже подтверждённой `freelancers/orders/my`.
+     */
+    @GET("freelancers/me/orders")
+    suspend fun incomingOrders(
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+    ): ApiResponse<FreelancerOrderPageDto>
+
+    /**
+     * Принять, отклонить или отметить выполненным входящий заказ (issue
+     * #190). Тело и ответ не проверены живым запросом: `401` приходит до
+     * валидации тела, как и у [createOrder]. `status` — то же перечисление,
+     * что уже подтверждено для `OrderResponse.status`
+     * ([uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus]).
+     */
+    @PUT("freelancers/orders/{orderId}/status")
+    suspend fun updateOrderStatus(
+        @Path("orderId") orderId: String,
+        @Body body: UpdateFreelancerOrderStatusRequest,
+    ): ApiResponse<FreelancerOrderDto>
+
+    // --- Кабинет мастера (issue #71). Всё требует Bearer. ---
+
+    /**
+     * Своя анкета. Отдаёт тот же `ProfileResponse`, что и каталог.
+     *
+     * Анкеты ещё нет — ожидается `404`: у самой ручки других вариантов
+     * «пусто» нет, а `GET freelancers/{id}` на неизвестного мастера отвечает
+     * именно так (проверено). Под токеном подтвердить нечем — см. риски в
+     * `docs/API-CONTRACT.md`.
+     */
+    @GET("freelancers/me")
+    suspend fun myProfile(): ApiResponse<FreelancerDto>
+
+    /**
+     * Создать или обновить свою анкету — одна ручка на оба случая
+     * (`operationId: upsert`).
+     */
+    @POST("freelancers/me")
+    suspend fun saveMyProfile(@Body body: FreelancerCreateRequest): ApiResponse<FreelancerDto>
+
+    /** Выставить услугу. */
+    @POST("freelancers/me/services")
+    suspend fun createMyService(
+        @Body body: FreelancerServiceRequest,
+    ): ApiResponse<FreelancerServiceDto>
+
+    /** Изменить свою услугу. Тело то же, что у создания. */
+    @PUT("freelancers/me/services/{serviceId}")
+    suspend fun updateMyService(
+        @Path("serviceId") serviceId: String,
+        @Body body: FreelancerServiceRequest,
+    ): ApiResponse<FreelancerServiceDto>
+
+    /**
+     * Снять услугу. `ApiResponseVoid` — `data` при успехе `null`, поэтому
+     * ответ проверяется `ensureSuccess`, а не `payload`.
+     *
+     * Удаляет ли бэкенд строку или ставит `isActive: false` — из контракта не
+     * следует, и приложение на это не закладывается: список после операции
+     * перечитывается у сервера.
+     */
+    @DELETE("freelancers/me/services/{serviceId}")
+    suspend fun deleteMyService(@Path("serviceId") serviceId: String): ApiResponse<JsonElement>
+
+    /**
+     * «Принимаю заказы» — переключатель без тела и без ответа: сервер меняет
+     * флаг на противоположный сам. Поэтому новое значение приложение не
+     * задаёт, а перечитывает анкетой.
+     */
+    @PUT("freelancers/me/toggle-availability")
+    suspend fun toggleAvailability(): ApiResponse<JsonElement>
 }
 
 /**
@@ -182,6 +267,76 @@ data class FreelancerOrderDto(
     @SerialName("createdAt") val createdAt: String? = null,
 )
 
+/**
+ * `FreelancerServiceResponse` — услуга мастера.
+ *
+ * Имя в схеме делят три пути, но все три — про услугу фрилансера
+ * (`GET freelancers/{id}/services`, `POST` и `PUT freelancers/me/services`),
+ * так что коллизии springdoc здесь нет. Живой ответ стенда 2026-09-09 совпал
+ * со схемой поле в поле.
+ *
+ * [isActive] принимается и под именем `active`: Jackson сериализует
+ * `boolean isActive` то так, то так (то же правило, что у `isAvailable` в
+ * [FreelancerDto]).
+ */
+@Serializable
+data class FreelancerServiceDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("freelancerId") val freelancerId: String? = null,
+    @SerialName("title") val title: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("priceAmount") val priceAmount: Long? = null,
+    @SerialName("durationMinutes") val durationMinutes: Int? = null,
+    @SerialName("isActive") val isActive: Boolean? = null,
+    @SerialName("active") val active: Boolean? = null,
+)
+
+/**
+ * Тело `POST /api/v1/freelancers/me` — схема `FreelancerCreateRequest`.
+ *
+ * На это имя ссылается ровно один путь, коллизии springdoc нет: обязательны
+ * `name` (`@Size(max = 200)`) и `profession` (`max = 100`), необязательны
+ * `bio` (`max = 2000`), `city` (`max = 100`), `phone` (`max = 20`),
+ * `hourlyRate` и `experienceYears` (оба `int32`, `@Min(0)`).
+ *
+ * Ручка одна на создание и на правку (`upsert`), и **тело идёт целиком**:
+ * незаполненное поле уходит отсутствующим (`explicitNulls = false`), а
+ * значит, серверное значение оно, скорее всего, затрёт. Поэтому форма
+ * открывается не раньше, чем приедет анкета, — иначе сохранение стёрло бы то,
+ * чего человек не видел.
+ */
+@Serializable
+data class FreelancerCreateRequest(
+    @SerialName("name") val name: String,
+    @SerialName("profession") val profession: String,
+    @SerialName("bio") val bio: String? = null,
+    @SerialName("city") val city: String? = null,
+    @SerialName("phone") val phone: String? = null,
+    @SerialName("hourlyRate") val hourlyRate: Int? = null,
+    @SerialName("experienceYears") val experienceYears: Int? = null,
+)
+
+/**
+ * Тело `POST`/`PUT freelancers/me/services` — схема `ServiceRequest`:
+ * обязательны `title` (`@Size(max = 200)`) и `priceAmount` (`int64`,
+ * `@Min(0)`), необязательны `description` (`max = 2000`) и `durationMinutes`
+ * (`int32`, `@Min(0)`).
+ *
+ * ⚠️ Имя `ServiceRequest` в схеме делят три пути, и третий — чужой
+ * (`POST barber-services/places/{placeId}`). Это ровно та коллизия springdoc,
+ * из-за которой в issue #97 поля пришлось выводить, а в issue #107 — у
+ * `ServiceResponse` — они разошлись с настоящим ответом. Под токеном проверить
+ * было нечем (`401` приходит до валидации тела), поэтому тело закреплено
+ * тестом: правка после проверки на живом аккаунте будет видна одной строкой.
+ */
+@Serializable
+data class FreelancerServiceRequest(
+    @SerialName("title") val title: String,
+    @SerialName("priceAmount") val priceAmount: Long,
+    @SerialName("description") val description: String? = null,
+    @SerialName("durationMinutes") val durationMinutes: Int? = null,
+)
+
 /** `PageResponseOrderResponse`. */
 @Serializable
 data class FreelancerOrderPageDto(
@@ -192,4 +347,15 @@ data class FreelancerOrderPageDto(
     @SerialName("totalPages") val totalPages: Int? = null,
     @SerialName("first") val first: Boolean? = null,
     @SerialName("last") val last: Boolean? = null,
+)
+
+/**
+ * Тело `PUT freelancers/orders/{orderId}/status` (issue #190) — не
+ * подтверждено живым запросом: `401` приходит до валидации тела, как и у
+ * [CreateFreelancerOrderRequest]. Единственное разумное поле — то же
+ * перечисление, что уже подтверждено для `OrderResponse.status`.
+ */
+@Serializable
+data class UpdateFreelancerOrderStatusRequest(
+    @SerialName("status") val status: String,
 )

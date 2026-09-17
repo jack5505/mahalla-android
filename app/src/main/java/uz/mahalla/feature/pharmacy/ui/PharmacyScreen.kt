@@ -1,7 +1,6 @@
 package uz.mahalla.feature.pharmacy.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,33 +11,41 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalPharmacy
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
+import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaSearchField
+import uz.mahalla.core.ui.components.MahallaSwitchRow
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.preview.PreviewSurface
@@ -112,10 +119,26 @@ fun PharmacyContent(
                 ),
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
+                // Владелец/менеджер (issue #252) — кнопка над списком, а не
+                // внутри `productItems`: она не зависит от того, загружен ли
+                // список, пуст он или упал с ошибкой.
+                if (state.isOwner) {
+                    item(key = "owner-add") {
+                        MahallaButton(
+                            text = stringResource(R.string.pharmacy_add_product),
+                            onClick = { onEvent(PharmacyEvent.AddProductClicked) },
+                            variant = MahallaButtonVariant.Secondary,
+                            icon = Icons.Outlined.Add,
+                        )
+                    }
+                }
                 productItems(state = state, onEvent = onEvent)
             }
         }
     }
+
+    state.createForm?.let { form -> NewProductSheet(form = form, onEvent = onEvent) }
+    state.stockForm?.let { form -> StockEditSheet(form = form, onEvent = onEvent) }
 }
 
 /**
@@ -159,14 +182,19 @@ private fun LazyListScope.productItems(
 
         is ScreenState.Content -> {
             items(products.data, key = PharmacyProduct::id) { product ->
-                ProductCard(product = product)
+                ProductCard(
+                    product = product,
+                    isOwner = state.isOwner,
+                    onEditStock = { onEvent(PharmacyEvent.StockEditClicked(product)) },
+                )
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = products.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(PharmacyEvent.LoadMore) },
                     )
                 }
             }
@@ -186,6 +214,8 @@ private fun LazyListScope.productItems(
 private fun ProductCard(
     product: PharmacyProduct,
     modifier: Modifier = Modifier,
+    isOwner: Boolean = false,
+    onEditStock: () -> Unit = {},
 ) {
     val colors = LocalMahallaColors.current
     val absent = product.stock == ProductStock.OutOfStock
@@ -207,6 +237,16 @@ private fun ProductCard(
                 text = stringResource(product.stock.labelRes()),
                 tone = product.stock.tone(),
             )
+            // Владелец/менеджер (issue #252): остаток правит тот же товар, что
+            // виден на витрине, поэтому иконка живёт прямо рядом с бейджем
+            // наличия, а не в отдельном разделе.
+            if (isOwner) {
+                MahallaIconButton(
+                    icon = Icons.Outlined.Edit,
+                    contentDescription = stringResource(R.string.pharmacy_edit_stock_action),
+                    onClick = onEditStock,
+                )
+            }
         }
 
         // Форма выпуска и дозировка — подпись под названием: «tabletka, 500 mg»
@@ -238,8 +278,9 @@ private fun ProductCard(
             )
         }
 
-        // «Осталось 2» — повод поспешить; «осталось 340» — складская сводка,
-        // поэтому число называется только когда товар кончается.
+        // «Осталось 2» — повод поспешить; покупателю число называется только
+        // когда товар кончается, иначе витрина читалась бы как складская
+        // сводка (issue #94/#100).
         if (product.showsStockQuantity) {
             val left = product.stockQuantity ?: 0
             Text(
@@ -247,6 +288,16 @@ private fun ProductCard(
                 modifier = Modifier.padding(top = Spacing.item),
                 style = MaterialTheme.typography.bodySmall.merge(TabularNums),
                 color = colors.warning,
+            )
+        } else if (isOwner && product.stockQuantity != null) {
+            // Владельцу (issue #252) остаток нужен всегда — это его склад, а
+            // не повод поторопиться, поэтому нейтральная подпись, а не
+            // строка «осталось N», рассчитанная на срочность у покупателя.
+            Text(
+                text = stringResource(R.string.pharmacy_stock_owner_count, product.stockQuantity),
+                modifier = Modifier.padding(top = Spacing.item),
+                style = MaterialTheme.typography.bodySmall.merge(TabularNums),
+                color = colors.fgMuted,
             )
         }
 
@@ -264,35 +315,137 @@ private fun ProductCard(
 }
 
 /**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
+ * Новый товар (issue #252). Ошибки полей показываются только после первой
+ * попытки сохранить (`submitAttempted`) — форма стартует пустой, и это не то
+ * же самое, что правка уже заполненной карточки места в issue #188.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LoadMoreItem(
-    state: PharmacyState,
-    itemCount: Int,
+private fun NewProductSheet(
+    form: NewProductFormState,
     onEvent: (PharmacyEvent) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(PharmacyEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(PharmacyEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
+    val draft = form.draft
+    val showErrors = form.submitAttempted
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PharmacyEvent.CreateFormDismissed) },
+        title = stringResource(R.string.pharmacy_new_product_title),
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
+        MahallaTextField(
+            value = draft.name,
+            onValueChange = { onEvent(PharmacyEvent.CreateNameChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_name),
+            errorText = if (showErrors && !draft.isNameValid) {
+                stringResource(R.string.pharmacy_field_name_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.priceText,
+            onValueChange = { onEvent(PharmacyEvent.CreatePriceChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_price),
+            errorText = if (showErrors && !draft.isPriceValid) {
+                stringResource(R.string.pharmacy_field_price_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.stockText,
+            onValueChange = { onEvent(PharmacyEvent.CreateStockChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_stock),
+            errorText = if (showErrors && !draft.isStockValid) {
+                stringResource(R.string.pharmacy_field_stock_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.manufacturer,
+            onValueChange = { onEvent(PharmacyEvent.CreateManufacturerChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_manufacturer),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.dosageForm,
+            onValueChange = { onEvent(PharmacyEvent.CreateDosageFormChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_dosage_form),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.strength,
+            onValueChange = { onEvent(PharmacyEvent.CreateStrengthChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_strength),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.description,
+            onValueChange = { onEvent(PharmacyEvent.CreateDescriptionChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_description),
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        MahallaSwitchRow(
+            title = stringResource(R.string.pharmacy_field_prescription),
+            checked = draft.requiresPrescription,
+            onCheckedChange = { onEvent(PharmacyEvent.CreatePrescriptionChanged(it)) },
+            enabled = !form.submitting,
+        )
+        form.failure?.let { failure -> InlineFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.pharmacy_create_submit),
+            onClick = { onEvent(PharmacyEvent.CreateSubmitted) },
+            state = ButtonState(
+                enabled = !showErrors || draft.canSubmit,
+                loading = form.submitting,
+            ),
+        )
+    }
+}
+
+/**
+ * Остаток одного товара (issue #252, `PUT products/{id}/stock`). Одно поле —
+ * форма не переиспользует [NewProductSheet], у неё нет ничего общего, кроме
+ * шторки.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StockEditSheet(
+    form: StockEditFormState,
+    onEvent: (PharmacyEvent) -> Unit,
+) {
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PharmacyEvent.StockFormDismissed) },
+        title = form.productName.takeIf { it.isNotBlank() }
+            ?: stringResource(R.string.pharmacy_stock_edit_title),
+    ) {
+        MahallaTextField(
+            value = form.quantityText,
+            onValueChange = { onEvent(PharmacyEvent.StockQuantityChanged(it)) },
+            label = stringResource(R.string.pharmacy_stock_edit_label),
+            errorText = if (form.submitAttempted && !form.isQuantityValid) {
+                stringResource(R.string.pharmacy_field_stock_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        form.failure?.let { failure -> InlineFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.pharmacy_stock_edit_submit),
+            onClick = { onEvent(PharmacyEvent.StockSubmitted) },
+            state = ButtonState(
+                enabled = !form.submitAttempted || form.isQuantityValid,
+                loading = form.submitting,
+            ),
+        )
     }
 }
 
@@ -347,7 +500,6 @@ private fun ProductStock.tone(): MahallaTone = when (this) {
 }
 
 private const val LIST_SKELETONS = 4
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable
@@ -390,5 +542,40 @@ private fun PharmacyScreenPreview() {
             onEvent = {},
             onBack = {},
         )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun PharmacyOwnerScreenPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        PharmacyContent(
+            state = PharmacyState(
+                placeName = "Dori-Darmon",
+                isOwner = true,
+                products = ScreenState.Content(
+                    listOf(
+                        PharmacyProduct(
+                            id = "p-1",
+                            name = "Paratsetamol",
+                            manufacturer = "Uzpharm",
+                            priceSum = 12_000,
+                            stockQuantity = 340,
+                            stock = ProductStock.InStock,
+                        ),
+                    ),
+                ),
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun PharmacyNewProductSheetPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        NewProductSheet(form = NewProductFormState(), onEvent = {})
     }
 }

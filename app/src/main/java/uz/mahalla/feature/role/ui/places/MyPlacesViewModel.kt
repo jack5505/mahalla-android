@@ -7,7 +7,8 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
+import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.role.data.ProviderRepository
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
@@ -24,9 +25,12 @@ import javax.inject.Inject
 @HiltViewModel
 class MyPlacesViewModel @Inject constructor(
     private val repository: ProviderRepository,
+    private val promotionsRepository: PromotionsRepository,
 ) : MviViewModel<MyPlacesState, MyPlacesEvent, MyPlacesEffect>(MyPlacesState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
+    private var promotionJob: Job? = null
     private var loadedPage = 0
 
     init {
@@ -35,12 +39,12 @@ class MyPlacesViewModel @Inject constructor(
 
     override fun onEvent(event: MyPlacesEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            MyPlacesEvent.ScreenResumed ->
-                if (!currentState.places.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            MyPlacesEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             MyPlacesEvent.Refreshed -> load(showLoading = false, refreshing = true)
             MyPlacesEvent.Retry -> load()
@@ -49,6 +53,32 @@ class MyPlacesViewModel @Inject constructor(
             is MyPlacesEvent.AvailabilityToggled -> toggleAvailability(event.placeId)
             MyPlacesEvent.RegisterPlaceRequested ->
                 emitEffect(MyPlacesEffect.OpenProviderForm)
+
+            is MyPlacesEvent.BusinessPanelClicked -> openBusinessPanel(event.placeId)
+            is MyPlacesEvent.ManageProductsClicked -> manageProducts(event.placeId)
+            is MyPlacesEvent.ManageStaffClicked -> manageStaff(event.placeId)
+
+            is MyPlacesEvent.AddPromotionClicked -> onAddPromotionClicked(event.placeId)
+            MyPlacesEvent.PromotionFormDismissed -> {
+                // Отменяет и незавершённый запрос: иначе его поздний ответ
+                // застал бы уже другую, вновь открытую форму (issue #252).
+                promotionJob?.cancel()
+                updateState { copy(promotionForm = null) }
+            }
+            is MyPlacesEvent.PromotionTitleChanged ->
+                updatePromotionDraft { withTitle(event.value) }
+            is MyPlacesEvent.PromotionDescriptionChanged ->
+                updatePromotionDraft { withDescription(event.value) }
+            is MyPlacesEvent.PromotionTypeChanged -> updatePromotionDraft { withType(event.value) }
+            is MyPlacesEvent.PromotionDiscountPercentChanged ->
+                updatePromotionDraft { withDiscountPercent(event.value) }
+            is MyPlacesEvent.PromotionDiscountAmountChanged ->
+                updatePromotionDraft { withDiscountAmount(event.value) }
+            is MyPlacesEvent.PromotionMinOrderChanged ->
+                updatePromotionDraft { withMinOrderAmount(event.value) }
+            is MyPlacesEvent.PromotionCodeChanged ->
+                updatePromotionDraft { withPromoCode(event.value) }
+            MyPlacesEvent.PromotionSubmitted -> submitPromotion()
         }
     }
 
@@ -64,7 +94,7 @@ class MyPlacesViewModel @Inject constructor(
                 actionFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myPlaces(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }
@@ -194,6 +224,83 @@ class MyPlacesViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Панель — только у опубликованного заведения (`MyPlace
+     * .canOpenBusinessPanel`). Роль здесь не проверяется: сотруднику панель
+     * тоже нужна, просто разделов у него меньше — это решает уже сама панель.
+     */
+    private fun openBusinessPanel(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canOpenBusinessPanel) return
+        emitEffect(MyPlacesEffect.OpenBusinessPanel(place.id, place.name))
+    }
+
+    /**
+     * Так же, как и [open]: заявка на модерации и рядовой сотрудник этой
+     * кнопки на экране не видят вовсе, но событие проверяется и здесь на
+     * случай, если оно всё-таки придёт.
+     */
+    private fun manageStaff(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManageStaff) return
+        emitEffect(MyPlacesEffect.OpenStaff(place.id))
+    }
+
     private fun placeOrNull(placeId: String): MyPlace? =
         (currentState.places as? ScreenState.Content)?.data?.firstOrNull { it.id == placeId }
+
+    /**
+     * Экран сам не рисует кнопку тому, кому нельзя (issue #252) — проверка
+     * здесь на случай, если событие всё-таки придёт.
+     */
+    private fun manageProducts(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManageProducts) return
+        emitEffect(MyPlacesEffect.OpenPharmacyManagement(place.id, place.name))
+    }
+
+    /** Кнопка скрыта не тому, кому нельзя, — проверка здесь на всякий случай. */
+    private fun onAddPromotionClicked(placeId: String) {
+        val place = placeOrNull(placeId) ?: return
+        if (!place.canManagePromotion) return
+        promotionJob?.cancel()
+        updateState {
+            copy(promotionForm = NewPromotionFormState(placeId = place.id, placeName = place.name))
+        }
+    }
+
+    private inline fun updatePromotionDraft(
+        crossinline transform: NewPromotionDraft.() -> NewPromotionDraft,
+    ) {
+        updateState {
+            copy(
+                promotionForm = promotionForm?.let {
+                    it.copy(draft = it.draft.transform(), failure = null)
+                },
+            )
+        }
+    }
+
+    private fun submitPromotion() {
+        val form = currentState.promotionForm ?: return
+        if (form.submitting) return
+        if (!form.draft.canSubmit) {
+            updateState { copy(promotionForm = form.copy(submitAttempted = true)) }
+            return
+        }
+
+        updateState { copy(promotionForm = form.copy(submitting = true, failure = null)) }
+        promotionJob = viewModelScope.launch {
+            when (val result = promotionsRepository.createPromotion(form.placeId, form.draft)) {
+                is ApiResult.Failure -> updateState {
+                    copy(promotionForm = promotionForm?.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> {
+                    updateState { copy(promotionForm = null) }
+                    emitEffect(MyPlacesEffect.PromotionCreated)
+                }
+            }
+        }
+    }
 }

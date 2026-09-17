@@ -3,6 +3,7 @@ package uz.mahalla.feature.place.domain
 import androidx.compose.runtime.Immutable
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -156,17 +157,21 @@ data class PlaceCapabilities(
  * @param authorId id автора с сервера. Единственный признак, по которому свой
  * отзыв отличается от чужого (issue #76) — «мой» это факт про аккаунт, а не
  * про отзыв, поэтому сравнение живёт в состоянии экрана, а не здесь.
+ *
+ * Имени автора и аватара здесь нет: у бэкенда их нет вовсе, ни под каким
+ * именем поля (issue #192) — экран показывает отзыв без имени, а не пустую
+ * строку на его месте.
+ *
+ * @param ownerReply ответ заведения на отзыв; `null` — заведение не ответило.
  */
 @Immutable
 data class Review(
     val id: String,
-    val author: String,
     val rating: Int,
     val text: String,
     val createdAt: Instant?,
     val authorId: String? = null,
-    /** Аватар автора (issue #60); `null` — рисуется первая буква имени. */
-    val avatarUrl: String? = null,
+    val ownerReply: String? = null,
 )
 
 /**
@@ -177,12 +182,16 @@ data class Review(
  * [fromCache] отмечает данные, поднятые из Room после сетевой ошибки: экран
  * показывает их, но подписывает — иначе устаревшие часы работы выглядят как
  * актуальные.
+ *
+ * [photos] — галерея из `media/entity/{placeId}` (issue #185), а не только
+ * обложка с логотипом: у элементов с [MediaFile.ownerId] есть кому предложить
+ * удаление, у запасного варианта (медиа не ответило) — нет.
  */
 @Immutable
 data class PlaceDetails(
     val place: Place,
     val description: String? = null,
-    val photos: List<String> = emptyList(),
+    val photos: List<MediaFile> = emptyList(),
     val hours: List<OpeningHours> = emptyList(),
     val contacts: PlaceContacts = PlaceContacts(),
     val capabilities: PlaceCapabilities = PlaceCapabilities(),

@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -30,6 +31,7 @@ import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramLoginState
 import uz.mahalla.feature.auth.domain.VerificationResult
 import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakeFormOwnership
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
@@ -53,6 +55,7 @@ class AuthRepositoryTest {
     private lateinit var server: MockWebServer
     private lateinit var sessionStore: FakeSessionStore
     private lateinit var userProfileStore: FakeUserProfileStore
+    private lateinit var formOwnership: FakeFormOwnership
     private lateinit var pinStorage: FakePinStorage
 
     private val deviceInfoProvider = FakeDeviceInfoProvider()
@@ -69,6 +72,7 @@ class AuthRepositoryTest {
         server.start()
         sessionStore = FakeSessionStore()
         userProfileStore = FakeUserProfileStore()
+        formOwnership = FakeFormOwnership()
         pinStorage = FakePinStorage(initialPin = "1234")
     }
 
@@ -549,6 +553,47 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `re-login of the same account does not wipe a name the server has not confirmed yet`() =
+        runTest {
+            // Анкета покупателя сохранила имя локально и ждёт `PUT` (issue #234) —
+            // сервер о нём ещё не знает, отсюда `fullName = null` в ответе на вход.
+            userProfileStore.save(
+                UserProfile(id = "u-1", fullName = "Jahongir", fullNamePendingSync = true),
+            )
+            server.enqueue(
+                envelope(
+                    """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                       "user":{"id":"u-1","phone":"+998901234567","fullName":null}}""",
+                ),
+            )
+
+            repository().verifyCode("otp-1", "123456")
+
+            val profile = userProfileStore.current()
+            assertEquals("Jahongir", profile.fullName)
+            assertTrue(profile.fullNamePendingSync)
+        }
+
+    @Test
+    fun `login of a different account does not inherit a pending name`() = runTest {
+        userProfileStore.save(
+            UserProfile(id = "u-old", fullName = "Jahongir", fullNamePendingSync = true),
+        )
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-new","phone":"+998901234567","fullName":null}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        val profile = userProfileStore.current()
+        assertNull(profile.fullName)
+        assertFalse(profile.fullNamePendingSync)
+    }
+
+    @Test
     fun `pin step stores the profile too`() = runTest {
         server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"SETUP_PIN"}"""))
         server.enqueue(
@@ -563,6 +608,106 @@ class AuthRepositoryTest {
         repository.completeServerPin("123456")
 
         assertEquals("+998901234567", userProfileStore.current().phone)
+    }
+
+    // Анкета (роль и адрес доставки) выход переживает и отдаётся только тому,
+    // чья она (issue #243). Кто вошёл, ей сообщает каждый путь входа.
+
+    @Test
+    fun `login tells the local form who signed in`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        assertEquals(listOf<String?>("u-1"), formOwnership.claims)
+    }
+
+    @Test
+    fun `pin step tells the local form who signed in only once tokens arrive`() = runTest {
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"SETUP_PIN"}"""))
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        // Верный код без токенов — ещё не вход: отдавать анкету рано.
+        assertEquals(emptyList<String?>(), formOwnership.claims)
+
+        repository.completeServerPin("123456")
+
+        assertEquals(listOf<String?>("u-1"), formOwnership.claims)
+    }
+
+    @Test
+    fun `telegram login tells the local form who signed in`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"accessToken":"a-tg","refreshToken":"r-tg","requiresPhoneVerify":false,
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        repository().checkTelegramLogin("dl-1")
+
+        // Номера на этом пути не вводят, и сравнить телефоны (issue #86) здесь
+        // нечем — тем важнее, что анкету сверяет `id`.
+        assertEquals(listOf<String?>("u-1"), formOwnership.claims)
+    }
+
+    @Test
+    fun `the local form is checked before the session is saved`() = runTest {
+        var sessionAtClaim: Session? = Session("not-called", "not-called")
+        formOwnership.onClaim = { sessionAtClaim = sessionStore.current() }
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        // С записью сессии приложение уже вошло: умри процесс сразу после неё,
+        // и следующий запуск открылся бы с чужим адресом доставки.
+        assertNull(sessionAtClaim)
+        assertEquals("a-1", sessionStore.current()?.accessToken)
+    }
+
+    @Test
+    fun `login without an account id leaves the local form unowned`() = runTest {
+        server.enqueue(envelope("""{"tokens":{"accessToken":"a-1","refreshToken":"r-1"}}"""))
+
+        repository().verifyCode("otp-1", "123456")
+
+        // Не знать, кто вошёл, — не повод отдавать ему чужую анкету.
+        assertEquals(listOf<String?>(null), formOwnership.claims)
+    }
+
+    @Test
+    fun `unavailable settings do not break the login`() = runTest {
+        formOwnership.failure = IllegalStateException("datastore")
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+
+        val result = repository().verifyCode("otp-1", "123456")
+
+        // Уборка по дороге не то, ради чего человек вводил код.
+        assertTrue(result is ApiResult.Success)
+        assertEquals("a-1", sessionStore.current()?.accessToken)
+        assertEquals("u-1", userProfileStore.current().id)
     }
 
     @Test
@@ -753,6 +898,8 @@ class AuthRepositoryTest {
             (result as ApiResult.Success).data,
         )
         assertNull("полуавторизованной сессии быть не должно", sessionStore.current())
+        // Вход ещё не состоялся — анкету рано и сверять (issue #243).
+        assertEquals(emptyList<String?>(), formOwnership.claims)
     }
 
     @Test
@@ -807,6 +954,8 @@ class AuthRepositoryTest {
         assertNull(pinStorage.storedPin)
         // Повторять PIN бессмысленно: ответ будет тот же.
         assertNull(repository.pendingServerPin)
+        // Вход не состоялся — и анкету никому не отдаём (issue #243).
+        assertEquals(emptyList<String?>(), formOwnership.claims)
     }
 
     @Test
@@ -866,6 +1015,7 @@ class AuthRepositoryTest {
             (result as ApiResult.Failure).error,
         )
         assertNull(sessionStore.current())
+        assertEquals(emptyList<String?>(), formOwnership.claims)
     }
 
     @Test
@@ -949,6 +1099,7 @@ class AuthRepositoryTest {
         authApi = authApi(),
         sessionStore = sessionStore,
         userProfileStore = userProfileStore,
+        formOwnership = formOwnership,
         pinStorage = pinStorage,
         deviceInfoProvider = deviceInfoProvider,
         locationProvider = locationProvider,

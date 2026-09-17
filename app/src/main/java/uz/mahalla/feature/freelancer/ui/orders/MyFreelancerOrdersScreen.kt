@@ -2,7 +2,6 @@ package uz.mahalla.feature.freelancer.ui.orders
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,16 +14,13 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Handyman
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -34,6 +30,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -133,10 +130,11 @@ private fun LazyListScope.orderItems(
             items(orders.data, key = FreelancerOrder::id) { order -> OrderCard(order = order) }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = orders.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(MyFreelancerOrdersEvent.LoadMore) },
                     )
                 }
             }
@@ -195,39 +193,6 @@ private fun OrderCard(order: FreelancerOrder, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: MyFreelancerOrdersState,
-    itemCount: Int,
-    onEvent: (MyFreelancerOrdersEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(MyFreelancerOrdersEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(MyFreelancerOrdersEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
-    }
-}
-
 /** Подписи статусов: домен знает состояние, ресурсы — формулировку. */
 @StringRes
 private fun FreelancerOrderStatus.labelRes(): Int = when (this) {
@@ -247,7 +212,6 @@ private fun FreelancerOrderStatus.tone(): MahallaTone = when (this) {
 }
 
 private const val LIST_SKELETONS = 3
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable

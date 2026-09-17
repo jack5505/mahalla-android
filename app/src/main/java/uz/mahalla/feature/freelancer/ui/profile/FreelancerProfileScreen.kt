@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.MoneyFormatter
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.EmptyState
@@ -298,16 +299,21 @@ private fun ServicesBlock(
     }
 }
 
-/** Цена и длительность — то, что человек хочет знать до заказа. */
+/**
+ * Цена и длительность — то, что человек хочет знать до заказа. Той же строкой
+ * мастер видит свою услугу в кабинете (issue #71), поэтому подпись одна на оба
+ * экрана: разойдясь, они показали бы одну услугу по-разному.
+ */
 @Composable
-private fun BarberService.priceNote(): String? {
+internal fun BarberService.priceNote(): String? {
     val price = priceSum.takeIf { it > 0 }?.let { sum ->
         MoneyFormatter.withCurrency(sum, stringResource(R.string.currency_uzs))
     }
     val duration = durationMinutes?.let { minutes ->
         pluralStringResource(R.plurals.freelancer_service_duration, minutes, minutes)
     }
-    return listOfNotNull(price, duration).takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
+    return listOfNotNull(price, duration).takeIf { it.isNotEmpty() }
+        ?.let { TextJoiner.join(stringResource(R.string.text_joined_with_dot), it) }
 }
 
 @Composable
@@ -586,8 +592,6 @@ private fun Context.startActivitySafely(intent: Intent) {
         // Обработчика нет — молча ничего не делаем, экран остаётся на месте.
     }
 }
-
-private const val SEPARATOR = " · "
 
 @ThemeLanguagePreviews
 @Composable

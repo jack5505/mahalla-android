@@ -53,6 +53,11 @@ fun MahallaFilterChip(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    // Галочка на выбранном чипе съедает ~26dp ширины, и в узкой ячейке
+    // фиксированной сетки (слоты времени в бронировании) от неё переносится
+    // текст. Там выбор виден заливкой и обводкой, а TalkBack всё равно читает
+    // состояние из `stateDescription` ниже.
+    showSelectedIcon: Boolean = true,
 ) {
     val stateLabel = stringResource(
         if (selected) R.string.chip_state_selected else R.string.chip_state_not_selected,
@@ -68,7 +73,7 @@ fun MahallaFilterChip(
             enabled = enabled,
             label = { Text(text = label, style = MaterialTheme.typography.labelLarge) },
             leadingIcon = when {
-                selected -> {
+                selected && showSelectedIcon -> {
                     {
                         Icon(
                             imageVector = Icons.Outlined.Check,
@@ -114,6 +119,7 @@ fun MahallaFilterRow(
     selectedId: String?,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = modifier
@@ -128,6 +134,7 @@ fun MahallaFilterRow(
                 selected = item.id == selectedId,
                 onClick = { onSelect(item.id) },
                 icon = item.icon,
+                enabled = enabled,
             )
         }
     }

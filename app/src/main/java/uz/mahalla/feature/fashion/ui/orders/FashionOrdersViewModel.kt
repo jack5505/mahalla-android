@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.fashion.data.FashionOrderRepository
 import uz.mahalla.feature.fashion.domain.FashionOrderPage
 import uz.mahalla.feature.food.domain.Order
@@ -32,6 +31,7 @@ class FashionOrdersViewModel @Inject constructor(
     FashionOrdersState(),
 ) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -41,12 +41,12 @@ class FashionOrdersViewModel @Inject constructor(
 
     override fun onEvent(event: FashionOrdersEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            FashionOrdersEvent.ScreenResumed -> {
-                val state = currentState
-                if (!state.orders.isLoading && !state.isRefreshing) load(showLoading = false)
-            }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            FashionOrdersEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             FashionOrdersEvent.Refreshed -> load(showLoading = false, refreshing = true)
             FashionOrdersEvent.Retry -> load()
@@ -77,7 +77,7 @@ class FashionOrdersViewModel @Inject constructor(
                 cancelFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myOrders(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

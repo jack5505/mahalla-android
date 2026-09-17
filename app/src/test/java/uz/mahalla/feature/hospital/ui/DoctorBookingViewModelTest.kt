@@ -25,7 +25,7 @@ import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
-import uz.mahalla.feature.hospital.domain.DoctorSchedule
+import uz.mahalla.feature.hospital.domain.DoctorSlot
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeHospitalRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -67,30 +67,54 @@ class DoctorBookingViewModelTest {
         }
 
     /**
-     * Сетка на сегодня начинается с текущего часа: 09:00 UTC — это 14:00 в
-     * Ташкенте, и предлагать утренний приём в обед нельзя.
+     * Единственный врач выбирается сам, а его выбор сразу спрашивает слоты
+     * (issue #181): заставлять нажимать на список из одной строки, а потом ещё
+     * ждать второго действия ради слотов, незачем.
      */
     @Test
-    fun `today offers only the time that has not passed`() =
+    fun `a single doctor selects itself and its slots are requested for today`() =
         runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
+
             val viewModel = viewModel()
             runCurrent()
 
-            val times = viewModel.state.value.times
-            assertEquals(LocalTime.of(14, 0), times.first())
-            assertEquals(DoctorSchedule.LAST_START, times.last())
+            assertEquals("d-1", viewModel.state.value.draft.doctorId)
+            assertEquals(listOf("d-1" to TODAY), repository.requestedSlots)
         }
 
     @Test
-    fun `a single doctor selects itself`() = runTest(mainDispatcherRule.dispatcher) {
-        repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
+    fun `an empty slot list for the day is an empty state, not an error`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
 
-        val viewModel = viewModel()
-        runCurrent()
+            val viewModel = viewModel()
+            runCurrent()
 
-        // Заставлять нажимать на список из одной строки незачем.
-        assertEquals("d-1", viewModel.state.value.draft.doctorId)
-    }
+            assertTrue(viewModel.state.value.slots is ScreenState.Empty)
+        }
+
+    @Test
+    fun `a refusal of slots is shown with the server text and can be retried`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
+            repository.defaultSlots = ApiResult.Failure(ApiError.NoConnection)
+
+            val viewModel = viewModel()
+            runCurrent()
+
+            assertEquals(
+                ApiError.NoConnection,
+                (viewModel.state.value.slots as ScreenState.Error).error,
+            )
+
+            repository.defaultSlots =
+                ApiResult.Success(listOf(DoctorSlot("09:00", LocalTime.of(9, 0))))
+            viewModel.onEvent(DoctorBookingEvent.SlotsRetry)
+            runCurrent()
+
+            assertTrue(viewModel.state.value.slots is ScreenState.Content)
+        }
 
     @Test
     fun `several doctors are not chosen for the person`() =
@@ -134,22 +158,46 @@ class DoctorBookingViewModelTest {
         }
 
     /**
-     * `10:00` от сегодняшнего дня на завтрашнем — уже другое время, а на
-     * сегодняшнем его может не быть вовсе: выбор обязан сброситься.
+     * `15:00` от сегодняшнего дня на завтрашнем — уже другое время, а на
+     * сегодняшнем его может не быть вовсе: выбор обязан сброситься, и слоты —
+     * перезапрошены на новый день (issue #181).
      */
     @Test
-    fun `changing the day resets the time and recounts the grid`() =
+    fun `changing the day resets the slot and requests it again`() =
         runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(DoctorBookingEvent.DateSelected(TOMORROW))
+            runCurrent()
 
             val state = viewModel.state.value
-            assertNull(state.draft.time)
-            // Завтра приём начинается с утра.
-            assertEquals(DoctorSchedule.OPENS_AT, state.times.first())
+            assertNull(state.draft.slot)
+            assertEquals(listOf("d-1" to TODAY, "d-1" to TOMORROW), repository.requestedSlots)
+        }
+
+    /**
+     * Занятость своя у каждого врача: слот от прежнего не переносится, и
+     * приложение переспрашивает слоты нового врача на тот же день.
+     */
+    @Test
+    fun `changing the doctor resets the slot and requests it again`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1"), doctor("d-2")))
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(DoctorBookingEvent.DoctorSelected("d-1"))
+            runCurrent()
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
+
+            viewModel.onEvent(DoctorBookingEvent.DoctorSelected("d-2"))
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertNull(state.draft.slot)
+            assertEquals(listOf("d-1" to TODAY, "d-2" to TODAY), repository.requestedSlots)
         }
 
     @Test
@@ -159,7 +207,7 @@ class DoctorBookingViewModelTest {
             val viewModel = viewModel()
             runCurrent()
 
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
             viewModel.onEvent(DoctorBookingEvent.ComplaintChanged("tomoq og'riyapti"))
             assertTrue(viewModel.state.value.canBook)
 
@@ -171,7 +219,7 @@ class DoctorBookingViewModelTest {
                     DoctorAppointmentDraft(
                         doctorId = "d-1",
                         date = TODAY,
-                        time = LocalTime.of(15, 0),
+                        slot = SLOT,
                         complaint = "tomoq og'riyapti",
                     ),
                 ),
@@ -191,7 +239,7 @@ class DoctorBookingViewModelTest {
             repository.bookResult = ApiResult.Success(Appointment(id = "a-1"))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(DoctorBookingEvent.BookClicked)
             runCurrent()
@@ -216,7 +264,7 @@ class DoctorBookingViewModelTest {
             )
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(DoctorBookingEvent.BookClicked)
             runCurrent()
@@ -231,7 +279,7 @@ class DoctorBookingViewModelTest {
             repository.bookResult = ApiResult.Failure(ApiError.Business("SLOT_TAKEN"))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
             viewModel.onEvent(DoctorBookingEvent.ComplaintChanged("bosh og'riq"))
 
             viewModel.onEvent(DoctorBookingEvent.BookClicked)
@@ -240,7 +288,7 @@ class DoctorBookingViewModelTest {
             val state = viewModel.state.value
             assertEquals(ApiError.Business("SLOT_TAKEN"), state.bookFailure?.error)
             assertNull(state.booked)
-            assertEquals(LocalTime.of(15, 0), state.draft.time)
+            assertEquals(LocalTime.of(15, 0), state.draft.slot?.time)
             assertEquals("bosh og'riq", state.draft.complaint)
 
             // Правка снимает прошлый отказ: он был про другой текст.
@@ -254,7 +302,7 @@ class DoctorBookingViewModelTest {
             repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(
                 DoctorBookingEvent.ComplaintChanged(
@@ -274,7 +322,7 @@ class DoctorBookingViewModelTest {
         repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
         val viewModel = viewModel()
         runCurrent()
-        viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+        viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
         viewModel.onEvent(DoctorBookingEvent.BookClicked)
         viewModel.onEvent(DoctorBookingEvent.BookClicked)
@@ -311,7 +359,7 @@ class DoctorBookingViewModelTest {
             repository.doctorsResult = ApiResult.Success(listOf(doctor("d-1")))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(DoctorBookingEvent.BookClicked)
             runCurrent()
@@ -329,7 +377,7 @@ class DoctorBookingViewModelTest {
             repository.bookResult = ApiResult.Failure(ApiError.Business("DOCTOR_BUSY"))
             val viewModel = viewModel()
             runCurrent()
-            viewModel.onEvent(DoctorBookingEvent.TimeSelected(LocalTime.of(15, 0)))
+            viewModel.onEvent(DoctorBookingEvent.SlotSelected(SLOT))
 
             viewModel.onEvent(DoctorBookingEvent.BookClicked)
             runCurrent()
@@ -355,5 +403,6 @@ class DoctorBookingViewModelTest {
         val TODAY: LocalDate = LocalDate.of(2026, 9, 4)
         val TOMORROW: LocalDate = LocalDate.of(2026, 9, 5)
         const val PLACE = "p-1"
+        val SLOT = DoctorSlot("15:00", LocalTime.of(15, 0))
     }
 }

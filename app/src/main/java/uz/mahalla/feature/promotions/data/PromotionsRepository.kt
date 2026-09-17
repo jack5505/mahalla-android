@@ -3,11 +3,14 @@ package uz.mahalla.feature.promotions.data
 import uz.mahalla.core.format.Money
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
-import uz.mahalla.feature.promotions.domain.PromoCheckResult
+import uz.mahalla.feature.promotions.domain.CreatablePromoType
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.promotions.domain.PromoType
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionFeed
@@ -36,10 +39,11 @@ interface PromotionsRepository {
     suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>>
 
     /**
-     * Проверка промокода перед оформлением (issue #180). [orderAmountSum] —
-     * сумы, как и весь домен; пересчёт в тийины делает реализация.
+     * Новая акция заведения (issue #252). Владелец правит своё заведение —
+     * доступ проверяет бэкенд, клиент только не даёт заведомо невалидному
+     * черновику уйти в сеть.
      */
-    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
+    suspend fun createPromotion(placeId: String, draft: NewPromotionDraft): ApiResult<Unit>
 }
 
 @Singleton
@@ -55,14 +59,42 @@ class DefaultPromotionsRepository @Inject constructor(
         apiCall { api.placePromotions(placeId).payload() }
             .map { promotions -> promotions.mapNotNull(PromotionDto::toDomain) }
 
-    override suspend fun check(
-        code: String,
+    /**
+     * Черновик уже проверен формой (`canSubmit`), но повторная проверка тут
+     * — не подстраховка от опечатки, а защита от вызова репозитория в обход
+     * экрана (как и у [uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository]).
+     */
+    override suspend fun createPromotion(
         placeId: String,
-        orderAmountSum: Long,
-    ): ApiResult<PromoCheckResult> =
-        apiCall {
-            api.check(code = code, placeId = placeId, orderAmount = Money.somToTiyin(orderAmountSum)).payload()
-        }.map { it.toDomain(code) }
+        draft: NewPromotionDraft,
+    ): ApiResult<Unit> {
+        if (placeId.isBlank() || !draft.canSubmit) {
+            return ApiResult.Failure(ApiError.Business(NewPromotionDraft.INVALID_CODE))
+        }
+
+        return apiCall {
+            api.create(
+                placeId = placeId,
+                body = CreatePromotionRequest(
+                    title = draft.title.trim(),
+                    description = draft.description.trim().takeIf(String::isNotEmpty),
+                    promoType = draft.type.serverValue,
+                    // Только поле выбранного вида: переключение с процента на
+                    // сумму (или обратно) не должно тащить за собой значение,
+                    // оставшееся в невидимом сейчас поле формы.
+                    discountPercent = draft.discountPercent
+                        .takeIf { draft.type == CreatablePromoType.PercentOff },
+                    discountAmount = draft.discountAmountSum
+                        ?.takeIf { draft.type == CreatablePromoType.FixedOff }
+                        ?.let(Money::somToTiyin),
+                    minOrderAmount = draft.minOrderAmountSum
+                        ?.takeIf { it > 0 }
+                        ?.let(Money::somToTiyin),
+                    promoCode = draft.promoCode.trim().takeIf(String::isNotEmpty),
+                ),
+            ).payload()
+        }.map {}
+    }
 }
 
 /**
@@ -71,18 +103,10 @@ class DefaultPromotionsRepository @Inject constructor(
  * не показать хвост, чем зациклить догрузку одной и той же страницы (то же
  * правило, что у уведомлений, issue #81).
  */
-internal fun PromotionPageDto.toDomain(): PromotionPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return PromotionPage(
-        items = content.mapNotNull(PromotionDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun PromotionPageDto.toDomain(): PromotionPage = PromotionPage(
+    items = content.mapNotNull(PromotionDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 /**
  * Разбор мягкий, как в каталоге (issue #53).

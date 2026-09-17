@@ -32,8 +32,15 @@ interface OrderRepository {
      * `POST food/orders` описан схемой, перекрытой коллизией springdoc, и
      * читать из него что-то кроме id — гадание. Состав и суммы экран статуса
      * берёт у `GET orders/{id}`, где схема однозначна.
+     *
+     * @param idempotencyKey ключ повторной отправки (задача 8.3 эпика #12):
+     * один на одну оплату, тот же — на повтор после оборванного соединения.
      */
-    suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<String>
+    suspend fun create(
+        cart: Cart,
+        form: CheckoutForm,
+        idempotencyKey: String,
+    ): ApiResult<String>
 
     suspend fun order(orderId: String): ApiResult<Order>
 
@@ -60,10 +67,15 @@ class DefaultOrderRepository @Inject constructor(
     private val clock: Clock,
 ) : OrderRepository {
 
-    override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<String> {
+    override suspend fun create(
+        cart: Cart,
+        form: CheckoutForm,
+        idempotencyKey: String,
+    ): ApiResult<String> {
         val result = apiCall {
             api.createOrder(
-                PlaceOrderRequestDto(
+                idempotencyKey = idempotencyKey,
+                request = PlaceOrderRequestDto(
                     placeId = cart.placeId,
                     items = cart.lines.map(CartLine::toRequest),
                     fulfillment = form.method.apiValue,

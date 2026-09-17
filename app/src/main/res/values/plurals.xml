@@ -38,6 +38,21 @@
         <item quantity="other">%1$d yulduz</item>
     </plurals>
 
+    <!--
+        Карточка места (issue #75): подпись кнопки лайка для TalkBack. Само
+        число нарисовано рядом цифрами, а озвучить надо и действие, и счётчик —
+        иначе кнопка читается как «кнопка» без единого смысла.
+    -->
+    <plurals name="place_social_like">
+        <item quantity="one">Yoqtirish, %1$d ta yoqtirish</item>
+        <item quantity="other">Yoqtirish, %1$d ta yoqtirish</item>
+    </plurals>
+
+    <plurals name="place_social_unlike">
+        <item quantity="one">Yoqtirishni bekor qilish, %1$d ta yoqtirish</item>
+        <item quantity="other">Yoqtirishni bekor qilish, %1$d ta yoqtirish</item>
+    </plurals>
+
     <!-- Анкеты (issue #84): границы длины полей. -->
     <plurals name="role_error_too_long">
         <item quantity="one">%1$d belgidan oshmasin</item>
@@ -53,6 +68,18 @@
     <plurals name="queue_wait_minutes">
         <item quantity="one">%1$d daqiqa</item>
         <item quantity="other">%1$d daqiqa</item>
+    </plurals>
+
+    <!-- Подпись под линией фокус-карточки на главной (макет 1a). -->
+    <plurals name="home_focus_wait">
+        <item quantity="one">~%1$d daqiqa kutish</item>
+        <item quantity="other">~%1$d daqiqa kutish</item>
+    </plurals>
+
+    <!-- «открыто N из M» у секции мест на главной; количество — N. -->
+    <plurals name="home_open_count">
+        <item quantity="one">%1$d / %2$d ochiq</item>
+        <item quantity="other">%1$d / %2$d ochiq</item>
     </plurals>
 
     <!-- Бронь (issue #97): длительность услуги. -->
@@ -138,6 +165,12 @@
         <item quantity="other">Joy nomi juda uzun: %1$d belgidan oshmasin.</item>
     </plurals>
 
+    <!-- Подтверждение оплаты (8.3, issue #12): сколько попыток PIN осталось. -->
+    <plurals name="payment_confirm_pin_wrong">
+        <item quantity="one">PIN-kod xato. %1$d urinish qoldi.</item>
+        <item quantity="other">PIN-kod xato. %1$d urinish qoldi.</item>
+    </plurals>
+
     <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
     <plurals name="pharmacy_stock_left">
         <item quantity="one">%1$d dona qoldi</item>
@@ -158,6 +191,17 @@
     <plurals name="gaming_error_duration">
         <item quantity="one">%1$d dan %2$d soatgacha tanlang</item>
         <item quantity="other">%1$d dan %2$d soatgacha tanlang</item>
+    </plurals>
+
+    <!-- Бизнес-панель, форма новой позиции меню (эпик #16). -->
+    <plurals name="business_menu_error_too_long">
+        <item quantity="one">%1$d belgidan oshmasin</item>
+        <item quantity="other">%1$d belgidan oshmasin</item>
+    </plurals>
+
+    <plurals name="business_menu_error_prep_large">
+        <item quantity="one">%1$d daqiqadan oshmasin</item>
+        <item quantity="other">%1$d daqiqadan oshmasin</item>
     </plurals>
 
 </resources>

@@ -77,6 +77,20 @@ class RoleRepositoryTest {
     }
 
     @Test
+    fun `saved name is queued for the server, not sent from the form itself`() = runTest {
+        val dataStore = newDataStore()
+        val profileStore = DataStoreUserProfileStore(dataStore)
+        val repository = DataStoreRoleRepository(SettingsDataStore(dataStore), profileStore)
+
+        repository.saveCustomer(CustomerForm(fullName = "Jahongir", city = City.TASHKENT))
+
+        // Анкета не ходит в сеть сама (issue #234) — она лишь помечает имя как
+        // неподтверждённое, а отправляет его `ProfileRepository.refresh()` при
+        // следующем открытии профиля.
+        assertTrue(profileStore.current().fullNamePendingSync)
+    }
+
+    @Test
     fun `name goes to the same profile the header shows`() = runTest {
         val dataStore = newDataStore()
         val profileStore = DataStoreUserProfileStore(dataStore)

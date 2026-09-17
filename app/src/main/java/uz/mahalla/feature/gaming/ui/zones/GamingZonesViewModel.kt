@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.analytics.AnalyticsTracker
@@ -12,7 +13,6 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.gaming.data.GamingRepository
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingValidator
@@ -40,6 +40,8 @@ class GamingZonesViewModel @Inject constructor(
 
     private val route: GamingRoute = savedStateHandle.toRoute()
 
+    private var loadJob: Job? = null
+
     init {
         updateState { copy(placeName = route.placeName) }
         load()
@@ -50,12 +52,12 @@ class GamingZonesViewModel @Inject constructor(
             GamingZonesEvent.Retry -> load()
             GamingZonesEvent.Refreshed -> load(showLoading = false, refreshing = true)
 
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            GamingZonesEvent.ScreenResumed ->
-                if (!currentState.zones.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            GamingZonesEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             is GamingZonesEvent.ZoneClicked -> openSheet(event.zoneId)
             GamingZonesEvent.SheetDismissed -> updateState { closedSheet() }
@@ -81,7 +83,7 @@ class GamingZonesViewModel @Inject constructor(
                 isRefreshing = refreshing,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             when (val result = repository.zones(route.placeId)) {
                 is ApiResult.Failure -> updateState {
                     copy(zones = ScreenState.Error(result.failure), isRefreshing = false)

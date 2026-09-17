@@ -2,7 +2,10 @@ package uz.mahalla.feature.pharmacy.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
@@ -31,9 +34,11 @@ import uz.mahalla.data.network.ApiResponse
  *   они есть, и это меняет решение: фильтровать по приехавшему списку нельзя,
  *   иначе совпадения на непрогруженных страницах остались бы невидимыми.
  *
- * Двух остальных путей контроллера (`POST products`, `PUT products/{id}/stock`)
- * здесь нет намеренно: ими заведение правит свою витрину — это бизнес-панель,
- * эпик #16.
+ * `POST products` и `PUT products/{id}/stock` (issue #252, владелец правит
+ * свою витрину) сняты той же схемой `/v3/api-docs` 2026-09-11, но не
+ * подтверждены живым запросом — обе требуют Bearer и роли владельца
+ * заведения, а `CONTRACT_REFRESH_TOKEN` в песочнице не задан. Подробности и
+ * риск — `docs/API-CONTRACT.md`.
  */
 interface PharmacyApi {
 
@@ -51,7 +56,58 @@ interface PharmacyApi {
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<ProductPageDto>
+
+    /**
+     * Новый товар витрины (issue #252). Тело — `PharmacyCreateRequest`, имя в
+     * `/v3/api-docs` коллизией springdoc не перекрыто (встречается только у
+     * этого пути), поля читаны из схемы как есть.
+     */
+    @POST("pharmacy/places/{placeId}/products")
+    suspend fun create(
+        @Path("placeId") placeId: String,
+        @Body body: CreateProductRequest,
+    ): ApiResponse<ProductDto>
+
+    /**
+     * Остаток товара (issue #252). Тело в схеме объявлено безымянной картой
+     * (`additionalProperties: integer`, как `walkin/accept` в PR #161 и
+     * `reviews/{id}/reply` в issue #188) — сгенерировано из
+     * `Map<String, Int>` в контроллере, имени ключа схема не называет.
+     *
+     * Ключ **выведен из соседних схем того же контроллера**: и
+     * `ProductResponse`, и `PharmacyCreateRequest` называют это поле
+     * `stockQuantity` — отправляем `{"stockQuantity": N}`. Не проверено живым
+     * запросом (нужен Bearer владельца, `CONTRACT_REFRESH_TOKEN` в песочнице
+     * нет) — при расхождении смотреть `docs/API-CONTRACT.md` в первую
+     * очередь.
+     */
+    @PUT("pharmacy/places/{placeId}/products/{id}/stock")
+    suspend fun updateStock(
+        @Path("placeId") placeId: String,
+        @Path("id") productId: String,
+        @Body body: Map<String, Int>,
+    ): ApiResponse<ProductDto>
 }
+
+/**
+ * `PharmacyCreateRequest`. Обязательны только [name] (≤ 300) и [price] —
+ * остальное схема не ограничивает. Пустые необязательные поля не уходят
+ * вовсе (`explicitNulls = false` в конфигурации Json, issue #84).
+ *
+ * @param price в тийинах — как и [ProductDto.price] (issue #149); черновик
+ * считает в сумах, перевод делает репозиторий.
+ */
+@Serializable
+data class CreateProductRequest(
+    @SerialName("name") val name: String,
+    @SerialName("manufacturer") val manufacturer: String? = null,
+    @SerialName("description") val description: String? = null,
+    @SerialName("dosageForm") val dosageForm: String? = null,
+    @SerialName("strength") val strength: String? = null,
+    @SerialName("price") val price: Long,
+    @SerialName("stockQuantity") val stockQuantity: Int? = null,
+    @SerialName("requiresPrescription") val requiresPrescription: Boolean? = null,
+)
 
 /**
  * `ProductResponse`. Имя в схеме встречается только в путях самого

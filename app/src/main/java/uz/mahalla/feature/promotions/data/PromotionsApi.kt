@@ -2,7 +2,9 @@ package uz.mahalla.feature.promotions.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
@@ -26,12 +28,16 @@ import uz.mahalla.data.network.ApiResponse
  *
  * `placeId` — uuid: `promotions/places/1` отвечает `400 TYPE_MISMATCH`.
  *
- * `GET promotions/check` — проверка промокода перед оформлением (issue #180,
- * снята со стенда); используется в чекауте «Одежды», где `promoCode` есть в
- * теле заказа. У «Еды» такого поля нет — ручку туда не тащить.
+ * `GET promotions/check` не используется: проверяет промокод, а применить его
+ * в заказе нечем — поля под код в `PlaceOrderRequest` нет (issue #9).
  *
- * `POST promotions/places/{placeId}` не используется: заводит акцию и
- * относится к бизнес-панели (эпик #16).
+ * **`POST places/{placeId}`** (issue #252, владелец заводит акцию) —
+ * доступна из «Моих заведений» тем же приёмом, что и `POST
+ * pharmacy/.../products`: без захода в неслитую бизнес-панель (эпик #16).
+ * Тело не проверено живым запросом (нужен Bearer владельца, которого в
+ * песочнице нет) — поля выведены из уже подтверждённых полей ответа
+ * [PromotionDto] того же контроллера, а не угаданы по аналогии с другой
+ * вертикалью. При расхождении смотреть `docs/API-CONTRACT.md`.
  */
 interface PromotionsApi {
 
@@ -43,6 +49,7 @@ interface PromotionsApi {
 
     @GET("promotions/places/{placeId}")
     suspend fun placePromotions(@Path("placeId") placeId: String): ApiResponse<List<PromotionDto>>
+
 
     /**
      * Проверка промокода. Все три параметра обязательны — без любого из них
@@ -56,7 +63,28 @@ interface PromotionsApi {
         @Query("placeId") placeId: String,
         @Query("orderAmount") orderAmount: Long,
     ): ApiResponse<PromoCheckDto>
+    @POST("promotions/places/{placeId}")
+    suspend fun create(
+        @Path("placeId") placeId: String,
+        @Body body: CreatePromotionRequest,
+    ): ApiResponse<PromotionDto>
 }
+
+/**
+ * Тело `POST promotions/places/{placeId}` — имя схемы `/v3/api-docs` не
+ * называет (не проверено живым запросом), поля повторяют [PromotionDto] того
+ * же контроллера: заводящая ручка и читающая описывают одну сущность.
+ */
+@Serializable
+data class CreatePromotionRequest(
+    @SerialName("title") val title: String,
+    @SerialName("description") val description: String? = null,
+    @SerialName("promoType") val promoType: String,
+    @SerialName("discountPercent") val discountPercent: Int? = null,
+    @SerialName("discountAmount") val discountAmount: Long? = null,
+    @SerialName("minOrderAmount") val minOrderAmount: Long? = null,
+    @SerialName("promoCode") val promoCode: String? = null,
+)
 
 /** `PageResponsePromotion`. */
 @Serializable

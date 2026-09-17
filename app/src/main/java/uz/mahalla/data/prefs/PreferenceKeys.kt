@@ -31,6 +31,13 @@ internal object PreferenceKeys {
      */
     val DeliveryAddress = stringPreferencesKey("settings_delivery_address")
 
+    /**
+     * Чья анкета лежит в [UserRole] и [DeliveryAddress] — `id` аккаунта
+     * (issue #243). Профиль при выходе стирается, этот ключ — нет: иначе
+     * вошедшему заново было бы не с чем себя сравнить (`FormOwnership`).
+     */
+    val FormOwnerId = stringPreferencesKey("settings_form_owner_id")
+
     /** Адрес бэкенда, введённый пользователем на первом экране (issue #26). */
     val BackendBaseUrl = stringPreferencesKey("settings_backend_base_url")
 
@@ -63,6 +70,14 @@ internal object PreferenceKeys {
     val ProfileServerRole = stringPreferencesKey("profile_server_role")
     val ProfileVerificationStatus = stringPreferencesKey("profile_verification_status")
     val ProfileAccountStatus = stringPreferencesKey("profile_account_status")
+
+    /**
+     * Имя из анкеты покупателя ждёт подтверждения сервером (issue #234):
+     * `RoleRepository.saveCustomer` пишет `fullName` раньше, чем `PUT users/me`
+     * успевает его отправить, и следующий `ProfileRepository.refresh()` должен
+     * повторить `PUT`, а не затереть ещё не отправленное имя обычным `GET`.
+     */
+    val ProfileFullNamePendingSync = booleanPreferencesKey("profile_full_name_pending_sync")
 
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")

@@ -2,7 +2,7 @@ package uz.mahalla.testutil
 
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.promotions.data.PromotionsRepository
-import uz.mahalla.feature.promotions.domain.PromoCheckResult
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionPage
 
@@ -38,13 +38,17 @@ class FakePromotionsRepository : PromotionsRepository {
         return place
     }
 
-    override suspend fun check(
-        code: String,
+    /** Что именно отправили на создание акции (issue #252) — по порядку вызовов. */
+    val createRequests = mutableListOf<Pair<String, NewPromotionDraft>>()
+
+    var createResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    override suspend fun createPromotion(
         placeId: String,
-        orderAmountSum: Long,
-    ): ApiResult<PromoCheckResult> {
-        requestedChecks += Triple(code, placeId, orderAmountSum)
-        return check
+        draft: NewPromotionDraft,
+    ): ApiResult<Unit> {
+        createRequests += placeId to draft
+        return createResult
     }
 }
 

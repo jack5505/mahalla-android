@@ -421,6 +421,50 @@ class ActivityViewModelTest {
         assertEquals(listOf("done"), viewModel.state.value.visible.map(Activity::id))
     }
 
+    // --- Пусто у всех при непустом курсоре (issue #203) ---
+
+    @Test
+    fun `an empty first page does not dead-end the screen while the cursor still has pages`() = runTest {
+        // Первая страница у всех источников пуста (например, все записи
+        // разбитого формата даты не прошли маппер), а курсор не пуст. Раньше
+        // это давало ScreenState.Empty без хвоста и без догрузки — выйти из
+        // него можно было только pull-to-refresh, вернувшим то же самое.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            when (pages.getValue(ActivitySource.Orders)) {
+                0 -> ActivityFeed(nextPages = mapOf(ActivitySource.Orders to 1))
+                else -> ActivityFeed(items = listOf(activity("late", status = ActivityStatus.InProgress)))
+            }
+        }
+
+        val viewModel = ActivityViewModel(repository)
+        val state = viewModel.state.value
+
+        // Догрузка прошла сама, и приехавшая активность видна.
+        assertTrue(state.items is ScreenState.Content)
+        assertEquals(listOf("late"), state.visible.map(Activity::id))
+        assertFalse(state.hasMore)
+    }
+
+    @Test
+    fun `an empty cursor that never produces anything ends in the real empty state`() = runTest {
+        // Курсор кончился, а активностей так и не нашлось ни на одной
+        // странице — это настоящее «вы ещё ничего не заказывали», а не
+        // недогруженный список.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            when (pages.getValue(ActivitySource.Orders)) {
+                0 -> ActivityFeed(nextPages = mapOf(ActivitySource.Orders to 1))
+                else -> ActivityFeed()
+            }
+        }
+
+        val state = ActivityViewModel(repository).state.value
+
+        assertTrue(state.items is ScreenState.Empty)
+        assertFalse(state.hasMore)
+    }
+
     // --- Догрузка ---
 
     @Test

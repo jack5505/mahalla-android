@@ -18,7 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class SettingsDataStore @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-) {
+) : FormOwnership {
 
     val settings: Flow<AppSettings> = dataStore.data
         .map { preferences ->
@@ -82,6 +82,25 @@ class SettingsDataStore @Inject constructor(
                 preferences.remove(PreferenceKeys.DeliveryAddress)
             } else {
                 preferences[PreferenceKeys.DeliveryAddress] = cleaned
+            }
+        }
+    }
+
+    /**
+     * Сравнение с владельцем и уборка — одной транзакцией: запись анкеты между
+     * ними иначе осталась бы без владельца либо досталась бы чужому.
+     */
+    override suspend fun claimFor(userId: String?) {
+        val owner = userId?.takeIf { it.isNotBlank() }
+        dataStore.edit { preferences ->
+            if (owner == null || preferences[PreferenceKeys.FormOwnerId] != owner) {
+                preferences.remove(PreferenceKeys.UserRole)
+                preferences.remove(PreferenceKeys.DeliveryAddress)
+            }
+            if (owner == null) {
+                preferences.remove(PreferenceKeys.FormOwnerId)
+            } else {
+                preferences[PreferenceKeys.FormOwnerId] = owner
             }
         }
     }
