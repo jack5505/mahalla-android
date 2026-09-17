@@ -351,7 +351,9 @@ class PromotionsRepositoryTest {
             ).failure
 
         assertEquals("Promo-kod topilmadi", failure.serverMessage)
+    }
 
+    @Test
     fun `a new percent-off promotion is sent with the amounts converted to tiyin`() = runTest {
         server.enqueue(envelope("""{"id":"promo-1","title":"20% chegirma"}"""))
 
