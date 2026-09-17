@@ -675,6 +675,10 @@ class ProfileViewModelTest {
         mediaRepository = media,
         profileRepository = profile,
         biometricAvailability = biometrics,
+        notificationChannels = NotificationChannels(
+            context = ApplicationProvider.getApplicationContext(),
+            settings = settings,
+        ),
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
