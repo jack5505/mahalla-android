@@ -13,6 +13,8 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.feature.promotions.domain.CreatablePromoType
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.promotions.domain.PromoType
 import uz.mahalla.feature.promotions.domain.Promotion
 import java.time.Instant
@@ -274,6 +276,147 @@ class PromotionsRepositoryTest {
 
         assertEquals("TYPE_MISMATCH", failure.server?.code)
         assertEquals("Noto'g'ri parametr turi: placeId", failure.serverMessage)
+    }
+
+    @Test
+    fun `a new percent-off promotion is sent with the amounts converted to tiyin`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"20% chegirma"}"""))
+
+        val draft = NewPromotionDraft(
+            title = "20% chegirma",
+            description = "Faqat ish kunlari",
+            type = CreatablePromoType.PercentOff,
+            discountPercentText = "20",
+            minOrderAmountText = "50000",
+            promoCode = "OSH20",
+        )
+        val result = repository().createPromotion("p-1", draft)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/promotions/places/p-1", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, """"title":"20% chegirma"""" in body)
+        assertTrue(body, """"description":"Faqat ish kunlari"""" in body)
+        assertTrue(body, """"promoType":"PERCENT_OFF"""" in body)
+        assertTrue(body, """"discountPercent":20""" in body)
+        // 50 000 сум — 5 000 000 тийинов (issue #149).
+        assertTrue(body, """"minOrderAmount":5000000""" in body)
+        assertTrue(body, """"promoCode":"OSH20"""" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `a new fixed-off promotion sends its discount amount converted to tiyin`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"5000 so'm chegirma"}"""))
+
+        val draft = NewPromotionDraft(
+            title = "5000 so'm chegirma",
+            type = CreatablePromoType.FixedOff,
+            discountAmountText = "5000",
+        )
+        val result = repository().createPromotion("p-1", draft)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, """"promoType":"FIXED_OFF"""" in body)
+        // 5 000 сум — 500 000 тийинов (issue #149), не «сумма как есть».
+        assertTrue(body, """"discountAmount":500000""" in body)
+        assertFalse(body, "discountPercent" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `a zero minimum order is not sent, same as reading treats it as absent`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"A"}"""))
+
+        val draft = NewPromotionDraft(
+            title = "A",
+            type = CreatablePromoType.FreeDelivery,
+            minOrderAmountText = "0",
+        )
+        repository().createPromotion("p-1", draft)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "minOrderAmount" in body)
+    }
+
+    @Test
+    fun `empty optional fields of a new promotion are absent, not null`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"A"}"""))
+
+        repository().createPromotion(
+            "p-1",
+            NewPromotionDraft(
+                title = "A",
+                type = CreatablePromoType.FreeDelivery,
+            ),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "description" in body)
+        assertFalse(body, "discountPercent" in body)
+        assertFalse(body, "promoCode" in body)
+        assertFalse(body, "null" in body)
+    }
+
+    @Test
+    fun `switching the type does not leak the other type's discount field`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"A"}"""))
+
+        // Черновик набрал процент под `PercentOff`, а затем переключился на
+        // `FreeDelivery` — застрявшее значение не должно уйти в сеть под
+        // видом акции, которая процента вообще не поддерживает.
+        val draft = NewPromotionDraft(
+            title = "A",
+            type = CreatablePromoType.FreeDelivery,
+            discountPercentText = "20",
+        )
+        repository().createPromotion("p-1", draft)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, """"promoType":"FREE_DELIVERY"""" in body)
+        assertFalse(body, "discountPercent" in body)
+    }
+
+    @Test
+    fun `an invalid draft never reaches the network`() = runTest {
+        val result = repository().createPromotion("p-1", NewPromotionDraft())
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewPromotionDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a blank place id never reaches the network either`() = runTest {
+        val draft = NewPromotionDraft(title = "A", type = CreatablePromoType.FreeDelivery)
+        val result = repository().createPromotion("", draft)
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewPromotionDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a refused promotion carries the server's reason`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"FORBIDDEN",
+                       "message":"Bu joyning egasi emassiz"}}""",
+                ),
+        )
+
+        val draft = NewPromotionDraft(title = "A", type = CreatablePromoType.FreeDelivery)
+        val failure = (repository().createPromotion("p-1", draft) as ApiResult.Failure).failure
+
+        assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
     }
 
     private fun repository() = DefaultPromotionsRepository(

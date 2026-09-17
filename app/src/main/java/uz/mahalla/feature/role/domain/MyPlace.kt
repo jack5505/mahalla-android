@@ -82,6 +82,14 @@ data class MyPlace(
             staffRole != PlaceStaffRole.Staff
 
     /**
+     * Заводить акцию заведения (issue #252, `POST promotions/places/{id}`) —
+     * тот же круг людей, что и у [canToggleAvailability], и по той же
+     * причине. В отличие от [canManageProducts] это действие не привязано к
+     * категории: акцию заводит любое заведение, а не одна вертикаль.
+     */
+    val canManagePromotion: Boolean get() = canToggleAvailability
+
+    /**
      * Показывать ли переход на «Сотрудники» (issue #189).
      *
      * В отличие от [canToggleAvailability] — только владельцу: назначать

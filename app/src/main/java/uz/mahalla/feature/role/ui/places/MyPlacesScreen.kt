@@ -2,6 +2,7 @@ package uz.mahalla.feature.role.ui.places
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,9 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -32,22 +37,30 @@ import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.FilterChipUi
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
+import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaFilterRow
+import uz.mahalla.core.ui.components.MahallaSnackbarHost
 import uz.mahalla.core.ui.components.MahallaSwitchRow
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
+import uz.mahalla.core.ui.components.rememberSnackbarController
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.core.ui.snackbar.SnackbarMessage
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.promotions.domain.CreatablePromoType
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
@@ -73,6 +86,8 @@ fun MyPlacesScreen(
     viewModel: MyPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarController = rememberSnackbarController()
+    val promotionCreatedMessage = stringResource(R.string.my_places_promotion_created)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -84,6 +99,12 @@ fun MyPlacesScreen(
                 is MyPlacesEffect.OpenPharmacyManagement ->
                     onManageProducts(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
+                // Список акций заведения на этом экране не показывается —
+                // без снекбара успех и смахнутую шторку было бы не отличить
+                // (issue #252).
+                MyPlacesEffect.PromotionCreated -> snackbarController.show(
+                    SnackbarMessage(text = promotionCreatedMessage, tone = MahallaTone.Success),
+                )
             }
         }
     }
@@ -94,12 +115,18 @@ fun MyPlacesScreen(
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
     }
 
-    MyPlacesContentScreen(
-        state = state,
-        onEvent = viewModel::onEvent,
-        onBack = onBack,
-        modifier = modifier,
-    )
+    Box(modifier = modifier.fillMaxSize()) {
+        MyPlacesContentScreen(
+            state = state,
+            onEvent = viewModel::onEvent,
+            onBack = onBack,
+            modifier = Modifier.fillMaxSize(),
+        )
+        MahallaSnackbarHost(
+            controller = snackbarController,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
 }
 
 /** Разделено ради превью: сюда не попадает ни Hilt, ни навигация. */
@@ -133,6 +160,8 @@ fun MyPlacesContentScreen(
             }
         }
     }
+
+    state.promotionForm?.let { form -> NewPromotionSheet(form = form, onEvent = onEvent) }
 }
 
 /**
@@ -334,6 +363,19 @@ private fun MyPlaceCard(
             )
         }
 
+        // Акция заведения (issue #252) — доступна любой категории, не только
+        // аптеке: в отличие от «управлять товарами» это не витрина, а просто
+        // объявление скидки.
+        if (place.canManagePromotion) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_add_promotion),
+                onClick = { onEvent(MyPlacesEvent.AddPromotionClicked(place.id)) },
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Secondary,
+                icon = Icons.Outlined.Campaign,
+            )
+        }
+
         // Только владельцу (issue #189): менеджеру и сотруднику бэкенд эти
         // действия не даст, а кнопка, которая всегда отвечает отказом,
         // читается как сломанная.
@@ -346,6 +388,129 @@ private fun MyPlaceCard(
                 modifier = Modifier.padding(top = Spacing.item),
             )
         }
+    }
+}
+
+/**
+ * Новая акция заведения (issue #252). Форма стартует пустой — ошибки полей
+ * показываются только после первой попытки сохранить, тот же приём, что у
+ * `NewProductSheet` в аптеке.
+ *
+ * Числовое поле скидки зависит от выбранного вида: процент — для
+ * [CreatablePromoType.PercentOff], сумма — для [CreatablePromoType.FixedOff],
+ * `FreeDelivery` своего числа не требует.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewPromotionSheet(
+    form: NewPromotionFormState,
+    onEvent: (MyPlacesEvent) -> Unit,
+) {
+    val draft = form.draft
+    val showErrors = form.submitAttempted
+    MahallaBottomSheet(
+        onDismiss = { onEvent(MyPlacesEvent.PromotionFormDismissed) },
+        title = stringResource(R.string.my_places_new_promotion_title),
+    ) {
+        // Заголовок шторки — что это за форма, а не какое заведение её
+        // открыло; имя заведения объясняет контекст ниже него (issue #252).
+        form.placeName.takeIf { it.isNotBlank() }?.let { placeName ->
+            Text(
+                text = placeName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+        MahallaTextField(
+            value = draft.title,
+            onValueChange = { onEvent(MyPlacesEvent.PromotionTitleChanged(it)) },
+            label = stringResource(R.string.promotion_field_title),
+            errorText = if (showErrors && !draft.isTitleValid) {
+                stringResource(R.string.promotion_field_title_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.description,
+            onValueChange = { onEvent(MyPlacesEvent.PromotionDescriptionChanged(it)) },
+            label = stringResource(R.string.promotion_field_description),
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        MahallaFilterRow(
+            items = listOf(
+                FilterChipUi(
+                    id = CreatablePromoType.PercentOff.name,
+                    label = stringResource(R.string.promotion_type_percent_off),
+                ),
+                FilterChipUi(
+                    id = CreatablePromoType.FixedOff.name,
+                    label = stringResource(R.string.promotion_type_fixed_off),
+                ),
+                FilterChipUi(
+                    id = CreatablePromoType.FreeDelivery.name,
+                    label = stringResource(R.string.promotion_type_free_delivery),
+                ),
+            ),
+            selectedId = draft.type.name,
+            onSelect = { id ->
+                onEvent(MyPlacesEvent.PromotionTypeChanged(CreatablePromoType.valueOf(id)))
+            },
+            enabled = !form.submitting,
+        )
+        when (draft.type) {
+            CreatablePromoType.PercentOff -> MahallaTextField(
+                value = draft.discountPercentText,
+                onValueChange = { onEvent(MyPlacesEvent.PromotionDiscountPercentChanged(it)) },
+                label = stringResource(R.string.promotion_field_discount_percent),
+                errorText = if (showErrors && !draft.isDiscountValid) {
+                    stringResource(R.string.promotion_field_discount_percent_invalid)
+                } else {
+                    null
+                },
+                enabled = !form.submitting,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            CreatablePromoType.FixedOff -> MahallaTextField(
+                value = draft.discountAmountText,
+                onValueChange = { onEvent(MyPlacesEvent.PromotionDiscountAmountChanged(it)) },
+                label = stringResource(R.string.promotion_field_discount_amount),
+                errorText = if (showErrors && !draft.isDiscountValid) {
+                    stringResource(R.string.promotion_field_discount_amount_invalid)
+                } else {
+                    null
+                },
+                enabled = !form.submitting,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+
+            CreatablePromoType.FreeDelivery -> Unit
+        }
+        MahallaTextField(
+            value = draft.minOrderAmountText,
+            onValueChange = { onEvent(MyPlacesEvent.PromotionMinOrderChanged(it)) },
+            label = stringResource(R.string.promotion_field_min_order),
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.promoCode,
+            onValueChange = { onEvent(MyPlacesEvent.PromotionCodeChanged(it)) },
+            label = stringResource(R.string.promotion_field_code),
+            enabled = !form.submitting,
+        )
+        form.failure?.let { failure -> InlineFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.promotion_create_submit),
+            onClick = { onEvent(MyPlacesEvent.PromotionSubmitted) },
+            state = ButtonState(
+                enabled = !showErrors || draft.canSubmit,
+                loading = form.submitting,
+            ),
+        )
     }
 }
 
@@ -465,6 +630,17 @@ private fun MyPlacesScreenPreview() {
             ),
             onEvent = {},
             onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun NewPromotionSheetPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        NewPromotionSheet(
+            form = NewPromotionFormState(placeId = "p-1", placeName = "Osh Markazi"),
+            onEvent = {},
         )
     }
 }

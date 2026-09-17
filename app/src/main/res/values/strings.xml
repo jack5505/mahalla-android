@@ -315,6 +315,20 @@
     <string name="promo_min_order">%1$s dan buyurtmaga</string>
     <string name="promo_code">Promo-kod: %1$s</string>
     <string name="promo_until">%1$s gacha</string>
+    <!-- Акция заведения (issue #252): владелец заводит акцию из «Моих заведений». -->
+    <string name="promotion_field_title">Sarlavha</string>
+    <string name="promotion_field_title_invalid">Sarlavhani kiriting</string>
+    <string name="promotion_field_description">Tavsif</string>
+    <string name="promotion_type_percent_off">Foizli chegirma</string>
+    <string name="promotion_type_fixed_off">Summaviy chegirma</string>
+    <string name="promotion_type_free_delivery">Bepul yetkazib berish</string>
+    <string name="promotion_field_discount_percent">Chegirma, %</string>
+    <string name="promotion_field_discount_percent_invalid">1 dan 100 gacha son kiriting</string>
+    <string name="promotion_field_discount_amount">Chegirma, so\'m</string>
+    <string name="promotion_field_discount_amount_invalid">Summani kiriting</string>
+    <string name="promotion_field_min_order">Minimal buyurtma, so\'m (ixtiyoriy)</string>
+    <string name="promotion_field_code">Promo-kod (ixtiyoriy)</string>
+    <string name="promotion_create_submit">Qo\'shish</string>
 
     <string name="distance_meters">%1$s m</string>
     <string name="distance_kilometers">%1$s km</string>
@@ -569,6 +583,10 @@
     <string name="my_places_available_description">O\'chirilsa, muassasa katalogda yopiq ko\'rinadi.</string>
     <!-- Управление витриной аптеки (issue #252). -->
     <string name="my_places_manage_products">Tovarlarni boshqarish</string>
+    <!-- Акция заведения (issue #252) — доступна любой категории. -->
+    <string name="my_places_add_promotion">Aksiya qo\'shish</string>
+    <string name="my_places_new_promotion_title">Yangi aksiya</string>
+    <string name="my_places_promotion_created">Aksiya qo\'shildi</string>
     <string name="my_places_status_pending">Moderatsiyada</string>
     <string name="my_places_status_active">Faol</string>
     <string name="my_places_status_suspended">To\'xtatilgan</string>
