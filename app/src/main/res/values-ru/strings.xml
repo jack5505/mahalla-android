@@ -573,6 +573,7 @@
     <!-- Акция заведения (issue #252) — доступна любой категории. -->
     <string name="my_places_add_promotion">Добавить акцию</string>
     <string name="my_places_new_promotion_title">Новая акция</string>
+    <string name="my_places_promotion_created">Акция добавлена</string>
     <string name="my_places_status_pending">На модерации</string>
     <string name="my_places_status_active">Активно</string>
     <string name="my_places_status_suspended">Приостановлено</string>

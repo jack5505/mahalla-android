@@ -73,8 +73,7 @@ data class MyPlace(
      * причине. В отличие от [canManageProducts] это действие не привязано к
      * категории: акцию заводит любое заведение, а не одна вертикаль.
      */
-    val canManagePromotion: Boolean
-        get() = status == PlaceModerationStatus.Active && staffRole != PlaceStaffRole.Staff
+    val canManagePromotion: Boolean get() = canToggleAvailability
 
     /**
      * Показывать ли переход на «Сотрудники» (issue #189).

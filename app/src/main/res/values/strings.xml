@@ -579,6 +579,7 @@
     <!-- Акция заведения (issue #252) — доступна любой категории. -->
     <string name="my_places_add_promotion">Aksiya qo\'shish</string>
     <string name="my_places_new_promotion_title">Yangi aksiya</string>
+    <string name="my_places_promotion_created">Aksiya qo\'shildi</string>
     <string name="my_places_status_pending">Moderatsiyada</string>
     <string name="my_places_status_active">Faol</string>
     <string name="my_places_status_suspended">To\'xtatilgan</string>

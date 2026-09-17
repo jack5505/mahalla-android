@@ -2,6 +2,7 @@ package uz.mahalla.feature.role.ui.places
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,12 +47,15 @@ import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaFilterRow
+import uz.mahalla.core.ui.components.MahallaSnackbarHost
 import uz.mahalla.core.ui.components.MahallaSwitchRow
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
+import uz.mahalla.core.ui.components.rememberSnackbarController
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.core.ui.snackbar.SnackbarMessage
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -81,6 +85,8 @@ fun MyPlacesScreen(
     viewModel: MyPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarController = rememberSnackbarController()
+    val promotionCreatedMessage = stringResource(R.string.my_places_promotion_created)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -90,6 +96,12 @@ fun MyPlacesScreen(
                 is MyPlacesEffect.OpenPharmacyManagement ->
                     onManageProducts(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
+                // Список акций заведения на этом экране не показывается —
+                // без снекбара успех и смахнутую шторку было бы не отличить
+                // (issue #252).
+                MyPlacesEffect.PromotionCreated -> snackbarController.show(
+                    SnackbarMessage(text = promotionCreatedMessage, tone = MahallaTone.Success),
+                )
             }
         }
     }
@@ -100,12 +112,18 @@ fun MyPlacesScreen(
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
     }
 
-    MyPlacesContentScreen(
-        state = state,
-        onEvent = viewModel::onEvent,
-        onBack = onBack,
-        modifier = modifier,
-    )
+    Box(modifier = modifier.fillMaxSize()) {
+        MyPlacesContentScreen(
+            state = state,
+            onEvent = viewModel::onEvent,
+            onBack = onBack,
+            modifier = Modifier.fillMaxSize(),
+        )
+        MahallaSnackbarHost(
+            controller = snackbarController,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
 }
 
 /** Разделено ради превью: сюда не попадает ни Hilt, ни навигация. */
@@ -376,9 +394,17 @@ private fun NewPromotionSheet(
     val showErrors = form.submitAttempted
     MahallaBottomSheet(
         onDismiss = { onEvent(MyPlacesEvent.PromotionFormDismissed) },
-        title = form.placeName.takeIf { it.isNotBlank() }
-            ?: stringResource(R.string.my_places_new_promotion_title),
+        title = stringResource(R.string.my_places_new_promotion_title),
     ) {
+        // Заголовок шторки — что это за форма, а не какое заведение её
+        // открыло; имя заведения объясняет контекст ниже него (issue #252).
+        form.placeName.takeIf { it.isNotBlank() }?.let { placeName ->
+            Text(
+                text = placeName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
         MahallaTextField(
             value = draft.title,
             onValueChange = { onEvent(MyPlacesEvent.PromotionTitleChanged(it)) },

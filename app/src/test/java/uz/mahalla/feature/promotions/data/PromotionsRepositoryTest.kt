@@ -307,6 +307,40 @@ class PromotionsRepositoryTest {
     }
 
     @Test
+    fun `a new fixed-off promotion sends its discount amount converted to tiyin`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"5000 so'm chegirma"}"""))
+
+        val draft = NewPromotionDraft(
+            title = "5000 so'm chegirma",
+            type = CreatablePromoType.FixedOff,
+            discountAmountText = "5000",
+        )
+        val result = repository().createPromotion("p-1", draft)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertTrue(body, """"promoType":"FIXED_OFF"""" in body)
+        // 5 000 сум — 500 000 тийинов (issue #149), не «сумма как есть».
+        assertTrue(body, """"discountAmount":500000""" in body)
+        assertFalse(body, "discountPercent" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `a zero minimum order is not sent, same as reading treats it as absent`() = runTest {
+        server.enqueue(envelope("""{"id":"promo-1","title":"A"}"""))
+
+        val draft = NewPromotionDraft(
+            title = "A",
+            type = CreatablePromoType.FreeDelivery,
+            minOrderAmountText = "0",
+        )
+        repository().createPromotion("p-1", draft)
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "minOrderAmount" in body)
+    }
+
+    @Test
     fun `empty optional fields of a new promotion are absent, not null`() = runTest {
         server.enqueue(envelope("""{"id":"promo-1","title":"A"}"""))
 

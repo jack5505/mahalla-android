@@ -283,7 +283,10 @@ class MyPlacesViewModel @Inject constructor(
                     copy(promotionForm = promotionForm?.copy(submitting = false, failure = result.failure))
                 }
 
-                is ApiResult.Success -> updateState { copy(promotionForm = null) }
+                is ApiResult.Success -> {
+                    updateState { copy(promotionForm = null) }
+                    emitEffect(MyPlacesEffect.PromotionCreated)
+                }
             }
         }
     }

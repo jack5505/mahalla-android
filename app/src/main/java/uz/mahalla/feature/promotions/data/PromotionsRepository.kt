@@ -87,7 +87,9 @@ class DefaultPromotionsRepository @Inject constructor(
                     discountAmount = draft.discountAmountSum
                         ?.takeIf { draft.type == CreatablePromoType.FixedOff }
                         ?.let(Money::somToTiyin),
-                    minOrderAmount = draft.minOrderAmountSum?.let(Money::somToTiyin),
+                    minOrderAmount = draft.minOrderAmountSum
+                        ?.takeIf { it > 0 }
+                        ?.let(Money::somToTiyin),
                     promoCode = draft.promoCode.trim().takeIf(String::isNotEmpty),
                 ),
             ).payload()

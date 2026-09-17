@@ -90,4 +90,11 @@ sealed interface MyPlacesEffect : UiEffect {
 
     /** «Сотрудники» (issue #189) — доступно только владельцу. */
     data class OpenStaff(val placeId: String) : MyPlacesEffect
+
+    /**
+     * Акция создана (issue #252). Список «моих заведений» акций не
+     * показывает — без явного сигнала успех и смахнутая шторка неотличимы, а
+     * типичный исход путаницы — повторный POST и дубль акции.
+     */
+    data object PromotionCreated : MyPlacesEffect
 }

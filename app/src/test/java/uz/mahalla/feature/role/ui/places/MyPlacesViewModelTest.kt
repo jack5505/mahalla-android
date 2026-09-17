@@ -303,7 +303,7 @@ class MyPlacesViewModelTest {
     }
 
     @Test
-    fun `a submitted promotion closes the form on success`() = runTest {
+    fun `a submitted promotion closes the form on success and signals it`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1")))
         val promotions = FakePromotionsRepository()
@@ -318,6 +318,9 @@ class MyPlacesViewModelTest {
         assertEquals("p-1", promotions.createRequests.single().first)
         assertEquals("20% chegirma", promotions.createRequests.single().second.title)
         assertNull(viewModel.state.value.promotionForm)
+        // Список акций на этом экране не виден — без сигнала успех и
+        // смахнутую шторку было бы не отличить (issue #252).
+        assertEquals(MyPlacesEffect.PromotionCreated, viewModel.effects.first())
     }
 
     @Test
