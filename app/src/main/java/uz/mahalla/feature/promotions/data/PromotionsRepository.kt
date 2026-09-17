@@ -151,3 +151,15 @@ internal fun PromotionDto.toDomain(): Promotion? {
 }
 
 private val PERCENT_RANGE = 1..100
+
+/**
+ * `CheckResponse` → домен (issue #180). `valid` — по умолчанию `false`:
+ * молчание сервера о поле — не повод считать код принятым и показать скидку,
+ * которой, может, и не одобрили.
+ */
+internal fun PromoCheckDto.toDomain(requestedCode: String): PromoCheckResult = PromoCheckResult(
+    code = promoCode?.takeIf(String::isNotBlank) ?: requestedCode,
+    valid = valid == true,
+    discountAmount = discountAmount.tiyinToSom() ?: 0,
+    finalAmount = finalAmount.tiyinToSom(),
+)

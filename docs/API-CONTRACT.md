@@ -441,6 +441,15 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 `CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
 (`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
+**`promoCode` подключён (issue #180)**, не дожидаясь остального ремонта из
+#221: поле добавлено в общий `PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`),
+`FoodOrderRepository` его не заполняет, значит у «Еды» оно по-прежнему не
+уходит на сервер. `storeId`/`items`/`deliveryLat`/`deliveryLng` — по-прежнему
+расхождение, описанное выше, и это отдельная задача (#221), не эта.
+Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда автором
+задачи) — независимо в этом прогоне не перепроверялась: под Bearer `401`
+приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
 ## FoodApi ✅
 
 `app/src/main/java/uz/mahalla/feature/food/data/FoodApi.kt` — сверен: issue #9, второй круг.
