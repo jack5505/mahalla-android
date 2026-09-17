@@ -332,6 +332,91 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `three consecutive ambiguous refresh failures end the session`() = runTest {
+        // Три подряд ответа, у которых нет причины, названной сервером — по
+        // очереди неразобранное тело, `success: false` при 2xx и 2xx без
+        // токенов, — то есть счётчик общий для всех трёх (issue #198), а не
+        // отдельный на каждый тип.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals("первый — прощаем", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        server.enqueue(
+            envelopeError(httpCode = 200, code = "TOKEN_INVALID", message = "Token noto'g'ri"),
+        )
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals("второй — тоже", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertNull("третий подряд — контракт сломан, а не прокси", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a successful refresh resets the ambiguous refresh counter`() = runTest {
+        // Прокси не отвечает одно и то же на каждый повторный refresh: если
+        // между сбоями случился нормальный ответ, следующие сбои снова
+        // начинают счёт с нуля, а не продолжают старый (issue #198).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+
+        server.enqueue(jsonResponse(REFRESHED_TOKENS_BODY))
+        auth.authenticate(route = null, response = unauthorized(request))
+        // Токен снова протух: только что обновлённая сессия опять становится
+        // той, что несёт `request` (`Bearer stale`), — иначе следующий 401 с
+        // тем же запросом authenticator счёл бы уже обновлённым параллельно.
+        sessionStore.save(Session("stale", "refresh-2"))
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+
+        assertEquals(
+            "два подряд после сброса — этого мало",
+            Session("stale", "refresh-2"),
+            sessionStore.current(),
+        )
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `repeated geo refusals never end the session`() = runTest {
+        // 403 `GEO_*` — осмысленный отказ, не контрактная неоднозначность: в
+        // общий счётчик issue #198 не идёт, сколько бы раз ни повторился.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        repeat(TokenAuthenticator.MAX_AMBIGUOUS_REFRESH_FAILURES + 2) {
+            server.enqueue(
+                envelopeError(
+                    httpCode = 403,
+                    code = "GEO_PERMISSION_REQUIRED",
+                    message = "Joylashuv ruxsatini yoqing",
+                ),
+            )
+            assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        }
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
     fun `a failure to describe the device keeps the session and stays inside`() = runTest {
         // Координаты и устройство собираются перед refresh. Их сбой — это
         // «спросить не удалось»: исключение не должно выйти из authenticator'а.

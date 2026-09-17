@@ -279,7 +279,6 @@ class PromotionsRepositoryTest {
     }
 
     @Test
-
     fun `a valid code is checked in tiyin and the discount is parsed back to som`() = runTest {
         server.enqueue(
             envelope(
@@ -351,7 +350,9 @@ class PromotionsRepositoryTest {
             ).failure
 
         assertEquals("Promo-kod topilmadi", failure.serverMessage)
+    }
 
+    @Test
     fun `a new percent-off promotion is sent with the amounts converted to tiyin`() = runTest {
         server.enqueue(envelope("""{"id":"promo-1","title":"20% chegirma"}"""))
 
