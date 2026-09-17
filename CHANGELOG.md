@@ -2614,3 +2614,34 @@ KDoc, обещавший дедуп там, где его нет, и три пр
 превью у `CartScreen` нет вовсе (как и у остальных экранов «Еды»), эмулятора
 в CI нет. Счётчик путей в `docs/UI-INVENTORY.md` заодно пересчитан: было 77,
 стало 81 — разошёлся он ещё до этой задачи.
+
+---
+
+## Этап: `AuthRepository.refresh()` убран (issue #199)
+
+Ревью PR #196 (issue #138) заметило второй путь обновления токенов —
+`DefaultAuthRepository.refresh()`, который расходился с правилами
+`TokenAuthenticator.rejectsSession()`: стирал сессию только на `Unauthorized`
+(игнорируя `Forbidden`/`Business`/400/422) и не слал `SessionExpiry`, то есть
+после стирания сессии человек оставался внутри приложения перед 401 на каждом
+запросе.
+
+**Метод не вызывал никто.** `RootViewModel` и все прочие потребители
+`AuthRepository` в проде используют только `isAuthorized`; `refresh()` был
+только в интерфейсе, `DefaultAuthRepository`, `FakeAuthRepository` и
+собственных тестах. Раз явной необходимости в отдельном пути на практике не
+нашлось, решено не тащить в него общую логику `rejectsSession()`, а убрать
+расходящуюся копию правил целиком — вместе с четырьмя тестами
+(`AuthRepositoryTest`), которые проверяли только её.
+
+`auth/refresh` как эндпоинт остаётся: его по-прежнему зовёт `TokenAuthenticator`
+по 401 — контракт (`docs/API-CONTRACT.md`) не менялся.
+
+**Заодно.** Чистый `main` (`d46efb7`) не собирался — `compileDebugKotlin`
+падал на `PromotionsRepository.kt` (`Unresolved reference 'PromoCheckResult'`
+и связанные ошибки в `FashionApi.kt`/`FashionCheckoutViewModel.kt`), это уже
+описано отдельно как issue #300 (регрессия мерджа issue #221 поверх issue
+#180). Готовый точечный фикс на 4 файла уже был в PR #302 (issue #198) —
+перенесён и сюда, иначе эту задачу было бы нечем проверить сборкой.
+
+**Проверено.** `testDebugUnitTest` и `assembleDebug` — зелёные.
