@@ -7,6 +7,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -89,7 +90,7 @@ class ProfileRepositoryTest {
                 .jsonObject["fullName"]?.jsonPrimitive?.content,
         )
         // Сервер подтвердил имя — ждать больше нечего.
-        assertTrue(!store.current().fullNamePendingSync)
+        assertFalse(store.current().fullNamePendingSync)
     }
 
     @Test
@@ -154,6 +155,43 @@ class ProfileRepositoryTest {
             .parseToJsonElement(server.takeRequest().body.readUtf8())
             .jsonObject
         assertEquals("", body["avatarUrl"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `avatar PUT does not clear a pending anketa name`() = runTest {
+        // Сервер возвращает профиль без имени (не знает о нём ещё).
+        server.enqueue(
+            envelope("""{"id":"u-1","fullName":null,"avatarUrl":"https://cdn.mahalla.uz/a.png"}"""),
+        )
+        val store = FakeUserProfileStore(
+            UserProfile(id = "u-1", fullName = "Jahongir", fullNamePendingSync = true),
+        )
+
+        val result = repository(store).updateProfile(avatarUrl = "https://cdn.mahalla.uz/a.png")
+
+        assertTrue(result is ApiResult.Success)
+        // Имя и флаг должны выжить — сервер их ещё не видел.
+        assertEquals("Jahongir", store.current().fullName)
+        assertTrue(store.current().fullNamePendingSync)
+        // Аватар обновился из ответа сервера.
+        assertEquals("https://cdn.mahalla.uz/a.png", store.current().avatarUrl)
+    }
+
+    @Test
+    fun `explicit name update clears the pending flag`() = runTest {
+        server.enqueue(
+            envelope("""{"id":"u-1","fullName":"Jahongir","avatarUrl":null}"""),
+        )
+        val store = FakeUserProfileStore(
+            UserProfile(id = "u-1", fullName = "Jahongir", fullNamePendingSync = true),
+        )
+
+        val result = repository(store).updateProfile(fullName = "Jahongir")
+
+        assertTrue(result is ApiResult.Success)
+        // Имя уже у сервера — флаг должен сняться.
+        assertFalse(store.current().fullNamePendingSync)
+        assertEquals("Jahongir", store.current().fullName)
     }
 
     @Test

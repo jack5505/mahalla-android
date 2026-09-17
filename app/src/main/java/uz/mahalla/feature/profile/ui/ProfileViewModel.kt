@@ -189,8 +189,14 @@ class ProfileViewModel @Inject constructor(
     private fun uploadAvatar(source: String) {
         // Имя сохраняется своим `PUT`: два одновременных `PUT` ответили бы в
         // произвольном порядке, и который приехал позже — тот и остался бы,
-        // даже если сервер обработал их в обратном порядке.
-        if (currentState.avatarUpload.inProgress || nameSaveJob?.isActive == true) return
+        // даже если сервер обработал их в обратном порядке. `profileRefreshJob`
+        // тоже может быть в полёте своим `PUT` (при fullNamePendingSync, issue
+        // #234) — те же два одновременных `PUT`, та же защита.
+        if (
+            currentState.avatarUpload.inProgress ||
+            nameSaveJob?.isActive == true ||
+            profileRefreshJob?.isActive == true
+        ) return
         updateState { copy(avatarUpload = AvatarUpload(inProgress = true)) }
         avatarJob = viewModelScope.launch {
             val result = mediaRepository.uploadImage(
