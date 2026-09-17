@@ -183,6 +183,8 @@ TrackEventRequest: {
 
 Профиль на сервере. Снято чтением живого `/v3/api-docs` 2026-09-10 (issue #237); приложение зовёт обе ручки — `GET` при открытии экрана профиля и при возврате на него, `PUT` из редактирования имени и после загрузки аватара (issue #170). Одиннадцать KDoc в коде утверждали, что этих ручек у бэкенда нет вовсе, — все переформулированы.
 
+Имя из анкеты покупателя (`RoleRepository.saveCustomer`) тоже уходит через `PUT`, но не сразу: анкета не ждёт сети (issue #234), а помечает `UserProfile.fullNamePendingSync` — следующий `ProfileRepository.refresh()` при открытии профиля шлёт `PUT` вместо `GET`, пока сервер не подтвердит имя.
+
 | Метод | Путь |
 |---|---|
 | GET | `users/me` → `MeResponse` |
@@ -439,6 +441,15 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 `CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
 (`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
+**`promoCode` подключён (issue #180)**, не дожидаясь остального ремонта из
+#221: поле добавлено в общий `PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`),
+`FoodOrderRepository` его не заполняет, значит у «Еды» оно по-прежнему не
+уходит на сервер. `storeId`/`items`/`deliveryLat`/`deliveryLng` — по-прежнему
+расхождение, описанное выше, и это отдельная задача (#221), не эта.
+Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда автором
+задачи) — независимо в этом прогоне не перепроверялась: под Bearer `401`
+приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
 ## FoodApi ✅
 
 `app/src/main/java/uz/mahalla/feature/food/data/FoodApi.kt` — сверен: issue #9, второй круг.
@@ -446,9 +457,19 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | Метод | Путь |
 |---|---|
 | GET | `food/places/{placeId}/menu` |
+| GET | `food/delivery-fee?itemsAmount=` |
 | POST | `food/orders` |
 | GET | `orders/{orderId}` |
 | POST | `food/orders/{orderId}/cancel` |
+
+**`food/delivery-fee` отдаёт карту, а не DTO** (issue #179, подключён): схема —
+`ApiResponseMapStringLong`, поэтому сумма читается по ключу `deliveryAmount`, а
+отсутствие ключа — не ошибка разбора, а «доставка неизвестна». `itemsAmount`
+обязателен, целый, **в тийинах** (issue #149) — как и ответ. Отвечает
+анонимно, параметра заведения у неё нет: на стенде это правило платформы
+(2026-09-10: от 200 000 тийинов доставка бесплатна, ниже — 10 000). Итог
+заказа всё равно считает сервер, поэтому в корзине и чекауте это **оценка**, а
+суммы оформленного заказа берутся из `GET orders/{orderId}`.
 
 **Картинки у позиции меню в схеме нет вовсе** (issue #60): у `ItemResponse` ни
 одного поля со ссылкой. `MenuItemDto` объявляет его на вырост под тремя
@@ -462,24 +483,78 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 ответов прочитаны 2026-09-10. Под токеном (`orders/my`, создание заказа) ответы
 не проверены: `401` приходит до валидации.
 
-| Метод | Путь |
-|---|---|
-| GET | `freelancers` |
-| GET | `freelancers/{id}` |
-| GET | `freelancers/{id}/services` |
-| POST | `freelancers/{id}/orders` |
-| GET | `freelancers/orders/my` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `freelancers` | ✅ анонимна, сегодня двое мастеров |
+| GET | `freelancers/{id}` | ✅ `404 NOT_FOUND` на неизвестного, `id` — uuid |
+| GET | `freelancers/{id}/services` | ✅ анонимна, поля сверены живым ответом |
+| POST | `freelancers/{id}/orders` | ⚠️ путь есть (`401`), тело не проверено |
+| GET | `freelancers/orders/my` | ⚠️ путь есть (`401`), схема не проверена |
+| GET | `freelancers/me` | ⚠️ путь есть (`401`), «нет анкеты» не проверено |
+| POST | `freelancers/me` | ⚠️ путь есть (`401`), тело не проверено |
+| POST | `freelancers/me/services` | ⚠️ путь есть (`401`), тело не проверено |
+| PUT | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| DELETE | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| PUT | `freelancers/me/toggle-availability` | ⚠️ путь есть (`401`) |
+| GET | `freelancers/me/orders` | ⚠️ путь есть (`401`), схема — та же `PageResponseOrderResponse` (issue #190) |
+| PUT | `freelancers/orders/{orderId}/status` | ⚠️ путь есть (`401`), тело `{status}` — то же перечисление, что `OrderResponse.status` (issue #190) |
 
-**`freelancers/{id}/services` отдавала не ту схему, которой её разбирали**
-(сверено 2026-09-10, issue #216, исправлено). Здесь `FreelancerServiceResponse
-{id, freelancerId, title, description, priceAmount, durationMinutes,
-isActive}`, а клиент до исправления разбирал ответ барберским `ServiceDto`
-(`name`, `price`) — у каждой услуги мастера было пустое название и цена 0. До
-развода коллизии обе ручки выглядели как одна схема `ServiceResponse`, отсюда
-и ошибка; не всплыла она на стенде только потому, что каталог мастеров там
-пуст. Теперь ответ разбирает свой `FreelancerServiceDto`
-(`FreelancerApi.kt`), домен — общий `BarberService` барбершопа: набор полей на
-экране один и тот же, а `freelancerId` уже известен вызывающей стороне.
+**Услуги мастера — это `FreelancerServiceResponse`, а не `ServiceResponse`
+барбершопа** (issue #71, схема перечитана 2026-09-10). До этого они
+разбирались `ServiceDto` (`name`/`price`) «по той же схеме», и у каждой услуги
+мастера пропадали название и цена. Исправлено своим `FreelancerServiceDto`.
+Живой ответ 2026-09-09:
+
+```json
+{"id":"a2000000-…","freelancerId":"a1000000-…","title":"Landing page tayyorlash",
+ "description":"Responsive landing sahifa","priceAmount":250000000,
+ "durationMinutes":4320,"isActive":true}
+```
+
+**Тело `POST freelancers/me` (`FreelancerCreateRequest`)** прочитано по схеме
+как есть — на это имя ссылается ровно один путь, коллизии springdoc нет:
+обязательны `name` (≤200) и `profession` (≤100), необязательны `bio` (≤2000),
+`city` (≤100), `phone` (≤20), `hourlyRate` и `experienceYears` (`int32`, ≥0).
+Ручка одна на создание и правку (`upsert`), поэтому приложение шлёт анкету
+целиком и не открывает форму, пока не прочитает сохранённое.
+
+**Тело `POST`/`PUT freelancers/me/services` (`ServiceRequest`) не
+подтверждено:** имя схемы делят три пути, третий — чужой
+(`POST barber-services/places/{placeId}`), то есть возможна та же коллизия, из-за
+которой разъехались поля `ServiceResponse`. Поля взяты как показаны — `title`
+(≤200), `priceAmount` (`int64`, ≥0), `description` (≤2000), `durationMinutes`
+(`int32`, ≥0) — и закреплены тестом `FreelancerRepositoryTest`.
+
+**Что значит `404` на `GET freelancers/me`** — «анкеты ещё нет»: проверить под
+токеном было нечем, приложение считает так (`myProfile()` отдаёт `null`), и так
+же трактует успешный конверт с пустой `data`. Отказ **с кодом** остаётся
+отказом.
+
+**Можно ли очистить необязательное поле анкеты — неизвестно.** В `Json` проекта
+`explicitNulls = false`, поэтому стёртые `bio`/`city`/`phone`/`hourlyRate`/
+`experienceYears` уходят не как `null`, а отсутствующими ключами. Затрёт ли их
+сервер или поймёт как «не менять» (обычное поведение upsert) — из схемы не
+следует. Во втором случае мастер, стерший «О себе», сохранит анкету без ошибки,
+а после перечитывания текст вернётся в поле. Проверять на живом аккаунте вместе
+с телом запроса.
+
+**Отдаёт ли `GET freelancers/{id}/services` выключенные услуги — неизвестно.**
+Ручка анонимная, то есть сервер вправе отсеивать `isActive: false` сам. Кабинет
+мастера (issue #71) на всякий случай их не фильтрует и помечает бейджем «услуга
+выключена»; если сервер их не отдаёт, мастер просто никогда этой пометки не
+увидит. Отдельной ручки «мои услуги» в контроллере нет.
+
+**Входящие заказы мастера подключены черновиком (issue #190):**
+`GET freelancers/me/orders` и `PUT freelancers/orders/{orderId}/status`
+используются экраном «Входящие заказы» (`ui/orders/MyFreelancerIncomingOrders*`),
+но **ни путь, ни тело не проверены живым запросом**: `CONTRACT_REFRESH_TOKEN`
+не был задан ни на момент issue, ни в прогоне, который это писал. Схема ответа
+`incomingOrders` — та же `PageResponseOrderResponse`, что у `orders/my`, тело
+`{status}` смены статуса выведено из `OrderResponse.status`. Значения статуса
+не расширены: переиспользован тот же `FreelancerOrderStatus`, что уже
+подтверждён для `OrderResponse` (`PENDING`, `ACCEPTED`, `REJECTED`,
+`COMPLETED`) — своего перечисления для смены статуса мастером в схеме не
+описано, шлём те же значения.
 
 ## GamingApi ⚠️ частично
 
@@ -754,7 +829,6 @@ Bearer. Тела под токеном не проверены — секрет�
 с `Mine.role` (`OWNER` / `MANAGER` / `STAFF`). Фильтра по `id` у ручки нет,
 поэтому доступ ищется перелистыванием страниц (`BusinessRepository.access`,
 предел — 20 страниц).
-=======
 ## SocialApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы

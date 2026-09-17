@@ -33,6 +33,8 @@ import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
 import uz.mahalla.feature.freelancer.ui.catalog.FreelancersScreen
+import uz.mahalla.feature.freelancer.ui.me.MyServicesScreen
+import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerIncomingOrdersScreen
 import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerOrdersScreen
 import uz.mahalla.feature.freelancer.ui.profile.FreelancerProfileScreen
 import uz.mahalla.feature.hospital.ui.DoctorBookingScreen
@@ -312,6 +314,14 @@ fun MahallaNavHost(
                     // фрилансера может любой, своего таба у этого нет.
                     onOpenMyFreelancerOrders = {
                         navController.navigate(MyFreelancerOrdersRoute)
+                    },
+                    // «Мои услуги» (issue #71): обратная сторона той же
+                    // вертикали — не заказать услугу, а выставить её.
+                    onOpenMyServices = { navController.navigate(MyServicesRoute) },
+                    // Входящие заказы мастера (issue #190): третья сторона
+                    // той же вертикали — принять или отклонить заказ.
+                    onOpenMyFreelancerIncomingOrders = {
+                        navController.navigate(MyFreelancerIncomingOrdersRoute)
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
                     onOpenSubscription = { navController.navigate(SubscriptionRoute) },
@@ -721,6 +731,18 @@ fun MahallaNavHost(
 
         composable<MyFreelancerOrdersRoute> {
             MyFreelancerOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Кабинет мастера (issue #71): анкета исполнителя и его услуги —
+        // вторая сторона той же сделки, что заказ выше.
+        composable<MyServicesRoute> {
+            MyServicesScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Входящие заказы мастера (issue #190) — третья сторона той же
+        // сделки: принять, отклонить или отметить выполненным.
+        composable<MyFreelancerIncomingOrdersRoute> {
+            MyFreelancerIncomingOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки

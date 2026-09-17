@@ -111,6 +111,14 @@ import java.time.Instant
  * (issue #107). Тоже отдельная строка и по той же причине: заказы у
  * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
  * являются.
+ * @param onOpenMyServices открыть «мои услуги» — кабинет мастера (issue #71).
+ * Строка видна всем: мастером человек становится прямо на этом экране, а до
+ * анкеты исполнителя другого пути в приложении нет. Роль продавца здесь ни при
+ * чём — она про заведение, а мастер работает сам.
+ * @param onOpenMyFreelancerIncomingOrders открыть входящие заказы мастера
+ * (issue #190): принять, отклонить или отметить выполненным. Строка видна
+ * всем по той же причине, что и [onOpenMyServices] — мастером человек
+ * становится сам, права продавца здесь ни при чём.
  * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
  * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
  * таба у вертикали нет.
@@ -128,6 +136,8 @@ fun ProfileScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -193,6 +203,8 @@ fun ProfileScreen(
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
         onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
+        onOpenMyServices = onOpenMyServices,
+        onOpenMyFreelancerIncomingOrders = onOpenMyFreelancerIncomingOrders,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
         modifier = modifier,
@@ -214,6 +226,8 @@ fun ProfileContentScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
     modifier: Modifier = Modifier,
@@ -253,7 +267,7 @@ fun ProfileContentScreen(
             // серверные права (issue #237) — их показывает шапка.
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(state.formRole.labelRes()),
+                subtitle = stringResource(state.formRole?.labelRes() ?: R.string.role_not_selected),
                 onClick = onOpenRole,
             )
 
@@ -307,6 +321,24 @@ fun ProfileContentScreen(
                 title = stringResource(R.string.my_freelancer_orders_title),
                 subtitle = stringResource(R.string.my_freelancer_orders_profile_subtitle),
                 onClick = onOpenMyFreelancerOrders,
+            )
+
+            // «Мои услуги» (issue #71) — обратная сторона той же вертикали:
+            // не заказать услугу, а выставить свою. Строка всем: анкету
+            // исполнителя заполняют прямо отсюда, другого пути к ней нет.
+            MahallaListItem(
+                title = stringResource(R.string.my_services_title),
+                subtitle = stringResource(R.string.my_services_profile_subtitle),
+                onClick = onOpenMyServices,
+            )
+
+            // Входящие заказы мастера (issue #190) — третья сторона той же
+            // вертикали: принять или отклонить то, что клиент уже заказал.
+            // Строка всем по той же причине, что у «Моих услуг».
+            MahallaListItem(
+                title = stringResource(R.string.freelancer_incoming_orders_title),
+                subtitle = stringResource(R.string.freelancer_incoming_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerIncomingOrders,
             )
 
             // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
@@ -937,6 +969,8 @@ private fun ProfilePreview() {
             onOpenGamingBookings = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
+            onOpenMyServices = {},
+            onOpenMyFreelancerIncomingOrders = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyTickets = {},
             onOpenMyFashionOrders = {},
