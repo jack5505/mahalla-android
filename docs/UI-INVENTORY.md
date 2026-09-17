@@ -196,7 +196,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 | Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | не подключены: поля промокода в checkout нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI), стоимость доставки не запрашивается |
 | «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `freelancers/me/orders`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
 | Медиа | `GET media/entity/{id}`, `DELETE media/{id}` | загрузка есть, чтения по сущности и удаления нет |
-| Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `PUT freelancers/orders/{id}/status` | «стать исполнителем» не начато |
+| Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `GET freelancers/me/orders`, `PUT freelancers/orders/{id}/status` | issue #71 — анкета и «Мои услуги» готовы; issue #190 добавил входящие заказы (`freelancers/me/orders`, `PUT freelancers/orders/{id}/status`) — подключены, но контракт этих двух ручек не сверен со стендом (`docs/API-CONTRACT.md`) |
 | Бизнес-панель | `analytics/places/{id}/dashboard`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163. `places/{id}/staff*` — отдельно, issue #189: экран «Сотрудники» (`feature/role/ui/staff`), доступ только владельцу |
 | Админка | `admin/*`, `auth/admin/users/{id}/block` | вне скоупа этого приложения |
 | Одиночки | `GET places` (постраничный список без гео), `POST p/request` (алиас запроса кода) | не нужны: каталог берётся `nearby`/`search`, код — `auth/send-otp` |
@@ -218,7 +218,6 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 Без issue (мелко или ждёт продукта):
 
-- **Кабинет мастера** (`freelancers/me`).
 - **`promotions/check` и `food/delivery-fee`** — промокода и стоимости
   доставки в чеке нет.
 - **Сверка вёрстки с дизайн-репозиторием**: `DESIGN_REPO_PAT` не задан,
