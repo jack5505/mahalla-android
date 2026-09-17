@@ -119,6 +119,10 @@ class GamingBookingsViewModelTest {
             val viewModel = viewModel()
             runCurrent()
 
+            // Первый resume — это открытие экрана, список уже запросил `init`.
+            viewModel.onEvent(GamingBookingsEvent.ScreenResumed)
+            runCurrent()
+
             // Состояние брони меняет заведение, а не приложение.
             repository.pages[0] = page(listOf("b-9"), hasMore = false)
             viewModel.onEvent(GamingBookingsEvent.ScreenResumed)

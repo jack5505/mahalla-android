@@ -13,6 +13,7 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.feature.pharmacy.domain.NewPharmacyProductDraft
 import uz.mahalla.feature.pharmacy.domain.ProductStock
 
 /**
@@ -293,6 +294,131 @@ class PharmacyRepositoryTest {
 
         assertEquals(ApiError.Forbidden, failure.error)
         assertEquals("Joylashuv ruxsatini yoqing", failure.serverMessage)
+    }
+
+    @Test
+    fun `a new product is sent with price converted from som to tiyin`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"p-1","name":"Paratsetamol","price":1200000,
+                   "stockQuantity":10,"isAvailable":true}""",
+            ),
+        )
+
+        val draft = NewPharmacyProductDraft(
+            name = "Paratsetamol",
+            manufacturer = "Uzpharm",
+            priceText = "12000",
+            stockText = "10",
+            requiresPrescription = true,
+        )
+        val result = repository().createProduct(PLACE, draft)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/pharmacy/places/$PLACE/products", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, """"name":"Paratsetamol"""" in body)
+        assertTrue(body, """"manufacturer":"Uzpharm"""" in body)
+        // 12 000 сум — 1 200 000 тийинов (issue #149).
+        assertTrue(body, """"price":1200000""" in body)
+        assertTrue(body, """"stockQuantity":10""" in body)
+        assertTrue(body, """"requiresPrescription":true""" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `empty optional fields of a new product are absent, not null`() = runTest {
+        server.enqueue(envelope("""{"id":"p-1","name":"A"}"""))
+
+        repository().createProduct(PLACE, NewPharmacyProductDraft(name = "A", priceText = "0"))
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "manufacturer" in body)
+        assertFalse(body, "stockQuantity" in body)
+        assertFalse(body, "null" in body)
+    }
+
+    @Test
+    fun `an invalid draft never reaches the network`() = runTest {
+        val result = repository().createProduct(PLACE, NewPharmacyProductDraft(priceText = "1000"))
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewPharmacyProductDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a blank place id never reaches the network either`() = runTest {
+        val draft = NewPharmacyProductDraft(name = "A", priceText = "0")
+        val result = repository().createProduct("", draft)
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewPharmacyProductDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `stock is sent under the key the response and the create request share`() = runTest {
+        server.enqueue(
+            envelope("""{"id":"p-1","name":"Paratsetamol","stockQuantity":7,"isAvailable":true}"""),
+        )
+
+        val result = repository().updateStock(PLACE, "p-1", 7)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/pharmacy/places/$PLACE/products/p-1/stock", request.path)
+        assertEquals("""{"stockQuantity":7}""", request.body.readUtf8())
+        val product = (result as ApiResult.Success).data
+        assertEquals(7, product.stockQuantity)
+        assertEquals(ProductStock.InStock, product.stock)
+    }
+
+    @Test
+    fun `a negative quantity never reaches the network`() = runTest {
+        val result = repository().updateStock(PLACE, "p-1", -1)
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a stock response without an id or a name is a business error`() = runTest {
+        // Товар только что обновлён по своему id — такой ответ был бы дефектом
+        // бэкенда, а не поводом промолчать.
+        server.enqueue(envelope("""{"stockQuantity":7}"""))
+
+        val result = repository().updateStock(PLACE, "p-1", 7)
+
+        assertEquals(
+            ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a refused stock update carries the server's reason`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"FORBIDDEN",
+                       "message":"Bu joyning egasi emassiz"}}""",
+                ),
+        )
+
+        val failure = (repository().updateStock(PLACE, "p-1", 7) as ApiResult.Failure).failure
+
+        assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
     }
 
     private fun repository() = DefaultPharmacyRepository(

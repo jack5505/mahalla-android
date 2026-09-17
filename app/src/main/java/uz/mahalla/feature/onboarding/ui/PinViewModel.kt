@@ -82,6 +82,10 @@ class PinViewModel @Inject constructor(
     override fun onEvent(event: PinEvent) {
         when (event) {
             is PinEvent.PinChanged -> onPinChanged(event.raw)
+            // Код собирается здесь, от собственного состояния: экран видит его
+            // только на момент композиции (см. PinEvent.DigitPressed).
+            is PinEvent.DigitPressed -> onPinChanged(currentState.pin.code + event.digit)
+            PinEvent.BackspacePressed -> onPinChanged(currentState.pin.code.dropLast(1))
             PinEvent.ForgotPin -> restartAuth()
             PinEvent.ErrorDismissed -> updateState { copy(error = null, apiFailure = null) }
         }

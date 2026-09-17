@@ -4,32 +4,42 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import uz.mahalla.R
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaErrorDetails
+import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaTone
-import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.colors
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.ui.theme.FocusHeadline
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
 /**
- * Общий каркас шагов онбординга (эпик 3): заголовок сверху, контент в
+ * Общий каркас шагов онбординга (эпик 3): шапка шага сверху, контент в
  * прокрутке, кнопки прижаты к низу.
  *
  * Один каркас на шесть экранов, потому что все они устроены одинаково, и
@@ -41,12 +51,18 @@ import uz.mahalla.ui.theme.Spacing
  * `MahallaApp` уже отдаёт его в `innerPadding`, и второй `navigationBarsPadding`
  * поднимал бы кнопки на высоту навбара — а с открытой клавиатурой ещё и
  * подвешивал бы футер над ней.
+ *
+ * @param stepLabel «Шаг 2 из 5» — счётчик из макета
+ * (`design_handoff_mahalla_focus/README.md`, шаги 0b–0e). Строку собирает
+ * вызывающий экран: только он знает свой номер, а порядок шагов задаёт граф
+ * навигации, а не каркас.
  */
 @Composable
 fun OnboardingStep(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    stepLabel: String? = null,
     onBack: (() -> Unit)? = null,
     footer: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
@@ -56,23 +72,51 @@ fun OnboardingStep(
             .fillMaxSize()
             .imePadding(),
     ) {
-        if (onBack != null) {
-            // Заголовок шага живёт в теле экрана — в панели остаётся только
-            // «назад», иначе название дублируется и читается TalkBack дважды.
-            MahallaTopBar(title = "", onBack = onBack)
+        // Заголовок шага живёт в теле экрана — в шапке остаются только «назад»
+        // и счётчик, иначе название дублируется и читается TalkBack дважды.
+        if (onBack != null || stepLabel != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = MahallaComponentDefaults.minTouchTarget)
+                    .padding(horizontal = HeaderPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    MahallaIconButton(
+                        icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                        onClick = onBack,
+                    )
+                }
+                if (stepLabel != null) {
+                    Text(
+                        text = stepLabel,
+                        // Без кнопки «назад» счётчик встаёт по полю экрана, с
+                        // ней — сразу за стрелкой.
+                        modifier = if (onBack == null) {
+                            Modifier.padding(start = Spacing.onboardingGutter - HeaderPadding)
+                        } else {
+                            Modifier
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = LocalMahallaColors.current.fgMuted,
+                    )
+                }
+            }
         }
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.gutter),
+                .padding(horizontal = Spacing.onboardingGutter),
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             Text(
                 text = title,
                 modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.headlineSmall,
+                style = FocusHeadline,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (subtitle != null) {
@@ -87,13 +131,20 @@ fun OnboardingStep(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.gutter, vertical = Spacing.gap),
+                .padding(horizontal = Spacing.onboardingGutter, vertical = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {
             footer()
         }
     }
 }
+
+/**
+ * Поле шапки меньше поля экрана ровно на внутренний отступ круглой кнопки
+ * (48dp кнопка вокруг 24dp иконки): так стрелка встаёт по той же вертикали,
+ * что и заголовок под ней.
+ */
+private val HeaderPadding = 12.dp
 
 /**
  * Ошибка шага под полем ввода. `liveRegion` — TalkBack проговаривает

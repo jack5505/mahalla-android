@@ -8,8 +8,9 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toScreenState
+import uz.mahalla.feature.subscription.data.SubscriptionRepository
+import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.feature.wallet.domain.TopUpDraft
 import uz.mahalla.feature.wallet.domain.TopUpValidator
@@ -31,8 +32,10 @@ import javax.inject.Inject
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
+    private val subscriptions: SubscriptionRepository,
 ) : MviViewModel<WalletState, WalletEvent, WalletEffect>(WalletState()) {
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -43,12 +46,12 @@ class WalletViewModel @Inject constructor(
     override fun onEvent(event: WalletEvent) {
         when (event) {
             // Возврат на экран: заказ мог быть оплачен, пока приложение было в
-            // фоне. Пока идёт загрузка, перезапрашивать нечего — ответ приедет
-            // на уже сменившееся состояние.
-            WalletEvent.ScreenResumed ->
-                if (!currentState.wallet.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+            // фоне. Защита от дубля (первый resume, два resume подряд) —
+            // общая, см. MviViewModel.onScreenResumed (issue #145, #209).
+            WalletEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             WalletEvent.Refreshed -> load(showLoading = false, refreshing = true)
 
@@ -94,6 +97,8 @@ class WalletViewModel @Inject constructor(
             WalletEvent.PaymentNoticeDismissed -> updateState {
                 copy(paymentStarted = null, paymentOpenFailed = false)
             }
+
+            WalletEvent.SubscriptionClicked -> emitEffect(WalletEffect.OpenSubscription)
         }
     }
 
@@ -160,18 +165,33 @@ class WalletViewModel @Inject constructor(
         if (showLoading) updateState { copy(wallet = ScreenState.Loading) }
         if (refreshing) updateState { copy(isRefreshing = true) }
         resetHistory(showLoading = showLoading)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             // Баланс и история — две независимые ручки: последовательный
             // запрос удвоил бы время до первого экрана без всякой причины.
             val balance = async { repository.wallet() }
             val history = async { repository.transactions(page = 0) }
+            // Подписка — третья ручка и тоже параллельно: карточка «Mahalla+»
+            // стоит над историей, и ждать её последовательно значит держать
+            // экран пустым дольше без всякой причины.
+            val subscription = async { subscriptions.current() }
             val walletState = balance.await().toScreenState()
             updateState { copy(wallet = walletState) }
             applyHistory(history.await())
+            applySubscription(subscription.await())
             // Индикатор снимается, когда приехали оба ответа: иначе он гаснет
             // над списком, который ещё грузится.
             if (refreshing) updateState { copy(isRefreshing = false) }
         }
+    }
+
+    /**
+     * Отказ подписки прячет карточку, а не роняет кошелёк: за балансом сюда
+     * приходят, за подпиской — нет. Причина отказа при этом теряется, но она
+     * относится к блоку, которого на экране всё равно не будет.
+     */
+    private fun applySubscription(result: ApiResult<Subscription?>) {
+        val subscription = (result as? ApiResult.Success)?.data
+        updateState { copy(subscription = subscription) }
     }
 
     private fun loadTransactions() {

@@ -4,10 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.map
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.cinema.data.CinemaRepository
@@ -32,6 +32,8 @@ class CinemaViewModel @Inject constructor(
 
     private val route: CinemaRoute = savedStateHandle.toRoute()
 
+    private var loadJob: Job? = null
+
     init {
         updateState { copy(placeName = route.placeName) }
         load()
@@ -39,13 +41,12 @@ class CinemaViewModel @Inject constructor(
 
     override fun onEvent(event: CinemaEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
-            CinemaEvent.ScreenResumed -> if (!currentState.movies.isLoading &&
-                !currentState.isRefreshing
-            ) {
-                load(showLoading = false)
-            }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209).
+            CinemaEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = { loadJob?.isActive == true },
+                load = { load(showLoading = false) },
+            )
 
             CinemaEvent.Refreshed -> load(showLoading = false, refreshing = true)
             CinemaEvent.Retry -> load()
@@ -60,7 +61,7 @@ class CinemaViewModel @Inject constructor(
                 isRefreshing = refreshing,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             val poster = repository.movies()
                 .toListScreenState()
                 .map { movies -> CinemaPoster.forPlace(movies, route.placeId) }

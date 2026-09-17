@@ -105,12 +105,13 @@ data class BookAppointmentRequest(
  * `AppointmentServiceResponse`. Все поля необязательные: отсутствие любого из
  * них — не повод показать экран ошибки вместо списка услуг.
  *
- * **Осторожно: этим же DTO разбирается ответ мастеров** (`FreelancerApi`,
- * `GET freelancers/{id}/services`), а там схема другая —
+ * До issue #216 этим же DTO по ошибке разбирался и ответ мастеров
+ * (`FreelancerApi`, `GET freelancers/{id}/services`), а там схема другая —
  * `FreelancerServiceResponse` с `title` и `priceAmount`. Пока эти две ручки
  * выглядели одной схемой `ServiceResponse`, это было незаметно; после развода
- * коллизии видно, что у услуг мастера будет пустое название и цена 0. Живой
- * баг, issue #216 — чинится отдельно, здесь ничего менять не надо.
+ * коллизии стало видно, что у услуг мастера было пустое название и цена 0.
+ * Теперь у мастеров свой `FreelancerServiceDto`, этот тип — только для
+ * барбершопа.
  *
  * **Имена сверены с живым стендом** контрактной пробой (`contract/booking.sh`,
  * фикстура `services.json`). До неё здесь стояли выведенные из схемы `title` и
@@ -161,9 +162,14 @@ data class ServiceDto(
  *
  * Этими же DTO разбираются ответы больниц, хотя схема у них своя,
  * `HospitalAppointmentResponse` (issue #167): общих полей хватает на всё, что
- * показывает экран, а `doctorId` и `complaint` больничной записи здесь не
- * объявлены и теряются — из-за чего запись к врачу остаётся без имени врача
- * (issue #219).
+ * показывает экран, а `complaint` больничной записи здесь не объявлен и
+ * теряется — экран его нигде не показывает, добавлять незачем.
+ *
+ * [doctorId] — тоже только больничный: у брони его нет никогда. Сам по себе
+ * он не имя, но это единственное, что называет запись к врачу — сервер не
+ * присылает `serviceName` для больничной схемы, и без `doctorId` подставить
+ * имя после перезахода в приложение нечем (issue #219). Дотягивает имя
+ * [uz.mahalla.feature.hospital.data.DefaultHospitalRepository].
  *
  * [startTime] и [endTime] типизированы как [JsonElement] по той же причине,
  * что `counterTime` талона очереди (issue #96): springdoc описывает
@@ -184,6 +190,7 @@ data class AppointmentDto(
     @SerialName("apptDate") val apptDate: String? = null,
     @SerialName("startTime") val startTime: JsonElement? = null,
     @SerialName("endTime") val endTime: JsonElement? = null,
+    @SerialName("doctorId") val doctorId: String? = null,
     @SerialName("status") val status: String? = null,
     /** ISO-8601; Jackson отдаёт и без зоны — разбирает `parseServerInstant`. */
     @SerialName("createdAt") val createdAt: String? = null,

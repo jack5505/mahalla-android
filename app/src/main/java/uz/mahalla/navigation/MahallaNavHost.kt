@@ -14,6 +14,10 @@ import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
+import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
+import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
+import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
+import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
 import uz.mahalla.feature.cinema.ui.movie.MovieScreen
 import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
 import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
@@ -56,6 +60,8 @@ import uz.mahalla.feature.role.ui.CustomerFormScreen
 import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
+import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
+import uz.mahalla.feature.social.ui.saved.SavedPlacesScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
 import uz.mahalla.feature.wallet.ui.WalletScreen
@@ -237,6 +243,11 @@ fun MahallaNavHost(
                     // Каталог мастеров (issue #107): отдельная ветка, мастер
                     // не заведение.
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
+                    // Фокус-карточка с талоном ведёт на очередь того
+                    // заведения, где талон взят.
+                    onTicketClick = { placeId, placeName ->
+                        navController.navigate(QueueRoute(placeId, placeName))
+                    },
                 )
             }
             composable<OrdersRoute> {
@@ -253,7 +264,13 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> { WalletScreen() }
+            composable<WalletRoute> {
+                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                // строка в профиле (issue #103).
+                WalletScreen(
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                )
+            }
             composable<ProfileRoute> {
                 ProfileScreen(
                     // Вышли (issue #61): сессии и PIN больше нет, поэтому весь
@@ -308,6 +325,9 @@ fun MahallaNavHost(
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
                     onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    // «Избранное» (issue #75): на карточке места кнопка только
+                    // добавляет и убирает, посмотреть список можно отсюда.
+                    onOpenSavedPlaces = { navController.navigate(SavedPlacesRoute) },
                     // Сменить сервер после входа (issue #26): онбординг уже
                     // пройден, и welcome, где стояла та же кнопка, недостижим.
                     onChangeServer = if (backendUrlOverrideEnabled) {
@@ -404,8 +424,61 @@ fun MahallaNavHost(
                 // продавца, что и из «Моей анкеты». Возврат из неё приведёт
                 // назад в список, где заявка уже будет видна.
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
+                // Бизнес-панель (эпик #16) — отсюда единственный вход: роль в
+                // заведении известна именно этому списку.
+                onOpenBusiness = { placeId, placeName ->
+                    navController.navigate(BusinessRoute(placeId, placeName))
+                },
+                // «Сотрудники» (issue #189) — доступно только владельцу,
+                // экран сам не покажет действие сотруднику или заявке на
+                // модерации.
+                onManageStaff = { placeId -> navController.navigate(PlaceStaffRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+                // Витрина аптеки в режиме владельца (issue #252): та же
+                // витрина, что открыта покупателю с карточки места, только
+                // с уже подтверждённым `isOwner` — товар аптеки своего
+                // `ownerId` не отдаёт, а «Мои заведения» уже сверились по
+                // `places/my`.
+                onManageProducts = { placeId, placeName ->
+                    navController.navigate(PharmacyRoute(placeId, placeName, isOwner = true))
+                },
+            )
+        }
+
+        // Бизнес-панель (эпик #16) — вне обоих графов: это не таб клиента, а
+        // отдельный раздел, и нижняя навигация витрины здесь только мешала бы.
+        // Права проверяет сам экран (`places/my`), маршрут их не даёт.
+        composable<BusinessRoute> {
+            BusinessDashboardScreen(
+                onOpenQueue = { placeId, placeName ->
+                    navController.navigate(BusinessQueueRoute(placeId, placeName))
+                },
+                onOpenOrders = { placeId, placeName ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
+                },
+                onOpenMenu = { placeId, placeName ->
+                    navController.navigate(BusinessMenuRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        composable<BusinessQueueRoute> {
+            BusinessQueueScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessOrdersRoute> {
+            BusinessOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessMenuRoute> {
+            BusinessMenuScreen(onBack = { navController.navigateUp() })
+        }
+
+        // «Сотрудники» заведения (issue #189) — открывается со своей карточки
+        // в «Моих заведениях», возврат ведёт туда же.
+        composable<PlaceStaffRoute> {
+            PlaceStaffScreen(onBack = { navController.navigateUp() })
         }
 
         // Подписка (issue #103) — вне обоих графов, как «мои заведения»:
@@ -418,6 +491,14 @@ fun MahallaNavHost(
         // а возврат ведёт обратно на главную.
         composable<SearchRoute> {
             SearchScreen(
+                onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        // «Избранное» (issue #75): открывается из профиля, возврат — туда же.
+        composable<SavedPlacesRoute> {
+            SavedPlacesScreen(
                 onPlaceClick = { placeId -> navController.navigate(PlaceRoute(placeId)) },
                 onBack = { navController.navigateUp() },
             )

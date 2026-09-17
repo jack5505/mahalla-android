@@ -8,6 +8,7 @@ import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import java.time.Instant
 
 /**
@@ -90,9 +91,10 @@ class PlaceMappersTest {
     }
 
     @Test
-    fun `the cover comes before the logo and duplicates are dropped`() {
+    fun `the cover comes before the logo and duplicates are dropped when media is silent`() {
         // Логотип это иконка, а не фотография заведения: в галерее он не может
-        // стоять первым, а вторым экземпляром — тем более.
+        // стоять первым, а вторым экземпляром — тем более. Запасной вариант
+        // включается только когда `media/entity` ничего не ответило.
         val dto = PlaceDetailDto(
             id = "p",
             name = "P",
@@ -100,7 +102,19 @@ class PlaceMappersTest {
             logoUrl = "cover.jpg",
         )
 
-        assertEquals(listOf("cover.jpg"), dto.toDetails().photos)
+        assertEquals(listOf("cover.jpg"), dto.toDetails().photos.map { it.url })
+        // Запасное фото никому не принадлежит — предложить его удаление нельзя.
+        assertNull(dto.toDetails().photos.single().ownerId)
+    }
+
+    @Test
+    fun `real gallery from media entity wins over the cover fallback`() {
+        val dto = PlaceDetailDto(id = "p", name = "P", coverUrl = "cover.jpg")
+        val media = listOf(MediaFile(id = "m-1", url = "real.jpg", ownerId = "u-1"))
+
+        val photos = dto.toDetails(media = media).photos
+
+        assertEquals(media, photos)
     }
 
     @Test

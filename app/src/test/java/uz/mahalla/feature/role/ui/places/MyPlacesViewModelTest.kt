@@ -74,6 +74,10 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
         val viewModel = MyPlacesViewModel(repository)
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(MyPlacesEvent.ScreenResumed)
+        assertEquals(listOf(0), repository.requestedPages)
+
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
         viewModel.onEvent(MyPlacesEvent.ScreenResumed)
 
@@ -219,6 +223,136 @@ class MyPlacesViewModelTest {
         assertTrue(repository.toggled.isEmpty())
     }
 
+    @Test
+    fun `an active place leads to the business panel with its name`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        // Имя едет вместе с id: панель рисует шапку раньше, чем подтверждает
+        // права, и пустой заголовок читался бы как чужой экран (эпик #16).
+        assertEquals(
+            MyPlacesEffect.OpenBusinessPanel("p-1", "Osh Markazi"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `a pharmacy owner opens the showcase in the owner mode`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", category = PlaceCategory.Pharmacy).copy(name = "Dori-Darmon")),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
+
+        assertEquals(
+            MyPlacesEffect.OpenPharmacyManagement("p-1", "Dori-Darmon"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `an application under moderation has no business panel`() = runTest {
+        // Ни заказов, ни очереди у неё быть не может, а панель, умеющая
+        // сказать только «ждите модерацию», повторяет ту же карточку.
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
+    /**
+     * Сотруднику панель нужна — он и вызывает следующего, и принимает заказы;
+     * разделов у него просто меньше, и решает это уже сама панель.
+     */
+    @Test
+    fun `a staff member still gets into the business panel`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(
+                place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Staff),
+            ),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
+
+        assertEquals(
+            MyPlacesEffect.OpenBusinessPanel("p-1", "Osh Markazi"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `the business panel of an unknown place does not open`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
+        val viewModel = MyPlacesViewModel(repository)
+
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-404"))
+
+        assertTrue(effects.isEmpty())
+    }
+
+    @Test
+    fun `a staff member of a pharmacy cannot open the owner mode`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(
+                place("p-1", category = PlaceCategory.Pharmacy)
+                    .copy(staffRole = PlaceStaffRole.Staff),
+            ),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
+    @Test
+    fun `the owner opens staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Owner)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertEquals(MyPlacesEffect.OpenStaff("p-1"), viewModel.effects.first())
+    }
+
+    @Test
+    fun `a manager cannot open staff management`() = runTest {
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Manager)),
+        )
+        val viewModel = MyPlacesViewModel(repository)
+        val effects = mutableListOf<MyPlacesEffect>()
+        backgroundScope.launch { viewModel.effects.toList(effects) }
+
+        viewModel.onEvent(MyPlacesEvent.ManageStaffClicked("p-1"))
+
+        assertTrue(effects.isEmpty())
+    }
+
     private fun page(
         items: List<MyPlace>,
         hasMore: Boolean = false,
@@ -227,10 +361,11 @@ class MyPlacesViewModelTest {
     private fun place(
         id: String,
         status: PlaceModerationStatus = PlaceModerationStatus.Active,
+        category: PlaceCategory = PlaceCategory.Food,
     ) = MyPlace(
         id = id,
         name = "Osh Markazi",
-        category = PlaceCategory.Food,
+        category = category,
         status = status,
         staffRole = PlaceStaffRole.Owner,
     )

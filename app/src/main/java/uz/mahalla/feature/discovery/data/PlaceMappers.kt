@@ -7,6 +7,7 @@ import uz.mahalla.feature.discovery.domain.GeoDistance
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.PlaceCapabilities
 import uz.mahalla.feature.place.domain.PlaceContacts
 import uz.mahalla.feature.place.domain.PlaceDetails
@@ -87,13 +88,21 @@ fun PlaceDetailDto.toDomain(from: DeviceLocation? = null): Place {
  */
 fun PlaceDetailDto.toDetails(
     reviews: List<Review> = emptyList(),
+    media: List<MediaFile> = emptyList(),
     from: DeviceLocation? = null,
 ): PlaceDetails = PlaceDetails(
     place = toDomain(from),
     capabilities = PlaceCapabilities.of(PlaceCategory.fromApi(category)),
     description = description?.takeIf(String::isNotBlank),
-    // Обложка первой: логотип это иконка, а не фотография заведения.
-    photos = listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct(),
+    // Галерея — из `media/entity` (issue #185). Обложка с логотипом остаются
+    // запасным вариантом на случай, если медиа не ответило: пустая карточка
+    // хуже, чем витринные фото вместо настоящих.
+    photos = media.ifEmpty {
+        // Обложка первой: логотип это иконка, а не фотография заведения.
+        // `id` пуст — запасное фото никому не принадлежит, удалить его нельзя.
+        listOfNotNull(coverUrl, logoUrl).filter(String::isNotBlank).distinct()
+            .map { MediaFile(id = "", url = it) }
+    },
     contacts = PlaceContacts(
         phone = phone?.takeIf(String::isNotBlank),
         website = website?.takeIf(String::isNotBlank),
@@ -160,7 +169,8 @@ fun PlaceEntity.toCachedDetails(): PlaceDetails = PlaceDetails(
     // хватает одного `placeId`: записаться можно и с карточки без сети.
     capabilities = PlaceCapabilities.of(PlaceCategory.fromApi(category)),
     description = description,
-    photos = listOfNotNull(photoUrl),
+    // Из кэша поднимается только обложка — своей она не была, удалить нечего.
+    photos = listOfNotNull(photoUrl).map { MediaFile(id = "", url = it) },
     contacts = PlaceContacts(phone = phone, website = website, address = address),
     fromCache = true,
 )

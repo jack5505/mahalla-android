@@ -4,6 +4,7 @@ import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.parseServerLocalDate
 import uz.mahalla.core.format.parseServerLocalTime
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.cinema.domain.CinemaSession
 import uz.mahalla.feature.cinema.domain.CinemaTicket
 import uz.mahalla.feature.cinema.domain.CinemaTicketPage
@@ -90,15 +91,7 @@ private fun CinemaTicketDto.ticket(ticketId: String) = CinemaTicket(
 )
 
 /** См. [CinemaTicketPage.hasMore] — правило подсчёта живёт там. */
-internal fun CinemaTicketPageDto.toDomain(): CinemaTicketPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return CinemaTicketPage(
-        items = content.mapNotNull(CinemaTicketDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun CinemaTicketPageDto.toDomain(): CinemaTicketPage = CinemaTicketPage(
+    items = content.mapNotNull(CinemaTicketDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)

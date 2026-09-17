@@ -43,6 +43,14 @@ sealed interface MyPlacesEvent : UiEvent {
     data class PlaceClicked(val placeId: String) : MyPlacesEvent
     data class AvailabilityToggled(val placeId: String) : MyPlacesEvent
     data object RegisterPlaceRequested : MyPlacesEvent
+
+    /** Открыть бизнес-панель этого заведения (эпик #16). */
+    data class BusinessPanelClicked(val placeId: String) : MyPlacesEvent
+
+    /** «Управлять товарами» на карточке аптеки (issue #252). */
+    data class ManageProductsClicked(val placeId: String) : MyPlacesEvent
+
+    data class ManageStaffClicked(val placeId: String) : MyPlacesEvent
 }
 
 sealed interface MyPlacesEffect : UiEffect {
@@ -51,4 +59,17 @@ sealed interface MyPlacesEffect : UiEffect {
 
     /** Пустой список ведёт туда, где заведение регистрируют (issue #84). */
     data object OpenProviderForm : MyPlacesEffect
+
+    /**
+     * Бизнес-панель (эпик #16). Имя едет вместе с id: панель рисует шапку
+     * раньше, чем успевает подтвердить права, и пустой заголовок читался бы
+     * как чужой экран.
+     */
+    data class OpenBusinessPanel(val placeId: String, val placeName: String) : MyPlacesEffect
+
+    /** Витрина аптеки в режиме владельца (issue #252). */
+    data class OpenPharmacyManagement(val placeId: String, val placeName: String) : MyPlacesEffect
+
+    /** «Сотрудники» (issue #189) — доступно только владельцу. */
+    data class OpenStaff(val placeId: String) : MyPlacesEffect
 }

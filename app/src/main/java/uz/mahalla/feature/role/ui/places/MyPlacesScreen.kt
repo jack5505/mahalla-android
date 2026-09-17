@@ -2,7 +2,6 @@ package uz.mahalla.feature.role.ui.places
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,8 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.Storefront
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -32,8 +30,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -65,8 +65,11 @@ import uz.mahalla.ui.theme.Spacing
 fun MyPlacesScreen(
     onPlaceClick: (String) -> Unit,
     onRegisterPlace: () -> Unit,
+    onOpenBusiness: (String, String) -> Unit,
+    onManageStaff: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onManageProducts: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: MyPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -76,6 +79,11 @@ fun MyPlacesScreen(
             when (effect) {
                 is MyPlacesEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 MyPlacesEffect.OpenProviderForm -> onRegisterPlace()
+                is MyPlacesEffect.OpenBusinessPanel ->
+                    onOpenBusiness(effect.placeId, effect.placeName)
+                is MyPlacesEffect.OpenPharmacyManagement ->
+                    onManageProducts(effect.placeId, effect.placeName)
+                is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
             }
         }
     }
@@ -180,10 +188,11 @@ private fun LazyListScope.myPlaceItems(
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = places.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(MyPlacesEvent.LoadMore) },
                     )
                 }
             }
@@ -286,6 +295,19 @@ private fun MyPlaceCard(
             )
         }
 
+        // Вход в бизнес-панель (эпик #16) — над переключателем: это главное
+        // действие владельца в своём заведении, а «открыто сейчас» — частный
+        // случай того, что панель умеет.
+        if (place.canOpenBusinessPanel) {
+            MahallaButton(
+                text = stringResource(R.string.business_open),
+                onClick = { onEvent(MyPlacesEvent.BusinessPanelClicked(place.id)) },
+                modifier = Modifier.padding(top = Spacing.gap),
+                variant = MahallaButtonVariant.Secondary,
+                state = ButtonState(enabled = enabled),
+            )
+        }
+
         if (place.canToggleAvailability) {
             MahallaSwitchRow(
                 title = stringResource(R.string.my_places_available),
@@ -296,6 +318,32 @@ private fun MyPlaceCard(
                 // второй переворот флага, и результат зависел бы от порядка
                 // ответов.
                 enabled = enabled && !pending,
+            )
+        }
+
+        // Витрина аптеки (issue #252) — единственная вертикаль с формой
+        // создания на клиенте сегодня, поэтому кнопка условна на категории, а
+        // не общая для всех «своих заведений».
+        if (place.canManageProducts) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_manage_products),
+                onClick = { onEvent(MyPlacesEvent.ManageProductsClicked(place.id)) },
+                modifier = Modifier.padding(top = Spacing.item),
+                variant = MahallaButtonVariant.Secondary,
+                icon = Icons.Outlined.Sell,
+            )
+        }
+
+        // Только владельцу (issue #189): менеджеру и сотруднику бэкенд эти
+        // действия не даст, а кнопка, которая всегда отвечает отказом,
+        // читается как сломанная.
+        if (place.canManageStaff) {
+            MahallaButton(
+                text = stringResource(R.string.my_places_staff_action),
+                onClick = { onEvent(MyPlacesEvent.ManageStaffClicked(place.id)) },
+                variant = MahallaButtonVariant.Ghost,
+                fillWidth = false,
+                modifier = Modifier.padding(top = Spacing.item),
             )
         }
     }
@@ -329,39 +377,6 @@ private fun InlineFailure(
                 fillWidth = false,
             )
         }
-    }
-}
-
-/**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: MyPlacesState,
-    itemCount: Int,
-    onEvent: (MyPlacesEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(MyPlacesEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(MyPlacesEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
     }
 }
 
@@ -408,7 +423,6 @@ private fun PlaceStaffRole.labelRes(): Int? = when (this) {
 }
 
 private const val LIST_SKELETONS = 3
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable
@@ -436,6 +450,15 @@ private fun MyPlacesScreenPreview() {
                             status = PlaceModerationStatus.Pending,
                             address = "Yunusobod, 4-daha",
                             staffRole = PlaceStaffRole.Manager,
+                        ),
+                        MyPlace(
+                            id = "p-3",
+                            name = "Dori-Darmon",
+                            category = PlaceCategory.Pharmacy,
+                            status = PlaceModerationStatus.Active,
+                            address = "Mirzo Ulug'bek, 8-uy",
+                            isAvailable = true,
+                            staffRole = PlaceStaffRole.Owner,
                         ),
                     ),
                 ),

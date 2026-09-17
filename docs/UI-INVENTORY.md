@@ -62,9 +62,9 @@ gh issue list --state open   # 47 открытых issue
 | Таб | Экран | Состояние |
 |---|---|---|
 | Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
-| Заказы | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба пока `nav_orders` — issue #211 |
+| Мои активности | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба — `nav_activity` («Активности»/«Amallarim») кеглем 9/600 из ТЗ (`design/android/TZ-ANDROID.md`, компонент `navbar`): с M3-шными 12sp она обрезалась бы при системном fontScale 1.3 на 393 dp и при 1.15 на 360 dp (#211). Макет (`figma/svg`, `prototype/screens.js`) до сих пор подписывает этот пункт «Заказы»/«Buyurtmalar» и держит 5 пунктов против 4 — дизайн-репо отстал от #73 (jack5505/mahalla#214) |
 | Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
-| Профиль | `profile/ui/ProfileScreen.kt` (731) | **работает**: имя, телефон, аватар (`media/upload`), мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |
+| Профиль | `profile/ui/ProfileScreen.kt` (869) | **работает**: имя (редактируется, `PUT users/me`), телефон, аватар (`media/upload` + `PUT users/me`, issue #170), профиль перечитывается `GET users/me` при открытии и возврате на экран, мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |
 
 ### 2.2 Вертикали: путь от карточки места
 
@@ -81,7 +81,7 @@ gh issue list --state open   # 47 открытых issue
 | **Кино** | афиша → фильм и сеансы → покупка → «мои билеты» | `cinema/movies`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `…/cancel` | #106 |
 | **Аптека** | витрина товаров с наличием — **только просмотр** | `pharmacy/places/{id}/products` | #100 (заказа нет и у бэкенда) |
 | **Одежда** (FASHION) | каталог → товар (цвет/размер) → **серверная** корзина → checkout → «мои заказы» | `fashion/categories`, `fashion/stores/{id}/catalog`, `fashion/products/{id}`, `fashion/cart*`, `fashion/orders` | #108 |
-| **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы»; отдельно в профиле — кабинет мастера «Мои услуги» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my`, `freelancers/me`, `freelancers/me/services*`, `freelancers/me/toggle-availability` | #107, кабинет — #71 |
+| **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my` | #107 |
 
 Мастер живёт в двух местах, и это не ошибка: плитка «Мастера» на главной — это
 категория `BARBER` в каталоге заведений (`SearchRoute`), то есть барбершопы, а
@@ -116,7 +116,7 @@ gh issue list --state open   # 47 открытых issue
 
 ---
 
-## 3. Написано, но в `main` этого нет: открытые PR
+## 3. Написано, но в `main` этого нет: 13 открытых PR
 
 Прежде чем брать что-либо из раздела 4 — проверь, нет ли этого здесь.
 
@@ -130,6 +130,7 @@ gh issue list --state open   # 47 открытых issue
 | #156 | Оплата из кошелька: подтверждение, идемпотентность, отказы | #12 |
 | #120 | Серверный PIN и app-lock: смена PIN, биометрия, `session/check` | #102 |
 | #78 | Соцфункции: лайк, «Избранное», комментарии | #105 |
+| #72 | Формы заказа и выставления услуги | #71 |
 | #41 | Чистый `lintDebug` (устарел: lint вернулся в CI отдельным PR #132) | #39 |
 | #38 | Тест цикла `HELLO.md` | #37 |
 
@@ -179,22 +180,21 @@ startTime`) явно от больницы. Для игровой зоны ну�
 
 Из 180 эндпоинтов стенда приложение использует 77. Разница — 103 ручки, и
 это **не** «отставание на порядок»: около 63 из них — бизнес-панель, кабинет
-мастера и админка. Клиентские незакрытые области — десять, и пять из них
+мастера и админка. Клиентские незакрытые области — девять, и пять из них
 уже в открытых PR:
 
 | Область | Ручки | Состояние |
 |---|---|---|
 | Соцфункции | `places/{id}/like`, `/save`, `/comments` (GET/POST), `DELETE comments/{id}`, `saved-places`, `places/{id}/status` | issue #105, PR #78; вопросы к бэкенду — #88 |
 | Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #120. Сейчас PIN живёт на `auth/setup-pin` + `auth/pin-login`, сменить его из профиля нечем |
-| Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар приложение на сервере не меняет — хотя ручка для этого есть. **Контракт обеих ручек снят** чтением схемы 2026-09-10 (issue #237) и лежит в `docs/API-CONTRACT.md` с ✅: `PUT` принимает ровно `fullName` и `avatarUrl`, `language` и `role` отправить нечем — решение в `docs/adr/0007`. Из девяти KDoc, утверждавших, что ручек нет вовсе, исправлены семь (`ProfileViewModel` — оба места, класс и `uploadAvatar`, `ProfileContract`, `AuthRepository`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`); остались `PlaceDetailsViewModel` и `CustomerForm` — их правит работа по #170/#234 |
 | Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
 | Аналитика | `POST analytics/track` | issue #169, PR #229 — **подключена**: `VIEW`/`CALL`/`NAVIGATE`/`REVIEW` на карточке места, `BOOK` в пяти вертикалях, `ORDER` в двух. Ручка place-центрична (`placeId` обязателен, перечисление видов закрыто), поэтому событие без заведения — экран, поиск, отказ бэкенда — отправить нечем: issue **#226** |
 | Карта | `GET places/map-bounds` | issue #168, PR #223: маркеры брались из `CatalogRepository` (`places/nearby`), то есть радиусом вокруг человека; в PR область приходит от полотна (`visibleRegion`) с дебаунсом, `nearby` остался первым кадром |
 | Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | не подключены: поля промокода в checkout нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI), стоимость доставки не запрашивается |
-| «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
+| «Мои» списки по вертикалям | `food/orders/my`, `fashion/orders/my`, `freelancers/me/orders`, `appointments/{id}`, `cinema/tickets/{id}`, `hospitals/appointments/{id}`, `cinema/movies/{id}`, `hospitals/doctors/{id}/slots` | часть закрывается «Моими активностями» (#73), часть просто не нужна |
 | Медиа | `GET media/entity/{id}`, `DELETE media/{id}` | загрузка есть, чтения по сущности и удаления нет |
 | Кабинет мастера | `GET/POST freelancers/me`, `me/services*`, `PUT me/toggle-availability`, `GET freelancers/me/orders`, `PUT freelancers/orders/{id}/status` | issue #71 — анкета и «Мои услуги» готовы; issue #190 добавил входящие заказы (`freelancers/me/orders`, `PUT freelancers/orders/{id}/status`) — подключены, но контракт этих двух ручек не сверен со стендом (`docs/API-CONTRACT.md`) |
-| Бизнес-панель | `analytics/places/{id}/dashboard`, `places/{id}/staff*`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163 |
+| Бизнес-панель | `analytics/places/{id}/dashboard`, `PUT places/{id}`, статусы заказов, меню, `wallet/business`, `walkin/{id}/accept\|decline\|start\|complete`, `walkin/barber/dashboard`, `reviews/{id}/reply` | issue #16, PR #161; открытые вопросы контракта — #162, #163. `places/{id}/staff*` — отдельно, issue #189: экран «Сотрудники» (`feature/role/ui/staff`), доступ только владельцу |
 | Админка | `admin/*`, `auth/admin/users/{id}/block` | вне скоупа этого приложения |
 | Одиночки | `GET places` (постраничный список без гео), `POST p/request` (алиас запроса кода) | не нужны: каталог берётся `nearby`/`search`, код — `auth/send-otp` |
 
@@ -209,7 +209,6 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 Заведено по итогам этой инвентаризации:
 
-- **`users/me`** — редактирование профиля на сервере, issue #170.
 - **Отмена записи к врачу** — какой ручкой, issue #167.
 
 `map-bounds` (issue #168) отсюда ушёл — он в PR #223, см. раздел 3.
@@ -244,6 +243,13 @@ KDoc написано почему — на 2026-09-04 своей отмены �
   (`restore-config.ts`) и **восстанавливается из базовой ветки поверх ветки
   PR** — то есть молча затирается (это же описано в комментарии
   `.github/workflows/claude.yml`). Поправить руками.
+- **Редизайн «Focus» (PR #283) опережает бэкенд в четырёх местах**, и это
+  зафиксировано issue, а не додумано: бейдж талона на табе (#284 — талона нет
+  в данных «Моих активностей»), бронирование шторкой (#285 — нужен
+  `navigation-material` либо подъём состояния), плитка карты на карточке
+  места и карточка номера талона (#286 — нет `MAPKIT_API_KEY` и нет номера
+  талона от бэкенда). `core/format/TicketFormatter.kt` («A-042», эпик 1.5)
+  с тех пор не используется нигде — мёртвый код до решения по #286.
 - **Compose-тестов почти нет**: `ui-test-junit4` в проекте есть, но
   использован ровно одним тестом (`MahallaAsyncImageTest`, #137). Цели
   нажатия и семантика не проверяются.
@@ -281,8 +287,10 @@ KDoc написано почему — на 2026-09-04 своей отмены �
    `CheckRequest`, `Response`): включить `springdoc.use-fqn=true`.~~
    **Сделано** — в схеме от 2026-09-09 у каждого пути своё тело (см. §3.2,
    issue #167).
-2. **Нет `GET /users/me` и обновления профиля**: данные пользователя приходят
-   только в ответе на вход, аватар/имя менять нечем.
+2. ~~**Нет `GET /users/me` и обновления профиля**: данные пользователя приходят
+   только в ответе на вход, аватар/имя менять нечем.~~ **Сделано** — обе ручки
+   есть, контракт снят чтением схемы 2026-09-10 (issue #237), приложение
+   зовёт их с issue #170.
 3. **`PlaceOrderRequest` беднее корзины приложения**: нет модификаторов
    позиций, промокода, времени доставки и комментария. Либо расширить, либо
    мы выкидываем эти шаги из UI еды.

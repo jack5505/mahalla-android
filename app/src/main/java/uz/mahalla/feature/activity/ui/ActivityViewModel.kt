@@ -38,12 +38,6 @@ class ActivityViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
 
-    /**
-     * Экран уже был на переднем плане. Нужен, чтобы отличить **возврат** на
-     * экран от его открытия — см. [onScreenResumed].
-     */
-    private var resumedOnce = false
-
     init {
         load()
     }
@@ -83,33 +77,15 @@ class ActivityViewModel @Inject constructor(
     /**
      * Возврат на экран: пока приложение было в фоне, заказ могли собрать, а
      * бронь — подтвердить, и таб открывают как раз затем, чтобы это увидеть.
-     *
-     * **Первый resume пропускается.** `LifecycleEventEffect(ON_RESUME)`
-     * срабатывает на первой же композиции, то есть сразу после того, как
-     * список запросил `init` — и это не возврат на экран, а его открытие.
-     * Проверки `isLoading` для этого мало: она отсекает дубль только пока
-     * стартовая загрузка в полёте, а успела та дойти до конца — и экран
-     * открывался бы двумя одинаковыми загрузками, то есть **десятью**
-     * запросами к пяти источникам вместо пяти (issue #145).
-     *
-     * Флаг живёт в ViewModel, а не в композабле: композабл пересоздаётся при
-     * каждом уходе с таба, а ViewModel держится за запись бэкстека — и второй
-     * его resume перечитать список как раз обязан.
+     * Защита от дубля (первый resume, два resume подряд) — общая, см.
+     * [MviViewModel.onScreenResumed] (issue #145, #209): здесь список пяти
+     * источников, поэтому дубль — не одна лишняя загрузка, а **десять**
+     * запросов вместо пяти.
      */
-    private fun onScreenResumed() {
-        if (!resumedOnce) {
-            resumedOnce = true
-            return
-        }
-        // Пока загрузка в полёте, перезапрашивать нечего: ответ приедет на уже
-        // сменившееся состояние. Проверяется job, а не `isLoading` с
-        // `isRefreshing`: загрузка **от самого resume** идёт молча и ни одного
-        // из этих флагов не поднимает, так что два resume подряд (диалог
-        // поверх экрана, быстрый уход в фон и обратно) снова дали бы десять
-        // запросов вместо пяти.
-        if (loadJob?.isActive == true) return
-        load(showLoading = false)
-    }
+    private fun onScreenResumed() = onScreenResumed(
+        isLoadInFlight = { loadJob?.isActive == true },
+        load = { load(showLoading = false) },
+    )
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadMoreJob?.cancel()

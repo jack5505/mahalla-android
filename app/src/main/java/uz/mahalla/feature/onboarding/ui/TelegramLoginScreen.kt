@@ -110,6 +110,9 @@ private fun TelegramLoginContent(
         title = stringResource(R.string.onboarding_telegram_title),
         modifier = modifier,
         subtitle = stringResource(state.subtitleRes),
+        // Тот же номер, что у ввода номера телефона: Telegram — замена первому
+        // шагу, а не добавочный шаг.
+        stepLabel = OnboardingStepNumber.Phone.label(),
         onBack = onBack,
         footer = {
             when {

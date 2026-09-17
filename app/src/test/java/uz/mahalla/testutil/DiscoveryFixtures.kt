@@ -55,6 +55,14 @@ class FakeCatalogRepository : CatalogRepository {
     var reviews: ApiResult<List<Review>> = ApiResult.Success(emptyList())
     var addReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
     var deleteReviewResult: ApiResult<Unit> = ApiResult.Success(Unit)
+    var deleteMediaResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /** Гейт для проверки гонки: удаление фото висит, пока его не открыли. */
+    var deleteMediaGate: CompletableDeferred<Unit>? = null
+
+    /** Карточки для «Избранного» (issue #75): ответ на каждый id отдельно. */
+    val cards: MutableMap<String, ApiResult<Place>> = mutableMapOf()
+    val requestedCards: MutableList<String> = mutableListOf()
 
     val requestedFilters: MutableList<Pair<DiscoveryFilters, Int>> = mutableListOf()
 
@@ -72,6 +80,7 @@ class FakeCatalogRepository : CatalogRepository {
     /** Черновики отправленных отзывов — тест проверяет, что уехало на сервер. */
     val addedReviews: MutableList<Pair<String, ReviewDraft>> = mutableListOf()
     val deletedReviews: MutableList<String> = mutableListOf()
+    val deletedMedia: MutableList<String> = mutableListOf()
 
     /** Сколько раз запрашивалась карточка: перезапрос после отзыва — часть контракта. */
     var detailsRequests: Int = 0
@@ -105,6 +114,11 @@ class FakeCatalogRepository : CatalogRepository {
         return details
     }
 
+    override suspend fun placeCard(placeId: String): ApiResult<Place> {
+        requestedCards += placeId
+        return cards[placeId] ?: ApiResult.Failure(ApiError.NotFound)
+    }
+
     override suspend fun reviews(placeId: String, page: Int): ApiResult<List<Review>> = reviews
 
     override suspend fun addReview(placeId: String, draft: ReviewDraft): ApiResult<Unit> {
@@ -115,6 +129,12 @@ class FakeCatalogRepository : CatalogRepository {
     override suspend fun deleteReview(reviewId: String): ApiResult<Unit> {
         deletedReviews += reviewId
         return deleteReviewResult
+    }
+
+    override suspend fun deleteMediaFile(id: String): ApiResult<Unit> {
+        deletedMedia += id
+        deleteMediaGate?.await()
+        return deleteMediaResult
     }
 }
 

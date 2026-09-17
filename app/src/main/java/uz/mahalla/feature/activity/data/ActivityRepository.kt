@@ -72,6 +72,7 @@ class DefaultActivityRepository @Inject constructor(
     private val bookingApi: BookingApi,
     private val hospitalApi: HospitalApi,
     private val cinemaApi: CinemaApi,
+    private val placeNameResolver: PlaceNameResolver,
 ) : ActivityRepository {
 
     /**
@@ -107,12 +108,32 @@ class DefaultActivityRepository @Inject constructor(
             }
 
             ActivityFeed(
-                items = items,
+                items = withPlaceNames(items),
                 failures = failures,
                 nextPages = nextPages,
                 requested = requested,
             )
         }
+
+    /**
+     * Подставляет `placeName`/`logoUrl`, дорезолвленные `GET places?ids=`
+     * (issue #182). Собирает неизвестные `placeId` со **всей** страницы
+     * разом — так на двадцать активностей уходит один запрос, а не двадцать.
+     * Резолв не удался — активность остаётся без имени, как до этой задачи.
+     */
+    private suspend fun withPlaceNames(items: List<Activity>): List<Activity> {
+        val placeIds = items.mapNotNull(Activity::placeId)
+        if (placeIds.isEmpty()) return items
+        val resolved = placeNameResolver.resolve(placeIds)
+        if (resolved.isEmpty()) return items
+        return items.map { activity ->
+            val place = activity.placeId?.let(resolved::get) ?: return@map activity
+            activity.copy(
+                placeName = place.name.takeIf(String::isNotBlank),
+                placeLogoUrl = place.logoUrl,
+            )
+        }
+    }
 
     private suspend fun load(
         source: ActivitySource,

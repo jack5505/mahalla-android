@@ -19,7 +19,9 @@ import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.GeoBounds
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.ReviewDraft
+import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakePlaceDao
 import java.time.Clock
 import java.time.Instant
@@ -44,6 +46,11 @@ class CatalogRepositoryTest {
     private val location = object : RequestLocationProvider {
         override suspend fun current() = DeviceLocation(latitude = 41.3111, longitude = 69.2797)
     }
+
+    // Галерея места (issue #185) ходит через отдельный сервис, а не через
+    // `CatalogApi` — фейк, чтобы не enqueue'ить лишний ответ в тестах, которые
+    // её не проверяют.
+    private val media = FakeMediaRepository()
 
     @Before
     fun setUp() {
@@ -337,6 +344,42 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `the gallery comes from media entity, not just the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Success(
+            listOf(MediaFile(id = "m-1", url = "real.jpg", ownerId = "u-9")),
+        )
+
+        val result = repository().placeDetails("p-1")
+
+        val photos = (result as ApiResult.Success).data.photos
+        assertEquals(listOf("real.jpg"), photos.map { it.url })
+        assertEquals(listOf("p-1"), media.requestedEntities)
+    }
+
+    @Test
+    fun `an empty gallery response falls back to the cover`() = runTest {
+        server.enqueue(json(DETAILS_BODY))
+        server.enqueue(json(REVIEWS_BODY))
+        media.entityResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(listOf("cover.jpg"), (result as ApiResult.Success).data.photos.map { it.url })
+    }
+
+    @Test
+    fun `deleting a media file delegates to the media service`() = runTest {
+        media.deleteResult = ApiResult.Success(Unit)
+
+        val result = repository().deleteMediaFile("m-1")
+
+        assertEquals(listOf("m-1"), media.deletedIds)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
     fun `the card is cached whole`() = runTest {
         // Открытая офлайн, она иначе показывала бы одно название.
         server.enqueue(json(DETAILS_BODY))
@@ -405,6 +448,42 @@ class CatalogRepositoryTest {
 
         assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
         assertNull(dao.byId("p-1"))
+    }
+
+    @Test
+    fun `a card for a list is one request, without reviews`() = runTest {
+        // «Избранное» (issue #75) дозапрашивает карточки по одной: второй
+        // запрос за отзывами на каждую сделал бы экран вдвое дороже без единой
+        // строки на нём.
+        server.enqueue(json(DETAILS_BODY))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals("Osh markazi", (result as ApiResult.Success).data.name)
+        assertEquals(1, server.requestCount)
+        assertEquals("/places/p-1", server.takeRequest().path)
+        assertEquals("Osh markazi", dao.byId("p-1")?.name)
+    }
+
+    @Test
+    fun `a card that did not arrive comes from the cache`() = runTest {
+        dao.seed(listOf(entity("p-1", name = "Osh markazi")))
+        server.enqueue(MockResponse().setResponseCode(503))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals("Osh markazi", (result as ApiResult.Success).data.name)
+    }
+
+    @Test
+    fun `a deleted place does not come back as a card either`() = runTest {
+        dao.seed(listOf(entity("p-1")))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
     }
 
     // --- Отзывы: оставить и удалить (issue #76) ---
@@ -515,7 +594,7 @@ class CatalogRepositoryTest {
                 NetworkFactory.converterFactory(NetworkFactory.json()),
             )
             .create(CatalogApi::class.java)
-        return DefaultCatalogRepository(api, dao, location, clock)
+        return DefaultCatalogRepository(api, dao, location, media, clock)
     }
 
     private fun entity(

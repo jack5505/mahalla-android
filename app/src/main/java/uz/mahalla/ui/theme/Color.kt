@@ -8,7 +8,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Семантические цвета варианта B «Focus» (design/android/HANDOFF.md).
+ * Семантические цвета редизайна «Focus» — фиолетовая тема
+ * (`design_handoff_mahalla_focus/README.md`, раздел Design Tokens).
  * Material 3 ColorScheme не покрывает success, warning и Soft-варианты — они живут здесь
  * и раздаются через CompositionLocal.
  */
@@ -31,48 +32,66 @@ val LocalMahallaColors = staticCompositionLocalOf<MahallaColors> {
     error("MahallaColors не предоставлены — оберните экран в MahallaTheme")
 }
 
+// Градиент фокус-карточки и приветственного экрана онбординга — не входит в
+// ColorScheme (M3 не поддерживает градиентные роли), используется напрямую
+// через Brush.linearGradient(FocusGradient) в местах, где макет требует заливку.
+val FocusGradientStart = Color(0xFF4F2FC0)
+val FocusGradientEnd = Color(0xFF7C5CE6)
+val FocusGradientWelcomeEnd = Color(0xFF9D84F0)
+
 val FocusLightScheme: ColorScheme = lightColorScheme(
-    primary = Color(0xFF2B1B3D),
+    primary = Color(0xFF5B3FC4),
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFDED5E6),
-    onPrimaryContainer = Color(0xFF1E1329),
-    secondary = Color(0xFFC4552E),
+    primaryContainer = Color(0xFFE8DEFF),
+    onPrimaryContainer = Color(0xFF21005D),
+    secondary = Color(0xFF6D4FC2),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFFBE3DA),
-    onSecondaryContainer = Color(0xFF4E1D0C),
-    background = Color(0xFFFFFFFF),
-    onBackground = Color(0xFF1E1329),
-    surface = Color(0xFFFBF6EF),
-    onSurface = Color(0xFF1E1329),
-    surfaceVariant = Color(0xFFEFE9F2),
-    onSurfaceVariant = Color(0xFF3B2B4C),
-    outline = Color(0xFFD9D2DE),
-    outlineVariant = Color(0xFFEAE4EF),
-    error = Color(0xFFA82521),
+    secondaryContainer = Color(0xFFE8DEFF),
+    onSecondaryContainer = Color(0xFF4A2F9E),
+    background = Color(0xFFFDF8FF),
+    onBackground = Color(0xFF1D1B20),
+    surface = Color(0xFFFDF8FF),
+    onSurface = Color(0xFF1D1B20),
+    surfaceVariant = Color(0xFFF1ECF7),
+    onSurfaceVariant = Color(0xFF49454F),
+    outline = Color(0xFFCAC4D0),
+    outlineVariant = Color(0xFFE7E2EB),
+    error = Color(0xFFB3261E),
     onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFADEDC),
-    onErrorContainer = Color(0xFF52100E),
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410E0B),
+    // Инверсные роли — это снекбар из макета (`#2b2440` с текстом `#fdf8ff` и
+    // акцентом `#b9a3f0`). Отдельные роли, а не тон `Neutral`: тем же тоном
+    // красятся бейджи («закрыто», «отменён»), и тёмными они стать не должны.
+    inverseSurface = Color(0xFF2B2440),
+    inverseOnSurface = Color(0xFFFDF8FF),
+    inversePrimary = Color(0xFFB9A3F0),
 )
 
 val FocusLightColors = MahallaColors(
-    accent = Color(0xFFC4552E),
-    accentSoft = Color(0xFFFBE3DA),
-    fgMuted = Color(0xFF6E6478),
-    outlineSoft = Color(0xFFEAE4EF),
+    accent = Color(0xFF6D4FC2),
+    accentSoft = Color(0xFFE8DEFF),
+    fgMuted = Color(0xFF625B71),
+    outlineSoft = Color(0xFFE7E2EB),
     success = Color(0xFF16704B),
     successSoft = Color(0xFFD5EEE3),
     warning = Color(0xFF8A5D00),
     warningSoft = Color(0xFFFAEBCB),
     info = Color(0xFF2A559C),
     infoSoft = Color(0xFFDAE4F6),
-    skeleton = Color(0xFFE9E4EE),
+    skeleton = Color(0xFFEDE7F5),
 )
 
+// Тёмная тема выведена из того же фиолетового seed (5B3FC4) — тональные пары
+// M3 baseline для фиолетового спектра; нейтральные тона (background/surface/
+// outline) сохранены из прежней палитры варианта B, они уже фиолетово-тёмные
+// и проверены ContrastTest. Primary/secondary в тёмной теме совпадают
+// (дизайн не разводит их по тону), это осознанно, не дублирование по ошибке.
 val FocusDarkScheme: ColorScheme = darkColorScheme(
-    primary = Color(0xFFE8704A),
-    onPrimary = Color(0xFF2B0F04),
-    primaryContainer = Color(0xFF4A2318),
-    onPrimaryContainer = Color(0xFFFFD9CC),
+    primary = Color(0xFFCBB4E4),
+    onPrimary = Color(0xFF2B1B3D),
+    primaryContainer = Color(0xFF332542),
+    onPrimaryContainer = Color(0xFFEDE0F7),
     secondary = Color(0xFFCBB4E4),
     onSecondary = Color(0xFF2B1B3D),
     secondaryContainer = Color(0xFF332542),
@@ -89,6 +108,11 @@ val FocusDarkScheme: ColorScheme = darkColorScheme(
     onError = Color(0xFF45100D),
     errorContainer = Color(0xFF401D1B),
     onErrorContainer = Color(0xFFFFDAD7),
+    // В тёмной теме инверсия работает в другую сторону: снекбар светлый на
+    // тёмном экране.
+    inverseSurface = Color(0xFFEFE9F2),
+    inverseOnSurface = Color(0xFF1D1429),
+    inversePrimary = Color(0xFF5B3FC4),
 )
 
 val FocusDarkColors = MahallaColors(

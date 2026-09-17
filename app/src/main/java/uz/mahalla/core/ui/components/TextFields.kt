@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -29,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -42,11 +45,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.unit.dp
 import uz.mahalla.R
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.core.ui.text.PhoneFieldFormatter
+import uz.mahalla.ui.theme.FocusOtpDigit
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -130,28 +135,50 @@ fun MahallaPhoneField(
     }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
-        OutlinedTextField(
-            value = fieldValue,
-            onValueChange = { input ->
-                val masked = PhoneFieldFormatter.apply(input.text, input.selection.end)
-                fieldValue = TextFieldValue(masked.text, TextRange(masked.caret))
-                onDigitsChange(PhoneFieldFormatter.digitsOf(masked.text))
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .defaultMinSize(minHeight = MahallaComponentDefaults.fieldMinHeight),
-            enabled = enabled,
-            singleLine = true,
-            isError = errorText != null,
-            label = { Text(label) },
-            prefix = { Text(text = "+$COUNTRY_CODE", style = MaterialTheme.typography.titleMedium) },
-            textStyle = MaterialTheme.typography.titleMedium.merge(TabularNums),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Phone,
-                imeAction = imeAction,
-            ),
-            shape = MaterialTheme.shapes.small,
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Код страны — отдельной плашкой (макет 0b), а не префиксом внутри
+            // поля: он не редактируется, и вид «поля» ему только мешал. Для
+            // TalkBack плашка пуста — код входит в описание самого поля.
+            Box(
+                modifier = Modifier
+                    .height(MahallaComponentDefaults.fieldMinHeight)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
+                    .padding(horizontal = Spacing.card)
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "+$COUNTRY_CODE",
+                    style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            OutlinedTextField(
+                value = fieldValue,
+                onValueChange = { input ->
+                    val masked = PhoneFieldFormatter.apply(input.text, input.selection.end)
+                    fieldValue = TextFieldValue(masked.text, TextRange(masked.caret))
+                    onDigitsChange(PhoneFieldFormatter.digitsOf(masked.text))
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .defaultMinSize(minHeight = MahallaComponentDefaults.fieldMinHeight)
+                    .semantics { contentDescription = "$label, +$COUNTRY_CODE" },
+                enabled = enabled,
+                singleLine = true,
+                isError = errorText != null,
+                label = { Text(label) },
+                textStyle = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = imeAction,
+                ),
+                shape = MaterialTheme.shapes.small,
+            )
+        }
         FieldSupportingText(supportingText = null, errorText = errorText)
     }
 }
@@ -189,7 +216,6 @@ fun MahallaOtpField(
         state.length,
     )
     val colors = MaterialTheme.colorScheme
-    val mahalla = LocalMahallaColors.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
         BasicTextField(
@@ -217,11 +243,20 @@ fun MahallaOtpField(
             textStyle = TextStyle.Default,
             cursorBrush = SolidColor(colors.primary),
             decorationBox = { innerTextField ->
-                Box(modifier = Modifier.fillMaxWidth()) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                     // Само поле остаётся в дереве, но невидимо: в нём живут
                     // ввод, курсор и автоподстановка кода из SMS. Видимые
                     // ячейки — только отрисовка состояния.
                     Box(modifier = Modifier.alpha(0f)) { innerTextField() }
+
+                    // Ширина ячейки — не константа: длину кода задаёт бэкенд, и
+                    // шесть ячеек по 64dp в экран не влезают (см.
+                    // MahallaComponentDefaults.otpCellWidth).
+                    val gaps = Spacing.item * (state.length - 1)
+                    val cellWidth = minOf(
+                        MahallaComponentDefaults.otpCellWidth,
+                        (maxWidth - gaps) / state.length,
+                    )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
                         verticalAlignment = Alignment.CenterVertically,
@@ -231,17 +266,23 @@ fun MahallaOtpField(
                             val borderColor = when {
                                 state.isError || errorText != null -> colors.error
                                 focused -> colors.primary
-                                else -> mahalla.outlineSoft
+                                else -> colors.outline
                             }
                             Box(
                                 modifier = Modifier
-                                    .width(MahallaComponentDefaults.otpCellWidth)
+                                    .width(cellWidth)
                                     .height(MahallaComponentDefaults.otpCellHeight)
-                                    .background(colors.surfaceVariant, MaterialTheme.shapes.small)
+                                    // Заполненная ячейка отличается заливкой, а
+                                    // не только цифрой: на неё смотрят боковым
+                                    // зрением, пересчитывая, сколько осталось.
+                                    .background(
+                                        if (digit == null) Color.Transparent else colors.surfaceVariant,
+                                        OtpCellShape,
+                                    )
                                     .border(
                                         MahallaComponentDefaults.borderWidth,
                                         borderColor,
-                                        MaterialTheme.shapes.small,
+                                        OtpCellShape,
                                     )
                                     // Ячейки — отрисовка одного поля, TalkBack не
                                     // должен читать их по отдельности.
@@ -254,7 +295,7 @@ fun MahallaOtpField(
                                         masked -> MASK_CHARACTER
                                         else -> digit.toString()
                                     },
-                                    style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                                    style = FocusOtpDigit.merge(TabularNums),
                                     color = colors.onSurface,
                                     textAlign = TextAlign.Center,
                                 )
@@ -329,6 +370,9 @@ private fun FieldSupportingText(supportingText: String?, errorText: String?) {
 }
 
 private const val COUNTRY_CODE = "998"
+
+/** Радиус ячейки кода — 14dp по макету, между `small` (12) и `medium` (16). */
+private val OtpCellShape = RoundedCornerShape(14.dp)
 
 /** Точка вместо цифры PIN: сам код не должен читаться с экрана через плечо. */
 private const val MASK_CHARACTER = "•"

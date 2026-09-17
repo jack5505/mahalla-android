@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.MahallaButton
@@ -47,10 +48,12 @@ import uz.mahalla.ui.theme.TabularNums
 /**
  * Оформление заказа одежды (issue #108): способ получения, адрес, оплата.
  *
- * Форма — та же, что у «Еды»: у бэкенда это один и тот же
- * `PlaceOrderRequest`. Ни комментария, ни времени доставки в нём нет, поэтому
- * их нет и на экране — поле, которое некуда отправить, обещало бы человеку
- * то, о чём магазин не узнает.
+ * Форма переиспользует [uz.mahalla.feature.food.domain.CheckoutForm] «Еды» —
+ * поля на экране совпадают, хотя тело запроса своё (issue #221:
+ * `FashionPlaceOrderRequestDto`, не общий с «Едой» `PlaceOrderRequestDto`).
+ * Ни комментария, ни времени доставки, ни выбора точки на карте, ни промокода
+ * на экране нет — поле, которое некуда отправить или нечем заполнить,
+ * обещало бы человеку то, о чём магазин не узнает.
  */
 @Composable
 fun FashionCheckoutScreen(
@@ -264,12 +267,13 @@ private fun OrderLine(item: FashionCartItem) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            val joinTemplate = stringResource(R.string.text_joined_with_dot)
             val details = listOfNotNull(
-                item.variantLabel.takeIf(String::isNotBlank),
+                item.variantLabel(joinTemplate).takeIf(String::isNotBlank),
                 stringResource(R.string.quantity_value, item.quantity),
             )
             Text(
-                text = details.joinToString(" · "),
+                text = TextJoiner.join(joinTemplate, details),
                 style = MaterialTheme.typography.bodySmall,
                 color = LocalMahallaColors.current.fgMuted,
             )
