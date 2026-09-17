@@ -178,10 +178,19 @@ private fun CheckoutBar(
                 .padding(horizontal = Spacing.gutter, vertical = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.item),
         ) {
-            // Одна строка, а не «позиции + скидка + итог»: до оформления
-            // корзина знает только сумму позиций — ни скидки, ни доставки
-            // бэкенд не сообщает, и три одинаковых числа подряд читались бы
-            // как ошибка расчёта.
+            // Разбивка появляется только вместе с платной доставкой
+            // (issue #179): без неё «позиции» и «итого» — два одинаковых
+            // числа подряд, а это читается как ошибка расчёта.
+            if (state.showsDelivery) {
+                TotalRow(
+                    label = stringResource(R.string.cart_subtotal),
+                    value = MoneyFormatter.withCurrency(state.totals.subtotalSum, currency),
+                )
+                TotalRow(
+                    label = stringResource(R.string.checkout_delivery_fee),
+                    value = MoneyFormatter.withCurrency(state.totals.deliverySum, currency),
+                )
+            }
             TotalRow(
                 label = stringResource(R.string.cart_total),
                 value = MoneyFormatter.withCurrency(state.totals.totalSum, currency),
