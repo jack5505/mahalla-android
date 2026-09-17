@@ -42,6 +42,13 @@ class BusinessQueueViewModel @Inject constructor(
      */
     private var loadJob: Job? = null
 
+    /**
+     * Reload, отменённый или отложенный ради действия над талоном (см.
+     * [preemptReload]), — не потерянный: он повторится сам, как только
+     * действие закончится ([replayReloadIfPending]), issue #272 (попытка 2).
+     */
+    private var reloadPending = false
+
     init {
         load()
     }
@@ -49,11 +56,11 @@ class BusinessQueueViewModel @Inject constructor(
     override fun onEvent(event: BusinessQueueEvent) {
         when (event) {
             BusinessQueueEvent.ScreenResumed ->
-                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
+                onScreenResumed(isLoadInFlight = { loadJob?.isActive == true }) {
+                    load(showLoading = false)
+                }
 
-            BusinessQueueEvent.Refreshed ->
-                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
-
+            BusinessQueueEvent.Refreshed -> load(showLoading = false, refreshing = true)
             BusinessQueueEvent.Retry -> load()
             is BusinessQueueEvent.ActionClicked -> act(event.ticketId, event.action)
             BusinessQueueEvent.CallNextClicked -> callNext()
@@ -61,15 +68,31 @@ class BusinessQueueViewModel @Inject constructor(
     }
 
     /**
-     * Reload и точечное действие над талоном взаимно исключают друг друга:
-     * который бы из двух ни начался вторым, более старый ответ первого может
-     * прийти позже и откатить то, что успел применить второй (нашло ревью,
-     * issue #272). Поэтому reload не стартует, пока действие в полёте, и
-     * действие не стартует, пока не завершился reload.
+     * Действие над талоном всегда важнее фонового reload, независимо от
+     * порядка: его ответ, если reload ещё летит, устарел по определению и
+     * откатил бы то, что действие вот-вот применит (нашло ревью, issue #272).
+     * Поэтому действие не ждёт reload, а обрывает его — а не наоборот.
      */
-    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.isBusy
+    private fun preemptReload() {
+        if (loadJob?.isActive == true) reloadPending = true
+        loadJob?.cancel()
+    }
+
+    private fun replayReloadIfPending() {
+        if (reloadPending) {
+            reloadPending = false
+            load(showLoading = false)
+        }
+    }
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+        if (currentState.isBusy) {
+            // Действие над талоном в полёте — его ответ и должен победить.
+            // Reload не потерян: [replayReloadIfPending] перечитает очередь,
+            // как только действие завершится.
+            reloadPending = true
+            return
+        }
         loadJob?.cancel()
         updateState {
             copy(
@@ -119,21 +142,24 @@ class BusinessQueueViewModel @Inject constructor(
      * доедут на ближайшем обновлении — показать чужую позицию на секунду
      * устаревшей безопаснее, чем дёргать список на каждое нажатие.
      *
-     * [isReloadBlocked] — та же гонка, что и у [load], но в обратную сторону:
-     * если фоновый reload уже в полёте, его более старый ответ может прийти
-     * позже и откатить действие, начатое поверх него (нашло ревью, issue
-     * #272).
+     * Если фоновый reload уже в полёте, [preemptReload] его обрывает: более
+     * старый ответ не может откатить то, что вот-вот применит действие
+     * (нашло ревью, issue #272).
      */
     private fun act(ticketId: String, action: QueueAction) {
-        if (isReloadBlocked()) return
+        if (currentState.isBusy) return
         val entry = entryOrNull(ticketId) ?: return
         if (!QueueActionRules.isAllowed(entry.status, action)) return
 
+        preemptReload()
         updateState { copy(pendingTicketId = ticketId, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.act(placeId, ticketId, action)) {
-                is ApiResult.Failure -> updateState {
-                    copy(pendingTicketId = null, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(pendingTicketId = null, actionFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 is ApiResult.Success -> {
@@ -144,6 +170,7 @@ class BusinessQueueViewModel @Inject constructor(
                         )
                     }
                     emitEffect(BusinessQueueEffect.ActionDone(action, entry.userName))
+                    replayReloadIfPending()
                 }
             }
         }

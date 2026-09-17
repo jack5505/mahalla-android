@@ -31,6 +31,7 @@ import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
@@ -47,7 +48,6 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueActionRules
 import uz.mahalla.feature.business.domain.QueueEntry
-import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing

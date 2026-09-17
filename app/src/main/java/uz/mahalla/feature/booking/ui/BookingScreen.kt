@@ -34,18 +34,17 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaChoiceCard
-import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaFilterChip
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.BarberService
@@ -581,38 +580,6 @@ private fun BookedBlock(
             text = stringResource(R.string.my_appointments_title),
             onClick = { onEvent(BookingEvent.MyAppointmentsClicked) },
         )
-    }
-}
-
-/**
- * Отказ внутри экрана: текст сервера, подробности и — если есть чем — повтор.
- * `ApiErrorState` здесь не годится: он занимает экран целиком, а услуги,
- * слоты и подтверждение отказывают по отдельности.
- */
-@Composable
-internal fun InlineFailure(
-    failure: ApiFailure,
-    modifier: Modifier = Modifier,
-    onRetry: (() -> Unit)? = null,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.item),
-    ) {
-        Text(
-            text = failure.userMessage(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
-        failure.server?.let { MahallaErrorDetails(server = it) }
-        if (onRetry != null) {
-            MahallaButton(
-                text = stringResource(R.string.action_retry),
-                onClick = onRetry,
-                variant = MahallaButtonVariant.Secondary,
-                fillWidth = false,
-            )
-        }
     }
 }
 

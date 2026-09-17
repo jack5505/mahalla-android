@@ -49,7 +49,7 @@ import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentSections
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.AppointmentVertical
-import uz.mahalla.feature.booking.ui.InlineFailure
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums

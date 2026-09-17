@@ -40,7 +40,7 @@ import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.feature.booking.ui.InlineFailure
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing

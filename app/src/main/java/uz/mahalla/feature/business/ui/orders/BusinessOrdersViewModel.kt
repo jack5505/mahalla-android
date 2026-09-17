@@ -40,6 +40,13 @@ class BusinessOrdersViewModel @Inject constructor(
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
+    /**
+     * Reload, отменённый или отложенный ради смены статуса (см.
+     * [preemptReload]), — не потерянный: он повторится сам, как только
+     * действие закончится ([replayReloadIfPending]), issue #272 (попытка 2).
+     */
+    private var reloadPending = false
+
     init {
         load()
     }
@@ -47,11 +54,11 @@ class BusinessOrdersViewModel @Inject constructor(
     override fun onEvent(event: BusinessOrdersEvent) {
         when (event) {
             BusinessOrdersEvent.ScreenResumed ->
-                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
+                onScreenResumed(isLoadInFlight = { loadJob?.isActive == true }) {
+                    load(showLoading = false)
+                }
 
-            BusinessOrdersEvent.Refreshed ->
-                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
-
+            BusinessOrdersEvent.Refreshed -> load(showLoading = false, refreshing = true)
             BusinessOrdersEvent.Retry -> load()
             BusinessOrdersEvent.LoadMore -> loadMore()
             is BusinessOrdersEvent.FilterSelected -> selectFilter(event.filter)
@@ -62,6 +69,11 @@ class BusinessOrdersViewModel @Inject constructor(
     /**
      * Смена вкладки показывает скелетон, а не оставляет чужие заказы: список
      * «новых» под заголовком «готовые» читался бы как ответ сервера.
+     *
+     * Инвариант с [load] общий: если смена статуса ещё не ответила, запрос
+     * вкладки не уходит тут же, а ждёт своей очереди внутри [load] — иначе
+     * это был бы третий обход того же инварианта в обход [preemptReload]
+     * (нашло ревью, issue #272, попытка 2).
      */
     private fun selectFilter(filter: BusinessOrderFilter) {
         if (filter == currentState.filter) return
@@ -70,13 +82,22 @@ class BusinessOrdersViewModel @Inject constructor(
     }
 
     /**
-     * Reload и смена статуса заказа взаимно исключают друг друга: который бы
-     * из двух ни начался вторым, более старый ответ первого может прийти
-     * позже и откатить то, что успел применить второй (нашло ревью, issue
-     * #272). Поэтому reload не стартует, пока статус меняется, и смена
-     * статуса не стартует, пока не завершился reload.
+     * Смена статуса заказа всегда важнее фонового reload, независимо от
+     * порядка: его ответ, если reload ещё летит, устарел по определению и
+     * откатил бы то, что действие вот-вот применит (нашло ревью, issue #272).
+     * Поэтому действие не ждёт reload, а обрывает его — а не наоборот.
      */
-    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.isBusy
+    private fun preemptReload() {
+        if (loadJob?.isActive == true) reloadPending = true
+        loadJob?.cancel()
+    }
+
+    private fun replayReloadIfPending() {
+        if (reloadPending) {
+            reloadPending = false
+            load(showLoading = false)
+        }
+    }
 
     /**
      * Предыдущая загрузка отменяется: «повторить» поверх pull-to-refresh иначе
@@ -84,6 +105,13 @@ class BusinessOrdersViewModel @Inject constructor(
      * есть возможен откат к более старому списку (нашло ревью).
      */
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+        if (currentState.isBusy) {
+            // Смена статуса в полёте — её ответ и должен победить. Reload не
+            // потерян: [replayReloadIfPending] перечитает список, как только
+            // действие завершится.
+            reloadPending = true
+            return
+        }
         loadJob?.cancel()
         loadMoreJob?.cancel()
         loadedPage = 0
@@ -199,12 +227,17 @@ class BusinessOrdersViewModel @Inject constructor(
      * выпадает из фильтра**: строка, исчезнувшая ровно в момент нажатия,
      * читается как «нажал не туда». Из выборки он уйдёт при следующем
      * обновлении — то есть тогда, когда это уже не выглядит потерей.
+     *
+     * Если фоновый reload уже в полёте, [preemptReload] его обрывает: более
+     * старый ответ не может откатить то, что вот-вот применит смена статуса
+     * (нашло ревью, issue #272).
      */
     private fun updateStatus(orderId: String, status: OrderStatus) {
-        if (isReloadBlocked()) return
+        if (currentState.isBusy) return
         val order = orderOrNull(orderId) ?: return
         if (!BusinessOrderStatusFlow.isAllowed(order.status, status, order.method)) return
 
+        preemptReload()
         updateState { copy(pendingOrderId = orderId, actionFailure = null) }
         viewModelScope.launch {
             val result = repository.updateOrderStatus(
@@ -213,8 +246,11 @@ class BusinessOrdersViewModel @Inject constructor(
                 status = status,
             )
             when (result) {
-                is ApiResult.Failure -> updateState {
-                    copy(pendingOrderId = null, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(pendingOrderId = null, actionFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 is ApiResult.Success -> {
@@ -225,6 +261,7 @@ class BusinessOrdersViewModel @Inject constructor(
                             number = result.data.number ?: order.number,
                         ),
                     )
+                    replayReloadIfPending()
                 }
             }
         }

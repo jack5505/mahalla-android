@@ -290,28 +290,77 @@ class BusinessOrdersViewModelTest {
     }
 
     /**
-     * Симметричная гонка: смена статуса, начатая поверх ещё не завершившегося
-     * reload, должна ждать его конца — иначе более старый ответ reload,
-     * доехавший позже, откатил бы применённый статус (нашло ревью, issue
-     * #272).
+     * Симметричная гонка, вторая попытка: смена статуса не ждёт ещё не
+     * завершившийся reload — она его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только статус ответит, и
+     * привозит уже свежий список (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего кнопки оставались
+     * нажимаемыми, но молча ничего не делали).
      */
     @Test
-    fun `a status change is blocked while a reload is in flight`() = runTest {
+    fun `a status change cancels a reload in flight and the reload replays after it`() = runTest {
         val repository = FakeBusinessRepository()
         repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
         val viewModel = viewModel(repository)
         val gate = CompletableDeferred<Unit>()
         repository.ordersGate = gate
 
         viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // открытие — пропускается
         viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
 
         viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
-        assertTrue(repository.statusUpdates.isEmpty())
+
+        // Смена статуса не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(listOf("o-1" to OrderStatus.Confirmed), repository.statusUpdates)
+        assertEquals(
+            OrderStatus.Confirmed,
+            (viewModel.state.value.orders as ScreenState.Content).data.single().status,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённый
+        // статус — а не откатывает его устаревшим снимком.
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Confirmed)))
+        gate.complete(Unit)
+
+        assertEquals(listOf(null to 0, null to 0, null to 0), repository.orderRequests)
+        assertEquals(
+            OrderStatus.Confirmed,
+            (viewModel.state.value.orders as ScreenState.Content).data.single().status,
+        )
+    }
+
+    /**
+     * Второй обход того же инварианта: чипсы фильтра не блокируются кнопкой,
+     * но переключение вкладки во время ещё не ответившей смены статуса не
+     * должно уходить на сервер немедленно — иначе достигается та же гонка
+     * (нажал «Готово» → тут же переключил вкладку), которую PR закрывает
+     * (нашло ревью, issue #272, попытка 2).
+     */
+    @Test
+    fun `changing the tab while a status change is in flight waits its turn`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.updateOrderGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertEquals("o-1", viewModel.state.value.pendingOrderId)
+
+        viewModel.onEvent(BusinessOrdersEvent.FilterSelected(BusinessOrderFilter.Ready))
+        // Вкладка переключилась визуально, но запрос за ней не ушёл — раньше
+        // это было дырой в инварианте.
+        assertEquals(listOf(null to 0), repository.orderRequests)
+        assertEquals(BusinessOrderFilter.Ready, viewModel.state.value.filter)
 
         gate.complete(Unit)
-        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
-        assertEquals(1, repository.statusUpdates.size)
+
+        // Статус ответил — отложенный reload доехал уже за новую вкладку.
+        assertEquals(listOf(null to 0, "READY" to 0), repository.orderRequests)
     }
 
     @Test

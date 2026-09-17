@@ -292,12 +292,16 @@ class BusinessMenuViewModelTest {
     }
 
     /**
-     * Симметричная гонка: стоп-лист, начатый поверх ещё не завершившегося
-     * reload, должен ждать его конца — иначе более старый ответ reload,
-     * доехавший позже, откатил бы переключение (нашло ревью, issue #272).
+     * Симметричная гонка, вторая попытка: стоп-лист не ждёт ещё не
+     * завершившийся reload — он его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только стоп-лист ответит, и
+     * привозит уже свежее меню (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего переключатель
+     * оставался нажимаемым, но молча ничего не делал).
      */
     @Test
-    fun `the stop list is blocked while a reload is in flight`() = runTest {
+    fun `the stop list cancels a reload in flight and the reload replays after it`() = runTest {
         val repository = FakeBusinessRepository()
         repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
         val viewModel = viewModel(repository)
@@ -306,13 +310,35 @@ class BusinessMenuViewModelTest {
 
         viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // открытие — пропускается
         viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(
+            listOf(FakeBusinessRepository.PLACE_ID, FakeBusinessRepository.PLACE_ID),
+            repository.menuRequests,
+        )
 
         viewModel.onEvent(BusinessMenuEvent.StopListToggled("i-1"))
-        assertTrue(repository.toggledItems.isEmpty())
 
+        // Стоп-лист не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(listOf("i-1" to true), repository.toggledItems)
+        assertTrue(
+            (viewModel.state.value.menu as ScreenState.Content).data.item("i-1")!!.isStopped,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённый
+        // стоп-лист — а не откатывает его устаревшим снимком.
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = false)))
         gate.complete(Unit)
-        viewModel.onEvent(BusinessMenuEvent.StopListToggled("i-1"))
-        assertEquals(1, repository.toggledItems.size)
+
+        assertEquals(
+            listOf(
+                FakeBusinessRepository.PLACE_ID,
+                FakeBusinessRepository.PLACE_ID,
+                FakeBusinessRepository.PLACE_ID,
+            ),
+            repository.menuRequests,
+        )
+        assertTrue(
+            (viewModel.state.value.menu as ScreenState.Content).data.item("i-1")!!.isStopped,
+        )
     }
 
     private fun viewModel(repository: FakeBusinessRepository) = BusinessMenuViewModel(

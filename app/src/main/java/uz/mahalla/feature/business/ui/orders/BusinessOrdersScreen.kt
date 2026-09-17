@@ -33,6 +33,7 @@ import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.FilterChipUi
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
@@ -48,7 +49,6 @@ import uz.mahalla.core.ui.components.rememberSnackbarController
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderLine

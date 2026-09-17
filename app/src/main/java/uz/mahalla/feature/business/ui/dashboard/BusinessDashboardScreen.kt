@@ -32,6 +32,7 @@ import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaListItem
@@ -47,7 +48,6 @@ import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessMetric
 import uz.mahalla.feature.business.domain.BusinessMetricKind
 import uz.mahalla.feature.business.domain.BusinessSection
-import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole

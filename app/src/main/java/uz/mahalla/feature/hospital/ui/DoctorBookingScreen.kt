@@ -43,7 +43,7 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
-import uz.mahalla.feature.booking.ui.InlineFailure
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
 import uz.mahalla.feature.hospital.domain.DoctorSlot

@@ -267,12 +267,16 @@ class BusinessDashboardViewModelTest {
     }
 
     /**
-     * Симметричная гонка: «пауза», начатая поверх ещё не завершившегося
-     * reload, должна ждать его конца — иначе более старый ответ reload,
-     * доехавший позже, откатил бы применённый флаг (нашло ревью, issue #272).
+     * Симметричная гонка, вторая попытка: «пауза» не ждёт ещё не
+     * завершившийся reload — она его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только «пауза» ответит, и
+     * привозит уже свежие права (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего переключатель
+     * оставался нажимаемым, но молча ничего не делал).
      */
     @Test
-    fun `a pause is blocked while a reload is in flight`() = runTest {
+    fun `a pause cancels a reload in flight and the reload replays after it`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
         val gate = CompletableDeferred<Unit>()
@@ -280,13 +284,22 @@ class BusinessDashboardViewModelTest {
 
         viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // открытие — пропускается
         viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(listOf(PLACE, PLACE), repository.accessRequests)
 
         viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
-        assertTrue(repository.paused.isEmpty())
 
+        // «Пауза» не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(listOf(PLACE to true), repository.paused)
+        assertFalse((viewModel.state.value.access as ScreenState.Content).data.isAvailable)
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённую
+        // паузу — а не откатывает её устаревшим снимком прав.
+        repository.accessResult = ApiResult.Success(access().copy(isAvailable = false))
         gate.complete(Unit)
-        viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
-        assertEquals(1, repository.paused.size)
+
+        // Reload повторился сам, как только «пауза» ответила.
+        assertEquals(listOf(PLACE, PLACE, PLACE), repository.accessRequests)
+        assertFalse((viewModel.state.value.access as ScreenState.Content).data.isAvailable)
     }
 
     /** Повтор метрик не трогает права: они уже подтверждены. */

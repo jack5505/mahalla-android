@@ -271,13 +271,16 @@ class BusinessQueueViewModelTest {
     }
 
     /**
-     * Симметричная гонка: действие над талоном, начатое поверх ещё не
-     * завершившегося reload, должно ждать его конца — иначе более старый ответ
-     * reload, доехавший позже, откатил бы то, что успело применить действие
-     * (нашло ревью, issue #272).
+     * Симметричная гонка, вторая попытка: действие над талоном не ждёт ещё не
+     * завершившийся reload — оно его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только действие ответит, и
+     * привозит уже свежий список (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего кнопки оставались
+     * нажимаемыми, но молча ничего не делали).
      */
     @Test
-    fun `an action is blocked while a reload is in flight`() = runTest {
+    fun `an action cancels a reload in flight and the reload replays after it`() = runTest {
         val repository = FakeBusinessRepository()
         repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
         val viewModel = viewModel(repository)
@@ -286,13 +289,27 @@ class BusinessQueueViewModelTest {
 
         viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // открытие — пропускается
         viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(listOf(PLACE, PLACE), repository.queueRequests)
 
         viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
-        assertTrue(repository.actions.isEmpty())
 
-        gate.complete(Unit)
-        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+        // Действие не ждёт зависший reload — уходит на сервер немедленно.
         assertEquals(1, repository.actions.size)
+        assertEquals(
+            WalkInStatus.InChair,
+            (viewModel.state.value.entries as ScreenState.Content).data.single().status,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённое
+        // действие — а не откатывает его устаревшим снимком.
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.InChair)))
+        gate.complete(Unit)
+
+        assertEquals(listOf(PLACE, PLACE, PLACE), repository.queueRequests)
+        assertEquals(
+            WalkInStatus.InChair,
+            (viewModel.state.value.entries as ScreenState.Content).data.single().status,
+        )
     }
 
     @Test

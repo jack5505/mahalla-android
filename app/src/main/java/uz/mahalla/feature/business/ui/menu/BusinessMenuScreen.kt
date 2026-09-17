@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.ButtonState
@@ -58,7 +59,6 @@ import uz.mahalla.feature.business.domain.BusinessMenuItem
 import uz.mahalla.feature.business.domain.BusinessMenuSection
 import uz.mahalla.feature.business.domain.NewMenuItemError
 import uz.mahalla.feature.business.domain.NewMenuItemForm
-import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
