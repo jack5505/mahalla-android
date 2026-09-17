@@ -43,6 +43,7 @@ class FakeProfileRepository(
                 current.copy(
                     fullName = fullName ?: current.fullName,
                     avatarUrl = avatarUrl ?: current.avatarUrl,
+                    fullNamePendingSync = false,
                 ),
             )
         }

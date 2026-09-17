@@ -404,18 +404,31 @@ class DefaultAuthRepository @Inject constructor(
      * их в том же блоке `user`, и раньше они молча выбрасывались — из-за этого
      * настоящий владелец заведения ничем не отличался от покупателя, а
      * заблокированный аккаунт выглядел сломанным приложением.
+     *
+     * Имя из анкеты покупателя, ещё не подтверждённое сервером
+     * (`UserProfile.fullNamePendingSync`, issue #234), этим ответом не
+     * стирается — вход предшествует анкете (`GeoRoute → RoleRoute(onboarding
+     * = true)` идёт уже после OTP/PIN), а ответ на вход анкету ещё не видел.
+     * Флаг переносится, только когда `current.id == user.id`; если ответ
+     * пришёл без `id` (`user.id == null`) и в сторе тоже `null` — сравнение
+     * даст `true`, поэтому при «пустом» входе имя тоже не теряется. Для
+     * другого аккаунта (первый вход, смена номера на устройстве) флаг не
+     * переносится — это не то же самое ожидание.
      */
     private suspend fun saveProfile(user: UserDto?) {
         if (user == null) return
+        val current = userProfileStore.current()
+        val stillPending = current.fullNamePendingSync && current.id == user.id
         userProfileStore.save(
             UserProfile(
                 id = user.id,
                 phone = user.phone,
-                fullName = user.fullName,
+                fullName = if (stillPending) current.fullName else user.fullName,
                 avatarUrl = user.avatarUrl,
                 serverRole = user.role,
                 verificationStatus = user.verificationStatus,
                 accountStatus = user.accountStatus,
+                fullNamePendingSync = stillPending,
             ),
         )
     }
