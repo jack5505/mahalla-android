@@ -61,6 +61,7 @@ class MahallaMessagingService : FirebaseMessagingService() {
             data = message.data,
             fallbackTitle = message.notification?.title,
             fallbackBody = message.notification?.body,
+            fcmMessageId = message.messageId,
         )
         runBlocking {
             runCatchingCancellable { notifier.show(push) }

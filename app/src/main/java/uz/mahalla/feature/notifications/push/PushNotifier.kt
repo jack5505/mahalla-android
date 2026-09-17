@@ -15,6 +15,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import uz.mahalla.MainActivity
 import uz.mahalla.R
 import uz.mahalla.core.crash.reportSwallowed
+import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.notifications.data.NotificationSettingsStore
 import java.time.LocalTime
@@ -72,7 +73,7 @@ class PushNotifier @Inject constructor(
     // Разрешение проверено в PushGate несколькими строками выше
     // (`isPostNotificationsGranted`), но статический анализ этого не видит:
     // проверка отделена от вызова ради тестируемости решения. Второе, чего
-    // требует lint, — обработка SecurityException — сделана `runCatching`
+    // требует lint, — обработка SecurityException — сделана `runCatchingCancellable`
     // ниже: отозвать разрешение между проверкой и показом можно, и падать на
     // этом фоновый сервис не должен.
     @SuppressLint("MissingPermission")
@@ -95,7 +96,7 @@ class PushNotifier @Inject constructor(
             .setContentIntent(contentIntent(message))
             .build()
 
-        runCatching {
+        runCatchingCancellable {
             NotificationManagerCompat.from(context)
                 .notify(message.tag, NOTIFICATION_ID, notification)
         }.reportSwallowed("push_notify")

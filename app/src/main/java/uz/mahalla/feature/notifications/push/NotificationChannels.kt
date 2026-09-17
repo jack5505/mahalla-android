@@ -7,6 +7,8 @@ import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.core.app.NotificationManagerCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import uz.mahalla.R
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.data.prefs.SettingsDataStore
@@ -72,13 +74,13 @@ class NotificationChannels @Inject constructor(
      */
     suspend fun ensureAll() {
         val localized = localizedContext()
-        manager.createNotificationChannels(
-            NotificationCategory.entries.map { it.toChannel(localized) },
-        )
+        val channels = NotificationCategory.entries.map { it.toChannel(localized) }
+        withContext(Dispatchers.IO) { manager.createNotificationChannels(channels) }
     }
 
     suspend fun ensure(category: NotificationCategory) {
-        manager.createNotificationChannel(category.toChannel(localizedContext()))
+        val channel = category.toChannel(localizedContext())
+        withContext(Dispatchers.IO) { manager.createNotificationChannel(channel) }
     }
 
     /**

@@ -79,6 +79,22 @@ class PushTokenRegistrarTest {
     }
 
     /**
+     * `fcmToken` в `AuthDeviceInfo` ограничен 500 символами
+     * (`docs/API-CONTRACT.md`). Реальные токены короче, но без обрезки на
+     * клиенте превышение уронило бы валидацией не пуши, а весь вход целиком.
+     */
+    @Test
+    fun `token longer than the backend limit is truncated`() = runTest {
+        val store = PushTokenStore(newDataStore())
+        val tooLong = "a".repeat(600)
+
+        store.save(tooLong)
+
+        assertEquals(500, store.current()?.length)
+        assertEquals(tooLong.take(500), store.current())
+    }
+
+    /**
      * Ради этого всё и хранится: описание устройства собирается заново на
      * каждый запрос авторизации, и токен уезжает вместе с ним.
      */

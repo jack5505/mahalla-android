@@ -41,9 +41,14 @@ class PushTokenStore @Inject constructor(
      * Пустая строка — это «токена нет», а не токен из пробелов: ключ
      * удаляется, иначе запрос авторизации отправил бы бэкенду мусор, по
      * которому пуш никуда не уйдёт (то же правило, что у адреса доставки).
+     *
+     * `fcmToken` в `AuthDeviceInfo` ограничен 500 символами
+     * (`docs/API-CONTRACT.md`) — превышение уронило бы валидацией не пуши, а
+     * весь `send-otp`/`verify-otp`/`refresh`. Реальные токены Firebase короче
+     * (~150–350), но резать здесь дешевле, чем разбирать сломанный вход.
      */
     suspend fun save(token: String) {
-        val cleaned = token.trim()
+        val cleaned = token.trim().take(MAX_TOKEN_LENGTH)
         dataStore.edit { preferences ->
             if (cleaned.isEmpty()) {
                 preferences.remove(PreferenceKeys.FcmToken)
@@ -51,5 +56,9 @@ class PushTokenStore @Inject constructor(
                 preferences[PreferenceKeys.FcmToken] = cleaned
             }
         }
+    }
+
+    private companion object {
+        const val MAX_TOKEN_LENGTH = 500
     }
 }

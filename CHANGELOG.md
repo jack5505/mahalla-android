@@ -2124,3 +2124,54 @@ SUCCESSFUL. Обе гонки и прогноз у отменённой подп
 - На устройстве ничего не проверено (эмулятора в CI нет), скриншот-тестов
   по-прежнему нет: карточка подписки с продлением, бейдж «истекает» и история
   списаний проверялись глазами по `@ThemeLanguagePreviews`.
+
+---
+
+## Этап: правки по ревью push-уведомлений (PR #159, issue #15)
+
+Ревью нашло шесть замечаний в коде и одну неточность в вёрстке. Пять
+исправлены здесь же:
+
+- **Разные пуши без своего экрана схлопывались в один.** `PushMessage.tag`
+  без `id` от сервера падал на `deepLink` — а у `WALKIN_*`, `APPOINTMENT_*`,
+  акции и отзыва ссылка одна и та же (`mahalla://notifications`), то есть
+  напоминание о записи и подошедшая очередь заменяли друг друга в шторке.
+  Теперь ключом становится `RemoteMessage.messageId` — он свой у каждой
+  доставки FCM и от бэкенда не зависит; ссылка остаётся запасным вариантом
+  только когда `messageId` тоже нет (пустой тест-payload).
+- **`runCatching` вместо `runCatchingCancellable`** в `PushNotifier.post` —
+  единственное место в пуш-коде, где ловился `Throwable`, включая отмену
+  корутины.
+- **`fcmToken` теперь обрезается до 500 символов** (`PushTokenStore.save`) —
+  лимит из контракта (`AuthDeviceInfo.fcmToken`), превышение уронило бы
+  валидацией не пуш, а весь `send-otp`/`verify-otp`/`refresh`.
+- **Названия каналов обновляются сразу при смене языка в профиле**
+  (`ProfileViewModel.LanguageSelected` зовёт `NotificationChannels.ensureAll`),
+  а не только при следующем перезапуске процесса.
+- **`createNotificationChannels`/`createNotificationChannel` ушли на
+  `Dispatchers.IO`** — раньше шесть binder-вызовов уходили с главного потока
+  во время сплэша.
+- **`HourPickerDialog`: кнопка «Отмена» переехала в `dismissButton`** —
+  раньше она занимала слот `confirmButton`, что читалось как обратная логика.
+
+**Оспорено, не исправлено.** Реплика про `mahalla://order/{id}` — что
+`NotificationCategory.Orders` шире, чем экран, на который ведёт `Order`
+(еда/одежда/мастера против только еды). Проверено кодом: `orders/{orderId}`
+(`order-controller`, схема `OrderView`) — это уже **общая** ручка, ею же
+читает заказ и вертикаль «Одежда» (`FashionOrderRepository`, фильтр
+`?vertical=CLOTHING`) — то есть еда и одежда через один и тот же id уже
+резолвятся оба, регресса тут нет. А вот вертикаль «Мастера»
+(`FreelancerRepository`) эту ручку не вызывает вовсе — у неё свои
+`freelancers/{id}/orders` и `freelancers/orders/my`, и резолвит ли
+`orders/{orderId}` id заказа мастера так же, как еду и одежду, из кода не
+следует ни в одну, ни в другую сторону. Это ровно тот случай, когда угадывать
+контракт нельзя (`AGENTS.md`): не исправлено кодом, задокументировано
+NEEDS-PARTNER в `docs/API-CONTRACT.md` и заведено issue #297.
+
+**Проверено.** `./gradlew testDebugUnitTest` — BUILD SUCCESSFUL; `assembleDebug`
+— BUILD SUCCESSFUL; `lintDebug` — BUILD SUCCESSFUL. Новые случаи:
+`PushMessageTest` (`fcmMessageId` разводит разные пуши, серверный `id`
+приоритетнее), `PushTokenRegistrarTest` (обрезка токена до 500 символов);
+`ProfileViewModelTest` и `RootViewModelTest` не потеряли покрытие —
+`ProfileViewModel` получил новую зависимость `NotificationChannels` (реальный
+экземпляр под Robolectric, как и в `RootViewModelTest`).

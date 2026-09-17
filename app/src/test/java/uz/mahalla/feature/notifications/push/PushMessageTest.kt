@@ -88,9 +88,45 @@ class PushMessageTest {
         assertNull(message.title)
         assertNull(message.body)
         assertEquals("mahalla://notifications", message.deepLink)
-        // Ключа от сервера нет — ключом становится ссылка, иначе два пуша
-        // подряд множили бы копии в шторке.
+        // Ключа от сервера нет, `messageId` FCM в тесте тоже не передан —
+        // ключом становится ссылка. В реальной доставке `messageId` есть
+        // всегда: см. `fcm message id keeps unrelated pushes apart`.
         assertEquals("mahalla://notifications", message.tag)
+    }
+
+    /**
+     * Без `id` от сервера двум разным по смыслу пушам (напоминание о записи и
+     * подошедшая очередь) раньше доставалась одна и та же ссылка-заглушка
+     * (`mahalla://notifications`), и второй пуш в шторке заменял первый —
+     * человек терял уведомление молча. `RemoteMessage.messageId` свой у
+     * каждой доставки и от бэкенда не зависит, поэтому именно он теперь
+     * разводит такие пуши.
+     */
+    @Test
+    fun `fcm message id keeps unrelated pushes apart`() {
+        val reminder = PushMessage.of(
+            data = mapOf("type" to "APPOINTMENT_REMINDER"),
+            fcmMessageId = "msg-1",
+        )
+        val queueTurn = PushMessage.of(
+            data = mapOf("type" to "WALKIN_ACCEPTED"),
+            fcmMessageId = "msg-2",
+        )
+
+        assertEquals("mahalla://notifications", reminder.deepLink)
+        assertEquals("mahalla://notifications", queueTurn.deepLink)
+        assertEquals("msg-1", reminder.tag)
+        assertEquals("msg-2", queueTurn.tag)
+    }
+
+    @Test
+    fun `server id wins over the fcm message id`() {
+        val message = PushMessage.of(
+            data = mapOf("id" to "n-1", "type" to "PROMOTION_CREATED"),
+            fcmMessageId = "msg-1",
+        )
+
+        assertEquals("n-1", message.tag)
     }
 
     /**

@@ -200,7 +200,8 @@ private fun HourPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
+        confirmButton = {},
+        dismissButton = {
             MahallaButton(
                 text = stringResource(R.string.action_cancel),
                 onClick = onDismiss,
