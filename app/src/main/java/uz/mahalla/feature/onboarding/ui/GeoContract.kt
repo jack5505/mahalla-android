@@ -29,7 +29,17 @@ sealed interface GeoEvent : UiEvent {
 
     /** «Выбрать город вручную» — без запроса разрешения. */
     data object ChooseCityRequested : GeoEvent
+
+    /**
+     * Город отмечен в списке. Шаг на этом **не** заканчивается: выбор надо
+     * подтвердить кнопкой (макет 0d). Раньше первый же тап сохранял город и
+     * закрывал онбординг — промах по соседней строке было уже не исправить, и
+     * человек уезжал в каталог чужого города.
+     */
     data class CitySelected(val city: City) : GeoEvent
+
+    /** «Продолжить»: сохранить отмеченный город и закончить шаг. */
+    data object ContinueClicked : GeoEvent
 }
 
 sealed interface GeoEffect : UiEffect {

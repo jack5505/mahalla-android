@@ -15,6 +15,9 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderDraft
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus
+import uz.mahalla.feature.freelancer.domain.FreelancerProfileForm
+import uz.mahalla.feature.freelancer.domain.FreelancerServiceForm
+import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -216,15 +219,12 @@ class FreelancerRepositoryTest {
     /**
      * Фикстура — `FreelancerServiceResponse`, как в живой схеме 2026-09-10:
      * `title`, `priceAmount`, `description`, `freelancerId`, `isActive`.
-     * Разбирает свой `FreelancerServiceDto` (issue #216) — не барберский
-     * `ServiceDto` (`name`/`price`), который сюда раньше подставлялся из-за
-     * коллизии springdoc.
      *
      * Выключенные не показываются: заказать их нельзя. Услуга без `id`
      * отбрасывается. Флаг принимается и как `isActive`, и как `active`.
      */
     @Test
-    fun `services drop the inactive ones`() = runTest {
+    fun `services are parsed by title and price amount and drop the inactive ones`() = runTest {
         server.enqueue(
             envelope(
                 """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
@@ -241,30 +241,33 @@ class FreelancerRepositoryTest {
         assertEquals("/freelancers/f-1/services", server.takeRequest().path)
         // Молчание сервера о флаге — «услуга оказывается».
         assertEquals(listOf("s-1", "s-3"), services.map { it.id })
-        assertEquals(60, services.first().durationMinutes)
+        val service = services.first()
+        assertEquals("Kran", service.title)
+        assertEquals("Almashtirish", service.description)
+        assertEquals(150_000L, service.priceSum)
+        assertEquals(60, service.durationMinutes)
     }
 
     /**
-     * Регрессия issue #216: `title` и `priceAmount` мастера — DTO этой
-     * вертикали, а не барберский `ServiceDto`, у которого этих полей нет
-     * вовсе. Название и цена больше не пустые.
+     * В кабинете мастера (issue #71) выключенные услуги остаются: это его
+     * состав, и спрятать их значило бы соврать, что услуги нет.
      */
     @Test
-    fun `services are parsed with the freelancer schema, not the barber one`() = runTest {
+    fun `my services keep the inactive ones`() = runTest {
         server.enqueue(
             envelope(
-                """[{"id":"s-1","freelancerId":"f-1","title":"Kran",
-                   "description":"Almashtirish","priceAmount":150000,
-                   "durationMinutes":60,"isActive":true}]""",
+                """[{"id":"s-1","title":"Kran","priceAmount":15000000,"isActive":true},
+                   {"id":"s-2","title":"Eski","priceAmount":0,"isActive":false}]""",
             ),
         )
 
-        val service = (repository().services("f-1") as ApiResult.Success).data.single()
+        val services = (repository().myServices("f-1") as ApiResult.Success).data
 
-        assertEquals("Kran", service.title)
-        assertEquals("Almashtirish", service.description)
-        // 150 000 тийинов (issue #149) — это 1 500 сум.
-        assertEquals(1_500L, service.priceSum)
+        assertEquals("/freelancers/f-1/services", server.takeRequest().path)
+        assertEquals(listOf("s-1", "s-2"), services.map { it.id })
+        assertEquals(150_000L, services.first().priceSum)
+        assertFalse(services.last().isActive)
+        assertEquals(0L, services.last().priceSum)
     }
 
     @Test
@@ -493,6 +496,304 @@ class FreelancerRepositoryTest {
         assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
     }
 
+    // --- Входящие заказы мастера (issue #190) ---
+
+    @Test
+    fun `incoming orders are paged and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"content":[{"id":"o-1","serviceTitle":"Kran","priceAmount":15000000,
+                   "status":"PENDING","address":"Chilonzor 7"}],"page":1,"totalPages":2,
+                   "last":true}""",
+            ),
+        )
+
+        val page = (repository().incomingOrders(page = 1) as ApiResult.Success).data
+
+        assertEquals("/freelancers/me/orders?page=1&size=20", server.takeRequest().path)
+        assertEquals(listOf("o-1"), page.items.map { it.id })
+        assertEquals(FreelancerOrderStatus.Pending, page.items.first().status)
+        assertFalse(page.hasMore)
+    }
+
+    @Test
+    fun `accepting an order sends the status body to the right path`() = runTest {
+        server.enqueue(envelope("""{"id":"o-1","status":"ACCEPTED"}"""))
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Accepted)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/freelancers/orders/o-1/status", request.path)
+        assertEquals("""{"status":"ACCEPTED"}""", request.body.readUtf8())
+        assertTrue(result is ApiResult.Success)
+    }
+
+    /**
+     * Ответ смены статуса без `id` — успех, а не отказ разбора: статус на
+     * сервере уже сменился, а `updateOrderStatus` не разбирает ответ как
+     * заказ (тот же урок, что у `saveMyService`: строгий разбор ответа записи
+     * не должен превращать удавшуюся операцию в ошибку экрана).
+     */
+    @Test
+    fun `status change with an id-less response is still a success`() = runTest {
+        server.enqueue(envelope("""{"status":"REJECTED"}"""))
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Rejected)
+
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `blank order id never reaches the network`() = runTest {
+        val result = repository().updateOrderStatus(" ", FreelancerOrderStatus.Completed)
+
+        assertEquals(
+            ApiError.Business(FreelancerRepository.INVALID_ORDER_ID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `unauthorized status change is a failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(401)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"UNAUTHORIZED",
+                       "message":"Kirish uchun autentifikatsiya talab qilinadi"}}""",
+                ),
+        )
+
+        val result = repository().updateOrderStatus("o-1", FreelancerOrderStatus.Accepted)
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+    }
+
+    // --- Кабинет мастера (issue #71) ---
+
+    /**
+     * `404` на своей анкете — это «её ещё нет», а не отказ: человек просто не
+     * выставлял себя исполнителем, и экран должен показать пустую форму.
+     */
+    @Test
+    fun `absent profile is a success with null`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"NOT_FOUND"}}"""),
+        )
+
+        val result = repository().myProfile()
+
+        assertEquals("/freelancers/me", server.takeRequest().path)
+        assertNull((result as ApiResult.Success).data)
+    }
+
+    /**
+     * Второй правдоподобный способ сказать «анкеты нет» — успешный конверт с
+     * пустой `data`. Каким из двух отвечает бэкенд, проверить было нечем.
+     */
+    @Test
+    fun `empty payload also counts as absent profile`() = runTest {
+        server.enqueue(envelope("null"))
+
+        assertNull((repository().myProfile() as ApiResult.Success).data)
+    }
+
+    /** А вот отказ **с кодом** остаётся отказом: это не «заполните анкету». */
+    @Test
+    fun `business failure on my profile stays a failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"USER_BLOCKED"}}"""),
+        )
+
+        val result = repository().myProfile()
+
+        assertEquals(ApiError.Business("USER_BLOCKED"), (result as ApiResult.Failure).error)
+    }
+
+    /** Анкета **без `id`** — тоже «нет»: по нему грузятся услуги кабинета. */
+    @Test
+    fun `profile without id counts as absent`() = runTest {
+        server.enqueue(envelope("""{"name":"Aziz"}"""))
+
+        assertNull((repository().myProfile() as ApiResult.Success).data)
+    }
+
+    @Test
+    fun `my profile is parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"f-1","name":"Aziz","profession":"Santexnik","city":"Toshkent",
+                   "hourlyRate":8000000,"experienceYears":7,"isAvailable":false}""",
+            ),
+        )
+
+        val freelancer = (repository().myProfile() as ApiResult.Success).data
+
+        assertEquals("f-1", freelancer?.id)
+        assertEquals("Santexnik", freelancer?.profession)
+        assertEquals(80_000L, freelancer?.hourlyRateSum)
+        assertFalse(freelancer?.isAvailable ?: true)
+    }
+
+    /**
+     * Тело `POST freelancers/me` закреплено здесь: под токеном его проверить
+     * было нечем (`401` приходит до валидации), и правка после проверки на
+     * живом аккаунте будет видна одной строкой.
+     */
+    @Test
+    fun `saved profile sends the whole form`() = runTest {
+        server.enqueue(envelope("""{"id":"f-1","name":"Aziz Karimov"}"""))
+
+        val result = repository().saveMyProfile(
+            FreelancerProfileForm(
+                name = " Aziz Karimov ",
+                profession = " Santexnik ",
+                city = " Toshkent ",
+                bio = " Quvurlar ",
+                phoneDigits = "901234567",
+                hourlyRateText = "80000",
+                experienceYearsText = "7",
+            ),
+        )
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/freelancers/me", request.path)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 80 000 → 8 000 000.
+        assertEquals(
+            """{"name":"Aziz Karimov","profession":"Santexnik","bio":"Quvurlar",""" +
+                """"city":"Toshkent","phone":"+998901234567","hourlyRate":8000000,""" +
+                """"experienceYears":7}""",
+            request.body.readUtf8(),
+        )
+        assertTrue(result is ApiResult.Success)
+    }
+
+    /**
+     * Пустые поля уходят отсутствующими, а не `null` (в `Json` проекта
+     * `explicitNulls = false`): обязательны только имя и специальность.
+     */
+    @Test
+    fun `minimal profile carries only the required fields`() = runTest {
+        server.enqueue(envelope("""{"id":"f-1"}"""))
+
+        repository().saveMyProfile(
+            FreelancerProfileForm(name = "Aziz", profession = "Santexnik"),
+        )
+
+        assertEquals(
+            """{"name":"Aziz","profession":"Santexnik"}""",
+            server.takeRequest().body.readUtf8(),
+        )
+    }
+
+    @Test
+    fun `profile without a profession never reaches the network`() = runTest {
+        val result = repository().saveMyProfile(FreelancerProfileForm(name = "Aziz"))
+
+        assertEquals(
+            ApiError.Business(FreelancerRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `new service is created with post`() = runTest {
+        server.enqueue(envelope("""{"id":"s-1","title":"Kran","priceAmount":150000}"""))
+
+        val result = repository().saveMyService(
+            FreelancerServiceForm(
+                title = " Kran almashtirish ",
+                description = " Materiallar mijoznikidan ",
+                priceText = "150000",
+                durationText = "60",
+            ),
+        )
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/freelancers/me/services", request.path)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 150 000 → 15 000 000.
+        assertEquals(
+            """{"title":"Kran almashtirish","priceAmount":15000000,""" +
+                """"description":"Materiallar mijoznikidan","durationMinutes":60}""",
+            request.body.readUtf8(),
+        )
+        assertTrue(result is ApiResult.Success)
+    }
+
+    /** У правки то же тело, но метод и путь другие — иначе выйдет дубль. */
+    @Test
+    fun `existing service is updated with put`() = runTest {
+        server.enqueue(envelope("""{"id":"s-1","title":"Kran","priceAmount":170000}"""))
+
+        repository().saveMyService(
+            FreelancerServiceForm(id = "s-1", title = "Kran", priceText = "170000"),
+        )
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/freelancers/me/services/s-1", request.path)
+        assertEquals("""{"title":"Kran","priceAmount":17000000}""", request.body.readUtf8())
+    }
+
+    @Test
+    fun `service without a price never reaches the network`() = runTest {
+        val result = repository().saveMyService(FreelancerServiceForm(title = "Kran"))
+
+        assertEquals(
+            ApiError.Business(FreelancerRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+        assertEquals(0, server.requestCount)
+    }
+
+    /** `ApiResponseVoid`: `data` пустая и при успехе — это не отказ. */
+    @Test
+    fun `delete and toggle accept an empty payload`() = runTest {
+        server.enqueue(envelope("null"))
+        server.enqueue(envelope("null"))
+        val repository = repository()
+
+        assertTrue(repository.deleteMyService("s-1") is ApiResult.Success)
+        assertTrue(repository.toggleAvailability() is ApiResult.Success)
+
+        val delete = server.takeRequest()
+        assertEquals("DELETE", delete.method)
+        assertEquals("/freelancers/me/services/s-1", delete.path)
+        val toggle = server.takeRequest()
+        assertEquals("PUT", toggle.method)
+        assertEquals("/freelancers/me/toggle-availability", toggle.path)
+    }
+
+    /** 2xx с `success:false` на пустом ответе — всё-таки отказ (issue #42). */
+    @Test
+    fun `toggle envelope failure is a business error`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"PROFILE_NOT_FOUND"}}"""),
+        )
+
+        val result = repository().toggleAvailability()
+
+        assertEquals(
+            ApiError.Business("PROFILE_NOT_FOUND"),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
     private fun repository() = DefaultFreelancerRepository(
         api = NetworkFactory
             .retrofit(
@@ -501,6 +802,7 @@ class FreelancerRepositoryTest {
                 NetworkFactory.converterFactory(NetworkFactory.json()),
             )
             .create(FreelancerApi::class.java),
+        phoneValidator = PhoneNumberValidator(),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 

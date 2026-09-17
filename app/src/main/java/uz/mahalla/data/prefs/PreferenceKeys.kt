@@ -72,6 +72,14 @@ internal object PreferenceKeys {
     val ProfileVerificationStatus = stringPreferencesKey("profile_verification_status")
     val ProfileAccountStatus = stringPreferencesKey("profile_account_status")
 
+    /**
+     * Имя из анкеты покупателя ждёт подтверждения сервером (issue #234):
+     * `RoleRepository.saveCustomer` пишет `fullName` раньше, чем `PUT users/me`
+     * успевает его отправить, и следующий `ProfileRepository.refresh()` должен
+     * повторить `PUT`, а не затереть ещё не отправленное имя обычным `GET`.
+     */
+    val ProfileFullNamePendingSync = booleanPreferencesKey("profile_full_name_pending_sync")
+
     val SessionAccessToken = stringPreferencesKey("session_access_token")
     val SessionRefreshToken = stringPreferencesKey("session_refresh_token")
     val SessionExpiresAt = longPreferencesKey("session_expires_at")

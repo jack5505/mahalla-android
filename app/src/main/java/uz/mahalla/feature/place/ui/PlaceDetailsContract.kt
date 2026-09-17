@@ -5,6 +5,7 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
@@ -40,6 +41,13 @@ data class PlaceDetailsState(
     /** `null` — расписания нет, статус неизвестен. */
     val openNow: Boolean? = null,
     val hoursExpanded: Boolean = false,
+    /**
+     * Услуги с ценами (макет 1b, блок «Услуги»). Берутся из каталога записи
+     * (`barber-services/places/{id}`) и только у мест, которые ведут запись:
+     * у остальных ручки нет. Отказ — пустой список, а не ошибка карточки:
+     * ради прайса сюда не приходили.
+     */
+    val services: List<BarberService> = emptyList(),
     val allReviewsShown: Boolean = false,
     val social: PlaceSocialStatus? = null,
     val socialLoading: Boolean = true,

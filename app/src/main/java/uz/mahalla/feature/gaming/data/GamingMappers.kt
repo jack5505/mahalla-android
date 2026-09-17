@@ -5,6 +5,7 @@ import java.time.format.DateTimeFormatter
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.parseServerSlotInstant
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
@@ -71,20 +72,10 @@ internal fun GamingBookingDto.toDomain(
 }
 
 /** См. `MyPlacePage` (issue #94) — правило подсчёта страниц там же. */
-internal fun GamingBookingPageDto.toDomain(): GamingBookingPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return GamingBookingPage(
-        items = content.mapNotNull { it.toDomain() },
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            // Полное молчание о страницах останавливает догрузку: лучше не
-            // показать хвост, чем крутить одну страницу в цикле.
-            else -> false
-        },
-    )
-}
+internal fun GamingBookingPageDto.toDomain(): GamingBookingPage = GamingBookingPage(
+    items = content.mapNotNull { it.toDomain() },
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 /**
  * Время начала для тела запроса.

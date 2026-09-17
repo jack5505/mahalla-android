@@ -400,7 +400,9 @@ class GraphAssemblyTest {
     /**
      * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
      * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
-     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     * анкета покупателя живут в DataStore: `PUT users/me` анкету целиком не
+     * принимает (только `fullName` и `avatarUrl`, issue #170), а роль там
+     * вообще не серверная, а локальный выбор (issue #237).
      */
     @Test
     fun `role forms assemble on the main retrofit and the data store`() {
@@ -507,7 +509,15 @@ class GraphAssemblyTest {
         val api = FreelancerDataModule.provideFreelancerApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
+        assertNotNull(
+            DefaultFreelancerRepository(
+                api = api,
+                // Кабинет мастера (issue #71) шлёт телефон в E.164 — тем же
+                // валидатором, что и анкета продавца.
+                phoneValidator = PhoneNumberValidator(),
+                clock = AppModule.provideClock(),
+            ),
+        )
     }
 
     /**
@@ -597,6 +607,7 @@ class GraphAssemblyTest {
                 api = api,
                 store = DataStoreWalkInTicketStore(
                     dataStore = sharedDataStore(context),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
                     clock = AppModule.provideClock(),
                 ),
                 clock = AppModule.provideClock(),

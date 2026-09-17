@@ -14,6 +14,10 @@ import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
+import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
+import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
+import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
+import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
 import uz.mahalla.feature.cinema.ui.movie.MovieScreen
 import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
 import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
@@ -29,6 +33,8 @@ import uz.mahalla.feature.food.ui.checkout.CheckoutScreen
 import uz.mahalla.feature.food.ui.menu.MenuScreen
 import uz.mahalla.feature.food.ui.order.OrderStatusScreen
 import uz.mahalla.feature.freelancer.ui.catalog.FreelancersScreen
+import uz.mahalla.feature.freelancer.ui.me.MyServicesScreen
+import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerIncomingOrdersScreen
 import uz.mahalla.feature.freelancer.ui.orders.MyFreelancerOrdersScreen
 import uz.mahalla.feature.freelancer.ui.profile.FreelancerProfileScreen
 import uz.mahalla.feature.hospital.ui.DoctorBookingScreen
@@ -238,6 +244,11 @@ fun MahallaNavHost(
                     // Каталог мастеров (issue #107): отдельная ветка, мастер
                     // не заведение.
                     onFreelancersClick = { navController.navigate(FreelancersRoute) },
+                    // Фокус-карточка с талоном ведёт на очередь того
+                    // заведения, где талон взят.
+                    onTicketClick = { placeId, placeName ->
+                        navController.navigate(QueueRoute(placeId, placeName))
+                    },
                 )
             }
             composable<OrdersRoute> {
@@ -254,7 +265,13 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> { WalletScreen() }
+            composable<WalletRoute> {
+                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                // строка в профиле (issue #103).
+                WalletScreen(
+                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                )
+            }
             composable<ProfileRoute> {
                 ProfileScreen(
                     // Вышли (issue #61): сессии и PIN больше нет, поэтому весь
@@ -298,6 +315,14 @@ fun MahallaNavHost(
                     // фрилансера может любой, своего таба у этого нет.
                     onOpenMyFreelancerOrders = {
                         navController.navigate(MyFreelancerOrdersRoute)
+                    },
+                    // «Мои услуги» (issue #71): обратная сторона той же
+                    // вертикали — не заказать услугу, а выставить её.
+                    onOpenMyServices = { navController.navigate(MyServicesRoute) },
+                    // Входящие заказы мастера (issue #190): третья сторона
+                    // той же вертикали — принять или отклонить заказ.
+                    onOpenMyFreelancerIncomingOrders = {
+                        navController.navigate(MyFreelancerIncomingOrdersRoute)
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
                     onOpenSubscription = { navController.navigate(SubscriptionRoute) },
@@ -405,6 +430,11 @@ fun MahallaNavHost(
                 // продавца, что и из «Моей анкеты». Возврат из неё приведёт
                 // назад в список, где заявка уже будет видна.
                 onRegisterPlace = { navController.navigate(ProviderFormRoute()) },
+                // Бизнес-панель (эпик #16) — отсюда единственный вход: роль в
+                // заведении известна именно этому списку.
+                onOpenBusiness = { placeId, placeName ->
+                    navController.navigate(BusinessRoute(placeId, placeName))
+                },
                 // «Сотрудники» (issue #189) — доступно только владельцу,
                 // экран сам не покажет действие сотруднику или заявке на
                 // модерации.
@@ -419,6 +449,36 @@ fun MahallaNavHost(
                     navController.navigate(PharmacyRoute(placeId, placeName, isOwner = true))
                 },
             )
+        }
+
+        // Бизнес-панель (эпик #16) — вне обоих графов: это не таб клиента, а
+        // отдельный раздел, и нижняя навигация витрины здесь только мешала бы.
+        // Права проверяет сам экран (`places/my`), маршрут их не даёт.
+        composable<BusinessRoute> {
+            BusinessDashboardScreen(
+                onOpenQueue = { placeId, placeName ->
+                    navController.navigate(BusinessQueueRoute(placeId, placeName))
+                },
+                onOpenOrders = { placeId, placeName ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
+                },
+                onOpenMenu = { placeId, placeName ->
+                    navController.navigate(BusinessMenuRoute(placeId, placeName))
+                },
+                onBack = { navController.navigateUp() },
+            )
+        }
+
+        composable<BusinessQueueRoute> {
+            BusinessQueueScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessOrdersRoute> {
+            BusinessOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessMenuRoute> {
+            BusinessMenuScreen(onBack = { navController.navigateUp() })
         }
 
         // «Сотрудники» заведения (issue #189) — открывается со своей карточки
@@ -696,6 +756,18 @@ fun MahallaNavHost(
 
         composable<MyFreelancerOrdersRoute> {
             MyFreelancerOrdersScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Кабинет мастера (issue #71): анкета исполнителя и его услуги —
+        // вторая сторона той же сделки, что заказ выше.
+        composable<MyServicesRoute> {
+            MyServicesScreen(onBack = { navController.navigateUp() })
+        }
+
+        // Входящие заказы мастера (issue #190) — третья сторона той же
+        // сделки: принять, отклонить или отметить выполненным.
+        composable<MyFreelancerIncomingOrdersRoute> {
+            MyFreelancerIncomingOrdersScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Очередь» (эпик #10, issue #96): талон берут с карточки

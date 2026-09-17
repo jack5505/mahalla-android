@@ -18,6 +18,7 @@ import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
 import uz.mahalla.feature.place.domain.PlaceDetails
+import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.feature.social.data.SocialRepository
@@ -44,6 +45,7 @@ class PlaceDetailsViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val socialRepository: SocialRepository,
     private val promotions: PromotionsRepository,
+    private val bookings: BookingRepository,
     private val profileStore: UserProfileStore,
     private val analytics: AnalyticsTracker,
     private val clock: Clock,
@@ -66,8 +68,9 @@ class PlaceDetailsViewModel @Inject constructor(
         // просмотр в панели превратится в несколько.
         analytics.track(AnalyticsEvents.placeViewed(placeId))
         viewModelScope.launch {
-            // Свой отзыв узнаётся по id аккаунта, и профиль лежит локально —
-            // отдельного `GET /users/me` у бэкенда нет (issue #61).
+            // Свой отзыв узнаётся по id аккаунта: он уже лежит в
+            // UserProfileStore (issue #61), и звать `GET /users/me` (issue
+            // #170) ради того, что и так известно, здесь незачем.
             val userId = profileStore.current().id
             updateState { copy(userId = userId) }
         }
@@ -160,8 +163,27 @@ class PlaceDetailsViewModel @Inject constructor(
                 is ApiResult.Failure -> if (!silent) {
                     updateState { copy(details = ScreenState.Error(result.failure)) }
                 }
-                is ApiResult.Success -> updateState { withSchedule(result.data) }
+                is ApiResult.Success -> {
+                    updateState { withSchedule(result.data) }
+                    // Прайс есть только у мест с записью: у остальных ручки
+                    // услуг нет, и запрос ушёл бы в 404.
+                    if (result.data.capabilities.booking) loadServices()
+                }
             }
+        }
+    }
+
+    /**
+     * Услуги для блока «Услуги» (макет 1b). Отказ прячет блок, а не роняет
+     * карточку — та же логика, что у акций: ради прайса сюда не приходили.
+     */
+    private fun loadServices() {
+        viewModelScope.launch {
+            val services = when (val result = bookings.services(placeId)) {
+                is ApiResult.Failure -> emptyList()
+                is ApiResult.Success -> result.data
+            }
+            updateState { copy(services = services) }
         }
     }
 

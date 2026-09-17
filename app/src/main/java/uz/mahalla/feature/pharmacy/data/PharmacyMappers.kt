@@ -1,6 +1,7 @@
 package uz.mahalla.feature.pharmacy.data
 
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
 import uz.mahalla.feature.pharmacy.domain.PharmacyProductPage
 import uz.mahalla.feature.pharmacy.domain.ProductStock
@@ -49,9 +50,5 @@ internal fun ProductDto.toDomain(): PharmacyProduct? {
  */
 internal fun ProductPageDto.toDomain(): PharmacyProductPage = PharmacyProductPage(
     items = content.mapNotNull(ProductDto::toDomain),
-    hasMore = when {
-        last != null -> !last
-        page != null && totalPages != null -> page + 1 < totalPages
-        else -> false
-    },
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
 )

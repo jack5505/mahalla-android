@@ -187,6 +187,10 @@ class SubscriptionViewModel @Inject constructor(
      * было.
      */
     private fun loadCharges(showLoading: Boolean, keepShownOnFailure: Boolean = false) {
+        // Полная загрузка сама тянет историю (issue #271): второй независимый
+        // запрос поверх неё дал бы гонку за `nextChargesPage`/`chargesHasMore` —
+        // тот же класс, что `loadMoreCharges` уже проверяет ниже.
+        if (loadJob?.isActive == true) return
         resetCharges()
         updateState {
             copy(

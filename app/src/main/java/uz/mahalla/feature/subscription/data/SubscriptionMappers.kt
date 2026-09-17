@@ -2,6 +2,7 @@ package uz.mahalla.feature.subscription.data
 
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.ChargeProvider
 import uz.mahalla.feature.subscription.domain.ChargeStatus
@@ -122,10 +123,7 @@ internal fun PaymentTransactionDto.toDomain(): SubscriptionCharge? {
  * `page`, отдаёт дефолтный `0`, и «следующей» навсегда осталась бы первая
  * (issue #53).
  */
-internal fun PaymentTransactionPageDto.hasMore(requestedPage: Int): Boolean = when {
-    last != null -> !last
-    totalPages != null -> requestedPage + 1 < totalPages
-    else -> false
-}
+internal fun PaymentTransactionPageDto.hasMore(requestedPage: Int): Boolean =
+    hasMorePages(page = requestedPage, totalPages = totalPages, last = last)
 
 private const val MAX_PERCENT = 100

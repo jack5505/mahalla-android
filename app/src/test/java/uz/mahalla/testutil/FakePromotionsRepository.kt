@@ -2,6 +2,7 @@ package uz.mahalla.testutil
 
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionPage
 
@@ -15,11 +16,17 @@ class FakePromotionsRepository : PromotionsRepository {
 
     var place: ApiResult<List<Promotion>> = ApiResult.Success(emptyList())
 
+    /** Ответ на проверку промокода (issue #180); по умолчанию — отказ. */
+    var check: ApiResult<PromoCheckResult> = ApiResult.Success(PromoCheckResult(code = "", valid = false))
+
     /** С какими размерами страницы просили акции платформы. */
     val requestedSizes = mutableListOf<Int>()
 
     /** У каких заведений спрашивали акции — в порядке запросов. */
     val requestedPlaces = mutableListOf<String>()
+
+    /** Чем и на какую сумму проверяли промокод — в порядке запросов. */
+    val requestedChecks = mutableListOf<Triple<String, String, Long>>()
 
     override suspend fun platformPromotions(page: Int, size: Int): ApiResult<PromotionPage> {
         requestedSizes += size
@@ -29,6 +36,19 @@ class FakePromotionsRepository : PromotionsRepository {
     override suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>> {
         requestedPlaces += placeId
         return place
+    }
+
+    /** Что именно отправили на создание акции (issue #252) — по порядку вызовов. */
+    val createRequests = mutableListOf<Pair<String, NewPromotionDraft>>()
+
+    var createResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    override suspend fun createPromotion(
+        placeId: String,
+        draft: NewPromotionDraft,
+    ): ApiResult<Unit> {
+        createRequests += placeId to draft
+        return createResult
     }
 }
 
