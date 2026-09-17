@@ -70,6 +70,18 @@
         <item quantity="other">%1$d daqiqa</item>
     </plurals>
 
+    <!-- Подпись под линией фокус-карточки на главной (макет 1a). -->
+    <plurals name="home_focus_wait">
+        <item quantity="one">~%1$d daqiqa kutish</item>
+        <item quantity="other">~%1$d daqiqa kutish</item>
+    </plurals>
+
+    <!-- «открыто N из M» у секции мест на главной; количество — N. -->
+    <plurals name="home_open_count">
+        <item quantity="one">%1$d / %2$d ochiq</item>
+        <item quantity="other">%1$d / %2$d ochiq</item>
+    </plurals>
+
     <!-- Бронь (issue #97): длительность услуги. -->
     <plurals name="booking_duration_minutes">
         <item quantity="one">%1$d daqiqa</item>
@@ -179,6 +191,17 @@
     <plurals name="gaming_error_duration">
         <item quantity="one">%1$d dan %2$d soatgacha tanlang</item>
         <item quantity="other">%1$d dan %2$d soatgacha tanlang</item>
+    </plurals>
+
+    <!-- Бизнес-панель, форма новой позиции меню (эпик #16). -->
+    <plurals name="business_menu_error_too_long">
+        <item quantity="one">%1$d belgidan oshmasin</item>
+        <item quantity="other">%1$d belgidan oshmasin</item>
+    </plurals>
+
+    <plurals name="business_menu_error_prep_large">
+        <item quantity="one">%1$d daqiqadan oshmasin</item>
+        <item quantity="other">%1$d daqiqadan oshmasin</item>
     </plurals>
 
 </resources>

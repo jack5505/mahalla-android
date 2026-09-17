@@ -1,6 +1,7 @@
 package uz.mahalla.feature.discovery.ui.search
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.History
@@ -31,6 +33,7 @@ import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaIconButton
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaSearchField
 import uz.mahalla.core.ui.components.MahallaTone
@@ -122,25 +125,31 @@ fun SearchContent(
                     )
                 },
             ) { places ->
+                // Без `spacedBy`: строки мест несут отступ сами, а линия между
+                // ними должна стоять ровно посередине (макет 1a).
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.gap),
                     contentPadding = PaddingValues(bottom = Spacing.gutter),
                 ) {
-                    items(items = places, key = { it.id }) { place ->
-                        PlaceCard(
-                            place = place.toCardUi(),
-                            onClick = { onEvent(SearchEvent.PlaceClicked(place.id)) },
-                        )
+                    itemsIndexed(items = places, key = { _, place -> place.id }) { index, place ->
+                        Column {
+                            if (index > 0) MahallaDivider()
+                            PlaceCard(
+                                place = place.toCardUi(),
+                                onClick = { onEvent(SearchEvent.PlaceClicked(place.id)) },
+                            )
+                        }
                     }
                     if (state.hasMore) {
                         item(key = "load-more") {
-                            LoadMoreAuto(
-                                itemCount = places.size,
-                                isLoading = state.isLoadingMore,
-                                failure = state.loadMoreFailure,
-                                onLoadMore = { onEvent(SearchEvent.LoadMore) },
-                            )
+                            Box(modifier = Modifier.padding(top = Spacing.gap)) {
+                                LoadMoreAuto(
+                                    itemCount = places.size,
+                                    isLoading = state.isLoadingMore,
+                                    failure = state.loadMoreFailure,
+                                    onLoadMore = { onEvent(SearchEvent.LoadMore) },
+                                )
+                            }
                         }
                     }
                 }

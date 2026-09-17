@@ -9,6 +9,8 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toScreenState
+import uz.mahalla.feature.subscription.data.SubscriptionRepository
+import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.feature.wallet.domain.TopUpDraft
 import uz.mahalla.feature.wallet.domain.TopUpValidator
@@ -30,6 +32,7 @@ import javax.inject.Inject
 @HiltViewModel
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
+    private val subscriptions: SubscriptionRepository,
 ) : MviViewModel<WalletState, WalletEvent, WalletEffect>(WalletState()) {
 
     private var loadJob: Job? = null
@@ -94,6 +97,8 @@ class WalletViewModel @Inject constructor(
             WalletEvent.PaymentNoticeDismissed -> updateState {
                 copy(paymentStarted = null, paymentOpenFailed = false)
             }
+
+            WalletEvent.SubscriptionClicked -> emitEffect(WalletEffect.OpenSubscription)
         }
     }
 
@@ -165,13 +170,28 @@ class WalletViewModel @Inject constructor(
             // запрос удвоил бы время до первого экрана без всякой причины.
             val balance = async { repository.wallet() }
             val history = async { repository.transactions(page = 0) }
+            // Подписка — третья ручка и тоже параллельно: карточка «Mahalla+»
+            // стоит над историей, и ждать её последовательно значит держать
+            // экран пустым дольше без всякой причины.
+            val subscription = async { subscriptions.current() }
             val walletState = balance.await().toScreenState()
             updateState { copy(wallet = walletState) }
             applyHistory(history.await())
+            applySubscription(subscription.await())
             // Индикатор снимается, когда приехали оба ответа: иначе он гаснет
             // над списком, который ещё грузится.
             if (refreshing) updateState { copy(isRefreshing = false) }
         }
+    }
+
+    /**
+     * Отказ подписки прячет карточку, а не роняет кошелёк: за балансом сюда
+     * приходят, за подпиской — нет. Причина отказа при этом теряется, но она
+     * относится к блоку, которого на экране всё равно не будет.
+     */
+    private fun applySubscription(result: ApiResult<Subscription?>) {
+        val subscription = (result as? ApiResult.Success)?.data
+        updateState { copy(subscription = subscription) }
     }
 
     private fun loadTransactions() {

@@ -3,9 +3,7 @@ package uz.mahalla.feature.onboarding.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -13,7 +11,8 @@ import uz.mahalla.R
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
-import uz.mahalla.core.ui.components.MahallaOtpField
+import uz.mahalla.core.ui.components.MahallaPinDots
+import uz.mahalla.core.ui.components.MahallaPinPad
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 
@@ -50,13 +49,14 @@ private fun PinContent(
     onEvent: (PinEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-
     OnboardingStep(
         title = stringResource(state.stage.titleRes()),
         modifier = modifier,
         subtitle = stringResource(R.string.onboarding_pin_subtitle),
+        // На разблокировке счётчика нет: это не шаг регистрации, а вход в уже
+        // заведённое приложение — «Шаг 3 из 5» там означал бы, что впереди
+        // ещё два.
+        stepLabel = OnboardingStepNumber.Pin.label().takeIf { state.stage != PinStage.Unlock },
         footer = {
             if (state.stage == PinStage.Unlock) {
                 MahallaButton(
@@ -68,13 +68,12 @@ private fun PinContent(
             }
         },
     ) {
-        MahallaOtpField(
-            state = state.pin,
-            onCodeChange = { onEvent(PinEvent.PinChanged(it)) },
+        MahallaPinDots(state = state.pin, isError = state.error != null)
+        state.errorText()?.let { OnboardingError(it) }
+        MahallaPinPad(
+            onDigit = { digit -> onEvent(PinEvent.DigitPressed(digit)) },
+            onBackspace = { onEvent(PinEvent.BackspacePressed) },
             enabled = !state.busy,
-            errorText = state.errorText(),
-            masked = true,
-            focusRequester = focusRequester,
         )
         // Отказ бэкенда на PIN-шаге входа (issue #51): текст сервера точнее
         // собственного, а подробности ответа нужны для поддержки.
