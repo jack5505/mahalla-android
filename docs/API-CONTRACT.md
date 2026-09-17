@@ -183,6 +183,8 @@ TrackEventRequest: {
 
 Профиль на сервере. Снято чтением живого `/v3/api-docs` 2026-09-10 (issue #237); приложение зовёт обе ручки — `GET` при открытии экрана профиля и при возврате на него, `PUT` из редактирования имени и после загрузки аватара (issue #170). Одиннадцать KDoc в коде утверждали, что этих ручек у бэкенда нет вовсе, — все переформулированы.
 
+Имя из анкеты покупателя (`RoleRepository.saveCustomer`) тоже уходит через `PUT`, но не сразу: анкета не ждёт сети (issue #234), а помечает `UserProfile.fullNamePendingSync` — следующий `ProfileRepository.refresh()` при открытии профиля шлёт `PUT` вместо `GET`, пока сервер не подтвердит имя.
+
 | Метод | Путь |
 |---|---|
 | GET | `users/me` → `MeResponse` |
@@ -439,6 +441,15 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 `CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено тестом
 (`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
+**`promoCode` подключён (issue #180)**, не дожидаясь остального ремонта из
+#221: поле добавлено в общий `PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`),
+`FoodOrderRepository` его не заполняет, значит у «Еды» оно по-прежнему не
+уходит на сервер. `storeId`/`items`/`deliveryLat`/`deliveryLng` — по-прежнему
+расхождение, описанное выше, и это отдельная задача (#221), не эта.
+Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда автором
+задачи) — независимо в этом прогоне не перепроверялась: под Bearer `401`
+приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
 ## FoodApi ✅
 
 `app/src/main/java/uz/mahalla/feature/food/data/FoodApi.kt` — сверен: issue #9, второй круг.
@@ -446,9 +457,19 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | Метод | Путь |
 |---|---|
 | GET | `food/places/{placeId}/menu` |
+| GET | `food/delivery-fee?itemsAmount=` |
 | POST | `food/orders` |
 | GET | `orders/{orderId}` |
 | POST | `food/orders/{orderId}/cancel` |
+
+**`food/delivery-fee` отдаёт карту, а не DTO** (issue #179, подключён): схема —
+`ApiResponseMapStringLong`, поэтому сумма читается по ключу `deliveryAmount`, а
+отсутствие ключа — не ошибка разбора, а «доставка неизвестна». `itemsAmount`
+обязателен, целый, **в тийинах** (issue #149) — как и ответ. Отвечает
+анонимно, параметра заведения у неё нет: на стенде это правило платформы
+(2026-09-10: от 200 000 тийинов доставка бесплатна, ниже — 10 000). Итог
+заказа всё равно считает сервер, поэтому в корзине и чекауте это **оценка**, а
+суммы оформленного заказа берутся из `GET orders/{orderId}`.
 
 **Картинки у позиции меню в схеме нет вовсе** (issue #60): у `ItemResponse` ни
 одного поля со ссылкой. `MenuItemDto` объявляет его на вырост под тремя

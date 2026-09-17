@@ -69,6 +69,15 @@ interface HospitalRepository : AppointmentsSource {
      * отдельная задача (#183).
      */
     suspend fun appointment(appointmentId: String): ApiResult<Appointment>
+
+    /**
+     * Дотягивает имя врача (issue #219) для записей, где оно не пришло, —
+     * единственная реализация на двух потребителей: [myAppointments] и «мои
+     * активности» (`ActivityRepository.load`, issue #266), которая читает
+     * `HospitalApi.myAppointments` напрямую, в обход этого репозитория, и без
+     * общего метода осталась бы без подписи вовсе.
+     */
+    suspend fun withDoctorNames(items: List<AppointmentDto>): List<AppointmentDto>
 }
 
 @Singleton
@@ -137,41 +146,46 @@ class DefaultHospitalRepository @Inject constructor(
 
     /**
      * `HospitalAppointmentResponse` не называет врача — только `doctorId`
-     * (issue #219). Имя дотягивается отдельным запросом на каждого уникального
-     * врача среди карточек без имени — повторный визит к тому же врачу не
-     * плодит дублирующие запросы; провал одного запроса не портит остальные и
-     * не превращает удачный список в ошибку — карточка просто останется с
-     * плейсхолдером экрана, тот же принцип мягкого разбора, что у самих DTO.
+     * (issue #219). Имя дотягивается [withDoctorNames] на уровне DTO — до
+     * перевода в домен, а не после: так тем же методом пользуется и «мои
+     * активности» (issue #266), которым доменная `Appointment` не нужна.
      */
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> =
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
-            .map(AppointmentPageDto::toDomain)
             .let { result ->
                 when (result) {
                     is ApiResult.Failure -> result
                     is ApiResult.Success ->
-                        ApiResult.Success(result.data.copy(items = withDoctorNames(result.data.items)))
+                        ApiResult.Success(result.data.copy(content = withDoctorNames(result.data.content)))
                 }
             }
+            .map(AppointmentPageDto::toDomain)
 
-    private suspend fun withDoctorNames(items: List<Appointment>): List<Appointment> {
-        val doctorIds = items.filter(::needsDoctorName).mapNotNull(Appointment::doctorId).distinct()
+    /**
+     * Имя дотягивается отдельным запросом на каждого уникального врача среди
+     * карточек без имени — повторный визит к тому же врачу не плодит
+     * дублирующие запросы; провал одного запроса не портит остальные и не
+     * превращает удачный список в ошибку — карточка просто останется с
+     * плейсхолдером экрана, тот же принцип мягкого разбора, что у самих DTO.
+     */
+    override suspend fun withDoctorNames(items: List<AppointmentDto>): List<AppointmentDto> {
+        val doctorIds = items.filter(::needsDoctorName).mapNotNull(AppointmentDto::doctorId).distinct()
         if (doctorIds.isEmpty()) return items
         val namesByDoctorId = coroutineScope {
             doctorIds.associateWith { id -> async { fetchDoctorName(id) } }
                 .mapValues { (_, deferred) -> deferred.await() }
         }
-        return items.map { appointment ->
-            if (needsDoctorName(appointment)) {
-                namesByDoctorId[appointment.doctorId]?.let { appointment.copy(serviceName = it) } ?: appointment
+        return items.map { dto ->
+            if (needsDoctorName(dto)) {
+                namesByDoctorId[dto.doctorId]?.let { dto.copy(serviceName = it) } ?: dto
             } else {
-                appointment
+                dto
             }
         }
     }
 
-    private fun needsDoctorName(appointment: Appointment): Boolean =
-        appointment.serviceName.isNullOrBlank() && !appointment.doctorId.isNullOrBlank()
+    private fun needsDoctorName(dto: AppointmentDto): Boolean =
+        dto.serviceName.isNullOrBlank() && !dto.doctorId.isNullOrBlank()
 
     private suspend fun fetchDoctorName(id: String): String? =
         doctor(id).dataOrNull()?.name?.takeIf(String::isNotBlank)

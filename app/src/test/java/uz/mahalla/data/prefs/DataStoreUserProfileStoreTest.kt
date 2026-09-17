@@ -46,11 +46,24 @@ class DataStoreUserProfileStoreTest {
             serverRole = "FOOD_OWNER",
             verificationStatus = "FULL_VERIFIED",
             accountStatus = "TEMP_BLOCKED",
+            fullNamePendingSync = true,
         )
 
         DataStoreUserProfileStore(dataStore).save(saved)
 
         assertEquals(saved, DataStoreUserProfileStore(dataStore).current())
+    }
+
+    @Test
+    fun `a confirmed name clears the pending flag`() = runTest {
+        val dataStore = newDataStore()
+        val store = DataStoreUserProfileStore(dataStore)
+        store.save(UserProfile(fullName = "Jahongir", fullNamePendingSync = true))
+
+        // Тот же профиль, но сервер уже ответил — второй `save` пишет `false`.
+        store.save(UserProfile(fullName = "Jahongir", fullNamePendingSync = false))
+
+        assertEquals(false, store.current().fullNamePendingSync)
     }
 
     @Test

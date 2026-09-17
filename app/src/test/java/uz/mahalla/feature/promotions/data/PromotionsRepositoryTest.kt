@@ -279,6 +279,79 @@ class PromotionsRepositoryTest {
     }
 
     @Test
+
+    fun `a valid code is checked in tiyin and the discount is parsed back to som`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"valid":true,"discountAmount":5000000,"finalAmount":45000000,"promoCode":"OSH20"}""",
+            ),
+        )
+
+        val result = (
+            repository().check(code = "osh20", placeId = "p-1", orderAmountSum = 500_000)
+                as ApiResult.Success
+            ).data
+
+        val path = server.takeRequest().path.orEmpty()
+        assertTrue(path.startsWith("/promotions/check"))
+        assertTrue(path.contains("code=osh20"))
+        assertTrue(path.contains("placeId=p-1"))
+        // Сум → тийин на выходе, тийин → сум на входе (issue #149).
+        assertTrue(path.contains("orderAmount=50000000"))
+        assertTrue(result.valid)
+        assertEquals(50_000L, result.discountAmount)
+        assertEquals(450_000L, result.finalAmount)
+        // Сервер мог поправить регистр/формат кода — используется его ответ.
+        assertEquals("OSH20", result.code)
+    }
+
+    @Test
+    fun `an invalid code is a successful answer with valid false, not a failure`() = runTest {
+        server.enqueue(envelope("""{"valid":false}"""))
+
+        val result = (
+            repository().check(code = "EXPIRED", placeId = "p-1", orderAmountSum = 100_000)
+                as ApiResult.Success
+            ).data
+
+        assertFalse(result.valid)
+        // Код не пришёл в ответе — остаётся тот, что проверяли.
+        assertEquals("EXPIRED", result.code)
+        assertEquals(0L, result.discountAmount)
+    }
+
+    @Test
+    fun `silence about valid is treated as invalid, not as an accepted code`() = runTest {
+        // Деньги дороже, чем остальной контракт акций: молчание не «да».
+        server.enqueue(envelope("""{"discountAmount":5000000}"""))
+
+        val result = (
+            repository().check(code = "OSH20", placeId = "p-1", orderAmountSum = 100_000)
+                as ApiResult.Success
+            ).data
+
+        assertFalse(result.valid)
+    }
+
+    @Test
+    fun `a check refusal carries the server text`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"PROMO_CODE_NOT_FOUND",
+                       "message":"Promo-kod topilmadi"}}""",
+                ),
+        )
+
+        val failure = (
+            repository().check(code = "NOPE", placeId = "p-1", orderAmountSum = 100_000)
+                as ApiResult.Failure
+            ).failure
+
+        assertEquals("Promo-kod topilmadi", failure.serverMessage)
+
     fun `a new percent-off promotion is sent with the amounts converted to tiyin`() = runTest {
         server.enqueue(envelope("""{"id":"promo-1","title":"20% chegirma"}"""))
 
@@ -417,6 +490,7 @@ class PromotionsRepositoryTest {
         val failure = (repository().createPromotion("p-1", draft) as ApiResult.Failure).failure
 
         assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
+
     }
 
     private fun repository() = DefaultPromotionsRepository(

@@ -16,11 +16,17 @@ class FakePromotionsRepository : PromotionsRepository {
 
     var place: ApiResult<List<Promotion>> = ApiResult.Success(emptyList())
 
+    /** Ответ на проверку промокода (issue #180); по умолчанию — отказ. */
+    var check: ApiResult<PromoCheckResult> = ApiResult.Success(PromoCheckResult(code = "", valid = false))
+
     /** С какими размерами страницы просили акции платформы. */
     val requestedSizes = mutableListOf<Int>()
 
     /** У каких заведений спрашивали акции — в порядке запросов. */
     val requestedPlaces = mutableListOf<String>()
+
+    /** Чем и на какую сумму проверяли промокод — в порядке запросов. */
+    val requestedChecks = mutableListOf<Triple<String, String, Long>>()
 
     override suspend fun platformPromotions(page: Int, size: Int): ApiResult<PromotionPage> {
         requestedSizes += size
