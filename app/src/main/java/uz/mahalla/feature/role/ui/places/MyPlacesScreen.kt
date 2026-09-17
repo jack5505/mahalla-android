@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.LoadMoreAuto
@@ -64,6 +65,7 @@ import uz.mahalla.ui.theme.Spacing
 fun MyPlacesScreen(
     onPlaceClick: (String) -> Unit,
     onRegisterPlace: () -> Unit,
+    onOpenBusiness: (String, String) -> Unit,
     onManageStaff: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -77,6 +79,8 @@ fun MyPlacesScreen(
             when (effect) {
                 is MyPlacesEffect.OpenPlace -> onPlaceClick(effect.placeId)
                 MyPlacesEffect.OpenProviderForm -> onRegisterPlace()
+                is MyPlacesEffect.OpenBusinessPanel ->
+                    onOpenBusiness(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenPharmacyManagement ->
                     onManageProducts(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
@@ -288,6 +292,19 @@ private fun MyPlaceCard(
                 modifier = Modifier.padding(top = Spacing.item),
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.fgMuted,
+            )
+        }
+
+        // Вход в бизнес-панель (эпик #16) — над переключателем: это главное
+        // действие владельца в своём заведении, а «открыто сейчас» — частный
+        // случай того, что панель умеет.
+        if (place.canOpenBusinessPanel) {
+            MahallaButton(
+                text = stringResource(R.string.business_open),
+                onClick = { onEvent(MyPlacesEvent.BusinessPanelClicked(place.id)) },
+                modifier = Modifier.padding(top = Spacing.gap),
+                variant = MahallaButtonVariant.Secondary,
+                state = ButtonState(enabled = enabled),
             )
         }
 
