@@ -37,6 +37,56 @@ class PinViewModelTest {
     private val authRepository = FakeAuthRepository(initialAuthorized = true)
     private val crashReporter = FakeCrashReporter()
 
+    // --- Нампад (макет 0e) ---
+
+    @Test
+    fun `keypad digits build the code inside the view model`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel(FakePinStorage())
+        advanceUntilIdle()
+
+        "123".forEach { viewModel.onEvent(PinEvent.DigitPressed(it)) }
+        advanceUntilIdle()
+
+        assertEquals("123", viewModel.state.value.pin.code)
+    }
+
+    @Test
+    fun `backspace removes the last digit only`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel(FakePinStorage())
+        advanceUntilIdle()
+
+        "12".forEach { viewModel.onEvent(PinEvent.DigitPressed(it)) }
+        viewModel.onEvent(PinEvent.BackspacePressed)
+        advanceUntilIdle()
+
+        assertEquals("1", viewModel.state.value.pin.code)
+    }
+
+    /**
+     * Цифры приходят от экрана по одной, а код собирает ViewModel из
+     * собственного состояния. Здесь это проверяется на самой опасной границе:
+     * последняя цифра «задайте PIN» синхронно переводит шаг на «повторите» и
+     * чистит поле, и следующее нажатие обязано начать повтор с нуля — а не
+     * дописаться к коду, которого на экране уже нет.
+     */
+    @Test
+    fun `a digit pressed right after the stage switch starts the repeat cleanly`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel(FakePinStorage())
+        advanceUntilIdle()
+
+        "123456".forEach { viewModel.onEvent(PinEvent.DigitPressed(it)) }
+        viewModel.onEvent(PinEvent.DigitPressed('9'))
+        advanceUntilIdle()
+
+        assertEquals(PinStage.Confirm, viewModel.state.value.stage)
+        assertEquals("9", viewModel.state.value.pin.code)
+        assertNull("лишняя цифра не должна ронять ввод ошибкой", viewModel.state.value.error)
+    }
+
     private fun viewModel(pinStorage: FakePinStorage) = PinViewModel(pinStorage, authRepository)
 
     @After

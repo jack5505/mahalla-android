@@ -8,6 +8,8 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.promotions.domain.Promotion
+import uz.mahalla.feature.queue.domain.WalkInTicket
+import java.time.Instant
 
 /** Содержимое главной (эпик 4.1): блоки «рядом» и «рекомендации». */
 @Immutable
@@ -35,7 +37,35 @@ data class DiscoveryHomeState(
      * не рисовать ничего.
      */
     val promotions: List<Promotion> = emptyList(),
-) : UiState
+    /**
+     * Талон для фокус-карточки (макет 1d): живой талон вошедшего, если он
+     * есть. Читается локально — ручки чтения талона у бэкенда нет вовсе
+     * (`WalkInApi`), и хранилище помнит последнее известное состояние.
+     */
+    val ticket: WalkInTicket? = null,
+    /**
+     * Свежи ли позиция и ожидание в [ticket] — правило живёт в домене
+     * (`WalkInTicket.showsQueueInfo`, две минуты). Считается на загрузке и на
+     * каждом возврате на экран: число из прошлого часа выдавать за текущее
+     * нельзя, а пересчитать его нечем.
+     */
+    val ticketQueueInfoIsCurrent: Boolean = false,
+    /**
+     * Момент, на который собран экран — мета шапки «9:30 · вторник» (общая
+     * шапка макета). Ставится при загрузке и на каждом возврате на экран, а
+     * не тикает каждую минуту: это подпись «когда это было», а не часы.
+     */
+    val openedAt: Instant? = null,
+) : UiState {
+
+    /**
+     * Ближайшее открытое место — то, о чём фокус-карточка говорит, пока
+     * талона нет. Закрытые не годятся: карточка отвечает на вопрос «куда
+     * можно сейчас».
+     */
+    val nearestOpenPlace: Place?
+        get() = (content as? ScreenState.Content)?.data?.nearby?.firstOrNull(Place::isOpenNow)
+}
 
 sealed interface DiscoveryHomeEvent : UiEvent {
     data object Retry : DiscoveryHomeEvent
@@ -44,6 +74,16 @@ sealed interface DiscoveryHomeEvent : UiEvent {
     data class PlaceClicked(val placeId: String) : DiscoveryHomeEvent
     data object SearchClicked : DiscoveryHomeEvent
     data object MapClicked : DiscoveryHomeEvent
+
+    /**
+     * Экран вернулся на передний план. Каталог при этом не перезапрашивается —
+     * перечитывается только талон: пока приложение было в фоне, его могли
+     * отменить с другого экрана, а числа в нём — устареть.
+     */
+    data object ScreenResumed : DiscoveryHomeEvent
+
+    /** «Открыть талон» на фокус-карточке. */
+    data object TicketClicked : DiscoveryHomeEvent
 
     /** Акция (issue #104): куда она ведёт, решает ViewModel. */
     data class PromotionClicked(val promotionId: String) : DiscoveryHomeEvent
@@ -56,4 +96,7 @@ sealed interface DiscoveryHomeEffect : UiEffect {
     data class OpenSearch(val category: PlaceCategory?) : DiscoveryHomeEffect
 
     data object OpenMap : DiscoveryHomeEffect
+
+    /** Экран очереди заведения, где взят талон. */
+    data class OpenTicket(val placeId: String, val placeName: String) : DiscoveryHomeEffect
 }

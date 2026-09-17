@@ -86,20 +86,51 @@ class GeoViewModelTest {
         assertFalse("разрешение не спрашивали", viewModel.state.value.permissionDenied)
     }
 
+    /**
+     * Отметка города шаг не заканчивает (макет 0d): промах по соседней строке
+     * до нажатия «Продолжить» можно исправить, а раньше он сразу сохранялся и
+     * увозил человека в каталог чужого города.
+     */
     @Test
-    fun `selecting a city stores it and finishes the step`() = runTest(
-        mainDispatcherRule.dispatcher,
-    ) {
+    fun `selecting a city only marks it`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel()
         viewModel.onEvent(GeoEvent.PermissionResult(granted = false))
 
         viewModel.onEvent(GeoEvent.CitySelected(City.SAMARKAND))
+        viewModel.onEvent(GeoEvent.CitySelected(City.BUKHARA))
+        advanceUntilIdle()
+
+        assertEquals(City.BUKHARA, viewModel.state.value.selectedCity)
+        assertNull("до подтверждения город не сохраняется", onboardingRepository.current.cityId)
+    }
+
+    @Test
+    fun `continue stores the marked city and finishes the step`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel()
+        viewModel.onEvent(GeoEvent.PermissionResult(granted = false))
+        viewModel.onEvent(GeoEvent.CitySelected(City.SAMARKAND))
+
+        viewModel.onEvent(GeoEvent.ContinueClicked)
         val effect = viewModel.effects.first()
 
         assertEquals(GeoEffect.Finished, effect)
         assertEquals("samarkand", onboardingRepository.current.cityId)
-        assertEquals(City.SAMARKAND, viewModel.state.value.selectedCity)
         assertFalse(viewModel.state.value.busy)
+    }
+
+    @Test
+    fun `continue without a marked city does nothing`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel()
+        viewModel.onEvent(GeoEvent.ChooseCityRequested)
+
+        viewModel.onEvent(GeoEvent.ContinueClicked)
+        advanceUntilIdle()
+
+        assertNull(onboardingRepository.current.cityId)
+        assertFalse("шаг не заканчивается вслепую", viewModel.state.value.busy)
+        assertEquals(GeoStage.CityPicker, viewModel.state.value.stage)
     }
 
     @Test
@@ -108,6 +139,7 @@ class GeoViewModelTest {
         val viewModel = viewModel()
 
         viewModel.onEvent(GeoEvent.CitySelected(City.SAMARKAND))
+        viewModel.onEvent(GeoEvent.ContinueClicked)
         val effect = viewModel.effects.first()
 
         // Последний шаг онбординга не должен запирать пользователя из-за

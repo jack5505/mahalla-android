@@ -318,7 +318,7 @@ private fun SelectedPlaceCard(
     ) {
         Surface(
             shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = MapOverlayElevation,
             shadowElevation = MapOverlayElevation,
