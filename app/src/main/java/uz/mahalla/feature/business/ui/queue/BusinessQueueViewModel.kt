@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueActionRules
@@ -50,16 +49,25 @@ class BusinessQueueViewModel @Inject constructor(
     override fun onEvent(event: BusinessQueueEvent) {
         when (event) {
             BusinessQueueEvent.ScreenResumed ->
-                if (!currentState.entries.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
 
-            BusinessQueueEvent.Refreshed -> load(showLoading = false, refreshing = true)
+            BusinessQueueEvent.Refreshed ->
+                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
+
             BusinessQueueEvent.Retry -> load()
             is BusinessQueueEvent.ActionClicked -> act(event.ticketId, event.action)
             BusinessQueueEvent.CallNextClicked -> callNext()
         }
     }
+
+    /**
+     * Reload и точечное действие над талоном взаимно исключают друг друга:
+     * который бы из двух ни начался вторым, более старый ответ первого может
+     * прийти позже и откатить то, что успел применить второй (нашло ревью,
+     * issue #272). Поэтому reload не стартует, пока действие в полёте, и
+     * действие не стартует, пока не завершился reload.
+     */
+    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.isBusy
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadJob?.cancel()
@@ -110,10 +118,14 @@ class BusinessQueueViewModel @Inject constructor(
      * работы с очередью. Позиции соседей при этом сервер пересчитал, и они
      * доедут на ближайшем обновлении — показать чужую позицию на секунду
      * устаревшей безопаснее, чем дёргать список на каждое нажатие.
+     *
+     * [isReloadBlocked] — та же гонка, что и у [load], но в обратную сторону:
+     * если фоновый reload уже в полёте, его более старый ответ может прийти
+     * позже и откатить действие, начатое поверх него (нашло ревью, issue
+     * #272).
      */
     private fun act(ticketId: String, action: QueueAction) {
-        val state = currentState
-        if (state.isBusy) return
+        if (isReloadBlocked()) return
         val entry = entryOrNull(ticketId) ?: return
         if (!QueueActionRules.isAllowed(entry.status, action)) return
 

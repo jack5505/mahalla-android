@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.ui.dashboard
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -210,15 +211,82 @@ class BusinessDashboardViewModelTest {
         assertTrue((state.access as ScreenState.Content).data.isAvailable)
     }
 
+    /**
+     * Первый resume — это открытие экрана, а не возврат на него: `init` уже
+     * загрузил и права, и метрики, и повторять запрос сразу же незачем (issue
+     * #145, #209 — тот же `onScreenResumed`, что и у других экранов панели).
+     */
     @Test
-    fun `returning to the screen re-reads both the access and the metrics`() = runTest {
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessDashboardEvent.ScreenResumed)
 
+        assertEquals(listOf(PLACE), repository.accessRequests)
+        assertEquals(listOf(PLACE), repository.dashboardRequests)
+    }
+
+    @Test
+    fun `returning to the screen re-reads both the access and the metrics`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // настоящий возврат
+
         assertEquals(listOf(PLACE, PLACE), repository.accessRequests)
         assertEquals(listOf(PLACE, PLACE), repository.dashboardRequests)
+    }
+
+    /**
+     * Пока «пауза» не ответила, полный reload не стартует ни по возврату на
+     * экран, ни по pull-to-refresh: иначе более старый снимок прав мог бы
+     * прийти позже и откатить только что применённый флаг (нашло ревью, issue
+     * #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while a pause is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.pauseGate = gate
+
+        viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
+        assertTrue(viewModel.state.value.pauseInProgress)
+
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed)
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed)
+        viewModel.onEvent(BusinessDashboardEvent.Refreshed)
+
+        assertEquals(listOf(PLACE), repository.accessRequests)
+        assertEquals(listOf(PLACE), repository.dashboardRequests)
+
+        gate.complete(Unit)
+        assertFalse(viewModel.state.value.pauseInProgress)
+    }
+
+    /**
+     * Симметричная гонка: «пауза», начатая поверх ещё не завершившегося
+     * reload, должна ждать его конца — иначе более старый ответ reload,
+     * доехавший позже, откатил бы применённый флаг (нашло ревью, issue #272).
+     */
+    @Test
+    fun `a pause is blocked while a reload is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.accessGate = gate
+
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // reload, завис на gate
+
+        viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
+        assertTrue(repository.paused.isEmpty())
+
+        gate.complete(Unit)
+        viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
+        assertEquals(1, repository.paused.size)
     }
 
     /** Повтор метрик не трогает права: они уже подтверждены. */

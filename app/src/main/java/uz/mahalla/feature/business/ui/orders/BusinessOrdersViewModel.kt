@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
@@ -48,11 +47,11 @@ class BusinessOrdersViewModel @Inject constructor(
     override fun onEvent(event: BusinessOrdersEvent) {
         when (event) {
             BusinessOrdersEvent.ScreenResumed ->
-                if (!currentState.orders.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
 
-            BusinessOrdersEvent.Refreshed -> load(showLoading = false, refreshing = true)
+            BusinessOrdersEvent.Refreshed ->
+                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
+
             BusinessOrdersEvent.Retry -> load()
             BusinessOrdersEvent.LoadMore -> loadMore()
             is BusinessOrdersEvent.FilterSelected -> selectFilter(event.filter)
@@ -69,6 +68,15 @@ class BusinessOrdersViewModel @Inject constructor(
         updateState { copy(filter = filter) }
         load()
     }
+
+    /**
+     * Reload и смена статуса заказа взаимно исключают друг друга: который бы
+     * из двух ни начался вторым, более старый ответ первого может прийти
+     * позже и откатить то, что успел применить второй (нашло ревью, issue
+     * #272). Поэтому reload не стартует, пока статус меняется, и смена
+     * статуса не стартует, пока не завершился reload.
+     */
+    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.isBusy
 
     /**
      * Предыдущая загрузка отменяется: «повторить» поверх pull-to-refresh иначе
@@ -193,8 +201,7 @@ class BusinessOrdersViewModel @Inject constructor(
      * обновлении — то есть тогда, когда это уже не выглядит потерей.
      */
     private fun updateStatus(orderId: String, status: OrderStatus) {
-        val state = currentState
-        if (state.isBusy) return
+        if (isReloadBlocked()) return
         val order = orderOrNull(orderId) ?: return
         if (!BusinessOrderStatusFlow.isAllowed(order.status, status, order.method)) return
 

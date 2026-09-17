@@ -49,20 +49,21 @@ class BusinessDashboardViewModel @Inject constructor(
      */
     private var loadJob: Job? = null
 
+    /** Отдельный повтор метрик (см. [retryMetrics]) — тоже гоняется с [load]. */
+    private var metricsJob: Job? = null
+
     init {
         load()
     }
 
     override fun onEvent(event: BusinessDashboardEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
             BusinessDashboardEvent.ScreenResumed ->
-                if (!currentState.access.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
 
-            BusinessDashboardEvent.Refreshed -> load(showLoading = false, refreshing = true)
+            BusinessDashboardEvent.Refreshed ->
+                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
+
             BusinessDashboardEvent.Retry -> load()
             BusinessDashboardEvent.RetryMetrics -> retryMetrics()
             is BusinessDashboardEvent.SectionClicked -> open(event.section)
@@ -70,8 +71,19 @@ class BusinessDashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Фоновый reload и «пауза» взаимно исключают друг друга: который бы из
+     * двух ни начался вторым, более старый ответ первого может прийти позже и
+     * откатить то, что успел применить второй (нашло ревью, issue #272).
+     * Поэтому reload не стартует, пока «пауза» в полёте (ни по возврату на
+     * экран, ни по pull-to-refresh), а «пауза» не стартует, пока не
+     * завершился reload.
+     */
+    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.pauseInProgress
+
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadJob?.cancel()
+        metricsJob?.cancel()
         updateState {
             copy(
                 access = if (showLoading) ScreenState.Loading else access,
@@ -118,9 +130,10 @@ class BusinessDashboardViewModel @Inject constructor(
     }
 
     private fun retryMetrics() {
-        if (currentState.metrics.isLoading) return
+        if (currentState.metrics.isLoading || loadJob?.isActive == true) return
+        metricsJob?.cancel()
         updateState { copy(metrics = ScreenState.Loading) }
-        viewModelScope.launch { fetchMetrics() }
+        metricsJob = viewModelScope.launch { fetchMetrics() }
     }
 
     /**
@@ -161,7 +174,7 @@ class BusinessDashboardViewModel @Inject constructor(
      */
     private fun togglePause() {
         val access = accessOrNull() ?: return
-        if (!access.canPause || currentState.pauseInProgress) return
+        if (!access.canPause || isReloadBlocked()) return
 
         updateState { copy(pauseInProgress = true, actionFailure = null) }
         viewModelScope.launch {

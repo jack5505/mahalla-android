@@ -64,6 +64,7 @@ class FakeBusinessRepository : BusinessRepository {
     val paused = mutableListOf<Pair<String, Boolean>>()
     val orderRequests = mutableListOf<Pair<String?, Int>>()
     val statusUpdates = mutableListOf<Pair<String, OrderStatus>>()
+    val menuRequests = mutableListOf<String>()
     val toggledItems = mutableListOf<Pair<String, Boolean>>()
     val createdItems = mutableListOf<NewMenuItemForm>()
 
@@ -71,14 +72,30 @@ class FakeBusinessRepository : BusinessRepository {
     val knownEntries = mutableMapOf<String, QueueEntry>()
 
     /**
-     * Задержка ответа `act`: пока `deferred` не завершён, запрос «в полёте».
-     * Иначе на `UnconfinedTestDispatcher` ответ приходит мгновенно, и
-     * состояние «идёт запрос» не поймать вовсе.
+     * Задержки ответов действий: пока соответствующий `deferred` не завершён,
+     * запрос «в полёте». Иначе на `UnconfinedTestDispatcher` ответ приходит
+     * мгновенно, и состояние «идёт запрос» не поймать вовсе — а без этого не
+     * проверить, что фоновый reload не стартует поверх ещё не завершённого
+     * точечного действия (issue #272).
      */
     var actGate: CompletableDeferred<Unit>? = null
+    var updateOrderGate: CompletableDeferred<Unit>? = null
+    var toggleStopListGate: CompletableDeferred<Unit>? = null
+    var pauseGate: CompletableDeferred<Unit>? = null
+
+    /**
+     * Задержки ответов **чтения**: те же гейты, только для reload — нужны,
+     * чтобы поймать обратную гонку: точечное действие, начатое поверх ещё не
+     * завершившегося reload (issue #272).
+     */
+    var accessGate: CompletableDeferred<Unit>? = null
+    var queueGate: CompletableDeferred<Unit>? = null
+    var ordersGate: CompletableDeferred<Unit>? = null
+    var menuGate: CompletableDeferred<Unit>? = null
 
     override suspend fun access(placeId: String): ApiResult<BusinessAccess> {
         accessRequests += placeId
+        accessGate?.await()
         return accessResult
     }
 
@@ -89,6 +106,7 @@ class FakeBusinessRepository : BusinessRepository {
 
     override suspend fun queue(placeId: String): ApiResult<List<QueueEntry>> {
         queueRequests += placeId
+        queueGate?.await()
         val result = queueResult
         if (result is ApiResult.Success) {
             result.data.forEach { knownEntries[it.id] = it }
@@ -111,6 +129,7 @@ class FakeBusinessRepository : BusinessRepository {
 
     override suspend fun togglePause(placeId: String, current: Boolean): ApiResult<Boolean> {
         paused += placeId to current
+        pauseGate?.await()
         return pauseResult ?: ApiResult.Success(!current)
     }
 
@@ -121,6 +140,7 @@ class FakeBusinessRepository : BusinessRepository {
         size: Int,
     ): ApiResult<BusinessOrderPage> {
         orderRequests += status to page
+        ordersGate?.await()
         return orderPages[status to page] ?: defaultOrderPage
     }
 
@@ -130,13 +150,19 @@ class FakeBusinessRepository : BusinessRepository {
         status: OrderStatus,
     ): ApiResult<BusinessOrder> {
         statusUpdates += orderId to status
+        updateOrderGate?.await()
         return updateOrderResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
     }
 
-    override suspend fun menu(placeId: String): ApiResult<BusinessMenu> = menuResult
+    override suspend fun menu(placeId: String): ApiResult<BusinessMenu> {
+        menuRequests += placeId
+        menuGate?.await()
+        return menuResult
+    }
 
     override suspend fun toggleStopList(itemId: String, current: Boolean): ApiResult<Boolean> {
         toggledItems += itemId to current
+        toggleStopListGate?.await()
         return toggleStopListResult ?: ApiResult.Success(!current)
     }
 

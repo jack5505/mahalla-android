@@ -58,9 +58,10 @@ import uz.mahalla.feature.business.domain.BusinessMenuItem
 import uz.mahalla.feature.business.domain.BusinessMenuSection
 import uz.mahalla.feature.business.domain.NewMenuItemError
 import uz.mahalla.feature.business.domain.NewMenuItemForm
-import uz.mahalla.feature.business.ui.BusinessInlineFailure
+import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 
 /**
  * Меню и стоп-лист (задача 12.4).
@@ -155,7 +156,7 @@ fun BusinessMenuContentScreen(
                     }
                 }
                 state.actionFailure?.let { failure ->
-                    item(key = "action-failure") { BusinessInlineFailure(failure = failure) }
+                    item(key = "action-failure") { InlineFailure(failure = failure) }
                 }
                 menuItems(state = state, onEvent = onEvent)
             }
@@ -186,7 +187,7 @@ private fun LazyListScope.menuItems(
         }
 
         is ScreenState.Error -> item(key = "error") {
-            BusinessInlineFailure(
+            InlineFailure(
                 failure = menu.failure,
                 onRetry = { onEvent(BusinessMenuEvent.Retry) },
             )
@@ -271,7 +272,7 @@ private fun MenuItemCard(
                 stringResource(R.string.currency_uzs),
             ),
             modifier = Modifier.padding(top = Spacing.item),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
             color = colors.fgMuted,
         )
 
@@ -382,7 +383,7 @@ private fun NewMenuItemSheet(
         )
 
         state.formFailure?.let { failure ->
-            BusinessInlineFailure(failure = failure)
+            InlineFailure(failure = failure)
         }
 
         MahallaButton(

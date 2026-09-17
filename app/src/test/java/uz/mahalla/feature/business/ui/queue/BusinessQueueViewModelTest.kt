@@ -182,12 +182,24 @@ class BusinessQueueViewModelTest {
         )
     }
 
+    /** Первый resume — открытие экрана, `init` уже загрузил очередь. */
+    @Test
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+
+        assertEquals(listOf(PLACE), repository.queueRequests)
+    }
+
     @Test
     fun `returning to the screen re-reads the queue`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
 
-        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // настоящий возврат
 
         assertEquals(listOf(PLACE, PLACE), repository.queueRequests)
     }
@@ -230,6 +242,57 @@ class BusinessQueueViewModelTest {
         // Запрет снимается вместе с запросом: следующее действие проходит.
         viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-2", QueueAction.Decline))
         assertEquals(2, repository.actions.size)
+    }
+
+    /**
+     * Пока действие над талоном не ответило, полный reload не стартует: иначе
+     * более старая очередь могла бы прийти позже и откатить только что
+     * применённое действие (нашло ревью, issue #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while an action is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.actGate = gate
+
+        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+        assertEquals("t-1", viewModel.state.value.pendingTicketId)
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.Refreshed)
+
+        assertEquals(listOf(PLACE), repository.queueRequests)
+
+        gate.complete(Unit)
+        assertNull(viewModel.state.value.pendingTicketId)
+    }
+
+    /**
+     * Симметричная гонка: действие над талоном, начатое поверх ещё не
+     * завершившегося reload, должно ждать его конца — иначе более старый ответ
+     * reload, доехавший позже, откатил бы то, что успело применить действие
+     * (нашло ревью, issue #272).
+     */
+    @Test
+    fun `an action is blocked while a reload is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.queueGate = gate
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // reload, завис на gate
+
+        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+        assertTrue(repository.actions.isEmpty())
+
+        gate.complete(Unit)
+        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+        assertEquals(1, repository.actions.size)
     }
 
     @Test

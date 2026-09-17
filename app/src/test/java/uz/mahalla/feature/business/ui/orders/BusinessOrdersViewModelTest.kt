@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.ui.orders
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -239,14 +240,78 @@ class BusinessOrdersViewModelTest {
         assertFalse(state.isLoadingMore)
     }
 
+    /** Первый resume — открытие экрана, `init` уже загрузил первую страницу. */
     @Test
-    fun `returning to the screen re-reads the first page`() = runTest {
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
 
+        assertEquals(listOf(null to 0), repository.orderRequests)
+    }
+
+    @Test
+    fun `returning to the screen re-reads the first page`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // настоящий возврат
+
         assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
+    }
+
+    /**
+     * Пока смена статуса не ответила, полный reload не стартует: иначе более
+     * старая страница могла бы прийти позже и откатить только что применённый
+     * статус (нашло ревью, issue #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while a status change is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.updateOrderGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertEquals("o-1", viewModel.state.value.pendingOrderId)
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
+        viewModel.onEvent(BusinessOrdersEvent.Refreshed)
+
+        assertEquals(listOf(null to 0), repository.orderRequests)
+
+        gate.complete(Unit)
+        assertNull(viewModel.state.value.pendingOrderId)
+    }
+
+    /**
+     * Симметричная гонка: смена статуса, начатая поверх ещё не завершившегося
+     * reload, должна ждать его конца — иначе более старый ответ reload,
+     * доехавший позже, откатил бы применённый статус (нашло ревью, issue
+     * #272).
+     */
+    @Test
+    fun `a status change is blocked while a reload is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.ordersGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // reload, завис на gate
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertTrue(repository.statusUpdates.isEmpty())
+
+        gate.complete(Unit)
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertEquals(1, repository.statusUpdates.size)
     }
 
     @Test

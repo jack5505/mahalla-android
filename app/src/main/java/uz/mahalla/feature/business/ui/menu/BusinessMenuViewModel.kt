@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessMenuItem
@@ -54,11 +53,11 @@ class BusinessMenuViewModel @Inject constructor(
     override fun onEvent(event: BusinessMenuEvent) {
         when (event) {
             BusinessMenuEvent.ScreenResumed ->
-                if (!currentState.menu.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(isLoadInFlight = ::isReloadBlocked) { load(showLoading = false) }
 
-            BusinessMenuEvent.Refreshed -> load(showLoading = false, refreshing = true)
+            BusinessMenuEvent.Refreshed ->
+                if (!isReloadBlocked()) load(showLoading = false, refreshing = true)
+
             BusinessMenuEvent.Retry -> load()
             is BusinessMenuEvent.StopListToggled -> toggleStopList(event.itemId)
 
@@ -80,6 +79,15 @@ class BusinessMenuViewModel @Inject constructor(
             BusinessMenuEvent.SaveClicked -> save()
         }
     }
+
+    /**
+     * Reload и стоп-лист/сохранение позиции взаимно исключают друг друга:
+     * который бы из двух ни начался вторым, более старый ответ первого может
+     * прийти позже и откатить то, что успел применить второй (нашло ревью,
+     * issue #272). Поэтому reload не стартует, пока одна из ручек в полёте, и
+     * ни одна из них не стартует, пока не завершился reload.
+     */
+    private fun isReloadBlocked(): Boolean = loadJob?.isActive == true || currentState.isBusy
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadJob?.cancel()
@@ -115,8 +123,7 @@ class BusinessMenuViewModel @Inject constructor(
      * перезагрузкой: меню длинное, и скролл к нужной позиции терять нельзя.
      */
     private fun toggleStopList(itemId: String) {
-        val state = currentState
-        if (state.isBusy) return
+        if (isReloadBlocked()) return
         val item = itemOrNull(itemId) ?: return
 
         updateState { copy(pendingItemId = itemId, actionFailure = null) }
@@ -200,7 +207,7 @@ class BusinessMenuViewModel @Inject constructor(
 
     private fun save() {
         val state = currentState
-        if (state.isSaving) return
+        if (isReloadBlocked()) return
         val form = state.form.trimmed()
         val errors = NewMenuItemValidator.validate(form)
         if (errors.isNotEmpty()) {

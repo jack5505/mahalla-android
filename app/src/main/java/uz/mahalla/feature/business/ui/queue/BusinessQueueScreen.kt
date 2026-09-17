@@ -47,10 +47,11 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueActionRules
 import uz.mahalla.feature.business.domain.QueueEntry
-import uz.mahalla.feature.business.ui.BusinessInlineFailure
+import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 import java.time.Instant
 
 /**
@@ -132,7 +133,7 @@ fun BusinessQueueContentScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
                 state.actionFailure?.let { failure ->
-                    item(key = "action-failure") { BusinessInlineFailure(failure = failure) }
+                    item(key = "action-failure") { InlineFailure(failure = failure) }
                 }
                 callNextItem(state = state, onEvent = onEvent)
                 queueItems(state = state, onEvent = onEvent)
@@ -176,7 +177,7 @@ private fun LazyListScope.callNextItem(
             Text(
                 text = stringResource(R.string.business_queue_waiting, state.waitingCount),
                 modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.merge(TabularNums),
                 color = LocalMahallaColors.current.fgMuted,
             )
         }
@@ -199,7 +200,7 @@ private fun LazyListScope.queueItems(
         }
 
         is ScreenState.Error -> item(key = "error") {
-            BusinessInlineFailure(
+            InlineFailure(
                 failure = entries.failure,
                 onRetry = { onEvent(BusinessQueueEvent.Retry) },
             )
@@ -266,7 +267,7 @@ private fun QueueEntryCard(
             Text(
                 text = stringResource(R.string.business_queue_position, position),
                 modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.merge(TabularNums),
                 color = colors.fgMuted,
             )
         }
