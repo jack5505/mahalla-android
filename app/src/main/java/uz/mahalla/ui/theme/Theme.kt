@@ -34,15 +34,20 @@ fun MahallaTheme(
     }
 }
 
-/** Отступы и размеры по макету — DESIGN-SYSTEM.md §3. */
+/**
+ * Отступы и размеры — `design_handoff_mahalla_focus/README.md`, раздел
+ * «Отступы». `minTouch` держим на 48dp, а не на макетных 44dp — правило кита
+ * (`.claude/rules/compose-ui.md`) важнее визуального макета.
+ */
 object Spacing {
-    val gutter = 14.dp // поля экрана
-    val card = 12.dp // внутренний отступ карточки
-    val item = 10.dp // вертикальный отступ строки списка
-    val gap = 10.dp // расстояние между блоками в колонке
-    val buttonHeight = 44.dp
-    val fieldHeight = 46.dp
-    val chipHeight = 28.dp
-    val navHeight = 58.dp
+    val gutter = 20.dp // поля экрана
+    val onboardingGutter = 24.dp // у онбординга поля шире — так в макете
+    val card = 18.dp // внутренний отступ карточки/блока
+    val item = 12.dp // вертикальный отступ строки списка
+    val gap = 20.dp // расстояние между блоками в колонке (18-22dp)
+    val buttonHeight = 46.dp // визуально; цель нажатия всё равно 48dp (MahallaComponentDefaults)
+    val fieldHeight = 56.dp
+    val chipHeight = 42.dp
+    val navHeight = 62.dp
     val minTouch = 48.dp // минимальная цель нажатия, важнее визуальной высоты
 }

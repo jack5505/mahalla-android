@@ -222,7 +222,7 @@ private fun SubmitBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(

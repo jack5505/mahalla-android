@@ -11,7 +11,7 @@
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Рядом</string>
-    <string name="nav_orders">Заказы</string>
+    <string name="nav_activity">Активности</string>
     <string name="nav_wallet">Кошелёк</string>
     <string name="nav_profile">Профиль</string>
 
@@ -40,17 +40,20 @@
     <string name="http_inspector_subtitle">Посмотреть, какие запросы уходят на сервер</string>
 
     <!-- Онбординг: welcome -->
-    <string name="onboarding_welcome_title">Mahalla — сервисы рядом с вами</string>
-    <string name="onboarding_welcome_subtitle">Еда, аптеки, врачи, очереди и заказы — в одном приложении.</string>
-    <string name="onboarding_welcome_action">Войти или зарегистрироваться</string>
+    <string name="onboarding_welcome_kicker">MAHALLA</string>
+    <string name="onboarding_welcome_title">Всё, что рядом с домом, — в одном приложении</string>
+    <string name="onboarding_welcome_subtitle">Аптеки, еда, врачи, мастера и кино. Талоны в очередь и брони без звонков.</string>
+    <string name="onboarding_welcome_action">Начать</string>
+    <string name="onboarding_welcome_consent">Продолжая, вы принимаете условия и политику</string>
     <string name="onboarding_welcome_language">Язык приложения</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Шаг %1$d из %2$d</string>
     <string name="onboarding_phone_title">Ваш номер телефона</string>
     <string name="onboarding_phone_subtitle">Пришлём код подтверждения в SMS.</string>
     <string name="onboarding_phone_label">Номер телефона</string>
     <string name="onboarding_phone_action">Получить код</string>
-    <string name="onboarding_phone_error">Неверный номер телефона</string>
+    <string name="onboarding_phone_error">Введите 9 цифр номера</string>
     <string name="onboarding_phone_consent">Согласен с условиями публичной оферты</string>
     <string name="onboarding_phone_consent_link">Читать оферту</string>
     <string name="onboarding_phone_consent_required">Чтобы продолжить, примите оферту</string>
@@ -93,6 +96,7 @@
     <string name="onboarding_pin_error_storage">Не удалось сохранить PIN-код. Попробуйте ещё раз</string>
     <string name="onboarding_error_foreign_account">Сервер вернул другой аккаунт. На этом устройстве раньше входил другой номер — вход отменён. Войдите заново по номеру телефона</string>
     <string name="onboarding_pin_forgot">Забыли PIN-код?</string>
+    <string name="pin_pad_backspace">Удалить цифру</string>
 
     <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Вход по биометрии</string>
@@ -124,7 +128,7 @@
     <string name="city_qarshi">Карши</string>
 
     <!-- Основные разделы -->
-    <string name="discovery_title">Рядом</string>
+    <string name="discovery_title">Что рядом</string>
     <string name="wallet_title">Кошелёк</string>
     <string name="wallet_available">Можно потратить</string>
     <string name="wallet_balance_total">На счету</string>
@@ -175,6 +179,10 @@
     <string name="profile_logout">Выйти</string>
     <string name="profile_logout_title">Выйти из аккаунта?</string>
     <string name="profile_logout_message">Чтобы войти снова, понадобится код подтверждения.</string>
+    <string name="profile_saved_places">Избранное</string>
+    <string name="profile_saved_places_subtitle">Сохранённые места</string>
+    <string name="profile_biometric_title">Вход по отпечатку</string>
+    <string name="profile_biometric_description">Вместо PIN-кода кошелька</string>
     <string name="profile_devices_title">Мои устройства</string>
     <string name="profile_devices_empty">Активных устройств нет</string>
     <string name="profile_device_unknown">Неизвестное устройство</string>
@@ -223,6 +231,7 @@
     <string name="action_cancel">Отмена</string>
     <string name="action_delete">Удалить</string>
     <string name="action_see_all">Все</string>
+    <string name="action_show_more">Показать ещё</string>
 
     <!-- UI-кит: поиск и OTP -->
     <string name="search_hint">Поиск</string>
@@ -349,7 +358,8 @@
     <string name="place_hours_unknown">Часы работы неизвестны</string>
     <string name="place_hours_around_the_clock">Круглосуточно</string>
     <string name="place_hours_day_off">Выходной</string>
-    <string name="place_contacts_title">Контакты</string>
+    <string name="place_meta_address">Адрес</string>
+    <string name="place_meta_phone">Телефон</string>
     <string name="place_reviews_title">Отзывы</string>
     <string name="place_reviews_show_all">Все отзывы</string>
     <string name="place_review_anonymous">Гость</string>
@@ -383,6 +393,26 @@
     <string name="place_action_products">Товары</string>
     <string name="place_action_call">Позвонить</string>
     <string name="place_action_route">Маршрут</string>
+
+    <!-- Карточка места: лайк, избранное, комментарии (issue #75) -->
+    <string name="place_social_save">В избранное</string>
+    <string name="place_social_saved">В избранном</string>
+    <string name="place_social_unavailable">Не удалось получить состояние лайка и избранного.</string>
+    <string name="place_comments_title">Комментарии</string>
+    <string name="place_comments_empty">Комментариев пока нет. Напишите первым.</string>
+    <string name="place_comments_show_more">Ещё комментарии</string>
+    <string name="place_comment_hint">Написать комментарий</string>
+    <string name="place_comment_send">Отправить</string>
+    <string name="place_comment_author_me">Вы</string>
+    <string name="place_comment_author_other">Пользователь</string>
+    <string name="place_comment_delete">Удалить</string>
+    <string name="place_comment_delete_title">Удалить комментарий?</string>
+    <string name="place_comment_delete_message">Комментарий удалится навсегда, вернуть его будет нельзя.</string>
+
+    <!-- Избранное (issue #75) -->
+    <string name="saved_places_title">Избранное</string>
+    <string name="saved_places_empty_title">В избранном пусто</string>
+    <string name="saved_places_empty_description">Добавляйте места кнопкой «В избранное» на их карточке.</string>
     <string name="action_collapse">Свернуть</string>
 
     <!-- UI-кит: степпер количества (эпик 5.2) -->
@@ -572,6 +602,16 @@
     <string name="image_gallery_of">Фотографии: %1$s</string>
 
     <!-- Очередь (walk-in, issue #96) -->
+    <string name="home_focus_ticket_kicker">Ваш талон</string>
+    <string name="home_focus_nearest_kicker">Ближе всего сейчас</string>
+    <string name="home_focus_ticket_position">В очереди · %1$d</string>
+    <string name="home_focus_open_ticket">Открыть талон</string>
+    <string name="home_focus_open_place">Место</string>
+    <string name="category_all">Все</string>
+    <string name="home_focus_updated_at">обновлено %1$s</string>
+    <string name="home_focus_rating">рейтинг %1$s</string>
+    <string name="wallet_header_subscription">%1$s до %2$s</string>
+    <string name="place_services_title">Услуги</string>
     <string name="queue_title">Очередь</string>
     <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
     <string name="queue_field_name">Ваше имя</string>
@@ -592,8 +632,9 @@
     <string name="queue_position_label">Ваше место в очереди</string>
     <string name="queue_position_unknown">Место появится, когда мастер подтвердит запись.</string>
     <string name="queue_position_outdated">Очередь могла измениться: дождитесь следующего сообщения.</string>
-    <string name="queue_wait_label">Примерное ожидание: %1$s</string>
-    <string name="queue_wait_hours">%1$s ч</string>
+    <string name="queue_stat_wait">минут</string>
+    <string name="queue_stat_wait_hours">часов</string>
+    <string name="queue_stat_taken">взят</string>
     <string name="queue_cancel">Отменить запись</string>
     <string name="queue_cancel_keep">Оставить</string>
     <string name="queue_cancel_confirm_title">Отменить запись?</string>
@@ -664,6 +705,11 @@
     <string name="appointment_status_completed">Завершена</string>
     <string name="appointment_status_no_show">Вы не пришли</string>
     <string name="appointment_status_unknown">Состояние неизвестно</string>
+
+    <!-- Профиль на сервере (issue #170) -->
+    <string name="profile_name_edit_action">Изменить имя</string>
+    <string name="profile_name_edit_label">Имя</string>
+    <string name="profile_name_edit_required">Введите имя</string>
 
     <!-- Загрузка изображений (issue #101) -->
     <string name="profile_avatar_title">Фото профиля</string>
@@ -842,6 +888,19 @@
     <string name="subscription_feature_custom_branding">Свой брендинг</string>
     <string name="subscription_feature_api_access">Доступ по API</string>
     <string name="subscription_analytics">Аналитика: %1$s</string>
+    <string name="subscription_status_expiring">Истекает</string>
+    <string name="subscription_next_charge">Следующее списание</string>
+    <string name="subscription_renew">Продлить подписку</string>
+    <string name="subscription_renew_until">После продления будет работать примерно до %1$s.</string>
+    <string name="subscription_notice_renewed">Подписка продлена.</string>
+    <string name="subscription_charges_title">История списаний</string>
+    <string name="subscription_charges_empty">За подписку пока не списывали.</string>
+    <string name="subscription_charges_more">Показать ещё</string>
+    <string name="subscription_charge_no_date">Дата не указана</string>
+    <string name="subscription_charge_pending">Выполняется</string>
+    <string name="subscription_charge_failed">Не прошло</string>
+    <string name="subscription_charge_cancelled">Отменено</string>
+    <string name="subscription_charge_refunded">Возвращено</string>
 
     <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
     <string name="cinema_title">Афиша</string>
@@ -1062,7 +1121,7 @@
     <string name="activity_empty_history_title">История пуста</string>
     <string name="activity_empty_history_description">Завершённые заказы и брони попадут сюда.</string>
     <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
-    <string name="activity_load_more">Показать ещё</string>
+    <string name="action_load_more">Показать ещё</string>
     <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
     <string name="activity_source_failed">Не удалось загрузить: %1$s</string>
     <string name="activity_source_orders">заказы</string>

@@ -9,9 +9,15 @@ paths:
 ## Сначала кит, потом свой компонент
 
 Библиотека — `core/ui/components/`: `Buttons`, `TextFields`, `Chips`, `Toggles`,
-`Cards`, `Bars`, `Sheets`, состояния экрана `state/ScreenState` + `ScreenStates`,
-`Refresh`, `Snackbars`. Своя кнопка или поле ввода — только если в ките нет
-подходящего; тогда добавляй в кит, а не в экран.
+`Cards` (в т. ч. `MahallaDivider` — линии между строками списков), `Bars`
+(шапка таба со знаком M, кикером и метой — `MahallaTopBar(brandMark = true)`),
+`Sheets`, `PinPad` (точки и нампад PIN), состояния экрана `state/ScreenState` +
+`ScreenStates`, `Refresh`, `Snackbars`. Своя кнопка или поле ввода — только
+если в ките нет подходящего; тогда добавляй в кит, а не в экран.
+
+Списки мест, операций и меты в редизайне «Focus» — строки с `MahallaDivider`,
+а не стопка карточек; линии рисует список (`itemsIndexed`, `if (index > 0)`),
+чтобы под последней строкой их не было.
 
 Состояния экрана — через `ScreenStateHost` (Loading / Empty / Error+retry /
 Content), не самодельными `if`.

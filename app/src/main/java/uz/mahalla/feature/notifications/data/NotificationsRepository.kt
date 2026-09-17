@@ -1,6 +1,7 @@
 package uz.mahalla.feature.notifications.data
 
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
@@ -77,18 +78,10 @@ class DefaultNotificationsRepository @Inject constructor(
  * не показать хвост списка, чем зациклить догрузку одной и той же страницы
  * (то же правило, что у истории кошелька, issue #62).
  */
-internal fun NotificationPageDto.toDomain(): NotificationPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return NotificationPage(
-        items = content.mapNotNull(NotificationDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
-    )
-}
+internal fun NotificationPageDto.toDomain(): NotificationPage = NotificationPage(
+    items = content.mapNotNull(NotificationDto::toDomain),
+    hasMore = hasMorePages(page = page, totalPages = totalPages, last = last),
+)
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): запись без `id` отбрасывается —

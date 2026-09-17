@@ -76,6 +76,8 @@ import uz.mahalla.feature.queue.data.DefaultWalkInRepository
 import uz.mahalla.feature.queue.data.di.QueueDataModule
 import uz.mahalla.feature.role.data.DefaultProviderRepository
 import uz.mahalla.feature.role.data.di.RoleDataModule
+import uz.mahalla.feature.social.data.DefaultSocialRepository
+import uz.mahalla.feature.social.data.di.SocialDataModule
 import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
 import uz.mahalla.feature.subscription.data.di.SubscriptionDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
@@ -236,6 +238,41 @@ class GraphAssemblyTest {
         }
     }
 
+    /**
+     * Лайк, «Избранное» и комментарии (issue #75). Репозиторий стоит на
+     * каталоге: «Избранное» бэкенд отдаёт одними идентификаторами, и карточки
+     * дозапрашиваются его же ручкой.
+     */
+    @Test
+    fun `social graph assembles over the api, the catalog and the profile`() {
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val retrofit = NetworkModule.provideRetrofit(
+                OkHttpClient(),
+                NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                NetworkModule.provideBaseUrl(),
+            )
+            assertNotNull(
+                DefaultSocialRepository(
+                    api = SocialDataModule.provideSocialApi(retrofit),
+                    catalogRepository = DefaultCatalogRepository(
+                        api = DiscoveryDataModule.provideCatalogApi(retrofit),
+                        placeDao = DatabaseModule.providePlaceDao(database),
+                        locationProvider = locationProvider(context),
+                        media = DefaultMediaRepository(
+                            api = MediaDataModule.provideMediaApi(retrofit),
+                            compressor = AndroidImageCompressor(context),
+                        ),
+                        clock = AppModule.provideClock(),
+                    ),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
+                ),
+            )
+        } finally {
+            database.close()
+        }
+    }
+
     @Test
     fun `storage graph assembles on top of a single data store`() {
         val dataStore = sharedDataStore(context)
@@ -350,15 +387,21 @@ class GraphAssemblyTest {
         )
 
         val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+        // История списаний (задача 9.3) живёт в контроллере платежей, но под
+        // тем же Bearer — значит и на том же клиенте.
+        val paymentsApi = SubscriptionDataModule.providePaymentsApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultSubscriptionRepository(api))
+        assertNotNull(paymentsApi)
+        assertNotNull(DefaultSubscriptionRepository(api, paymentsApi))
     }
 
     /**
      * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
      * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
-     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     * анкета покупателя живут в DataStore: `PUT users/me` анкету целиком не
+     * принимает (только `fullName` и `avatarUrl`, issue #170), а роль там
+     * вообще не серверная, а локальный выбор (issue #237).
      */
     @Test
     fun `role forms assemble on the main retrofit and the data store`() {
@@ -555,6 +598,7 @@ class GraphAssemblyTest {
                 api = api,
                 store = DataStoreWalkInTicketStore(
                     dataStore = sharedDataStore(context),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
                     clock = AppModule.provideClock(),
                 ),
                 clock = AppModule.provideClock(),

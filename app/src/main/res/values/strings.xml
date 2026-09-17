@@ -15,7 +15,7 @@
 
     <!-- Нижняя навигация -->
     <string name="nav_discovery">Yaqin atrofda</string>
-    <string name="nav_orders">Buyurtmalar</string>
+    <string name="nav_activity">Amallarim</string>
     <string name="nav_wallet">Hamyon</string>
     <string name="nav_profile">Profil</string>
 
@@ -45,17 +45,20 @@
     <string name="http_inspector_subtitle">Ilova serverga qanday so\'rovlar yuborayotganini ko\'rish</string>
 
     <!-- Онбординг: welcome -->
-    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
-    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
-    <string name="onboarding_welcome_action">Kirish yoki ro\'yxatdan o\'tish</string>
+    <string name="onboarding_welcome_kicker">MAHALLA</string>
+    <string name="onboarding_welcome_title">Uyingiz yaqinidagi hamma narsa — bitta ilovada</string>
+    <string name="onboarding_welcome_subtitle">Dorixona, ovqat, shifokor, ustalar va kino. Navbatga talon va bron — qo\'ng\'iroqsiz.</string>
+    <string name="onboarding_welcome_action">Boshlash</string>
+    <string name="onboarding_welcome_consent">Davom etish orqali siz shartlar va siyosatga rozilik bildirasiz</string>
     <string name="onboarding_welcome_language">Ilova tili</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Qadam %1$d / %2$d</string>
     <string name="onboarding_phone_title">Telefon raqamingiz</string>
     <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
     <string name="onboarding_phone_label">Telefon raqami</string>
     <string name="onboarding_phone_action">Kodni olish</string>
-    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_phone_error">Raqamning 9 ta raqamini kiriting</string>
     <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
     <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
     <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
@@ -99,6 +102,7 @@
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
     <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
+    <string name="pin_pad_backspace">Raqamni o\'chirish</string>
 
     <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Biometrika bilan kirish</string>
@@ -130,7 +134,7 @@
     <string name="city_qarshi">Qarshi</string>
 
     <!-- Основные разделы -->
-    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_title">Yaqinda nima bor</string>
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_available">Sarflash mumkin</string>
     <string name="wallet_balance_total">Hisobda</string>
@@ -181,6 +185,10 @@
     <string name="profile_logout">Chiqish</string>
     <string name="profile_logout_title">Hisobdan chiqasizmi?</string>
     <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
+    <string name="profile_saved_places">Saqlangan joylar</string>
+    <string name="profile_saved_places_subtitle">Saqlangan joylar ro\'yxati</string>
+    <string name="profile_biometric_title">Barmoq izi bilan kirish</string>
+    <string name="profile_biometric_description">Hamyon PIN-kodi o\'rniga</string>
     <string name="profile_devices_title">Mening qurilmalarim</string>
     <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
     <string name="profile_device_unknown">Noma\'lum qurilma</string>
@@ -229,6 +237,7 @@
     <string name="action_cancel">Bekor qilish</string>
     <string name="action_delete">O\'chirish</string>
     <string name="action_see_all">Hammasi</string>
+    <string name="action_show_more">Yana ko\'rsatish</string>
 
     <!-- UI-кит: поиск и OTP -->
     <string name="search_hint">Qidirish</string>
@@ -355,7 +364,8 @@
     <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
     <string name="place_hours_around_the_clock">Kunu tun</string>
     <string name="place_hours_day_off">Dam olish kuni</string>
-    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_meta_address">Manzil</string>
+    <string name="place_meta_phone">Telefon</string>
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
@@ -389,6 +399,26 @@
     <string name="place_action_products">Dorilar</string>
     <string name="place_action_call">Qo\'ng\'iroq qilish</string>
     <string name="place_action_route">Yo\'nalish</string>
+
+    <!-- Карточка места: лайк, избранное, комментарии (issue #75) -->
+    <string name="place_social_save">Saqlash</string>
+    <string name="place_social_saved">Saqlangan</string>
+    <string name="place_social_unavailable">Yoqtirish va saqlash holatini olib bo\'lmadi.</string>
+    <string name="place_comments_title">Izohlar</string>
+    <string name="place_comments_empty">Hozircha izoh yo\'q. Birinchi bo\'lib yozing.</string>
+    <string name="place_comments_show_more">Yana izohlar</string>
+    <string name="place_comment_hint">Izoh yozing</string>
+    <string name="place_comment_send">Yuborish</string>
+    <string name="place_comment_author_me">Siz</string>
+    <string name="place_comment_author_other">Foydalanuvchi</string>
+    <string name="place_comment_delete">O\'chirish</string>
+    <string name="place_comment_delete_title">Izohni o\'chirasizmi?</string>
+    <string name="place_comment_delete_message">Izoh butunlay o\'chadi, uni qaytarib bo\'lmaydi.</string>
+
+    <!-- Избранное (issue #75) -->
+    <string name="saved_places_title">Saqlangan joylar</string>
+    <string name="saved_places_empty_title">Saqlangan joylar yo\'q</string>
+    <string name="saved_places_empty_description">Joy kartochkasidagi «Saqlash» tugmasi orqali qo\'shing.</string>
     <string name="action_collapse">Yig\'ish</string>
 
     <!-- UI-кит: степпер количества (эпик 5.2) -->
@@ -578,6 +608,16 @@
     <string name="image_gallery_of">%1$s suratlari</string>
 
     <!-- Очередь (walk-in, issue #96) -->
+    <string name="home_focus_ticket_kicker">Sizning navbatingiz</string>
+    <string name="home_focus_nearest_kicker">Hozir eng yaqin</string>
+    <string name="home_focus_ticket_position">Navbatda · %1$d</string>
+    <string name="home_focus_open_ticket">Navbatni ochish</string>
+    <string name="home_focus_open_place">Joy</string>
+    <string name="category_all">Hammasi</string>
+    <string name="home_focus_updated_at">%1$s da yangilangan</string>
+    <string name="home_focus_rating">reyting %1$s</string>
+    <string name="wallet_header_subscription">%1$s %2$s gacha</string>
+    <string name="place_services_title">Xizmatlar</string>
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
     <string name="queue_field_name">Ismingiz</string>
@@ -598,8 +638,9 @@
     <string name="queue_position_label">Navbatdagi o\'rningiz</string>
     <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
     <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
-    <string name="queue_wait_label">Taxminiy kutish: %1$s</string>
-    <string name="queue_wait_hours">%1$s soat</string>
+    <string name="queue_stat_wait">daqiqa</string>
+    <string name="queue_stat_wait_hours">soat</string>
+    <string name="queue_stat_taken">olindi</string>
     <string name="queue_cancel">Navbatni bekor qilish</string>
     <string name="queue_cancel_keep">Qoldirish</string>
     <string name="queue_cancel_confirm_title">Navbatni bekor qilasizmi?</string>
@@ -670,6 +711,11 @@
     <string name="appointment_status_completed">Tugadi</string>
     <string name="appointment_status_no_show">Kelmadingiz</string>
     <string name="appointment_status_unknown">Holati aniq emas</string>
+
+    <!-- Профиль на сервере (issue #170) -->
+    <string name="profile_name_edit_action">Ismni tahrirlash</string>
+    <string name="profile_name_edit_label">Ism</string>
+    <string name="profile_name_edit_required">Ism kiritilishi shart</string>
 
     <!-- Загрузка изображений (issue #101) -->
     <string name="profile_avatar_title">Profil rasmi</string>
@@ -850,6 +896,19 @@
     <string name="subscription_feature_custom_branding">O\'z brendingiz</string>
     <string name="subscription_feature_api_access">API orqali kirish</string>
     <string name="subscription_analytics">Tahlil: %1$s</string>
+    <string name="subscription_status_expiring">Tugayapti</string>
+    <string name="subscription_next_charge">Keyingi to\'lov</string>
+    <string name="subscription_renew">Obunani uzaytirish</string>
+    <string name="subscription_renew_until">Uzaytirsangiz, taxminan %1$s gacha ishlaydi.</string>
+    <string name="subscription_notice_renewed">Obuna uzaytirildi.</string>
+    <string name="subscription_charges_title">To\'lovlar tarixi</string>
+    <string name="subscription_charges_empty">Obuna uchun hali pul yechilmagan.</string>
+    <string name="subscription_charges_more">Yana ko\'rsatish</string>
+    <string name="subscription_charge_no_date">Sanasi ko\'rsatilmagan</string>
+    <string name="subscription_charge_pending">Bajarilmoqda</string>
+    <string name="subscription_charge_failed">O\'tmadi</string>
+    <string name="subscription_charge_cancelled">Bekor qilingan</string>
+    <string name="subscription_charge_refunded">Qaytarilgan</string>
 
     <!-- Вертикаль «Кино» (эпик #13, issue #106) -->
     <string name="cinema_title">Afisha</string>
@@ -1070,7 +1129,7 @@
     <string name="activity_empty_history_title">Tarix bo\'sh</string>
     <string name="activity_empty_history_description">Tugagan buyurtma va bandlovlar shu yerga tushadi.</string>
     <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
-    <string name="activity_load_more">Ko\'proq ko\'rsatish</string>
+    <string name="action_load_more">Ko\'proq ko\'rsatish</string>
     <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
     <string name="activity_source_failed">%1$s yuklanmadi</string>
     <string name="activity_source_orders">Buyurtmalar</string>

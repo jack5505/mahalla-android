@@ -47,6 +47,7 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.ui.theme.FocusTitleSheet
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
@@ -133,6 +134,7 @@ fun EmptyState(
         description = description,
         actionLabel = actionLabel,
         onAction = onAction,
+        actionVariant = MahallaButtonVariant.Primary,
     )
 }
 
@@ -219,6 +221,15 @@ fun <T> ScreenStateHost(
     }
 }
 
+/**
+ * Сообщение о состоянии экрана — карточкой (макет 2b: «Активных талонов
+ * нет» на плашке r24). Внешний отступ прежний, карточка рисуется внутри него:
+ * так ни один экран не сдвинулся, а плашка появилась.
+ *
+ * @param actionVariant пустое состояние зовёт дальше основной кнопкой (в макете
+ * она filled), а повтор после ошибки остаётся вторичным: «повторить» — не
+ * главное действие экрана, а починка.
+ */
 @Composable
 private fun StateMessage(
     icon: ImageVector,
@@ -228,15 +239,18 @@ private fun StateMessage(
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    actionVariant: MahallaButtonVariant = MahallaButtonVariant.Secondary,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(Spacing.gutter)
+            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.large)
+            .padding(Spacing.card)
             // Сообщение о смене состояния экрана TalkBack проговаривает сам.
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(Spacing.gap),
+        verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
         Icon(
             imageVector = icon,
@@ -246,8 +260,8 @@ private fun StateMessage(
         )
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+            style = FocusTitleSheet,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
         )
         Text(
@@ -260,7 +274,8 @@ private fun StateMessage(
             MahallaButton(
                 text = actionLabel,
                 onClick = onAction,
-                variant = MahallaButtonVariant.Secondary,
+                modifier = Modifier.padding(top = Spacing.item / 2),
+                variant = actionVariant,
                 fillWidth = false,
             )
         }
