@@ -40,18 +40,18 @@ interface PromotionsRepository {
     suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>>
 
     /**
+     * Проверка промокода перед оформлением (issue #180, `GET promotions/check`).
+     * [orderAmountSum] — сумы, как и весь домен; пересчёт в тийины (issue #149)
+     * делает реализация.
+     */
+    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
+
+    /**
      * Новая акция заведения (issue #252). Владелец правит своё заведение —
      * доступ проверяет бэкенд, клиент только не даёт заведомо невалидному
      * черновику уйти в сеть.
      */
     suspend fun createPromotion(placeId: String, draft: NewPromotionDraft): ApiResult<Unit>
-
-    /**
-     * Проверка промокода перед оформлением заказа (issue #180).
-     * [orderAmountSum] — сумма заказа в сумах, конвертация в тийины — забота
-     * репозитория, как и у [createPromotion].
-     */
-    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
 }
 
 @Singleton
@@ -66,6 +66,15 @@ class DefaultPromotionsRepository @Inject constructor(
     override suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>> =
         apiCall { api.placePromotions(placeId).payload() }
             .map { promotions -> promotions.mapNotNull(PromotionDto::toDomain) }
+
+    override suspend fun check(
+        code: String,
+        placeId: String,
+        orderAmountSum: Long,
+    ): ApiResult<PromoCheckResult> =
+        apiCall {
+            api.check(code = code, placeId = placeId, orderAmount = Money.somToTiyin(orderAmountSum)).payload()
+        }.map { it.toDomain(code) }
 
     /**
      * Черновик уже проверен формой (`canSubmit`), но повторная проверка тут
@@ -103,19 +112,6 @@ class DefaultPromotionsRepository @Inject constructor(
             ).payload()
         }.map {}
     }
-
-    override suspend fun check(
-        code: String,
-        placeId: String,
-        orderAmountSum: Long,
-    ): ApiResult<PromoCheckResult> =
-        apiCall {
-            api.check(
-                code = code,
-                placeId = placeId,
-                orderAmount = Money.somToTiyin(orderAmountSum),
-            ).payload()
-        }.map { it.toDomain(code) }
 }
 
 /**

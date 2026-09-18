@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="stylesheet" href="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/styles.css">
+  <script src="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/_ds_bundle.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; background: #ece6f4; }
+    a { color: #6d4fc2; } a:hover { color: #4a2f9e; }
+  </style>
+</helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" fill="#5b3fc4"/><circle cx="100" cy="100" r="44" fill="#fff"/><text x="100" y="116" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="48" fill="#5b3fc4">M</text></svg></template>
+<div style="position:absolute;width:0;height:0;overflow:hidden;opacity:0;pointer-events:none"><x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" width="{{ 10 }}" height="{{ 10 }}" hint-size="0,0"><span></span></x-import></div>
+<div style="padding:40px 44px 56px;display:flex;flex-direction:column;gap:28px;font-family:'Inter',system-ui,sans-serif;color:#1d1b20;width:max-content">
+  <div style="display:flex;flex-direction:column;gap:8px;max-width:720px">
+    <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;color:#625b71">Mahalla · макет B «Focus» · Material 3 · все экраны</div>
+    <h1 style="margin:0;font:700 28px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">Карта экранов</h1>
+    <p style="margin:0;font:400 13px/1.6 'Inter',system-ui,sans-serif;color:#49454f;max-width:640px">Ряд 0 — вход: приветствие, телефон, SMS-код, махалля, PIN. Ряд 1 — путь «увидел место → взял талон». Ряд 2 — остальные вкладки меню (Рядом · Очереди · Кошелёк · Профиль). Каждый телефон живой.</p>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 12px/1 'Inter',system-ui,sans-serif;color:#5b3fc4">0 · Вход в приложение</div>
+    <div style="display:flex;gap:32px;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0a</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Приветствие</span></div>
+        <dc-import name="Mahalla Onboarding" step="welcome" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0b</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Телефон</span></div>
+        <dc-import name="Mahalla Onboarding" step="phone" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0c</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Код из SMS</span></div>
+        <dc-import name="Mahalla Onboarding" step="code" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0d</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Махалля</span></div>
+        <dc-import name="Mahalla Onboarding" step="place" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0e</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">PIN кошелька</span></div>
+        <dc-import name="Mahalla Onboarding" step="pin" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">0f</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Готово</span></div>
+        <dc-import name="Mahalla Onboarding" step="done" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 12px/1 'Inter',system-ui,sans-serif;color:#5b3fc4">1 · Главный путь</div>
+    <div style="display:flex;gap:32px;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">1a</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Рядом — главная</span></div>
+        <dc-import name="Mahalla Focus M3" screen="near" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">1b</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Карточка места</span></div>
+        <dc-import name="Mahalla Focus M3" screen="near" place="apteka" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">1c</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Бронирование — шторка</span></div>
+        <dc-import name="Mahalla Focus M3" screen="near" place="osh" sheet="{{ true }}" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">1d</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Главная с активным талоном</span></div>
+        <dc-import name="Mahalla Focus M3" screen="near" ticket="{{ true }}" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font:600 12px/1 'Inter',system-ui,sans-serif;color:#5b3fc4">2 · Остальные вкладки меню</div>
+    <div style="display:flex;gap:32px;align-items:flex-start">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">2a</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Очереди — талон</span></div>
+        <dc-import name="Mahalla Focus M3" screen="queue" ticket="{{ true }}" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">2b</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Очереди — пусто</span></div>
+        <dc-import name="Mahalla Focus M3" screen="queue" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">2c</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Кошелёк</span></div>
+        <dc-import name="Mahalla Focus M3" screen="wallet" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><span style="font:600 11px/1 'Inter',system-ui,sans-serif;padding:4px 7px;border-radius:8px;background:#e8deff;color:#21005d">2d</span><span style="font:500 12px/1.3 'Inter',system-ui,sans-serif;color:#49454f">Профиль</span></div>
+        <dc-import name="Mahalla Focus M3" screen="me" embedded="{{ true }}" hint-size="393px,852px"></dc-import>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

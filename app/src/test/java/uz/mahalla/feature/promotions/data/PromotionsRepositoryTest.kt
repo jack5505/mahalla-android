@@ -279,7 +279,6 @@ class PromotionsRepositoryTest {
     }
 
     @Test
-
     fun `a valid code is checked in tiyin and the discount is parsed back to som`() = runTest {
         server.enqueue(
             envelope(

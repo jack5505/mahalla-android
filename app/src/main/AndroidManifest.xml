@@ -11,6 +11,12 @@
 
     <!-- Вход по биометрии (эпик 3.5); датчик не обязателен, фолбэк — PIN. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+
+    <!-- Пуши (эпик 11). С API 33 показывать уведомления без этого разрешения
+         нельзя; спрашивается оно не на старте, а там, где человеку понятно
+         зачем — в центре уведомлений и в настройках уведомлений. На API 26–32
+         разрешения не существует, система выдаёт его при установке. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature
         android:name="android.hardware.fingerprint"
         android:required="false" />
@@ -58,9 +64,31 @@
             android:name="io.sentry.auto-init"
             android:value="false" />
 
+        <!-- Пуши (эпик 11). Канал по умолчанию нужен для сообщений с блоком
+             `notification`: их в фоне показывает сама библиотека, минуя
+             MahallaMessagingService, и без этого значения уведомление уехало
+             бы в канал «Прочее», созданный библиотекой со своим названием.
+             Иконка и цвет — по той же причине: у сообщения, показанного
+             библиотекой, их взять больше неоткуда. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="other" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+
+        <service
+            android:name=".feature.notifications.push.MahallaMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Mahalla.Splash"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
@@ -69,14 +97,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep links (эпик 1.2): mahalla://place/{placeId} -->
+            <!-- Deep links (эпик 1.2, расширены в эпике 11). Хосты перечислены
+                 в одном фильтре: у них общие action и категории, а разные
+                 фильтры на ту же схему отличались бы только строкой хоста.
+                 Шаблоны и их соответствие маршрутам — в DeepLinks. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="place"
-                    android:scheme="mahalla" />
+                <data android:scheme="mahalla" />
+                <data android:host="place" />
+                <data android:host="order" />
+                <data android:host="notifications" />
+                <data android:host="subscription" />
             </intent-filter>
         </activity>
     </application>

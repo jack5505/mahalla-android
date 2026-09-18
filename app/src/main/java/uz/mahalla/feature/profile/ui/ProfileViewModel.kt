@@ -19,6 +19,7 @@ import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.media.data.MediaRepository
+import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.profile.data.ProfileRepository
 import uz.mahalla.feature.profile.data.SessionsRepository
 import uz.mahalla.feature.profile.domain.DeviceSession
@@ -43,6 +44,7 @@ class ProfileViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val profileRepository: ProfileRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val notificationChannels: NotificationChannels,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
@@ -79,6 +81,11 @@ class ProfileViewModel @Inject constructor(
         when (event) {
             is ProfileEvent.LanguageSelected -> viewModelScope.launch {
                 settingsDataStore.setLanguage(event.language)
+                // Названия каналов идут строкой на языке из настроек
+                // (NotificationChannels.localizedContext), а не системы — без
+                // перезавода здесь они остались бы на старом языке до
+                // следующего перезапуска процесса.
+                notificationChannels.ensureAll()
                 if (localeManager.apply(event.language)) {
                     emitEffect(ProfileEffect.RecreateActivity)
                 }

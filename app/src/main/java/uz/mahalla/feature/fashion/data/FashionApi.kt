@@ -306,7 +306,8 @@ data class AddToCartRequestDto(
  *
  * Схема допускает ещё `deliveryLat`/`deliveryLng` — клиент их не шлёт: на
  * экране оформления нет выбора точки на карте, а угаданные координаты хуже,
- * чем их отсутствие. `promoCode` шлётся — проверенный код (issue #180).
+ * чем их отсутствие. `promoCode` шлётся: проверенный код из чекаута (issue
+ * #180, `GET promotions/check`).
  */
 @Serializable
 data class FashionPlaceOrderRequestDto(
@@ -316,7 +317,6 @@ data class FashionPlaceOrderRequestDto(
     /** `WALLET` / `CASH`. */
     @SerialName("paymentMethod") val paymentMethod: String,
     @SerialName("deliveryAddress") val deliveryAddress: String? = null,
-    /** Проверенный код (issue #180); `null`, если код не применяли. */
     @SerialName("promoCode") val promoCode: String? = null,
 )
 

@@ -16,6 +16,7 @@ import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.profile.domain.VerificationStatus
 import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
+import uz.mahalla.feature.role.domain.providesServices
 
 /**
  * @param httpInspectorAvailable в сборке есть инспектор трафика (issue #30) —
@@ -78,9 +79,10 @@ data class ProfileState(
      * человек может её не заполнять; серверная роль — право, и владелец
      * заведения, который анкету не заполнял, до issue #237 своего заведения в
      * приложении не находил вовсе. Ложное «да» стоит пустого списка, ложное
-     * «нет» — спрятанного бизнеса.
+     * «нет» — спрятанного бизнеса. Правило общее с аудиторией тарифов
+     * подписки (issue #244) — см. [providesServices].
      */
-    val showMyPlaces: Boolean get() = formRole == UserRole.Provider || serverRole.isProvider
+    val showMyPlaces: Boolean get() = providesServices(formRole, serverRole)
 }
 
 /**
