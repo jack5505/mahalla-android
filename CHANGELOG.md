@@ -2763,3 +2763,27 @@ auth-удаление дословно совпадает с частью PR #27
 ставила. Закрывать/мёржить чужой PR или схлопывать issue #199 с #197 —
 решение мейнтейнера, не этой задачи; конфликт при мердже — тривиальный
 (идентичное удаление), не смысловой.
+
+---
+
+## issue #300 — `main` снова не собирался: `check(...)` продублирован, а не потерян
+
+Диагноз в issue устарел к моменту работы: 4 файла точечного promo-фикса
+(issue #180 поверх #221, впервые описанные как «потерянные» в #300) к этому
+моменту уже попали в `main` дважды — независимо, через issue #199 (см.
+раздел выше, «Заодно») и через PR #307 (issue #286). Оба переноса
+скопировали один и тот же код, и обычный мердж-механизм `git` не считает
+это конфликтом: `check(...)` оказался объявлен дважды в интерфейсе
+`PromotionsRepository`, дважды переопределён в `DefaultPromotionsRepository`
+и в `FakePromotionsRepository` — `compileDebugKotlin` падал на
+`Conflicting overloads` / `Overload resolution ambiguity`, а не на
+`Unresolved reference`, как в исходном описании issue.
+
+Исправление — убрать вторые (дословно идентичные) объявление/переопределения
+в `PromotionsRepository.kt` и `FakePromotionsRepository.kt`.
+`PromotionsRepositoryTest.kt` и `promoCode` у `FashionPlaceOrderRequestDto`
+дублирования не получили, `docs/API-CONTRACT.md` уже отражал `promoCode`
+(правка ещё из issue #199) — трогать не пришлось.
+
+**Проверено.** `testDebugUnitTest` (2677 тестов), `assembleDebug` и
+`lintDebug` — зелёные.
