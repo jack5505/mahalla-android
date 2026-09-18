@@ -3,6 +3,7 @@ package uz.mahalla.testutil
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.NewPromotionDraft
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionPage
 
@@ -49,6 +50,15 @@ class FakePromotionsRepository : PromotionsRepository {
     ): ApiResult<Unit> {
         createRequests += placeId to draft
         return createResult
+    }
+
+    override suspend fun check(
+        code: String,
+        placeId: String,
+        orderAmountSum: Long,
+    ): ApiResult<PromoCheckResult> {
+        requestedChecks += Triple(code, placeId, orderAmountSum)
+        return check
     }
 }
 

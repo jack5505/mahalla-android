@@ -238,9 +238,10 @@ data class AddToCartRequestDto(
  * заказа сервер берёт из своей корзины (`fashion/cart*`), которую клиент уже
  * ведёт.
  *
- * Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
- * не шлёт: на экране оформления нет ни выбора точки на карте, ни поля
- * промокода, а угаданные координаты хуже, чем их отсутствие.
+ * Схема допускает ещё `deliveryLat`/`deliveryLng` — клиент их не шлёт: на
+ * экране оформления нет выбора точки на карте, а угаданные координаты хуже,
+ * чем их отсутствие. `promoCode` подключён (issue #180) — экран оформления
+ * проверяет код заранее (`GET promotions/check`) и шлёт его же в заказе.
  */
 @Serializable
 data class FashionPlaceOrderRequestDto(
@@ -250,6 +251,7 @@ data class FashionPlaceOrderRequestDto(
     /** `WALLET` / `CASH`. */
     @SerialName("paymentMethod") val paymentMethod: String,
     @SerialName("deliveryAddress") val deliveryAddress: String? = null,
+    @SerialName("promoCode") val promoCode: String? = null,
 )
 
 /**
