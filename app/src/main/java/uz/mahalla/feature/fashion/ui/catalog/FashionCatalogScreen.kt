@@ -2,6 +2,8 @@ package uz.mahalla.feature.fashion.ui.catalog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,9 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Checkroom
 import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,20 +28,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
+import uz.mahalla.core.ui.components.MahallaBottomSheet
+import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.FilterChipUi
+import uz.mahalla.core.ui.components.MahallaFilterChip
 import uz.mahalla.core.ui.components.MahallaFilterRow
 import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.preview.PreviewSurface
@@ -43,6 +56,7 @@ import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.fashion.domain.FashionCategory
 import uz.mahalla.feature.fashion.domain.FashionProduct
+import uz.mahalla.feature.fashion.domain.ProductGender
 import uz.mahalla.feature.fashion.ui.FashionFailure
 import uz.mahalla.feature.fashion.ui.priceText
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -58,7 +72,7 @@ import uz.mahalla.ui.theme.TabularNums
  */
 @Composable
 fun FashionCatalogScreen(
-    onProductClick: (String) -> Unit,
+    onProductClick: (productId: String, isOwner: Boolean) -> Unit,
     onCartClick: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -74,7 +88,9 @@ fun FashionCatalogScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                is FashionCatalogEffect.OpenProduct -> onProductClick(effect.productId)
+                // `isOwner` не меняется за время жизни экрана (issue #280) —
+                // читать его из уже собранного состояния безопасно.
+                is FashionCatalogEffect.OpenProduct -> onProductClick(effect.productId, state.isOwner)
                 FashionCatalogEffect.OpenCart -> onCartClick()
             }
         }
@@ -120,9 +136,27 @@ fun FashionCatalogContent(
                 contentPadding = PaddingValues(Spacing.gutter),
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
+                // Владелец/менеджер (issue #280) — кнопка над списком, а не
+                // внутри `productItems`: она не зависит от того, загружен ли
+                // список, пуст он или упал с ошибкой (тот же приём, что у
+                // аптеки, issue #252).
+                if (state.isOwner) {
+                    item(key = "owner-add") {
+                        MahallaButton(
+                            text = stringResource(R.string.fashion_add_product),
+                            onClick = { onEvent(FashionCatalogEvent.AddProductClicked) },
+                            variant = MahallaButtonVariant.Secondary,
+                            icon = Icons.Outlined.Add,
+                        )
+                    }
+                }
                 productItems(state = state, onEvent = onEvent)
             }
         }
+    }
+
+    state.createForm?.let { form ->
+        NewFashionProductSheet(form = form, categories = state.categories, onEvent = onEvent)
     }
 }
 
@@ -269,6 +303,145 @@ private fun ProductCard(
 }
 
 /**
+ * Новый товар (issue #280). Ошибки полей показываются только после первой
+ * попытки сохранить (`submitAttempted`) — тот же приём, что у формы товара
+ * аптеки (issue #252).
+ *
+ * Категория — чипами из уже загруженного [categories]: тот же справочник,
+ * что и у полосы фильтров, второй раз с сервера не запрашивается. Пустой или
+ * упавший справочник просто прячет блок — категория необязательна.
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun NewFashionProductSheet(
+    form: NewFashionProductFormState,
+    categories: ScreenState<List<FashionCategory>>,
+    onEvent: (FashionCatalogEvent) -> Unit,
+) {
+    val draft = form.draft
+    val showErrors = form.submitAttempted
+    MahallaBottomSheet(
+        onDismiss = { onEvent(FashionCatalogEvent.CreateFormDismissed) },
+        title = stringResource(R.string.fashion_new_product_title),
+    ) {
+        MahallaTextField(
+            value = draft.name,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateNameChanged(it)) },
+            label = stringResource(R.string.fashion_field_name),
+            errorText = if (showErrors && !draft.isNameValid) {
+                stringResource(R.string.fashion_field_name_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.priceText,
+            onValueChange = { onEvent(FashionCatalogEvent.CreatePriceChanged(it)) },
+            label = stringResource(R.string.fashion_field_price),
+            errorText = if (showErrors && !draft.isPriceValid) {
+                stringResource(R.string.fashion_field_price_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.brand,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateBrandChanged(it)) },
+            label = stringResource(R.string.fashion_field_brand),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.description,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateDescriptionChanged(it)) },
+            label = stringResource(R.string.fashion_field_description),
+            enabled = !form.submitting,
+            singleLine = false,
+        )
+        MahallaTextField(
+            value = draft.material,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateMaterialChanged(it)) },
+            label = stringResource(R.string.fashion_material),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.careInstructions,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateCareInstructionsChanged(it)) },
+            label = stringResource(R.string.fashion_care),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.sizeGuide,
+            onValueChange = { onEvent(FashionCatalogEvent.CreateSizeGuideChanged(it)) },
+            label = stringResource(R.string.fashion_size_guide),
+            enabled = !form.submitting,
+        )
+
+        Text(
+            text = stringResource(R.string.fashion_field_gender),
+            style = MaterialTheme.typography.labelLarge,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+        ) {
+            ProductGender.entries.filter { it != ProductGender.Unknown }.forEach { gender ->
+                MahallaFilterChip(
+                    label = stringResource(gender.labelRes()),
+                    selected = gender == draft.gender,
+                    onClick = { onEvent(FashionCatalogEvent.CreateGenderChanged(gender)) },
+                    enabled = !form.submitting,
+                )
+            }
+        }
+
+        val categoryList = (categories as? ScreenState.Content)?.data.orEmpty()
+        if (categoryList.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.fashion_field_category),
+                style = MaterialTheme.typography.labelLarge,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            ) {
+                categoryList.forEach { category ->
+                    MahallaFilterChip(
+                        label = category.name,
+                        selected = category.id == draft.categoryId,
+                        onClick = { onEvent(FashionCatalogEvent.CreateCategoryChanged(category.id)) },
+                        enabled = !form.submitting,
+                    )
+                }
+            }
+        }
+
+        form.failure?.let { failure -> FashionFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.fashion_create_submit),
+            onClick = { onEvent(FashionCatalogEvent.CreateSubmitted) },
+            state = ButtonState(
+                enabled = !showErrors || draft.canSubmit,
+                loading = form.submitting,
+            ),
+        )
+    }
+}
+
+/** Подписи «кому вещь» в форме нового товара (issue #280). */
+private fun ProductGender.labelRes(): Int = when (this) {
+    ProductGender.Male -> R.string.fashion_gender_male
+    ProductGender.Female -> R.string.fashion_gender_female
+    ProductGender.Unisex -> R.string.fashion_gender_unisex
+    ProductGender.Kids -> R.string.fashion_gender_kids
+    ProductGender.Unknown -> R.string.fashion_gender_unisex
+}
+
+/**
  * Кнопка корзины с количеством. Число в подписи, а не точкой: «сколько там
  * лежит» — это и есть вопрос, ради которого на неё смотрят.
  */
@@ -326,6 +499,48 @@ private fun FashionCatalogPreview() {
             ),
             onEvent = {},
             onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun FashionCatalogOwnerPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        FashionCatalogContent(
+            state = FashionCatalogState(
+                placeName = "Zara Tashkent",
+                isOwner = true,
+                products = ScreenState.Content(
+                    listOf(
+                        FashionProduct(
+                            id = "p-1",
+                            storeId = "s-1",
+                            name = "Oq ko'ylak",
+                            basePriceSum = 320_000,
+                        ),
+                    ),
+                ),
+            ),
+            onEvent = {},
+            onBack = {},
+        )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun FashionNewProductSheetPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        NewFashionProductSheet(
+            form = NewFashionProductFormState(),
+            categories = ScreenState.Content(
+                listOf(
+                    FashionCategory(id = "c-1", name = "Ko'ylaklar"),
+                    FashionCategory(id = "c-2", name = "Shimlar"),
+                ),
+            ),
+            onEvent = {},
         )
     }
 }

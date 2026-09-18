@@ -459,11 +459,18 @@ data class DoctorBookingRoute(
  * @param placeName название магазина. Едет маршрутом по той же причине, что и
  * у [MenuRoute]: в `CatalogResponse` его нет, а витрина без имени магазина
  * читается как чужая.
+ * @param isOwner владелец/менеджер заведения (issue #280, тот же приём, что у
+ * [PharmacyRoute]): экран получает действие «добавить товар». Выставляется
+ * вызывающей стороной — сегодня только «Моими заведениями», где
+ * принадлежность уже известна из `places/my`, — а не проверяется на месте: у
+ * товара магазина нет своего `ownerId`, по которому это можно было бы
+ * сделать здесь.
  */
 @Serializable
 data class FashionCatalogRoute(
     val placeId: String,
     val placeName: String = "",
+    val isOwner: Boolean = false,
 )
 
 /**
@@ -471,9 +478,13 @@ data class FashionCatalogRoute(
  *
  * Знает только `productId` — всё остальное, включая `storeId`, приезжает в
  * ответе `fashion/products/{id}`.
+ *
+ * @param isOwner тот же флаг, что и у [FashionCatalogRoute], — приезжает
+ * витриной, откуда открыта карточка (issue #280): даёт действие «добавить
+ * вариант».
  */
 @Serializable
-data class FashionProductRoute(val productId: String)
+data class FashionProductRoute(val productId: String, val isOwner: Boolean = false)
 
 /**
  * Корзина. Аргументов нет: она живёт **на сервере** и одна на все магазины
@@ -510,6 +521,7 @@ object FashionArgs {
     const val PLACE_NAME = "placeName"
     const val PRODUCT_ID = "productId"
     const val STORE_ID = "storeId"
+    const val IS_OWNER = "isOwner"
 }
 
 // --- Вертикаль «Кино» (эпик #13, issue #106) ---

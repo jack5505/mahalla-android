@@ -419,6 +419,8 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+| POST | `fashion/stores/{storeId}/products` |
+| POST | `fashion/products/{id}/variants` |
 
 `GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
 отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
@@ -451,6 +453,17 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 эта. Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда
 автором задачи) — независимо не перепроверялась: под Bearer `401` приходит
 до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
+**`POST fashion/stores/{storeId}/products` и `POST fashion/products/{id}/variants`
+(issue #280, продолжение #252) — НЕ СВЕРЕНЫ живым запросом**, поля выведены
+по аналогии с уже подтверждёнными полями того же контроллера: у товара —
+`ProductDetail`/`ProductSummary` (`name`, `description`, `brand`, `material`,
+`careInstructions`, `sizeGuide`, `gender`, `categoryId`, `basePrice`), у
+варианта — `VariantResponse` (`colorName`, `colorHex`, `size`, `sku`, `price`,
+`stockQuantity`). Обе ручки требуют Bearer владельца/менеджера заведения —
+`CONTRACT_REFRESH_TOKEN` в песочнице не задан, `401` приходит до валидации
+тела. Тела закреплены тестами (`FashionRepositoryTest`) до первой проверки
+под токеном; при расхождении смотреть сюда в первую очередь.
 
 ## FoodApi ✅
 

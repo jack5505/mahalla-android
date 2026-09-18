@@ -259,6 +259,24 @@ class MyPlacesViewModelTest {
     }
 
     @Test
+    fun `a fashion owner opens the showcase in the owner mode`() = runTest {
+        // Категория решает пункт назначения (issue #280): у одежды и аптеки
+        // одна и та же кнопка ведёт в разные витрины.
+        val repository = FakeProviderRepository()
+        repository.defaultPage = page(
+            listOf(place("p-1", category = PlaceCategory.Fashion).copy(name = "Zara")),
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(MyPlacesEvent.ManageProductsClicked("p-1"))
+
+        assertEquals(
+            MyPlacesEffect.OpenFashionManagement("p-1", "Zara"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
     fun `an application under moderation has no business panel`() = runTest {
         // Ни заказов, ни очереди у неё быть не может, а панель, умеющая
         // сказать только «ждите модерацию», повторяет ту же карточку.
