@@ -68,7 +68,13 @@ class BusinessOrdersViewModel @Inject constructor(
 
     /**
      * Смена вкладки показывает скелетон, а не оставляет чужие заказы: список
-     * «новых» под заголовком «готовые» читался бы как ответ сервера.
+     * «новых» под заголовком «готовые» читался бы как ответ сервера. Скелетон
+     * ставится тут же, а не внутри [load] — если смена статуса ещё в полёте,
+     * [load] не проваливается за него до [replayReloadIfPending], а между
+     * нажатием вкладки и этим моментом старый список с чужим фильтром иначе
+     * успевал бы перерисоваться, а с ним и висящий на его длине автотриггер
+     * догрузки — следующей страницы уже нового фильтра (нашло ревью, issue
+     * #272, попытка 3).
      *
      * Инвариант с [load] общий: если смена статуса ещё не ответила, запрос
      * вкладки не уходит тут же, а ждёт своей очереди внутри [load] — иначе
@@ -77,7 +83,7 @@ class BusinessOrdersViewModel @Inject constructor(
      */
     private fun selectFilter(filter: BusinessOrderFilter) {
         if (filter == currentState.filter) return
-        updateState { copy(filter = filter) }
+        updateState { copy(filter = filter, orders = ScreenState.Loading) }
         load()
     }
 

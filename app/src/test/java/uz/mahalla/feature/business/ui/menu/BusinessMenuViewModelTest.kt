@@ -341,6 +341,44 @@ class BusinessMenuViewModelTest {
         )
     }
 
+    /**
+     * `createItem()` не переигрывает reload после себя (он уже привёз меню
+     * целиком), а значит и не проходит через сброс `isRefreshing` в начале
+     * [BusinessMenuViewModel.load]. Если pull-to-refresh был в полёте и его
+     * оборвал `preemptReload()`, индикатор обязан сброситься самим `save()` —
+     * иначе крутился бы до следующей загрузки (нашло ревью, issue #272,
+     * попытка 3).
+     */
+    @Test
+    fun `saving an item resets a refresh indicator stuck by a cancelled reload`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.menuGate = gate
+
+        viewModel.onEvent(BusinessMenuEvent.Refreshed) // pull-to-refresh, завис на gate
+        assertTrue(viewModel.state.value.isRefreshing)
+
+        viewModel.onEvent(BusinessMenuEvent.AddItemClicked)
+        viewModel.onEvent(BusinessMenuEvent.NameChanged("Osh"))
+        viewModel.onEvent(BusinessMenuEvent.PriceChanged("32000"))
+        repository.createItemResult = ApiResult.Success(
+            menu(item("i-1", available = true), item("i-2", available = true)),
+        )
+
+        viewModel.onEvent(BusinessMenuEvent.SaveClicked)
+
+        assertFalse(viewModel.state.value.isRefreshing)
+        assertEquals(2, (viewModel.state.value.menu as ScreenState.Content).data.sections
+            .single().items.size)
+        // Reload не повторяется — createItem() уже привёз то же самое.
+        assertEquals(
+            listOf(FakeBusinessRepository.PLACE_ID, FakeBusinessRepository.PLACE_ID),
+            repository.menuRequests,
+        )
+    }
+
     private fun viewModel(repository: FakeBusinessRepository) = BusinessMenuViewModel(
         repository = repository,
         savedStateHandle = SavedStateHandle(

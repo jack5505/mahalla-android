@@ -319,6 +319,42 @@ class BusinessDashboardViewModelTest {
         assertTrue(viewModel.state.value.metrics is ScreenState.Content)
     }
 
+    /**
+     * Пока фоновый `load()` сам везёт метрики, `retryMetrics()` раньше молча
+     * возвращался — нажатие «повторить» не давало вообще никакой реакции.
+     * Теперь скелетон ставится сразу, а второй параллельный запрос всё равно
+     * не запускается — его привезёт уже идущий `load()` (нашло ревью, issue
+     * #272, попытка 3).
+     */
+    @Test
+    fun `retrying the metrics shows a skeleton even while a background reload fetches them`() =
+        runTest {
+            val repository = FakeBusinessRepository()
+            repository.dashboardResult = ApiResult.Failure(ApiFailure(ApiError.Timeout))
+            val viewModel = viewModel(repository)
+            assertTrue(viewModel.state.value.metrics is ScreenState.Error)
+
+            val gate = CompletableDeferred<Unit>()
+            repository.dashboardGate = gate
+            repository.dashboardResult = ApiResult.Success(
+                BusinessDashboard.from(mapOf("orders" to 1L)),
+            )
+
+            viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // открытие — пропускается
+            viewModel.onEvent(BusinessDashboardEvent.ScreenResumed) // фоновый reload, завис на gate
+
+            viewModel.onEvent(BusinessDashboardEvent.RetryMetrics)
+
+            // Реакция видна тут же, а не только когда reload наконец ответит.
+            assertTrue(viewModel.state.value.metrics is ScreenState.Loading)
+
+            gate.complete(Unit)
+
+            // Второй запрос не уходил — фоновый reload и так довёз метрики.
+            assertEquals(listOf(PLACE, PLACE), repository.dashboardRequests)
+            assertTrue(viewModel.state.value.metrics is ScreenState.Content)
+        }
+
     @Test
     fun `the title comes from the server once the access is loaded`() = runTest {
         val repository = FakeBusinessRepository()

@@ -356,6 +356,10 @@ class BusinessOrdersViewModelTest {
         // это было дырой в инварианте.
         assertEquals(listOf(null to 0), repository.orderRequests)
         assertEquals(BusinessOrderFilter.Ready, viewModel.state.value.filter)
+        // Список старой вкладки не остаётся на экране под новым заголовком:
+        // скелетон ставится сразу, а не только когда запрос наконец уйдёт
+        // (нашло ревью, issue #272, попытка 3).
+        assertTrue(viewModel.state.value.orders is ScreenState.Loading)
 
         gate.complete(Unit)
 

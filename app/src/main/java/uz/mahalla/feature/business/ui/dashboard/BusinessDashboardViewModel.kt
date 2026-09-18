@@ -153,10 +153,17 @@ class BusinessDashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Скелетон ставится и тогда, когда фоновый `load()` уже в полёте: его
+     * `fetchMetrics()` и так привезёт результат, но нажатие «повторить» не
+     * должно выглядеть так, будто оно ничего не сделало (нашло ревью, issue
+     * #272, попытка 3) — второй параллельный запрос при этом не запускается.
+     */
     private fun retryMetrics() {
-        if (currentState.metrics.isLoading || loadJob?.isActive == true) return
-        metricsJob?.cancel()
+        if (currentState.metrics.isLoading) return
         updateState { copy(metrics = ScreenState.Loading) }
+        if (loadJob?.isActive == true) return
+        metricsJob?.cancel()
         metricsJob = viewModelScope.launch { fetchMetrics() }
     }
 

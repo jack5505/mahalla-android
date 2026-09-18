@@ -389,7 +389,10 @@ private fun NewMenuItemSheet(
         MahallaButton(
             text = stringResource(R.string.business_menu_save),
             onClick = { onEvent(BusinessMenuEvent.SaveClicked) },
-            state = ButtonState(loading = state.isSaving),
+            // Пока летит стоп-лист, `save()` тоже отказывает (`isBusy`) —
+            // кнопка обязана погаснуть, а не остаться нажимаемой без эффекта
+            // (нашло ревью, issue #272, попытка 3).
+            state = ButtonState(enabled = !state.isBusy, loading = state.isSaving),
         )
     }
 }

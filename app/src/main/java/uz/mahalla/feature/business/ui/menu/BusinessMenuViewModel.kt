@@ -261,6 +261,12 @@ class BusinessMenuViewModel @Inject constructor(
                             isSaving = false,
                             isFormVisible = false,
                             form = NewMenuItemForm(),
+                            // Pull-to-refresh мог быть в полёте, когда его
+                            // обрывал preemptReload() — снятое тут состояние
+                            // никогда бы иначе не сбросилось: без reloadPending
+                            // ниже replayReloadIfPending() его не сделает
+                            // (нашло ревью, issue #272, попытка 3).
+                            isRefreshing = false,
                         )
                     }
                     emitEffect(BusinessMenuEffect.ItemCreated(form.name))

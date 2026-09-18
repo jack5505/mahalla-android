@@ -92,6 +92,7 @@ class FakeBusinessRepository : BusinessRepository {
     var queueGate: CompletableDeferred<Unit>? = null
     var ordersGate: CompletableDeferred<Unit>? = null
     var menuGate: CompletableDeferred<Unit>? = null
+    var dashboardGate: CompletableDeferred<Unit>? = null
 
     override suspend fun access(placeId: String): ApiResult<BusinessAccess> {
         accessRequests += placeId
@@ -101,6 +102,7 @@ class FakeBusinessRepository : BusinessRepository {
 
     override suspend fun dashboard(placeId: String): ApiResult<BusinessDashboard> {
         dashboardRequests += placeId
+        dashboardGate?.await()
         return dashboardResult
     }
 
