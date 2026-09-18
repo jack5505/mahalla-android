@@ -31,6 +31,7 @@ import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
@@ -58,9 +59,14 @@ class NetworkStackTest {
 
     private var locationProvider: RequestLocationProvider = FakeRequestLocationProvider()
 
-    /** Фиксированные часы: срок жизни токена должен быть детерминированным. */
-    private val fixedClock: Clock =
-        Clock.fixed(Instant.ofEpochSecond(FIXED_NOW_EPOCH_SECONDS), ZoneOffset.UTC)
+    /**
+     * Срок жизни токена должен быть детерминированным, но счётчик
+     * неоднозначных провалов refresh (issue #301) требует ещё и умения
+     * двигать время внутри теста — поэтому часы можно подвинуть явно, а не
+     * только зафиксировать.
+     */
+    private val movableClock: MovableClock =
+        MovableClock(Instant.ofEpochSecond(FIXED_NOW_EPOCH_SECONDS))
 
     @Before
     fun setUp() {
@@ -264,6 +270,49 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `a new session after an explicit rejection starts the ambiguous counter over`() = runTest {
+        // Тот же риск, что и у смерти по счётчику: если до явного отказа
+        // сервера (401) уже был один прощённый неоднозначный ответ, счётчик
+        // остаётся ненулевым, а следующий вход пишет сессию мимо
+        // `TokenAuthenticator` — без сброса и здесь один неоднозначный ответ
+        // в новой сессии сразу добил бы счёт (issue #198).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val staleRequest = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertEquals("прощённый неоднозначный ответ", Session("stale", "refresh-1"), sessionStore.current())
+
+        server.enqueue(
+            envelopeError(
+                httpCode = 401,
+                code = "TOKEN_HIJACK",
+                message = "Xavfsizlik muammosi aniqlandi. Barcha sessiyalar bekor qilindi.",
+            ),
+        )
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertNull("явный отказ убивает сессию", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+
+        sessionStore.save(Session("new-access", "new-refresh"))
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-2"}}"""))
+        auth.authenticate(route = null, response = unauthorized(newRequest))
+
+        assertEquals(
+            "один неоднозначный ответ в новой сессии — снова прощаем",
+            Session("new-access", "new-refresh"),
+            sessionStore.current(),
+        )
+        assertEquals("второго выброса на вход не случилось", 1, expiryEvents.size)
+    }
+
+    @Test
     fun `a refresh refused by the geo filter keeps the session`() = runTest {
         // 403 `GEO_*` на refresh — это `geoService.requireLocation`, первая
         // строка `refreshToken`, до разбора токена: токен тут ни при чём, и
@@ -326,6 +375,200 @@ class NetworkStackTest {
         )
 
         apiCall { catalogApi().place("p-1") }
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `three consecutive ambiguous refresh failures end the session`() = runTest {
+        // Три подряд ответа, у которых нет причины, названной сервером — по
+        // очереди неразобранное тело, `success: false` при 2xx и 2xx без
+        // токенов, — то есть счётчик общий для всех трёх (issue #198), а не
+        // отдельный на каждый тип. Разнесены по времени (issue #301) — иначе
+        // это уже другой сценарий, см. `a burst of near-simultaneous ambiguous
+        // refresh failures does not end the session`.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals("первый — прощаем", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(
+            envelopeError(httpCode = 200, code = "TOKEN_INVALID", message = "Token noto'g'ri"),
+        )
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals("второй — тоже", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertNull("третий подряд — контракт сломан, а не прокси", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a burst of near-simultaneous ambiguous refresh failures does not end the session`() =
+        runTest {
+            // Несколько экранов упёрлись в 401 почти одновременно (например,
+            // на холодном старте) — каждый берёт лок по очереди и делает свой
+            // refresh, время между ответами не двигается. Чужой прокси
+            // (issue #138) в этот момент может отдать одно и то же тело на
+            // все эти близкие по времени запросы — это один инцидент, а не
+            // MAX_AMBIGUOUS_REFRESH_FAILURES разных провалов контракта
+            // подряд, и сессия не должна кончаться (issue #301).
+            sessionStore.save(Session("stale", "refresh-1"))
+            val auth = authenticator()
+            val request = staleRequest()
+
+            repeat(TokenAuthenticator.MAX_AMBIGUOUS_REFRESH_FAILURES + 2) {
+                server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+                assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+            }
+
+            assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+            assertEquals(0, expiryEvents.size)
+        }
+
+    @Test
+    fun `a burst counts once and the next genuinely later failures still add up`() = runTest {
+        // Всплеск (без сдвига часов) не должен исчезать без следа: он
+        // засчитан как один провал, а не как ноль, — и как только реальный
+        // интервал снова проходит, следующие ответы продолжают считать с
+        // этого одного, а не начинают заново.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        // Всплеск из двух почти одновременных ответов — засчитан один раз.
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals(0, expiryEvents.size)
+
+        // Второй засчитанный — сессия ещё жива.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertEquals("второй засчитанный — сессия ещё жива", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        // Третий засчитанный (после всплеска в счёте — только два) — конец.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        assertNull("третий засчитанный подряд — сессия кончена", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a new session after death starts the ambiguous counter over`() = runTest {
+        // Смерть сессии от контракта — не единственный путь сюда: следующий
+        // человек логинится заново, и `SessionStore.save` пишет новую сессию
+        // мимо `TokenAuthenticator`. Если счётчик не обнулить вместе с
+        // `clear()`, первый же неоднозначный ответ в новой сессии добивает
+        // счёт до порога и стирает её мгновенно — тот самый цикл «вход →
+        // платный SMS → моментальный выход», от которого защищает #138.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val staleRequest = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(
+            envelopeError(httpCode = 200, code = "TOKEN_INVALID", message = "Token noto'g'ri"),
+        )
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertNull("сессия погибла на третьем подряд", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+
+        // Новый вход — с тем же authenticator'ом, как это и будет в проде
+        // (он `@Singleton`).
+        sessionStore.save(Session("new-access", "new-refresh"))
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-2"}}"""))
+        auth.authenticate(route = null, response = unauthorized(newRequest))
+
+        assertEquals(
+            "один неоднозначный ответ в новой сессии — снова прощаем",
+            Session("new-access", "new-refresh"),
+            sessionStore.current(),
+        )
+        assertEquals("второго выброса на вход не случилось", 1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a successful refresh resets the ambiguous refresh counter`() = runTest {
+        // Прокси не отвечает одно и то же на каждый повторный refresh: если
+        // между сбоями случился нормальный ответ, следующие сбои снова
+        // начинают счёт с нуля, а не продолжают старый (issue #198).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        // Разнесены по времени (issue #301) — иначе оба ответа одной пары
+        // схлопнутся во всплеск сами, и тест останется зелёным даже без
+        // сброса счётчика удачным refresh.
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse(REFRESHED_TOKENS_BODY))
+        auth.authenticate(route = null, response = unauthorized(request))
+        // Токен снова протух: только что обновлённая сессия опять становится
+        // той, что несёт `request` (`Bearer stale`), — иначе следующий 401 с
+        // тем же запросом authenticator счёл бы уже обновлённым параллельно.
+        sessionStore.save(Session("stale", "refresh-2"))
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+
+        assertEquals(
+            "два подряд после сброса — этого мало",
+            Session("stale", "refresh-2"),
+            sessionStore.current(),
+        )
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
+    fun `repeated geo refusals never end the session`() = runTest {
+        // 403 `GEO_*` — осмысленный отказ, не контрактная неоднозначность: в
+        // общий счётчик issue #198 не идёт, сколько бы раз ни повторился.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val request = staleRequest()
+
+        repeat(TokenAuthenticator.MAX_AMBIGUOUS_REFRESH_FAILURES + 2) {
+            server.enqueue(
+                envelopeError(
+                    httpCode = 403,
+                    code = "GEO_PERMISSION_REQUIRED",
+                    message = "Joylashuv ruxsatini yoqing",
+                ),
+            )
+            assertNull(auth.authenticate(route = null, response = unauthorized(request)))
+        }
 
         assertEquals(Session("stale", "refresh-1"), sessionStore.current())
         assertEquals(0, expiryEvents.size)
@@ -490,7 +733,7 @@ class NetworkStackTest {
             authApi = authApi,
             deviceInfoProvider = FakeDeviceInfoProvider(),
             locationProvider = locationProvider,
-            clock = fixedClock,
+            clock = movableClock,
         )
     }
 
@@ -528,6 +771,16 @@ class NetworkStackTest {
     private fun envelopeError(httpCode: Int, code: String, message: String): MockResponse =
         jsonResponse("""{"success":false,"error":{"code":"$code","message":"$message"}}""")
             .setResponseCode(httpCode)
+
+    /** Часы, которые можно подвинуть: не только «когда», но и «насколько давно». */
+    private class MovableClock(private var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId): Clock = this
+        fun advanceBy(duration: Duration) {
+            now = now.plus(duration)
+        }
+    }
 
     private companion object {
         const val DEFAULT_READ_TIMEOUT_MILLIS = 5_000L
