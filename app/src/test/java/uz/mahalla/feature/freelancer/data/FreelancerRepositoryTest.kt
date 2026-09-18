@@ -290,8 +290,10 @@ class FreelancerRepositoryTest {
         val request = server.takeRequest()
         assertEquals("POST", request.method)
         assertEquals("/freelancers/f-1/orders", request.path)
+        // Местное ташкентское время слота, не UTC-момент (issue #205):
+        // 10:30 выбранных человеком уходят как есть, без сдвига на -05:00.
         assertEquals(
-            """{"serviceId":"s-1","scheduledAt":"2026-09-05T05:30:00Z",""" +
+            """{"serviceId":"s-1","scheduledAt":"2026-09-05T10:30:00",""" +
                 """"address":"Chilonzor 7","comment":"Kran oqyapti"}""",
             request.body.readUtf8(),
         )
@@ -401,8 +403,10 @@ class FreelancerRepositoryTest {
         // `priceAmount` в тийинах (issue #149): 15 000 000 → 150 000 сум.
         assertEquals(150_000L, order.priceSum)
         assertEquals("Chilonzor 7", order.address)
-        // Jackson отдаёт `LocalDateTime` без зоны — иначе время пусто у всех.
-        assertEquals(Instant.parse("2026-09-06T10:30:00Z"), order.scheduledAt)
+        // `scheduledAt` — время слота, зоне-менее строка = Asia/Tashkent
+        // (issue #205): 10:30 в Ташкенте — это 05:30 UTC.
+        assertEquals(Instant.parse("2026-09-06T05:30:00Z"), order.scheduledAt)
+        // `createdAt` — отметка сервера, зоне-менее строка = UTC (issue #144).
         assertEquals(Instant.parse("2026-09-04T09:00:00Z"), order.createdAt)
         assertFalse(page.hasMore)
     }
