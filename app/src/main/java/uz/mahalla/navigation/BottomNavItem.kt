@@ -17,7 +17,7 @@ enum class BottomNavItem(
 ) {
     // Метка на карте, а не лупа: таб про «что рядом», поиск — кнопка внутри.
     Discovery(DiscoveryRoute, R.string.nav_discovery, Icons.Outlined.Place),
-    Orders(OrdersRoute, R.string.nav_activity, Icons.AutoMirrored.Outlined.ReceiptLong),
+    Activities(ActivitiesRoute, R.string.nav_activity, Icons.AutoMirrored.Outlined.ReceiptLong),
     Wallet(WalletRoute, R.string.nav_wallet, Icons.Outlined.AccountBalanceWallet),
     Profile(ProfileRoute, R.string.nav_profile, Icons.Outlined.Person),
 }
