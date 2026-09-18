@@ -11,6 +11,7 @@ import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.promotions.domain.CreatablePromoType
 import uz.mahalla.feature.promotions.domain.NewPromotionDraft
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.promotions.domain.PromoType
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionFeed
@@ -44,6 +45,13 @@ interface PromotionsRepository {
      * черновику уйти в сеть.
      */
     suspend fun createPromotion(placeId: String, draft: NewPromotionDraft): ApiResult<Unit>
+
+    /**
+     * Проверка промокода перед оформлением заказа (issue #180).
+     * [orderAmountSum] — сумма заказа в сумах, конвертация в тийины — забота
+     * репозитория, как и у [createPromotion].
+     */
+    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
 }
 
 @Singleton
@@ -95,6 +103,19 @@ class DefaultPromotionsRepository @Inject constructor(
             ).payload()
         }.map {}
     }
+
+    override suspend fun check(
+        code: String,
+        placeId: String,
+        orderAmountSum: Long,
+    ): ApiResult<PromoCheckResult> =
+        apiCall {
+            api.check(
+                code = code,
+                placeId = placeId,
+                orderAmount = Money.somToTiyin(orderAmountSum),
+            ).payload()
+        }.map { it.toDomain(code) }
 }
 
 /**

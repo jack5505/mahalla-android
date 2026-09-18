@@ -62,7 +62,7 @@ sealed interface MyPlacesEvent : UiEvent {
     /** Открыть бизнес-панель этого заведения (эпик #16). */
     data class BusinessPanelClicked(val placeId: String) : MyPlacesEvent
 
-    /** «Управлять товарами» на карточке аптеки (issue #252). */
+    /** «Управлять товарами» на карточке аптеки (issue #252) или одежды (issue #280). */
     data class ManageProductsClicked(val placeId: String) : MyPlacesEvent
 
     data class ManageStaffClicked(val placeId: String) : MyPlacesEvent
@@ -97,6 +97,9 @@ sealed interface MyPlacesEffect : UiEffect {
 
     /** Витрина аптеки в режиме владельца (issue #252). */
     data class OpenPharmacyManagement(val placeId: String, val placeName: String) : MyPlacesEffect
+
+    /** Витрина магазина одежды в режиме владельца (issue #280). */
+    data class OpenFashionManagement(val placeId: String, val placeName: String) : MyPlacesEffect
 
     /** «Сотрудники» (issue #189) — доступно только владельцу. */
     data class OpenStaff(val placeId: String) : MyPlacesEffect

@@ -65,6 +65,35 @@ interface FashionApi {
     @GET("fashion/products/{id}")
     suspend fun product(@Path("id") productId: String): ApiResponse<ProductDetailDto>
 
+    /**
+     * Новый товар магазина (issue #280, продолжение #252). Тело —
+     * `ProductCreateRequest`, поля выведены по аналогии с уже подтверждёнными
+     * полями [ProductDetailDto]/[ProductSummaryDto] того же контроллера
+     * (`name`, `description`, `brand`, `material`, `careInstructions`,
+     * `sizeGuide`, `gender`, `categoryId`, `basePrice`), а не угаданы по
+     * другой вертикали. Не проверено живым запросом — нужен Bearer владельца
+     * заведения, `CONTRACT_REFRESH_TOKEN` в песочнице не задан; риск —
+     * `docs/API-CONTRACT.md`.
+     */
+    @POST("fashion/stores/{storeId}/products")
+    suspend fun createProduct(
+        @Path("storeId") storeId: String,
+        @Body body: CreateFashionProductRequest,
+    ): ApiResponse<ProductDetailDto>
+
+    /**
+     * Новый вариант товара — размер/цвет (issue #280). Тело —
+     * `VariantCreateRequest`, поля выведены по аналогии с уже подтверждёнными
+     * полями [VariantDto] (`colorName`, `colorHex`, `size`, `sku`, `price`,
+     * `stockQuantity`). Не проверено живым запросом — та же причина, что и у
+     * [createProduct].
+     */
+    @POST("fashion/products/{id}/variants")
+    suspend fun createVariant(
+        @Path("id") productId: String,
+        @Body body: CreateFashionVariantRequest,
+    ): ApiResponse<VariantDto>
+
     /** Корзина на сервере: один список на все магазины. */
     @GET("fashion/cart")
     suspend fun cart(): ApiResponse<List<CartItemDto>>
@@ -210,6 +239,43 @@ data class VariantDto(
     @SerialName("available") val available: Boolean? = null,
 )
 
+/**
+ * `ProductCreateRequest` (issue #280). Обязательны только [name] и
+ * [basePrice] — остальное схема не ограничивает. Пустые необязательные поля
+ * не уходят вовсе (`explicitNulls = false`, issue #84).
+ *
+ * @param basePrice в тийинах, как и [ProductDetailDto.basePrice] (issue
+ * #149); черновик считает в сумах, перевод делает репозиторий.
+ */
+@Serializable
+data class CreateFashionProductRequest(
+    @SerialName("name") val name: String,
+    @SerialName("description") val description: String? = null,
+    @SerialName("brand") val brand: String? = null,
+    @SerialName("material") val material: String? = null,
+    @SerialName("careInstructions") val careInstructions: String? = null,
+    @SerialName("sizeGuide") val sizeGuide: String? = null,
+    @SerialName("gender") val gender: String? = null,
+    @SerialName("categoryId") val categoryId: String? = null,
+    @SerialName("basePrice") val basePrice: Long,
+)
+
+/**
+ * `VariantCreateRequest` (issue #280). Обязательны [colorName], [size] и
+ * [price] — вариант без них нечем отличить от соседнего и нечем продать.
+ *
+ * @param price в тийинах, как и [VariantDto.price] (issue #149).
+ */
+@Serializable
+data class CreateFashionVariantRequest(
+    @SerialName("colorName") val colorName: String,
+    @SerialName("colorHex") val colorHex: String? = null,
+    @SerialName("size") val size: String,
+    @SerialName("sku") val sku: String? = null,
+    @SerialName("price") val price: Long,
+    @SerialName("stockQuantity") val stockQuantity: Int? = null,
+)
+
 /** `CartItemResponse`. */
 @Serializable
 data class CartItemDto(
@@ -238,9 +304,9 @@ data class AddToCartRequestDto(
  * заказа сервер берёт из своей корзины (`fashion/cart*`), которую клиент уже
  * ведёт.
  *
- * Схема допускает ещё `deliveryLat`/`deliveryLng` и `promoCode` — клиент их
- * не шлёт: на экране оформления нет ни выбора точки на карте, ни поля
- * промокода, а угаданные координаты хуже, чем их отсутствие.
+ * Схема допускает ещё `deliveryLat`/`deliveryLng` — клиент их не шлёт: на
+ * экране оформления нет выбора точки на карте, а угаданные координаты хуже,
+ * чем их отсутствие. `promoCode` шлётся — проверенный код (issue #180).
  */
 @Serializable
 data class FashionPlaceOrderRequestDto(
@@ -250,6 +316,8 @@ data class FashionPlaceOrderRequestDto(
     /** `WALLET` / `CASH`. */
     @SerialName("paymentMethod") val paymentMethod: String,
     @SerialName("deliveryAddress") val deliveryAddress: String? = null,
+    /** Проверенный код (issue #180); `null`, если код не применяли. */
+    @SerialName("promoCode") val promoCode: String? = null,
 )
 
 /**
