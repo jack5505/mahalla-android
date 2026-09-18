@@ -136,9 +136,9 @@ data class MenuItemDto(
  * `PlaceOrderRequest` бэкенда — общий с `FashionApi.createOrder`.
  *
  * Ни комментария, ни времени, ни модификаторов позиции контракт не принимает.
- * `promoCode` — поле схемы «Одежды» (issue #180); `FoodOrderRepository` его
- * никогда не задаёт, и `explicitNulls = false` выбрасывает `null` из тела, то
- * есть у «Еды» это поле по-прежнему не уходит на сервер.
+ * Схема допускает ещё `promoCode` (см. `FashionPlaceOrderRequestDto`) —
+ * «Еда» промокоды не проверяет и не отправляет (issue #180 закрыла только
+ * «Одежду»), поле здесь не заводим, чтобы не намекать на обратное.
  */
 @Serializable
 data class PlaceOrderRequestDto(
@@ -149,7 +149,6 @@ data class PlaceOrderRequestDto(
     /** `WALLET` / `CASH`. */
     @SerialName("paymentMethod") val paymentMethod: String,
     @SerialName("deliveryAddress") val deliveryAddress: String? = null,
-    @SerialName("promoCode") val promoCode: String? = null,
 )
 
 /** Цену и состав считает сервер: клиент присылает только позицию и количество. */
