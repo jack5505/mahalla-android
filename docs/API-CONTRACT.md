@@ -84,7 +84,19 @@
 
 Клиент живёт в целых сумах: домен, экраны и Room хранят сумы, а пересчёт делает
 `core/format/Money` ровно один раз — в маппере DTO → домен (`tiyinToSom`) и при
-сборке тела запроса (`somToTiyin`, сейчас это только `POST wallet/top-up`).
+сборке тела запроса (`somToTiyin`). Исходящих денежных полей стало много, и их
+число растёт с каждой вертикалью, где владелец сам назначает цену. На 2026-09-18
+это `POST wallet/top-up` (`amount`), `POST food/places/{placeId}/items`
+(`price`), `POST pharmacy/places/{placeId}/products` (`price`),
+`POST freelancers/me` (`hourlyRate` — единственное денежное поле в `int32`,
+перевод через `Math.toIntExact`, чтобы переполнение падало, а не молча
+обрезалось), `POST freelancers/me/services` и
+`PUT freelancers/me/services/{serviceId}` (`priceAmount`, тело общее),
+`POST promotions/places/{placeId}` (`discountAmount`, `minOrderAmount`), плюс
+query у `GET promotions/check` (`orderAmount`) и `GET food/delivery-fee`
+(`itemsAmount` — доменное значение в репозитории названо `itemsSum`, но на
+проводе параметр `itemsAmount`). **Новое поле, которое клиент отправляет, без
+`somToTiyin` — это цена в сто раз меньше задуманной** (issue #236).
 Дробные близнецы `balanceSom`, `amountSom`, `monthlyPriceSom`, `pricePaidSom`
 — то же число в сумах для чтения ответа глазами; клиент их **игнорирует**, а не
 выводит из них единицу, как делал раньше `WalletAmounts`. Проценты
@@ -949,9 +961,11 @@ DTO→домен, но в интерфейсе не показан: задача
   списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
 - Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
   `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
-  `purpose`, `purposeId`, `errorMessage`) — **без пары `amountSom`**, поэтому
-  единицу `amount` вывести нечем и она читается как тийины (у кошелька она
-  выводится из пары, issue #62). **Проверить первым же живым ответом.**
+  `purpose`, `purposeId`, `errorMessage`). Пары `amountSom` у него нет, но она и
+  не нужна: `amount` — тийины, потому что так устроены все целые денежные поля
+  («Общее для всех запросов»), а не потому, что рядом нет дробного близнеца.
+  Вывод единицы из наличия пары — механизм удалённого `WalletAmounts`
+  (issue #149, #236); здесь его не восстанавливать.
 - `GET payments/subscription` не используется: отдаёт строго меньше, чем
   `subscriptions/current` (`plan` перечислением, без `daysRemaining`,
   `isTrial` и грейс-периода). `POST payments/subscription/activate` принимает
