@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -135,6 +136,36 @@ class MainActivity : FragmentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * Прячем окно от снимка для «недавних» (issue #102).
+     *
+     * Снимок задачи система делает в промежутке между `onPause` и `onStop` —
+     * то есть **до** того, как замок защёлкнется: он срабатывает только на
+     * возврате. Без этого в списке задач оставался кошелёк с балансом, то
+     * есть дырка мимо самой фичи, ради которой замок и делали.
+     *
+     * Флаг ставится на паузе и снимается на резюме, а не висит постоянно,
+     * потому что `FLAG_SECURE` запрещает скриншот **и пока приложение на
+     * экране**: талон очереди и QR — как раз то, что человек показывает и
+     * сохраняет. Гейт «есть ли PIN» для этого не годится — PIN обязателен на
+     * входе (токены отдаёт только `setup-pin`/`pin-login`), так что он был бы
+     * истиной у всех и означал бы «запретить скриншоты навсегда».
+     *
+     * **Руками на устройстве не проверено** (эмулятора в CI нет): порядок
+     * «onPause → снимок» описан в документации, но на отдельных прошивках
+     * снимок делают раньше. Если окажется, что рано — флаг придётся вешать
+     * постоянно и отдельно решать судьбу скриншотов талона.
+     */
+    override fun onPause() {
+        super.onPause()
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     /**

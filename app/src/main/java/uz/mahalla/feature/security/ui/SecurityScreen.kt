@@ -24,7 +24,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
-import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.biometric.findFragmentActivity
 import uz.mahalla.core.ui.biometric.showBiometricPrompt
 import uz.mahalla.core.ui.components.MahallaBadge
@@ -32,7 +31,6 @@ import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaCard
-import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaOtpField
 import uz.mahalla.core.ui.components.MahallaSwitchRow
@@ -43,8 +41,8 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.dataOrNull
-import uz.mahalla.core.ui.userMessage
 import uz.mahalla.data.security.BiometricStatus
+import uz.mahalla.feature.onboarding.ui.OnboardingApiError
 import uz.mahalla.feature.security.domain.ServerPinStatus
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -161,9 +159,15 @@ private fun SecurityContent(
             // нужна — иначе строка «PIN-код установлен» не появится до
             // следующего возврата на экран.
             (state.status as? ScreenState.Error)?.let { screen ->
-                SecurityFailure(
+                OnboardingApiError(
                     failure = screen.failure,
-                    onRetry = { onEvent(SecurityEvent.RetryRequested) },
+                    action = {
+                        MahallaButton(
+                            text = stringResource(R.string.action_retry),
+                            onClick = { onEvent(SecurityEvent.RetryRequested) },
+                            variant = MahallaButtonVariant.Secondary,
+                        )
+                    },
                 )
             }
         }
@@ -239,38 +243,9 @@ private fun BiometricPinSheet(state: SecurityState, onEvent: (SecurityEvent) -> 
             masked = true,
             focusRequester = focusRequester,
         )
-        state.failure?.let { SecurityFailure(failure = it) }
-    }
-}
-
-/**
- * @param onRetry `null` там, где повторять нечего: отказ переключателя
- * повторяется вводом кода заново, и кнопка «повторить» отправила бы тот же
- * PIN второй раз.
- */
-@Composable
-private fun SecurityFailure(
-    failure: ApiFailure,
-    modifier: Modifier = Modifier,
-    onRetry: (() -> Unit)? = null,
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.item),
-    ) {
-        Text(
-            text = failure.userMessage(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
-        failure.server?.let { MahallaErrorDetails(server = it) }
-        if (onRetry != null) {
-            MahallaButton(
-                text = stringResource(R.string.action_retry),
-                onClick = onRetry,
-                variant = MahallaButtonVariant.Secondary,
-            )
-        }
+        // Без кнопки повтора: отказ переключателя лечится вводом кода заново,
+        // а «повторить» отправило бы тот же PIN второй раз.
+        state.failure?.let { OnboardingApiError(failure = it) }
     }
 }
 
