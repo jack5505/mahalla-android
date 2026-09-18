@@ -28,9 +28,10 @@ import uz.mahalla.testutil.FakeRequestLocationProvider
  * запроса, ни несовпадение схемы JSON.
  *
  * Имена полей тела выведены из ответа `Detail`: в `/v3/api-docs` тело
- * `POST /places` объявлено как `CreateRequest`, а это имя перекрыто коллизией
- * springdoc (см. KDoc [ProviderApi]). Тест закрепляет то, что приложение
- * отправляет, — сверить с бэкендом придётся живым запросом под токеном.
+ * `POST /places` раньше было объявлено под перекрытым коллизией именем
+ * `CreateRequest`, а теперь называется `PlaceCreateRequest` (issue #235, см.
+ * KDoc [ProviderApi]). Тест закрепляет то, что приложение отправляет, —
+ * сверить с бэкендом придётся живым запросом под токеном.
  */
 class ProviderRepositoryTest {
 
