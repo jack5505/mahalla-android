@@ -57,7 +57,8 @@ fun PlaceMapTile(
     modifier: Modifier = Modifier,
 ) {
     val engine = rememberMapEngine(initializer)
-    val shape = MaterialTheme.shapes.small
+    // r16 по хендоффу (1b): «плитка карты r16», как и image slot рядом.
+    val shape = MaterialTheme.shapes.medium
 
     Column(modifier = modifier.width(TILE_WIDTH)) {
         Box(
@@ -91,8 +92,13 @@ fun PlaceMapTile(
             }
         }
         Text(
-            text = stringResource(R.string.place_map_tile_distance, distanceLabel(distanceMeters)),
+            text = stringResource(R.string.place_map_tile_caption),
             modifier = Modifier.padding(top = Spacing.item / 2),
+            style = MaterialTheme.typography.labelMedium,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+        Text(
+            text = stringResource(R.string.place_map_tile_distance, distanceLabel(distanceMeters)),
             style = MaterialTheme.typography.labelLarge,
             color = LocalMahallaColors.current.fgMuted,
         )
@@ -138,7 +144,7 @@ private fun PlaceMapTileUnavailablePreview() {
         PlaceMapTileUnavailable(
             modifier = Modifier
                 .size(width = TILE_WIDTH, height = TILE_HEIGHT)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(LocalMahallaColors.current.skeleton),
         )
     }
