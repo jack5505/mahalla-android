@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -145,7 +146,7 @@ fun BookingContent(
             state.bookFailure?.let { InlineFailure(failure = it) }
 
             if (state.selectedServiceId != null) {
-                SummaryBlock(state = state, onEvent = onEvent)
+                SummaryBlock(state = state, onEvent = onEvent, onCancel = onBack)
             }
         }
     }
@@ -366,16 +367,32 @@ private fun SlotsBlock(
             modifier = modifier,
         )
 
+        // Ровная сетка в четыре колонки, как в макете 1c: время читают
+        // столбцами, и слоты, разной ширины расползшиеся по строке, для этого
+        // хуже. Последний ряд достраивается пустыми ячейками, иначе три
+        // оставшихся слота растянулись бы на всю ширину.
         is ScreenState.Content -> FlowRow(
             modifier = modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalArrangement = Arrangement.spacedBy(Spacing.item),
+            maxItemsInEachRow = SLOT_COLUMNS,
         ) {
             slots.data.forEach { slot ->
                 MahallaFilterChip(
                     label = DateTimeFormatters.time(slot),
                     selected = slot == state.selectedTime,
                     onClick = { onEvent(BookingEvent.TimeSelected(slot)) },
+                    modifier = Modifier.weight(1f),
+                    // Ячейка сетки узкая (≈79dp на 393dp экране), и галочка
+                    // выбранного слота переносила бы время на вторую строку.
+                    showSelectedIcon = false,
                 )
+            }
+            val tail = slots.data.size % SLOT_COLUMNS
+            if (tail != 0) {
+                repeat(SLOT_COLUMNS - tail) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }
@@ -390,6 +407,7 @@ private fun SlotsBlock(
 private fun SummaryBlock(
     state: BookingState,
     onEvent: (BookingEvent) -> Unit,
+    onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMahallaColors.current
@@ -449,17 +467,43 @@ private fun SummaryBlock(
             )
         }
 
-        MahallaButton(
-            text = stringResource(
-                if (state.isReschedule) {
-                    R.string.booking_reschedule_submit
-                } else {
-                    R.string.booking_submit
-                },
-            ),
-            onClick = { onEvent(BookingEvent.BookClicked) },
-            state = ButtonState(enabled = state.canBook, loading = state.isBooking),
+        // Время прямо в подписи кнопки (макет 1c: «Подтвердить · 10:30»): у
+        // человека перед нажатием последний шанс заметить, что выбран не тот
+        // слот, а карточку итога над кнопкой при длинном списке слотов видно
+        // не всегда.
+        val submitLabel = stringResource(
+            if (state.isReschedule) {
+                R.string.booking_reschedule_submit
+            } else {
+                R.string.booking_submit
+            },
         )
+        // «Отмена» рядом с подтверждением (макет 1c): выход с экрана, куда
+        // пришли за одним решением, должен быть под рукой, а не только в шапке.
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
+            MahallaButton(
+                text = stringResource(R.string.action_cancel),
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                variant = MahallaButtonVariant.Ghost,
+                state = ButtonState(enabled = !state.isBooking),
+            )
+            MahallaButton(
+                text = if (time == null) {
+                    submitLabel
+                } else {
+                    stringResource(
+                        R.string.text_joined_with_dot,
+                        submitLabel,
+                        DateTimeFormatters.time(time),
+                    )
+                },
+                onClick = { onEvent(BookingEvent.BookClicked) },
+                // Подтверждению — больше места: подпись с временем длиннее.
+                modifier = Modifier.weight(SUBMIT_WEIGHT),
+                state = ButtonState(enabled = state.canBook, loading = state.isBooking),
+            )
+        }
     }
 }
 
@@ -699,3 +743,9 @@ private fun BookingDonePreview() {
         )
     }
 }
+
+/** Четыре колонки слотов — как в макете 1c. */
+private const val SLOT_COLUMNS = 4
+
+/** Кнопка подтверждения шире «Отмены»: в ней ещё и время. */
+private const val SUBMIT_WEIGHT = 1.6f

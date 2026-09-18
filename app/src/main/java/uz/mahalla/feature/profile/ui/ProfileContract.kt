@@ -12,6 +12,7 @@ import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.feature.profile.domain.AccountStatus
 import uz.mahalla.feature.profile.domain.DeviceSession
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.profile.domain.VerificationStatus
 import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
@@ -46,7 +47,19 @@ data class ProfileState(
     val loggingOut: Boolean = false,
     val avatarUpload: AvatarUpload = AvatarUpload(),
     val nameEdit: NameEdit = NameEdit(),
+    /**
+     * Биометрия на устройстве (макет 2d, тумблер «Вход по отпечатку»).
+     * Перечитывается на каждом возврате на экран: отпечаток могли добавить в
+     * настройках устройства и вернуться.
+     */
+    val biometricStatus: BiometricStatus = BiometricStatus.NoHardware,
+    /** Системный промпт не подтвердил — тумблер остался выключенным, и это объяснено словами. */
+    val biometricPromptFailed: Boolean = false,
 ) : UiState {
+
+    /** Тумблер отпечатка есть только там, где есть датчик: без него он ничего не включит. */
+    val showsBiometricRow: Boolean
+        get() = biometricStatus == BiometricStatus.Available || biometricStatus == BiometricStatus.NotEnrolled
 
     /** Роль из анкеты — локальный выбор человека (issue #84). */
     val formRole: UserRole? get() = UserRole.fromStoredValue(settings.roleId)
@@ -113,6 +126,16 @@ data class NameEdit(
 sealed interface ProfileEvent : UiEvent {
     data class LanguageSelected(val language: AppLanguage) : ProfileEvent
     data class ThemeSelected(val mode: ThemeMode) : ProfileEvent
+
+    /**
+     * Тумблер «Вход по отпечатку». Включение флаг не пишет — сначала системный
+     * промпт: иначе человек, закрывший диалог, получил бы «биометрия включена»
+     * без единого подтверждения (то же правило, что на шаге онбординга).
+     */
+    data class BiometricToggled(val enabled: Boolean) : ProfileEvent
+    data object BiometricPromptSucceeded : ProfileEvent
+    data object BiometricPromptFailed : ProfileEvent
+    data object BiometricPromptCancelled : ProfileEvent
     data object HttpInspectorRequested : ProfileEvent
 
     /** Экран вернулся на передний план: список устройств мог устареть. */
@@ -153,6 +176,9 @@ sealed interface ProfileEvent : UiEvent {
 sealed interface ProfileEffect : UiEffect {
     /** До API 33 смену языка применяет только пересоздание Activity. */
     data object RecreateActivity : ProfileEffect
+
+    /** Системный BiometricPrompt живёт в Activity — показывает его экран. */
+    data object ShowBiometricPrompt : ProfileEffect
 
     /** Экран инспектора трафика: интент отдаёт сама библиотека (issue #30). */
     data class OpenHttpInspector(val intent: Intent) : ProfileEffect

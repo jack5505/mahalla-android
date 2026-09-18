@@ -20,9 +20,11 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.analytics.AnalyticsEventType
 import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.discovery.domain.GeoPoint
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
@@ -37,6 +39,7 @@ import uz.mahalla.feature.social.domain.PlaceComment
 import uz.mahalla.feature.social.domain.PlaceCommentPage
 import uz.mahalla.feature.social.domain.PlaceSocialStatus
 import uz.mahalla.testutil.FakeAnalyticsTracker
+import uz.mahalla.testutil.FakeBookingRepository
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeSocialRepository
@@ -76,6 +79,8 @@ class PlaceDetailsViewModelTest {
     private val profileStore = FakeUserProfileStore(UserProfile(id = USER_ID))
 
     private val promotions = FakePromotionsRepository()
+
+    private val bookings = FakeBookingRepository()
 
     @Test
     fun `card is loaded for the id from the route`() = runTest {
@@ -917,6 +922,7 @@ class PlaceDetailsViewModelTest {
         repository = repository,
         socialRepository = social,
         promotions = promotions,
+        bookings = bookings,
         profileStore = profileStore,
         analytics = analytics,
         clock = clock,
@@ -948,6 +954,42 @@ class PlaceDetailsViewModelTest {
         capabilities = capabilities,
         reviews = reviews,
     )
+
+    // --- Услуги с ценами (макет 1b) ---
+
+    @Test
+    fun `services are loaded for a place that takes bookings`() = runTest {
+        repository.details = ApiResult.Success(details(capabilities = PlaceCapabilities(booking = true)))
+        bookings.servicesResult = ApiResult.Success(listOf(service("s-1"), service("s-2")))
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf("s-1", "s-2"), state.services.map(BarberService::id))
+    }
+
+    /** Ручка услуг есть только у мест с записью — у остальных запрос ушёл бы в 404. */
+    @Test
+    fun `services are not requested without the booking capability`() = runTest {
+        repository.details = ApiResult.Success(details(capabilities = PlaceCapabilities(queue = true)))
+        bookings.servicesResult = ApiResult.Success(listOf(service("s-1")))
+
+        val state = viewModel().state.value
+
+        assertTrue(state.services.isEmpty())
+    }
+
+    @Test
+    fun `a failed price list hides the block but keeps the card`() = runTest {
+        repository.details = ApiResult.Success(details(capabilities = PlaceCapabilities(booking = true)))
+        bookings.servicesResult = ApiResult.Failure(ApiFailure(ApiError.Timeout))
+
+        val state = viewModel().state.value
+
+        assertTrue(state.services.isEmpty())
+        assertTrue("карточка не должна пострадать", state.details is ScreenState.Content)
+    }
+
+    private fun service(id: String) = BarberService(id = id, title = "Soch olish $id", priceSum = 50_000)
 
     private fun workingDay(day: DayOfWeek) =
         OpeningHours(day, LocalTime.of(9, 0), LocalTime.of(18, 0))

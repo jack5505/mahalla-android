@@ -32,6 +32,11 @@ import javax.inject.Singleton
  * `FULL_VERIFIED`) строкой; разбирает её `VerificationStatus`.
  * @param accountStatus статус аккаунта (`ACTIVE`, `TEMP_BLOCKED`, …) строкой;
  * разбирает её `AccountStatus`.
+ * @param fullNamePendingSync `true` — [fullName] пришло из анкеты покупателя
+ * (`RoleRepository.saveCustomer`, issue #234) и ещё не подтверждено сервером:
+ * `ProfileRepository.refresh()` должен повторить `PUT users/me`, а не
+ * затереть его обычным `GET`. Успешный `GET`/`PUT` всегда возвращает `false`
+ * — источник истины один, сервер.
  */
 data class UserProfile(
     val id: String? = null,
@@ -41,6 +46,7 @@ data class UserProfile(
     val serverRole: String? = null,
     val verificationStatus: String? = null,
     val accountStatus: String? = null,
+    val fullNamePendingSync: Boolean = false,
 ) {
 
     /** Пусто — входа ещё не было либо ответ пришёл без блока `user`. */
@@ -96,6 +102,8 @@ class DataStoreUserProfileStore @Inject constructor(
                 serverRole = preferences[PreferenceKeys.ProfileServerRole],
                 verificationStatus = preferences[PreferenceKeys.ProfileVerificationStatus],
                 accountStatus = preferences[PreferenceKeys.ProfileAccountStatus],
+                fullNamePendingSync = preferences[PreferenceKeys.ProfileFullNamePendingSync]
+                    ?: false,
             )
         }
         .distinctUntilChanged()
@@ -119,6 +127,11 @@ class DataStoreUserProfileStore @Inject constructor(
             preferences.put(PreferenceKeys.ProfileServerRole, profile.serverRole)
             preferences.put(PreferenceKeys.ProfileVerificationStatus, profile.verificationStatus)
             preferences.put(PreferenceKeys.ProfileAccountStatus, profile.accountStatus)
+            if (profile.fullNamePendingSync) {
+                preferences[PreferenceKeys.ProfileFullNamePendingSync] = true
+            } else {
+                preferences.remove(PreferenceKeys.ProfileFullNamePendingSync)
+            }
         }
     }
 
@@ -131,6 +144,7 @@ class DataStoreUserProfileStore @Inject constructor(
             preferences.remove(PreferenceKeys.ProfileServerRole)
             preferences.remove(PreferenceKeys.ProfileVerificationStatus)
             preferences.remove(PreferenceKeys.ProfileAccountStatus)
+            preferences.remove(PreferenceKeys.ProfileFullNamePendingSync)
         }
     }
 

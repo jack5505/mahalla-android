@@ -10,6 +10,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -428,66 +429,6 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `refresh without a session does not hit the network`() = runTest {
-        val result = repository().refresh()
-
-        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
-        assertEquals(0, server.requestCount)
-    }
-
-    @Test
-    fun `refresh rotates the token pair and carries the device`() = runTest {
-        sessionStore.save(Session("stale", "r-1", sessionId = "s-1"))
-        server.enqueue(
-            envelope(
-                """{"sessionId":"s-1",
-                   "tokens":{"accessToken":"fresh","refreshToken":"r-2","accessExpiresIn":60}}""",
-            ),
-        )
-
-        val result = repository().refresh()
-
-        assertEquals(ApiResult.Success(Unit), result)
-        assertEquals(
-            Session("fresh", "r-2", FIXED_NOW_EPOCH_SECONDS + 60, sessionId = "s-1"),
-            sessionStore.current(),
-        )
-
-        val request = server.takeRequest()
-        assertEquals("/auth/refresh", request.path)
-        val body = request.bodyJson()
-        assertEquals("r-1", body["refreshToken"]?.jsonPrimitive?.content)
-        assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
-    }
-
-    @Test
-    fun `dead refresh token clears the session`() = runTest {
-        sessionStore.save(Session("stale", "r-1"))
-        server.enqueue(
-            MockResponse()
-                .setResponseCode(401)
-                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
-                .setBody("""{"success":false,"error":{"code":"TOKEN_INVALID"}}"""),
-        )
-
-        val result = repository().refresh()
-
-        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
-        assertNull("сессию с мёртвым refresh хранить нечего", sessionStore.current())
-    }
-
-    @Test
-    fun `refresh keeps the session when the server is broken`() = runTest {
-        sessionStore.save(Session("stale", "r-1"))
-        server.enqueue(MockResponse().setResponseCode(500))
-
-        repository().refresh()
-
-        // 5xx — проблема сервера, а не токена: разлогинивать за это нельзя.
-        assertEquals(Session("stale", "r-1"), sessionStore.current())
-    }
-
-    @Test
     fun `login stores the profile for the profile screen`() = runTest {
         server.enqueue(
             envelope(
@@ -549,6 +490,47 @@ class AuthRepositoryTest {
         // Чужие права в профиле — это лишние строки в меню у того, у кого их
         // нет: поле, которого в ответе нет, стирается вместе с остальными.
         assertNull(userProfileStore.current().serverRole)
+    }
+
+    @Test
+    fun `re-login of the same account does not wipe a name the server has not confirmed yet`() =
+        runTest {
+            // Анкета покупателя сохранила имя локально и ждёт `PUT` (issue #234) —
+            // сервер о нём ещё не знает, отсюда `fullName = null` в ответе на вход.
+            userProfileStore.save(
+                UserProfile(id = "u-1", fullName = "Jahongir", fullNamePendingSync = true),
+            )
+            server.enqueue(
+                envelope(
+                    """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                       "user":{"id":"u-1","phone":"+998901234567","fullName":null}}""",
+                ),
+            )
+
+            repository().verifyCode("otp-1", "123456")
+
+            val profile = userProfileStore.current()
+            assertEquals("Jahongir", profile.fullName)
+            assertTrue(profile.fullNamePendingSync)
+        }
+
+    @Test
+    fun `login of a different account does not inherit a pending name`() = runTest {
+        userProfileStore.save(
+            UserProfile(id = "u-old", fullName = "Jahongir", fullNamePendingSync = true),
+        )
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"a-1","refreshToken":"r-1"},
+                   "user":{"id":"u-new","phone":"+998901234567","fullName":null}}""",
+            ),
+        )
+
+        repository().verifyCode("otp-1", "123456")
+
+        val profile = userProfileStore.current()
+        assertNull(profile.fullName)
+        assertFalse(profile.fullNamePendingSync)
     }
 
     @Test

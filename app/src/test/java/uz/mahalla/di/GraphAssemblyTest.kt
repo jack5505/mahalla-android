@@ -508,7 +508,15 @@ class GraphAssemblyTest {
         val api = FreelancerDataModule.provideFreelancerApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
+        assertNotNull(
+            DefaultFreelancerRepository(
+                api = api,
+                // Кабинет мастера (issue #71) шлёт телефон в E.164 — тем же
+                // валидатором, что и анкета продавца.
+                phoneValidator = PhoneNumberValidator(),
+                clock = AppModule.provideClock(),
+            ),
+        )
     }
 
     /**
@@ -568,12 +576,17 @@ class GraphAssemblyTest {
             NetworkModule.provideBaseUrl(),
         )
 
+        val hospitalApi = HospitalDataModule.provideHospitalApi(retrofit)
         assertNotNull(
             DefaultActivityRepository(
                 fashionApi = FashionDataModule.provideFashionApi(retrofit),
                 gamingApi = GamingDataModule.provideGamingApi(retrofit),
                 bookingApi = BookingDataModule.provideBookingApi(retrofit),
-                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                hospitalApi = hospitalApi,
+                hospitalRepository = DefaultHospitalRepository(
+                    api = hospitalApi,
+                    clock = AppModule.provideClock(),
+                ),
                 cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
                 placeNameResolver = DefaultPlaceNameResolver(
                     DiscoveryDataModule.provideCatalogApi(retrofit),

@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.data.CartRepository
+import uz.mahalla.feature.food.data.DeliveryFeeRepository
 import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.data.OrderRepository
 import uz.mahalla.feature.food.domain.Cart
@@ -173,6 +174,26 @@ class FakeCartRepository : CartRepository {
     override suspend fun clearAll() {
         clearedPlaceIds += carts.value.keys
         carts.value = emptyMap()
+    }
+}
+
+/**
+ * Стоимость доставки (issue #179) под тесты ViewModel.
+ *
+ * По умолчанию отвечает `null` — «доставка неизвестна»: это состояние экрана
+ * до ответа сервера, и тесты, которым доставка не интересна, проверяют ровно
+ * прежнее поведение.
+ */
+class FakeDeliveryFeeRepository : DeliveryFeeRepository {
+
+    var fee: ApiResult<Long?> = ApiResult.Success(null)
+
+    /** Суммы позиций, с которыми звали — по ним видно, сколько было запросов. */
+    val requestedSums: MutableList<Long> = mutableListOf()
+
+    override suspend fun deliveryFee(itemsSum: Long): ApiResult<Long?> {
+        requestedSums += itemsSum
+        return fee
     }
 }
 

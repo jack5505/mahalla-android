@@ -95,7 +95,7 @@ fun ActivityContentScreen(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         // Кнопки «назад» нет: экран — корень таба, возвращаться некуда.
-        MahallaTopBar(title = stringResource(R.string.activity_title))
+        MahallaTopBar(title = stringResource(R.string.activity_title), brandMark = true)
 
         // Фильтр стоит над списком и виден всегда, даже на пустой вкладке:
         // иначе человек, у которого всё выполнено, не нашёл бы «Историю».

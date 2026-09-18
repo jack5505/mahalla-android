@@ -18,8 +18,8 @@ import java.util.Locale
  * «не пришёл» у заказа мастера нет.
  *
  * [Unknown] обязателен: состояние меняет сам мастер
- * (`PUT freelancers/orders/{orderId}/status`, его кабинет — эпик #16), и новое
- * значение не должно прятать заказ из списка.
+ * (`PUT freelancers/orders/{orderId}/status`, экран входящих заказов —
+ * issue #190), и новое значение не должно прятать заказ из списка.
  */
 enum class FreelancerOrderStatus(val apiValue: String) {
     /** Заказ создан, мастер ещё не ответил. */

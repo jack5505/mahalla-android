@@ -13,11 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,10 +25,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +53,12 @@ data class PlaceCardUi(
     val isOpen: Boolean = true,
     /** Логотип или фото заведения (issue #60); `null` — карточка без картинки. */
     val photoUrl: String? = null,
+    /**
+     * Иконка категории — вместо фото, когда его нет (макет 1a рисует плитку
+     * именно с ней). Общая «фотография» на полсписка ничего не говорит, а
+     * иконка хотя бы отличает аптеку от кинотеатра.
+     */
+    val categoryIcon: ImageVector? = null,
 )
 
 @Immutable
@@ -81,7 +89,20 @@ data class BookingCardUi(
     val statusTone: MahallaTone = MahallaTone.Info,
 )
 
-/** Карточка места в выдаче: название, категория, рейтинг, расстояние, статус. */
+/**
+ * Строка места в выдаче (макет 1a): плитка 64dp, название, мета одной
+ * строкой и рейтинг справа.
+ *
+ * Ряд, а не карточка: в макете список мест разделён линиями, и стопка
+ * карточек на длинной выдаче читается хуже. Линии рисует список — так они не
+ * появляются под последней строкой и не дублируются у одиночной карточки
+ * (баннер выбранного места на карте).
+ *
+ * Мета склеена в одну строку («Аптека · 180 м · открыто») вместо ряда
+ * иконок-чипов: три иконки на строку списка соревновались за внимание с
+ * названием, а порядок «что это — как далеко — работает ли» человек читает
+ * слева направо и так.
+ */
 @Composable
 fun PlaceCard(
     place: PlaceCardUi,
@@ -90,58 +111,58 @@ fun PlaceCard(
 ) {
     val openLabel = stringResource(if (place.isOpen) R.string.place_open_now else R.string.place_closed_now)
     val ratingDescription = place.ratingLabel?.let { stringResource(R.string.place_rating_description, it) }
-    MahallaCard(onClick = onClick, modifier = modifier) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
-            verticalAlignment = Alignment.Top,
-        ) {
-            // Картинка декоративная: название заведения стоит рядом, и
-            // TalkBack не должен читать его дважды.
-            MahallaThumbnail(url = place.photoUrl, contentDescription = null)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = place.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = place.category,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = LocalMahallaColors.current.fgMuted,
-                )
-            }
-            MahallaBadge(
-                text = openLabel,
-                tone = if (place.isOpen) MahallaTone.Success else MahallaTone.Neutral,
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {}
+            .padding(vertical = Spacing.item),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Картинка декоративная: название заведения стоит рядом, и
+        // TalkBack не должен читать его дважды.
+        MahallaThumbnail(
+            url = place.photoUrl,
+            contentDescription = null,
+            fallbackIcon = place.categoryIcon ?: Icons.Outlined.Photo,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = place.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = listOfNotNull(
+                    place.category,
+                    place.distanceLabel,
+                    openLabel,
+                    place.priceLabel,
+                ).joinToString(META_SEPARATOR),
+                style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                color = LocalMahallaColors.current.fgMuted,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        Spacer(modifier = Modifier.size(Spacing.item))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (place.ratingLabel != null) {
-                CardMeta(
-                    icon = Icons.Outlined.Star,
-                    text = place.ratingLabel,
-                    contentDescription = ratingDescription,
-                )
-            }
-            if (place.distanceLabel != null) {
-                CardMeta(icon = Icons.Outlined.LocationOn, text = place.distanceLabel)
-            }
-            if (place.priceLabel != null) {
-                Text(
-                    text = place.priceLabel,
-                    style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                    color = LocalMahallaColors.current.fgMuted,
-                )
-            }
+        if (place.ratingLabel != null) {
+            Text(
+                text = place.ratingLabel,
+                modifier = Modifier.clearAndSetSemantics {
+                    if (ratingDescription != null) contentDescription = ratingDescription
+                },
+                style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
+
+/** Разделитель меты — тот же « · », что и в `text_joined_with_dot`. */
+private const val META_SEPARATOR = " · "
 
 /**
  * Карточка заказа: статус тоном + текстом, сумма моноширинными цифрами.
@@ -272,6 +293,9 @@ fun BookingCard(
 fun MahallaCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    // Радиус карточки в макете зависит от её роли: плитка 16dp, карточка
+    // талона и «пусто» — 24dp, ряд «Mahalla+» — 20dp.
+    shape: Shape = MaterialTheme.shapes.medium,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Card(
@@ -279,9 +303,12 @@ fun MahallaCard(
             .fillMaxWidth()
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .semantics(mergeDescendants = true) {},
-        shape = MaterialTheme.shapes.medium,
+        shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            // surfaceVariant, а не surface: в палитре редизайна фон экрана и
+            // surface — один и тот же #fdf8ff, и карточка на нём была бы
+            // невидима. Заливка карточек в макете — #f1ecf7.
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         // Тень не используем — глубина в макете задаётся фоном и рамкой.
@@ -289,6 +316,22 @@ fun MahallaCard(
     ) {
         Column(modifier = Modifier.padding(Spacing.card), content = content)
     }
+}
+
+/**
+ * Линия между строками списка — 1dp по макету редизайна.
+ *
+ * Отдельным компонентом, потому что в макете разделитель несёт ту же роль, что
+ * раньше несла карточка вокруг каждой строки: списки операций, меты места и
+ * настроек рисуются рядами с линиями, а не стопкой карточек.
+ */
+@Composable
+fun MahallaDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier,
+        thickness = MahallaComponentDefaults.borderWidth,
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
 }
 
 /**
@@ -364,6 +407,8 @@ fun MahallaListItem(
 fun SectionHeader(
     title: String,
     modifier: Modifier = Modifier,
+    /** Счётчик или подпись справа от заголовка («открыто 4 из 6», макет 1a), tnum. */
+    meta: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
@@ -380,6 +425,18 @@ fun SectionHeader(
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
         )
+        if (meta != null) {
+            Text(
+                text = meta,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = Spacing.item),
+                style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                color = LocalMahallaColors.current.fgMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (actionLabel != null && onAction != null) {
             Box(
                 modifier = Modifier

@@ -3,6 +3,7 @@ package uz.mahalla.feature.place.ui
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,6 +29,8 @@ import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Directions
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.ConfirmationNumber
@@ -37,6 +42,7 @@ import androidx.compose.material.icons.outlined.ShoppingBag
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,18 +51,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
 import uz.mahalla.core.result.ApiFailure
@@ -72,9 +85,9 @@ import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.MahallaDialog
+import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaIconButton
-import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaRatingInput
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
@@ -83,7 +96,9 @@ import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.components.SkeletonBox
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.discovery.ui.distanceLabel
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
@@ -94,6 +109,7 @@ import uz.mahalla.feature.place.domain.ReviewDraft
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.ui.PromotionCard
 import uz.mahalla.feature.social.domain.PlaceComment
+import uz.mahalla.ui.theme.FocusHeadline
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -182,9 +198,25 @@ fun PlaceDetailsContent(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
+        // Название переехало в тело экрана крупным заголовком (макет 1b), в
+        // шапке остаётся только «назад»: иначе имя места читается дважды —
+        // глазами и TalkBack.
+        // Мета шапки — «180 м · 09:00 – 18:00» (макет 1b): расстояние и часы на
+        // сегодня. Появляется вместе с карточкой; пока она грузится, шапка
+        // пустая, а не с прочерками.
+        val loadedPlace = state.data?.place
+        val todayHours = state.week.firstOrNull { it.dayOfWeek == state.today }
         MahallaTopBar(
-            title = state.data?.place?.name ?: stringResource(R.string.place_title),
+            title = "",
             onBack = onBack,
+            meta = loadedPlace?.let { place ->
+                val distance = distanceLabel(place.distanceMeters)
+                if (todayHours != null) {
+                    stringResource(R.string.text_joined_with_dot, distance, todayHours.label())
+                } else {
+                    distance
+                }
+            },
         )
         ScreenStateHost(
             state = state.details,
@@ -289,18 +321,18 @@ private fun DetailsList(
             }
         }
 
-        if (state.week.isNotEmpty()) {
-            item(key = "hours") {
-                Hours(
-                    week = state.week,
-                    today = state.today,
-                    expanded = state.hoursExpanded,
-                    onToggle = { onEvent(PlaceDetailsEvent.HoursToggled) },
-                )
+        // Адрес, часы и телефон — одной таблицей (макет 1b), а не двумя
+        // секциями с заголовками. Ячейка заводится, только если есть хоть один
+        // факт: пустая получила бы от `spacedBy` свой отступ.
+        if (state.week.isNotEmpty() || details.contacts.address != null || details.contacts.phone != null) {
+            item(key = "meta") {
+                MetaTable(details = details, state = state, onEvent = onEvent)
             }
         }
 
-        contacts(details = details, onEvent = onEvent)
+        if (state.services.isNotEmpty()) {
+            item(key = "services") { ServicesBlock(services = state.services) }
+        }
 
         reviews(state = state, onEvent = onEvent)
 
@@ -656,6 +688,13 @@ private fun GalleryPhoto(
 /** Скрим под кнопкой удаления: без него белая иконка теряется на светлом фото. */
 private val GALLERY_DELETE_SCRIM = Color.Black.copy(alpha = 0.45f)
 
+/**
+ * Шапка карточки места (макет 1b): кикер категории, крупное название,
+ * строка меты под ним.
+ *
+ * Без карточки вокруг: в макете заголовок лежит прямо на фоне экрана, а рамка
+ * вокруг названия делала бы его одним из блоков, а не заголовком.
+ */
 @Composable
 private fun Summary(
     details: PlaceDetails,
@@ -663,7 +702,7 @@ private fun Summary(
     modifier: Modifier = Modifier,
 ) {
     val place = details.place
-    MahallaCard(modifier = modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
             verticalAlignment = Alignment.CenterVertically,
@@ -671,7 +710,7 @@ private fun Summary(
             Text(
                 text = stringResource(place.category.labelRes),
                 modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = LocalMahallaColors.current.fgMuted,
             )
             MahallaBadge(
@@ -683,6 +722,14 @@ private fun Summary(
                 tone = if (openNow == true) MahallaTone.Success else MahallaTone.Neutral,
             )
         }
+        Text(
+            text = place.name,
+            modifier = Modifier
+                .padding(top = Spacing.item / 2)
+                .semantics { heading() },
+            style = FocusHeadline,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
         Row(
             modifier = Modifier.padding(top = Spacing.item),
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -699,18 +746,22 @@ private fun Summary(
                 } else {
                     stringResource(R.string.place_no_rating)
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = distanceLabel(place.distanceMeters),
-                style = MaterialTheme.typography.bodyMedium,
-                color = LocalMahallaColors.current.fgMuted,
             )
         }
     }
 }
 
+/**
+ * Действия места. Первые два — в ряд, как в макете 1b («Взять талон» рядом с
+ * «Забронировать»): это самая частая пара, и растянутые на всю ширину кнопки
+ * друг под другом занимали бы экран целиком.
+ *
+ * Остальные (у мест с несколькими вертикалями их бывает до четырёх) остаются
+ * колонкой ниже: макет такого случая не рисует, а втискивать четыре кнопки в
+ * ряд значит обрезать подписи.
+ */
 @Composable
 private fun Actions(
     actions: List<PlaceAction>,
@@ -721,85 +772,265 @@ private fun Actions(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.item),
     ) {
-        actions.forEachIndexed { index, action ->
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.item)) {
+            actions.take(SIDE_BY_SIDE_ACTIONS).forEachIndexed { index, action ->
+                MahallaButton(
+                    text = stringResource(action.labelRes()),
+                    onClick = { onEvent(PlaceDetailsEvent.ActionClicked(action)) },
+                    modifier = Modifier.weight(1f),
+                    // Первое действие — основное; остальные не должны спорить с
+                    // ним за внимание.
+                    variant = if (index == 0) {
+                        MahallaButtonVariant.Primary
+                    } else {
+                        MahallaButtonVariant.Secondary
+                    },
+                    icon = action.icon(),
+                )
+            }
+        }
+        actions.drop(SIDE_BY_SIDE_ACTIONS).forEach { action ->
             MahallaButton(
                 text = stringResource(action.labelRes()),
                 onClick = { onEvent(PlaceDetailsEvent.ActionClicked(action)) },
-                // Первое действие — основное; остальные не должны спорить с ним
-                // за внимание.
-                variant = if (index == 0) {
-                    MahallaButtonVariant.Primary
-                } else {
-                    MahallaButtonVariant.Secondary
-                },
+                variant = MahallaButtonVariant.Secondary,
                 icon = action.icon(),
             )
         }
     }
 }
 
+private const val SIDE_BY_SIDE_ACTIONS = 2
+
+/**
+ * Таблица меты (макет 1b): адрес, часы, телефон — ключ слева, значение справа,
+ * линия между строками. Прежние две секции («Часы работы» и «Контакты») с
+ * заголовками и строками-иконками занимали пол-экрана ради трёх фактов.
+ *
+ * Действия сохранены: адрес ведёт к маршруту, телефон — к звонку, строка
+ * часов раскрывает неделю. Нажимаемая строка помечена иконкой справа — цвет
+ * не единственный носитель смысла, а TalkBack получает роль кнопки.
+ *
+ * Рейтинга в таблице нет, хотя в макете он есть: он уже стоит в шапке рядом
+ * с расстоянием (строку очереди из макета показать нечем, и её место занял
+ * он), и повторять его строкой ниже незачем.
+ */
 @Composable
-private fun Hours(
-    week: List<OpeningHours>,
-    today: DayOfWeek?,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+private fun MetaTable(
+    details: PlaceDetails,
+    state: PlaceDetailsState,
+    onEvent: (PlaceDetailsEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val visible = if (expanded) week else week.filter { it.dayOfWeek == today }
+    val address = details.contacts.address
+    val phone = details.contacts.phone
+    val today = state.week.firstOrNull { it.dayOfWeek == state.today }
+    val otherDays = state.week.filter { it.dayOfWeek != state.today }
+
+    val rows = buildList<@Composable () -> Unit> {
+        if (address != null) {
+            val canRoute = details.place.point != null
+            add {
+                MetaRow(
+                    key = stringResource(R.string.place_meta_address),
+                    value = address,
+                    tabular = false,
+                    onClick = if (canRoute) {
+                        { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route)) }
+                    } else {
+                        null
+                    },
+                    trailingIcon = if (canRoute) Icons.Outlined.Directions else null,
+                )
+            }
+        }
+        if (today != null) {
+            add {
+                MetaRow(
+                    key = stringResource(R.string.place_hours_title),
+                    value = today.label(),
+                    onClick = { onEvent(PlaceDetailsEvent.HoursToggled) },
+                    trailingIcon = if (state.hoursExpanded) {
+                        Icons.Outlined.ExpandLess
+                    } else {
+                        Icons.Outlined.ExpandMore
+                    },
+                    trailingIconDescription = stringResource(
+                        if (state.hoursExpanded) R.string.action_collapse else R.string.action_see_all,
+                    ),
+                )
+            }
+        }
+        // Без «сегодня» (день недели неизвестен) неделя видна сразу: прятать
+        // её за строкой, которой нет, некуда.
+        if (state.hoursExpanded || today == null) {
+            otherDays.forEach { day ->
+                add {
+                    MetaRow(
+                        key = stringResource(day.dayOfWeek.fullLabelRes()),
+                        value = day.label(),
+                    )
+                }
+            }
+        }
+        if (phone != null) {
+            add {
+                MetaRow(
+                    key = stringResource(R.string.place_meta_phone),
+                    value = phone,
+                    onClick = { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call)) },
+                    trailingIcon = Icons.Outlined.Call,
+                )
+            }
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
-        SectionHeader(
-            title = stringResource(R.string.place_hours_title),
-            actionLabel = stringResource(
-                if (expanded) R.string.action_collapse else R.string.action_see_all,
-            ),
-            onAction = onToggle,
-        )
-        visible.forEach { day ->
-            MahallaListItem(
-                title = stringResource(day.dayOfWeek.labelRes()),
-                subtitle = day.label(),
-                showChevron = false,
-            )
+        rows.forEachIndexed { index, row ->
+            if (index > 0) MahallaDivider()
+            row()
         }
     }
 }
 
-private fun LazyListScope.contacts(
-    details: PlaceDetails,
-    onEvent: (PlaceDetailsEvent) -> Unit,
+/**
+ * Строка таблицы меты. Нажимаемая — не ниже цели нажатия и с ролью кнопки;
+ * обычная — компактная, по макету.
+ *
+ * @param tabular значение цифровое (часы, телефон) — моноширинные цифры;
+ * адресу они не нужны.
+ * @param trailingIconDescription подпись иконки для TalkBack там, где иконка
+ * не дублирует значение (раскрыть/свернуть); для звонка и маршрута действие
+ * понятно из ключа и роли кнопки.
+ */
+@Composable
+private fun MetaRow(
+    key: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    tabular: Boolean = true,
+    onClick: (() -> Unit)? = null,
+    trailingIcon: ImageVector? = null,
+    trailingIconDescription: String? = null,
 ) {
-    val phone = details.contacts.phone
-    val address = details.contacts.address
-    if (phone == null && address == null) return
-
-    item(key = "contacts-header") {
-        SectionHeader(title = stringResource(R.string.place_contacts_title))
-    }
-    if (address != null) {
-        item(key = "contacts-address") {
-            MahallaListItem(
-                title = address,
-                leadingIcon = Icons.Outlined.Directions,
-                showChevron = details.place.point != null,
-                onClick = if (details.place.point != null) {
-                    { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Route)) }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clickable(role = Role.Button, onClick = onClick)
+                        .heightIn(min = MahallaComponentDefaults.minTouchTarget)
                 } else {
-                    null
+                    Modifier.semantics(mergeDescendants = true) {}
                 },
             )
-        }
-    }
-    if (phone != null) {
-        item(key = "contacts-phone") {
-            MahallaListItem(
-                title = phone,
-                leadingIcon = Icons.Outlined.Call,
-                onClick = { onEvent(PlaceDetailsEvent.ActionClicked(PlaceAction.Call)) },
+            .padding(vertical = META_ROW_PADDING),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = key,
+            style = MaterialTheme.typography.labelLarge,
+            color = LocalMahallaColors.current.fgMuted,
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            style = if (tabular) {
+                MaterialTheme.typography.bodyMedium.merge(TabularNums)
+            } else {
+                MaterialTheme.typography.bodyMedium
+            },
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.End,
+        )
+        if (trailingIcon != null) {
+            Icon(
+                imageVector = trailingIcon,
+                contentDescription = trailingIconDescription,
+                modifier = Modifier.size(MahallaComponentDefaults.cardIconSize),
+                tint = LocalMahallaColors.current.accent,
             )
         }
     }
 }
+
+/** Строки таблицы меты — 9dp по макету; цель нажатия добирается `heightIn`. */
+private val META_ROW_PADDING = 9.dp
+
+/**
+ * Прайс (макет 1b): «название …… цена» с пунктирной отводкой. Цена без
+ * валюты, как в макете, — на карточке места других чисел с валютой нет, а
+ * «сум» в каждой строке съедал бы место у названия. Услуга без цены —
+ * без цены: «бесплатно» из макета сказать нечем, ноль у бэкенда значит
+ * «не названа».
+ *
+ * Строки не нажимаются: запись начинается кнопкой «Забронировать» — там
+ * услугу выбирают заново вместе со днём и временем.
+ */
+@Composable
+private fun ServicesBlock(services: List<BarberService>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        SectionHeader(title = stringResource(R.string.place_services_title))
+        services.forEach { service ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = META_ROW_PADDING)
+                    .semantics(mergeDescendants = true) {},
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = service.title.takeIf { it.isNotBlank() }
+                        ?: stringResource(R.string.booking_service_unnamed),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                DottedLeader(modifier = Modifier.weight(1f))
+                // Ноль у `priceSum` — «цена не названа», а не «бесплатно»
+                // (см. BarberService): экран записи такую цену не показывает,
+                // и карточка места не должна обещать больше него.
+                service.priceSum.takeIf { it > 0 }?.let { price ->
+                    Text(
+                        text = MoneyFormatter.amount(price),
+                        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Пунктир между названием и ценой — 1dp, `outlineVariant`. Декорация. */
+@Composable
+private fun DottedLeader(modifier: Modifier = Modifier) {
+    val color = MaterialTheme.colorScheme.outlineVariant
+    Box(
+        modifier = modifier
+            .height(LEADER_HEIGHT)
+            .clearAndSetSemantics {}
+            .drawBehind {
+                val y = size.height / 2
+                drawLine(
+                    color = color,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = LEADER_STROKE.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(
+                        floatArrayOf(LEADER_DASH.toPx(), LEADER_GAP.toPx()),
+                    ),
+                )
+            },
+    )
+}
+
+private val LEADER_HEIGHT = 12.dp
+private val LEADER_STROKE = 1.dp
+private val LEADER_DASH = 2.dp
+private val LEADER_GAP = 3.dp
 
 /**
  * Акции заведения (issue #104). Секции нет, пока акций нет: заголовок над
@@ -1082,15 +1313,6 @@ private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Route -> Icons.Outlined.Directions
 }
 
-private fun DayOfWeek.labelRes(): Int = when (this) {
-    DayOfWeek.MONDAY -> R.string.day_monday
-    DayOfWeek.TUESDAY -> R.string.day_tuesday
-    DayOfWeek.WEDNESDAY -> R.string.day_wednesday
-    DayOfWeek.THURSDAY -> R.string.day_thursday
-    DayOfWeek.FRIDAY -> R.string.day_friday
-    DayOfWeek.SATURDAY -> R.string.day_saturday
-    DayOfWeek.SUNDAY -> R.string.day_sunday
-}
 
 /**
  * Набирать номер и строить маршрут умеют не все устройства (и не все
