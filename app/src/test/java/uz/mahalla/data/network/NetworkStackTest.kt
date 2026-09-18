@@ -360,6 +360,48 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `a new session after death starts the ambiguous counter over`() = runTest {
+        // Смерть сессии от контракта — не единственный путь сюда: следующий
+        // человек логинится заново, и `SessionStore.save` пишет новую сессию
+        // мимо `TokenAuthenticator`. Если счётчик не обнулить вместе с
+        // `clear()`, первый же неоднозначный ответ в новой сессии добивает
+        // счёт до порога и стирает её мгновенно — тот самый цикл «вход →
+        // платный SMS → моментальный выход», от которого защищает #138.
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val staleRequest = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        server.enqueue(
+            envelopeError(httpCode = 200, code = "TOKEN_INVALID", message = "Token noto'g'ri"),
+        )
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertNull("сессия погибла на третьем подряд", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+
+        // Новый вход — с тем же authenticator'ом, как это и будет в проде
+        // (он `@Singleton`).
+        sessionStore.save(Session("new-access", "new-refresh"))
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-2"}}"""))
+        auth.authenticate(route = null, response = unauthorized(newRequest))
+
+        assertEquals(
+            "один неоднозначный ответ в новой сессии — снова прощаем",
+            Session("new-access", "new-refresh"),
+            sessionStore.current(),
+        )
+        assertEquals("второго выброса на вход не случилось", 1, expiryEvents.size)
+    }
+
+    @Test
     fun `a successful refresh resets the ambiguous refresh counter`() = runTest {
         // Прокси не отвечает одно и то же на каждый повторный refresh: если
         // между сбоями случился нормальный ответ, следующие сбои снова
