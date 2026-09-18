@@ -40,8 +40,9 @@ interface PromotionsRepository {
     suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>>
 
     /**
-     * Проверка промокода перед оформлением (issue #180). [orderAmountSum] —
-     * сумы, как и весь домен; пересчёт в тийины делает реализация.
+     * Проверка промокода перед оформлением (issue #180, `GET promotions/check`).
+     * [orderAmountSum] — сумы, как и весь домен; пересчёт в тийины (issue #149)
+     * делает реализация.
      */
     suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
 
@@ -51,15 +52,6 @@ interface PromotionsRepository {
      * черновику уйти в сеть.
      */
     suspend fun createPromotion(placeId: String, draft: NewPromotionDraft): ApiResult<Unit>
-
-    /**
-     * Проверка промокода (issue #180, `GET promotions/check`) — заведение и
-     * сумма заказа обязательны серверу, чтобы посчитать скидку.
-     *
-     * @param orderAmountSum сумма заказа в сумах — пересчёт в тийины (issue
-     * #149), как и у остальных денежных полей контракта, делает репозиторий.
-     */
-    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
 }
 
 @Singleton
@@ -120,14 +112,6 @@ class DefaultPromotionsRepository @Inject constructor(
             ).payload()
         }.map {}
     }
-
-    override suspend fun check(
-        code: String,
-        placeId: String,
-        orderAmountSum: Long,
-    ): ApiResult<PromoCheckResult> = apiCall {
-        api.check(code = code, placeId = placeId, orderAmount = Money.somToTiyin(orderAmountSum)).payload()
-    }.map { it.toDomain(code) }
 }
 
 /**
