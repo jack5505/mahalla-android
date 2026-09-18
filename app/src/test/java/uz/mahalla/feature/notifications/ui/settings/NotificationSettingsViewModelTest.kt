@@ -2,6 +2,7 @@ package uz.mahalla.feature.notifications.ui.settings
 
 import android.app.Application
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -47,6 +48,15 @@ class NotificationSettingsViewModelTest {
 
     private val mainDispatcher = UnconfinedTestDispatcher()
 
+    /**
+     * `init` подписывается на стор через `viewModelScope` и не отписывается
+     * сам — этот collect иначе продолжает висеть на `Dispatchers.Main` и после
+     * `resetMain()`, и ловит гонку в `TestMainDispatcher` уже в соседнем тесте
+     * полного прогона (issue #314). Через `ViewModelStore.clear()` scope
+     * закрывается штатно, как это сделал бы реальный `ViewModelStoreOwner`.
+     */
+    private val viewModelStore = ViewModelStore()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(mainDispatcher)
@@ -54,6 +64,7 @@ class NotificationSettingsViewModelTest {
 
     @After
     fun tearDown() {
+        viewModelStore.clear()
         Dispatchers.resetMain()
     }
 
@@ -138,6 +149,8 @@ class NotificationSettingsViewModelTest {
         assertEquals(QuietHours.DEFAULT_TO, viewModel.state.value.settings.quietHours.to)
     }
 
+    private var viewModelKeySeq = 0
+
     private fun viewModel(store: NotificationSettingsStore) = NotificationSettingsViewModel(
         store = store,
         channels = NotificationChannels(
@@ -146,7 +159,7 @@ class NotificationSettingsViewModelTest {
             // Activity его больше неоткуда взять.
             settings = SettingsDataStore(settingsDataStore()),
         ),
-    )
+    ).also { viewModelStore.put("notificationSettings-${viewModelKeySeq++}", it) }
 
     private fun settingsDataStore() = PreferenceDataStoreFactory.create(
         produceFile = { File(temporaryFolder.root, "app-settings.preferences_pb") },
