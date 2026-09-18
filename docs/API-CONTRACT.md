@@ -433,24 +433,24 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 обязателен **`storeId`** (а не `placeId`), поля `items` нет вовсе (состав
 заказа сервер берёт из серверной корзины `fashion/cart*`, которую клиент уже
 ведёт). Клиент отправляет `FashionPlaceOrderRequestDto` (`storeId`,
-`fulfillment`, `paymentMethod`, `deliveryAddress`, `promoCode`).
+`fulfillment`, `paymentMethod`, `deliveryAddress`).
 
 Схема допускает ещё `deliveryLat`/`deliveryLng` — клиент их **сознательно не
-шлёт**: на экране оформления нет выбора точки на карте. Не проверено живым
-запросом (`401` до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан) —
-тело закреплено тестом (`FashionOrderRepositoryTest`) до первой проверки под
-токеном. `storeId`/`items`/`deliveryLat`/`deliveryLng` — по-прежнему
-расхождение, описанное выше, и это отдельная задача (#221), не эта.
+шлёт**: на экране оформления нет выбора точки на карте, а угаданные
+координаты хуже, чем их отсутствие. Не проверено живым запросом (`401` до
+валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено
+тестом (`FashionOrderRepositoryTest`) до первой проверки под токеном.
 
-**`promoCode` подключён у «Одежды» (issue #180, PR #307)**, не дожидаясь
-остального ремонта из #221: поле — в `FashionPlaceOrderRequestDto`
-(`app/.../fashion/data/FashionApi.kt`), заполняется из
-`FashionCheckoutViewModel` после успешной `GET promotions/check`. У «Еды»
-(`app/.../food/data/FoodApi.kt`) поля промокода в DTO нет вовсе — заказы
-своей схемой не пересекаются с «Одеждой», проверка кода там не реализована.
-Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда автором
-задачи) — независимо в этом прогоне не перепроверялась: под Bearer `401`
-приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+**`promoCode` подключён (issue #180)**: чекаут «Одежды» проверяет код через
+`GET promotions/check` (см. `PromotionsRepository.check`) и, если он валиден,
+шлёт его в `FashionPlaceOrderRequestDto.promoCode`. В общем
+`PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`) поле тоже есть, но
+`FoodOrderRepository` его не заполняет — у «Еды» оно по-прежнему не уходит на
+сервер, это отдельная задача. `storeId`/`items`/`deliveryLat`/`deliveryLng` —
+по-прежнему расхождение, описанное выше, и это отдельная задача (#221), не
+эта. Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда
+автором задачи) — независимо не перепроверялась: под Bearer `401` приходит
+до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
 
 ## FoodApi ✅
 

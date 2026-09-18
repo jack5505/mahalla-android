@@ -39,6 +39,11 @@ class FakePromotionsRepository : PromotionsRepository {
         return place
     }
 
+    override suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult> {
+        requestedChecks += Triple(code, placeId, orderAmountSum)
+        return check
+    }
+
     /** Что именно отправили на создание акции (issue #252) — по порядку вызовов. */
     val createRequests = mutableListOf<Pair<String, NewPromotionDraft>>()
 
