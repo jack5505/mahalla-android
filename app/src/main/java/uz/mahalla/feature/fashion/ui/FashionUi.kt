@@ -2,20 +2,13 @@ package uz.mahalla.feature.fashion.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.result.ApiFailure
@@ -28,9 +21,10 @@ import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.ui.theme.Spacing
 
 /**
- * Общее для экранов вертикали «Одежда» (issue #108): отказ, хвост списка и
- * подписи статусов. Пять экранов показывают одно и то же — четыре копии
- * разошлись бы при первой правке.
+ * Общее для экранов вертикали «Одежда» (issue #108): отказ и подписи статусов.
+ * Пять экранов показывают одно и то же — четыре копии разошлись бы при первой
+ * правке. Хвост списка — общий для всего приложения `LoadMoreAuto` (issue
+ * #214), не здесь.
  */
 
 /**
@@ -65,34 +59,6 @@ fun FashionFailure(
     }
 }
 
-/**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по [itemCount] больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-fun FashionLoadMore(
-    itemCount: Int,
-    failure: ApiFailure?,
-    onLoadMore: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (failure != null) {
-        FashionFailure(failure = failure, onRetry = onLoadMore, modifier = modifier)
-        return
-    }
-
-    LaunchedEffect(itemCount) { onLoadMore() }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
-    }
-}
-
 /** Цена в сумах — одинаково на витрине, в карточке, в корзине и в заказе. */
 @Composable
 fun priceText(sum: Long): String =
@@ -120,5 +86,3 @@ fun OrderStatus.tone(): MahallaTone = when (this) {
     OrderStatus.Unknown -> MahallaTone.Neutral
     else -> MahallaTone.Info
 }
-
-private val LOAD_MORE_INDICATOR = 24.dp

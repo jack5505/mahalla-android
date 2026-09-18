@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/styles.css">
+  <script src="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/_ds_bundle.js"></script>
+  <script src="./image-slot.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; background: #ece6f4; }
+    a { color: #6d4fc2; } a:hover { color: #4a2f9e; }
+    * { -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+  </style>
+</helmet>
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:{{ pagePad }};box-sizing:border-box;font-family:'Inter',system-ui,sans-serif">
+  <sc-if value="{{ standalone }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+    <div style="font:400 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71;font-variant-numeric:tabular-nums">Mahalla &middot; макет B &laquo;Focus&raquo; &middot; Material 3, заливки &middot; 393&times;852</div>
+    <div style="width:26px;height:1px;background:#6d4fc2"></div>
+  </div>
+  </sc-if>
+
+  <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" width="{{ 393 }}" height="{{ 852 }}" hint-size="393px,852px">
+    <div style="height:100%;display:flex;flex-direction:column;position:relative;background:#fdf8ff;color:#1d1b20;font-family:'Inter',system-ui,sans-serif">
+
+      <div style="flex:none;padding:14px 20px 11px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(34,28,51,.16)">
+        <sc-if value="{{ notDetail }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:12px;min-width:0">
+          <div style="flex:none;width:38px;height:38px;background:#5b3fc4;border:1px solid #5b3fc4;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 18px/1 'Inter',system-ui,sans-serif;color:#ffffff;padding-bottom:2px;box-sizing:border-box">M</div>
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">{{ headKicker }}</div>
+            <h1 style="margin:0;font:600 22px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.015em">{{ headTitle }}</h1>
+          </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ back }}" style="min-height:44px;padding:0 10px 0 0;background:transparent;border:0;cursor:pointer;font:600 12px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#6d4fc2">&#8592; Назад</button>
+        </sc-if>
+        <div style="flex:none;font:500 11px/1.4 'Inter',system-ui,sans-serif;text-align:right;color:#625b71;font-variant-numeric:tabular-nums">{{ headMeta }}</div>
+      </div>
+
+      <div style="flex:1;overflow:auto;scrollbar-width:none">
+
+        <sc-if value="{{ isNear }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:18px 0 26px;display:flex;flex-direction:column;gap:22px">
+
+            <div style="padding:0 20px;display:flex;flex-direction:column;gap:12px">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+                <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">{{ focusKicker }}</div>
+                <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ focusMeta }}</div>
+              </div>
+
+              <div style="position:relative;overflow:hidden;background:linear-gradient(135deg,#4f2fc0 0%,#7c5ce6 100%);color:#ffffff;border-radius:28px;padding:20px 18px 18px;display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 32px rgba(43,36,64,.22)">
+                <div style="position:absolute;right:-4px;top:-30px;font:700 118px/1 'Inter',system-ui,sans-serif;color:#ffffff;opacity:.14;font-variant-numeric:tabular-nums;letter-spacing:-.04em;pointer-events:none">{{ focus.big }}</div>
+                <div style="position:relative;display:flex;flex-direction:column;gap:6px;padding-right:64px">
+                  <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#b9a3f0">{{ focus.bigLabel }} · {{ focus.big }}</div>
+                  <h2 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em;color:#fdf8ff">{{ focus.title }}</h2>
+                  <div style="font:400 12px/1.5 'Inter',system-ui,sans-serif;color:#b8b3c8">{{ focus.sub }}</div>
+                </div>
+                <div style="position:relative;display:flex;flex-direction:column;gap:7px">
+                  <div style="height:1px;background:rgba(245,243,250,.18)">
+                    <div style="height:1px;background:#b9a3f0;width:{{ focus.barW }}"></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;gap:10px;font:400 11px/1.3 'Inter',system-ui,sans-serif;color:#b8b3c8;font-variant-numeric:tabular-nums">
+                    <span>{{ focus.left }}</span><span>{{ focus.right }}</span>
+                  </div>
+                </div>
+                <div style="position:relative;display:flex;gap:9px">
+                  <button onClick="{{ focus.act }}" style="flex:1;min-height:46px;cursor:pointer;background:#ffffff;border:1px solid #ffffff;border-radius:20px;color:#4f2fc0;font:600 14px/1.2 'Inter',system-ui,sans-serif;letter-spacing:.03em" style-hover="background:rgba(185,163,240,.12)">{{ focus.actLabel }}</button>
+                  <button onClick="{{ focus.alt }}" style="flex:none;padding:0 16px;min-height:46px;cursor:pointer;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.16);border-radius:20px;color:#ffffff;font:600 13px/1.2 'Inter',system-ui,sans-serif" style-hover="background:rgba(245,243,250,.08)">{{ focus.altLabel }}</button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="padding:0 20px;font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Рядом с домом</div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:0 20px">
+                <sc-for list="{{ cats }}" as="c" hint-placeholder-count="8">
+                  <button onClick="{{ c.pick }}" style="min-height:76px;padding:10px 6px 9px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;border:0;background:{{ c.bg }};color:{{ c.fg }};font:500 10.5px/1.2 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;text-align:center" style-hover="background:rgba(109,79,194,.08)">
+                    <span style="display:flex;width:22px;height:22px;color:{{ c.ic }}">{{ c.icon }}</span>
+                    <span>{{ c.label }}</span>
+                    <span style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none">{{ c.count }}</span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="padding:0 20px;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding-bottom:9px">
+                <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Открыто сейчас</div>
+                <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ listMeta }}</div>
+              </div>
+              <sc-for list="{{ list }}" as="p" hint-placeholder-count="4">
+                <button onClick="{{ p.open }}" style="display:flex;width:100%;gap:14px;align-items:center;text-align:left;padding:13px 0;background:transparent;border:0;border-top:1px solid rgba(34,28,51,.1);cursor:pointer;font-family:'Inter',system-ui,sans-serif" style-hover="background:rgba(109,79,194,.06)">
+                  <div style="flex:none;width:64px;height:64px;box-sizing:border-box;border-radius:12px;background:#e8deff;color:#5b3fc4;display:flex;align-items:center;justify-content:center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="{{ p.iconD }}"></path></svg></div>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+                    <div style="font:600 16px/1.25 'Inter',system-ui,sans-serif;color:#1d1b20">{{ p.name }}</div>
+                    <div style="font:400 10.5px/1.35 'Inter',system-ui,sans-serif;color:#625b71;font-variant-numeric:tabular-nums">{{ p.meta }}</div>
+                    <div style="font:400 11px/1.35 'Inter',system-ui,sans-serif;color:#4a2f9e">{{ p.queueLabel }}</div>
+                  </div>
+                  <div style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:5px">
+                    <div style="font:600 14px/1 'Inter',system-ui,sans-serif;color:#1d1b20;font-variant-numeric:tabular-nums">{{ p.rating }}</div>
+                    <div style="width:22px;height:1px;background:#6d4fc2"></div>
+                  </div>
+                </button>
+              </sc-for>
+              <div style="border-top:1px solid rgba(34,28,51,.1)"></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 20px 26px;display:flex;flex-direction:column;gap:19px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">{{ place.cat }}</div>
+              <h2 style="margin:0;font:600 28px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.02em">{{ place.name }}</h2>
+              <div style="font:400 12.5px/1.45 'Inter',system-ui,sans-serif;color:#49454f;font-variant-numeric:tabular-nums">{{ place.queueLabel }}</div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+              <div style="height:150px;box-sizing:border-box;border:0;border-radius:16px;overflow:hidden">
+                <image-slot id="{{ place.heroId }}" shape="rect" placeholder="Фото места" style="width:100%;height:100%"></image-slot>
+              </div>
+              <div style="height:150px;box-sizing:border-box;border:0;border-radius:16px;background:#e8deff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:8px">
+                <div style="width:10px;height:10px;border:1px solid #6d4fc2;border-radius:50%;background:rgba(109,79,194,.3)"></div>
+                <div style="font:500 11px/1.3 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Карта</div>
+                <div style="font:400 10.5px/1.4 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ place.dist }} пешком</div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ place.meta2 }}" as="m" hint-placeholder-count="3">
+                <div style="display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-top:1px solid rgba(34,28,51,.1);font-size:12px">
+                  <span style="letter-spacing:.02em;text-transform:none;font-size:9px;color:#625b71;align-self:center;flex:none">{{ m.k }}</span>
+                  <span style="color:#1d1b20;text-align:right;font-variant-numeric:tabular-nums">{{ m.v }}</span>
+                </div>
+              </sc-for>
+              <div style="border-top:1px solid rgba(34,28,51,.1)"></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Услуги</div>
+              <sc-for list="{{ place.services }}" as="s" hint-placeholder-count="3">
+                <div style="display:flex;align-items:baseline;gap:8px;padding:5px 0">
+                  <span style="font:400 13.5px/1.4 'Inter',system-ui,sans-serif;color:#2b2440;flex:none">{{ s.n }}</span>
+                  <span style="flex:1;height:1px;background:rgba(34,28,51,.16);transform:translateY(-3px)"></span>
+                  <span style="font:400 13px/1.4 'Inter',system-ui,sans-serif;color:#1d1b20;flex:none;font-variant-numeric:tabular-nums">{{ s.p }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:flex;gap:9px;padding-top:2px">
+              <button onClick="{{ takeTicket }}" style="flex:1;min-height:48px;cursor:pointer;background:#5b3fc4;border:1px solid #5b3fc4;border-radius:20px;color:#ffffff;font:600 14px/1.2 'Inter',system-ui,sans-serif;letter-spacing:.03em;font-variant-numeric:tabular-nums">{{ takeLabel }}</button>
+              <button onClick="{{ openSheet }}" style="flex:none;padding:0 16px;min-height:48px;cursor:pointer;background:#e8deff;border:1px solid #e8deff;border-radius:20px;color:#21005d;font:600 13px/1.2 'Inter',system-ui,sans-serif">Забронировать</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isQueue }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 20px 26px;display:flex;flex-direction:column;gap:20px">
+            <sc-if value="{{ hasTicket }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#f1ecf7;border:0;border-radius:24px;padding:18px 16px;display:flex;flex-direction:column;gap:14px">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                  <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Талон</div>
+                  <div style="font:600 48px/1 'Inter',system-ui,sans-serif;color:#1d1b20;font-variant-numeric:tabular-nums;letter-spacing:.02em">{{ ticket.number }}</div>
+                  <div style="font:500 17px/1.2 'Inter',system-ui,sans-serif">{{ ticket.place }}</div>
+                </div>
+                <div style="height:1px;background:rgba(34,28,51,.16)"></div>
+                <div style="display:flex">
+                  <sc-for list="{{ ticket.figs }}" as="f" hint-placeholder-count="3">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+                      <div style="font:600 20px/1 'Inter',system-ui,sans-serif;font-variant-numeric:tabular-nums">{{ f.n }}</div>
+                      <div style="font:500 10px/1.2 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71;text-align:center">{{ f.label }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:9px">
+                  <button onClick="{{ advance }}" style="flex:1;min-height:46px;cursor:pointer;background:#e8deff;border:1px solid #e8deff;border-radius:20px;color:#21005d;font:600 12.5px/1.2 'Inter',system-ui,sans-serif">Обновить очередь</button>
+                  <button onClick="{{ cancelTicket }}" style="flex:none;padding:0 16px;min-height:46px;cursor:pointer;background:#fdf8ff;border:1px solid #cac4d0;border-radius:20px;color:#5b3fc4;font:600 12.5px/1.2 'Inter',system-ui,sans-serif">Отменить</button>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ noTicket }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#f1ecf7;border:0;border-radius:24px;padding:26px 18px;text-align:center;display:flex;flex-direction:column;gap:9px">
+                <div style="font:400 22px/1.15 'Inter',system-ui,sans-serif">Активных талонов нет</div>
+                <div style="font:400 12px/1.6 'Inter',system-ui,sans-serif;color:#625b71">Возьмите талон в карточке места — он появится здесь и на главной.</div>
+                <button onClick="{{ goNear }}" style="align-self:center;margin-top:4px;min-height:44px;padding:0 18px;cursor:pointer;background:#5b3fc4;border:1px solid #5b3fc4;border-radius:20px;color:#ffffff;font:600 13px/1.2 'Inter',system-ui,sans-serif">К местам рядом</button>
+              </div>
+            </sc-if>
+
+            <div style="display:flex;flex-direction:column">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71;padding-bottom:9px">Брони и история</div>
+              <sc-for list="{{ bookings }}" as="b" hint-placeholder-count="3">
+                <div style="display:flex;gap:12px;align-items:center;padding:12px 0;border-top:1px solid rgba(34,28,51,.1)">
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <div style="font:600 15px/1.25 'Inter',system-ui,sans-serif">{{ b.place }}</div>
+                    <div style="font:400 10.5px/1.35 'Inter',system-ui,sans-serif;color:#625b71;font-variant-numeric:tabular-nums">{{ b.when }}</div>
+                  </div>
+                  <div style="flex:none;font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:{{ b.fg }};border:1px solid {{ b.bd }};border-radius:8px;padding:4px 6px">{{ b.status }}</div>
+                </div>
+              </sc-for>
+              <div style="border-top:1px solid rgba(34,28,51,.1)"></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isWallet }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 20px 26px;display:flex;flex-direction:column;gap:20px">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Доступно</div>
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <div style="font:600 40px/1 'Inter',system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em">{{ balance }}</div>
+                <div style="font:400 13px/1 'Inter',system-ui,sans-serif;color:#625b71">so&rsquo;m</div>
+              </div>
+              <div style="height:1px;background:rgba(34,28,51,.16);margin-top:6px"></div>
+            </div>
+
+            <div style="display:flex;gap:9px">
+              <button onClick="{{ topUp }}" style="flex:1;min-height:46px;cursor:pointer;background:#5b3fc4;border:1px solid #5b3fc4;border-radius:20px;color:#ffffff;font:600 13px/1.2 'Inter',system-ui,sans-serif">Пополнить</button>
+              <button onClick="{{ topUp }}" style="flex:1;min-height:46px;cursor:pointer;background:#e8deff;border:1px solid #e8deff;border-radius:20px;color:#21005d;font:600 13px/1.2 'Inter',system-ui,sans-serif">Перевести</button>
+            </div>
+
+            <div style="background:#e8deff;border:0;border-radius:20px;padding:14px;display:flex;justify-content:space-between;gap:12px;align-items:center">
+              <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="font:600 16px/1.25 'Inter',system-ui,sans-serif">Mahalla+</div>
+                <div style="font:400 10.5px/1.4 'Inter',system-ui,sans-serif;color:#625b71;font-variant-numeric:tabular-nums">Без очереди в 6 местах · до 12 окт</div>
+              </div>
+              <div style="flex:none;font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#4a2f9e">активна</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71;padding-bottom:9px">Операции</div>
+              <sc-for list="{{ ledger }}" as="t" hint-placeholder-count="5">
+                <div style="display:flex;gap:12px;align-items:center;padding:11px 0;border-top:1px solid rgba(34,28,51,.1)">
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <div style="font:400 13px/1.3 'Inter',system-ui,sans-serif;color:#1d1b20">{{ t.what }}</div>
+                    <div style="font:400 11px/1.3 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ t.when }}</div>
+                  </div>
+                  <div style="flex:none;font:600 14px/1 'Inter',system-ui,sans-serif;color:{{ t.fg }};font-variant-numeric:tabular-nums">{{ t.sum }}</div>
+                </div>
+              </sc-for>
+              <div style="border-top:1px solid rgba(34,28,51,.1)"></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isMe }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 20px 26px;display:flex;flex-direction:column;gap:19px">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Чиланзар · 12-квартал</div>
+              <h2 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif">Аброр Юсупов</h2>
+              <div style="font:400 11px/1.4 'Inter',system-ui,sans-serif;color:#625b71;font-variant-numeric:tabular-nums">+998 90 123-45-67</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;color:#625b71">Язык интерфейса</div>
+              <div style="display:flex;border:1px solid rgba(34,28,51,.16);border-radius:4px;overflow:hidden">
+                <sc-for list="{{ langs }}" as="l" hint-placeholder-count="2">
+                  <button onClick="{{ l.pick }}" style="flex:1;min-height:44px;cursor:pointer;border:0;background:{{ l.bg }};color:{{ l.fg }};font:400 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none">{{ l.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ settings }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.toggle }}" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;text-align:left;min-height:56px;padding:12px 0;background:transparent;border:0;border-top:1px solid rgba(34,28,51,.1);cursor:pointer;font-family:'Inter',system-ui,sans-serif" style-hover="background:rgba(109,79,194,.06)">
+                  <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                    <div style="font:600 15px/1.25 'Inter',system-ui,sans-serif;color:#1d1b20">{{ s.label }}</div>
+                    <div style="font:400 10.5px/1.4 'Inter',system-ui,sans-serif;color:#79747e">{{ s.hint }}</div>
+                  </div>
+                  <div style="flex:none;width:44px;height:24px;border-radius:8px;box-sizing:border-box;border:1px solid {{ s.bd }};background:{{ s.track }};display:flex;align-items:center;padding:2px;justify-content:{{ s.justify }}">
+                    <div style="width:18px;height:18px;background:{{ s.knob }}"></div>
+                  </div>
+                </button>
+              </sc-for>
+              <div style="border-top:1px solid rgba(34,28,51,.1)"></div>
+            </div>
+
+            <button style="min-height:46px;cursor:pointer;background:#e8deff;border:1px solid #e8deff;border-radius:20px;color:#21005d;font:600 13px/1.2 'Inter',system-ui,sans-serif">Панель бизнеса</button>
+          </div>
+        </sc-if>
+
+      </div>
+
+      <div style="flex:none;display:flex;background:#f1ecf7;padding:6px 6px 6px">
+        <sc-for list="{{ tabs }}" as="nav" hint-placeholder-count="4">
+          <button onClick="{{ nav.go }}" style="flex:1;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;background:transparent;border:0;border-top:0;cursor:pointer;margin-top:-1px;padding:9px 0 5px;font-family:'Inter',system-ui,sans-serif;position:relative">
+            <div style="width:56px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:{{ nav.mark }};color:{{ nav.ink }}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"><path d="{{ nav.d }}"></path></svg></div>
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.02em;color:{{ nav.ink }}">{{ nav.label }}</div>
+            <div style="position:absolute;top:8px;right:26px;min-width:15px;height:15px;box-sizing:border-box;border:1px solid #6d4fc2;border-radius:8px;display:{{ nav.badgeDisplay }};align-items:center;justify-content:center;font:500 10px/1 'Inter',system-ui,sans-serif;color:#4a2f9e;background:#fdf8ff;font-variant-numeric:tabular-nums">{{ nav.badgeText }}</div>
+          </button>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;inset:0;z-index:80;display:flex;flex-direction:column;justify-content:flex-end;background:rgba(34,28,51,.34)">
+          <div onClick="{{ closeSheet }}" style="flex:1"></div>
+          <div style="background:#fdf8ff;border-radius:28px 28px 0 0;box-shadow:0 -8px 24px rgba(29,27,32,.14);padding:14px 20px 22px;display:flex;flex-direction:column;gap:13px">
+            <div style="align-self:center;width:44px;height:3px;background:rgba(34,28,51,.2);border-radius:8px"></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+              <h3 style="margin:0;font:600 20px/1.2 'Inter',system-ui,sans-serif">Бронирование</h3>
+              <span style="font:400 11px/1.3 'Inter',system-ui,sans-serif;color:#625b71">{{ sheetPlace }}</span>
+            </div>
+            <div style="display:flex;gap:7px;overflow:auto;padding-bottom:2px;scrollbar-width:none">
+              <sc-for list="{{ days }}" as="d" hint-placeholder-count="4">
+                <button onClick="{{ d.pick }}" style="flex:none;min-height:42px;padding:0 12px;cursor:pointer;border-radius:8px;background:{{ d.bg }};border:1px solid {{ d.bd }};color:{{ d.fg }};font:400 11px/1.3 'Inter',system-ui,sans-serif;letter-spacing:.02em;text-transform:none;font-variant-numeric:tabular-nums">{{ d.label }}</button>
+              </sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px">
+              <sc-for list="{{ slots }}" as="s" hint-placeholder-count="8">
+                <button onClick="{{ s.pick }}" style="min-height:44px;cursor:{{ s.cursor }};border-radius:8px;background:{{ s.bg }};border:1px solid {{ s.bd }};color:{{ s.fg }};font:400 12.5px/1 'Inter',system-ui,sans-serif;font-variant-numeric:tabular-nums;text-decoration:{{ s.deco }}">{{ s.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+              <div style="font:400 11px/1.4 'Inter',system-ui,sans-serif;color:#4a2f9e;border-left:1px solid #6d4fc2;padding-left:10px">{{ errorText }}</div>
+            </sc-if>
+            <div style="display:flex;gap:9px">
+              <button onClick="{{ closeSheet }}" style="flex:none;padding:0 18px;min-height:48px;cursor:pointer;background:#e8deff;border:1px solid #e8deff;border-radius:20px;color:#21005d;font:600 13px/1.2 'Inter',system-ui,sans-serif">Отмена</button>
+              <button onClick="{{ confirm }}" style="flex:1;min-height:48px;cursor:pointer;background:#5b3fc4;border:1px solid #5b3fc4;border-radius:20px;color:#ffffff;font:600 14px/1.2 'Inter',system-ui,sans-serif;font-variant-numeric:tabular-nums">{{ confirmLabel }}</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:20px;right:20px;bottom:82px;z-index:70;background:#2b2440;color:#fdf8ff;padding:11px 13px;border-radius:4px;font:400 11.5px/1.4 'Inter',system-ui,sans-serif;display:flex;justify-content:space-between;gap:12px">
+          <span>{{ toastText }}</span>
+          <span style="color:#b9a3f0;font-variant-numeric:tabular-nums;flex:none">{{ toastMeta }}</span>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+
+  <sc-if value="{{ standalone }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:430px;font:400 11.5px/1.7 'Inter',system-ui,sans-serif;color:#49454f;text-align:center">Вариант в духе M3 из ТЗ: Inter, заливки, скругления 16–28. Одна фокус-карточка решает «что мне сейчас»: пока талона нет — ближайшее открытое место, как только взят — сам талон. Возьмите талон в карточке места или забронируйте время.</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:1010},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;near&quot;,&quot;queue&quot;,&quot;wallet&quot;,&quot;me&quot;],&quot;default&quot;:&quot;near&quot;,&quot;tsType&quot;:&quot;'near'|'queue'|'wallet'|'me'&quot;,&quot;section&quot;:&quot;Стартовое состояние&quot;},&quot;place&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;apteka&quot;,&quot;osh&quot;,&quot;poli&quot;,&quot;usta&quot;,&quot;kino&quot;,&quot;kiyim&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Стартовое состояние&quot;},&quot;sheet&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Стартовое состояние&quot;},&quot;ticket&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Стартовое состояние&quot;},&quot;embedded&quot;:{&quot;editor&quot;:null,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const PLACES = [
+  { id: 'apteka', name: 'Dorixona 24', cat: 'Аптека', dist: '180 м', queue: 3, wait: 9, rating: '4,8', hours: 'круглосуточно', addr: 'Чиланзар, 12-кв, дом 4', phone: '+998 71 200-14-14',
+    services: [{ n: 'Фармацевт', p: 'бесплатно' }, { n: 'Давление', p: '5 000' }, { n: 'Экспресс-тест', p: '35 000' }] },
+  { id: 'osh', name: 'Osh Markazi', cat: 'Еда', dist: '320 м', queue: 11, wait: 25, rating: '4,6', hours: '08:00 – 22:00', addr: 'Чиланзар, ул. Бунёдкор 12', phone: '+998 71 244-08-08',
+    services: [{ n: 'Стол на 4', p: '—' }, { n: 'Осh (порция)', p: '28 000' }, { n: 'Самса', p: '9 000' }] },
+  { id: 'poli', name: 'Поликлиника №7', cat: 'Больница', dist: '650 м', queue: 24, wait: 52, rating: '4,1', hours: '08:00 – 18:00', addr: 'Чиланзар, 14-кв', phone: '+998 71 277-31-02',
+    services: [{ n: 'Терапевт', p: 'по ОМС' }, { n: 'УЗИ', p: '90 000' }, { n: 'Анализы', p: '55 000' }] },
+  { id: 'usta', name: 'Usta Rustam · ремонт', cat: 'Мастера', dist: '740 м', queue: 0, wait: 0, rating: '4,9', hours: '09:00 – 19:00', addr: 'Чиланзар, 11-кв, мастерская 3', phone: '+998 93 501-77-20',
+    services: [{ n: 'Диагностика', p: '20 000' }, { n: 'Замена экрана', p: 'от 180 000' }, { n: 'Выезд на дом', p: '40 000' }] },
+  { id: 'kino', name: 'Kinoteatr Zarafshan', cat: 'Кино', dist: '1,2 км', queue: 6, wait: 14, rating: '4,4', hours: '10:00 – 00:00', addr: 'Чиланзар, просп. Бунёдкор 45', phone: '+998 71 273-19-19',
+    services: [{ n: 'Сеанс 19:40', p: '45 000' }, { n: 'VIP-ряд', p: '80 000' }, { n: 'Детский зал', p: '30 000' }] },
+  { id: 'kiyim', name: 'Kiyim Bozor', cat: 'Одежда', dist: '900 м', queue: 2, wait: 6, rating: '4,2', hours: '09:00 – 21:00', addr: 'Чиланзар, 13-кв', phone: '+998 90 700-40-40',
+    services: [{ n: 'Подгонка', p: '35 000' }, { n: 'Примерочная', p: 'бесплатно' }, { n: 'Доставка', p: '15 000' }] }
+];
+
+const CATS = ['Все', 'Еда', 'Аптека', 'Больница', 'Кино', 'Мастера', 'Одежда'];
+
+const ICONS = {
+  all: 'M4 6h16M4 12h16M4 18h10',
+  'Еда': 'M4 3v7a3 3 0 0 0 6 0V3M7 10v11M17 3c-1.5 2-2 3.5-2 6 0 1.7.7 2.6 2 3v9',
+  'Аптека': 'M12 8v8M8 12h8M6 4h12l-1.5 16h-9L6 4z',
+  'Больница': 'M12 6v12M6 12h12M4 4h16v16H4z',
+  'Кино': 'M4 5h16v14H4zM4 9h16M8 5v4M16 5v4M8 15h8',
+  'Мастера': 'M14.7 6.3a3.5 3.5 0 0 1 4.6 4.6L8.9 21.3l-4.6-4.6L14.7 6.3zM4 8l4-4M6 6l1.5-1.5',
+  'Одежда': 'M9 3l3 2 3-2 5 4-2.5 3V21H6.5V10L4 7l5-4z',
+  near: 'M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+  queue: 'M4 6h10M4 12h16M4 18h7M18 5v4M16 7h4',
+  wallet: 'M3 7h15a3 3 0 0 1 3 3v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7zM3 7l2.5-3H17M17 13h1',
+  me: 'M19 21v-1.5A3.5 3.5 0 0 0 15.5 16h-7A3.5 3.5 0 0 0 5 19.5V21M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'
+};
+
+const SLOTS = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '15:00', '15:30', '16:00', '16:30'];
+const TAKEN = { '10:00': 1, '11:30': 1, '15:30': 1, '12:30': 1 };
+const DAYS = ['Сегодня', 'Ср 9', 'Чт 10', 'Пт 11', 'Сб 12'];
+
+class Component extends DCLogic {
+  state = {
+    tab: null, placeId: undefined, sheet: undefined,
+    ticket: undefined, day: 'Сегодня', slot: null, error: '',
+    cat: 'Все', lang: 'Русский', toast: null,
+    notify: true, geo: true, biometry: false,
+    bookings: [
+      { place: 'Kinoteatr Zarafshan', when: 'сегодня, 19:40 · 2 места', status: 'бронь' },
+      { place: 'Osh Markazi', when: 'вчера, 13:15 · стол на 4', status: 'завершено' },
+      { place: 'Поликлиника №7', when: '4 сент, 09:20 · терапевт', status: 'завершено' }
+    ]
+  };
+
+  res() {
+    const pr = this.props || {}, st = this.state;
+    return Object.assign({}, st, {
+      tab: st.tab || pr.screen || 'near',
+      placeId: st.placeId === undefined ? (pr.place || null) : st.placeId,
+      sheet: st.sheet === undefined ? !!pr.sheet : st.sheet,
+      ticket: st.ticket === undefined ? (pr.ticket ? { placeId: 'apteka', place: 'Dorixona 24', number: 'A-15', ahead: 3, wait: 9, start: 5 } : null) : st.ticket
+    });
+  }
+
+  icon(d, size) {
+    return React.createElement('svg', { width: size || 20, height: size || 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.35, strokeLinecap: 'round', strokeLinejoin: 'round' }, React.createElement('path', { d: d }));
+  }
+
+  flash(text, meta) {
+    this.setState({ toast: { text: text, meta: meta || '' } });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: null }), 2600);
+  }
+
+  componentWillUnmount() { clearTimeout(this._t); }
+
+  qLabel(p) {
+    if (p.queue === 0) return 'без очереди — заходите';
+    return p.queue + ' в очереди · ~' + p.wait + ' мин';
+  }
+
+  take = () => {
+    const p = PLACES.filter(x => x.id === this.res().placeId)[0] || PLACES[0];
+    const num = 'A-' + (p.queue + 12);
+    this.setState({
+      ticket: { placeId: p.id, place: p.name, number: num, ahead: p.queue, wait: Math.max(2, p.wait), start: p.queue },
+      tab: 'queue', placeId: null
+    });
+    this.flash('Талон взят · ' + p.name, num);
+  };
+
+  advance = () => {
+    this.setState(() => {
+      const cur = this.res().ticket;
+      if (!cur) return {};
+      const ahead = Math.max(0, cur.ahead - 2);
+      return { ticket: Object.assign({}, cur, { ahead: ahead, wait: ahead === 0 ? 0 : Math.max(2, Math.round(ahead * 2.2)) }) };
+    }, () => {
+      const t = this.res().ticket;
+      this.flash(t.ahead === 0 ? 'Ваша очередь — подойдите к окну' : 'Очередь обновлена', t.ahead === 0 ? t.number : t.ahead + ' перед вами');
+    });
+  };
+
+  confirm = () => {
+    if (!this.state.slot) { this.setState({ error: 'Выберите время — свободные слоты без зачёркивания.' }); return; }
+    const p = PLACES.filter(x => x.id === this.res().placeId)[0] || PLACES[0];
+    const when = this.state.day.toLowerCase() + ', ' + this.state.slot;
+    this.setState(s => ({
+      sheet: false, error: '', slot: null,
+      bookings: [{ place: p.name, when: when, status: 'бронь' }].concat(s.bookings)
+    }));
+    this.flash('Забронировано · ' + p.name, this.state.slot);
+  };
+
+  renderVals() {
+    const s = this.res();
+    const place = s.placeId ? PLACES.filter(p => p.id === s.placeId)[0] : null;
+    const isDetail = !!place;
+    const t = s.ticket;
+
+    const list = PLACES.filter(p => s.cat === 'Все' || p.cat === s.cat).map(p => ({
+      id: p.id, name: p.name, rating: p.rating, cat: p.cat, iconD: ICONS[p.cat],
+      meta: p.cat + ' · ' + p.dist + ' · ' + p.hours,
+      queueLabel: this.qLabel(p),
+      open: () => this.setState({ placeId: p.id })
+    }));
+
+    const nearest = PLACES[0];
+    const focus = t ? {
+      title: t.place,
+      sub: 'талон ' + t.number + (t.ahead === 0 ? ' · ваша очередь' : ' · вас позовут по номеру'),
+      big: t.ahead === 0 ? '—' : String(t.ahead),
+      bigLabel: t.ahead === 0 ? 'сейчас' : 'перед вами',
+      barW: Math.round(((t.start - t.ahead) / Math.max(1, t.start)) * 100) + '%',
+      left: t.ahead === 0 ? 'подойдите к окну' : '~' + t.wait + ' мин ожидания',
+      right: 'взят в 9:30',
+      act: this.advance, actLabel: t.ahead === 0 ? 'Я подошёл' : 'Обновить очередь',
+      alt: () => this.setState({ tab: 'queue' }), altLabel: 'Талон'
+    } : {
+      title: nearest.name,
+      sub: nearest.cat + ' · ' + nearest.dist + ' пешком · ' + nearest.hours,
+      big: String(nearest.queue), bigLabel: 'в очереди',
+      barW: '28%',
+      left: '~' + nearest.wait + ' мин ожидания',
+      right: 'рейтинг ' + nearest.rating,
+      act: () => this.setState({ placeId: nearest.id }, this.take), actLabel: 'Взять талон',
+      alt: () => this.setState({ placeId: nearest.id }), altLabel: 'Место'
+    };
+
+    const cats = CATS.concat(['Ещё']).map(c => {
+      const on = s.cat === c;
+      const n = c === 'Все' ? PLACES.length : PLACES.filter(p => p.cat === c).length;
+      return {
+        label: c, icon: this.icon(c === 'Все' ? ICONS.all : c === 'Ещё' ? 'M5 12h.01M12 12h.01M19 12h.01' : ICONS[c], 22),
+        count: c === 'Ещё' ? '' : n + (n === 1 ? ' место' : n < 5 ? ' места' : ' мест'),
+        bg: on ? '#e8deff' : '#f1ecf7',
+        fg: on ? '#4a2f9e' : '#49454f',
+        ic: on ? '#4a2f9e' : '#6d4fc2',
+        pick: c === 'Ещё' ? () => this.flash('Все категории', '24 раздела') : () => this.setState({ cat: c })
+      };
+    });
+
+    const tabDefs = [
+      { id: 'near', label: 'Рядом', d: ICONS.near },
+      { id: 'queue', label: 'Очереди', d: ICONS.queue },
+      { id: 'wallet', label: 'Кошелёк', d: ICONS.wallet },
+      { id: 'me', label: 'Профиль', d: ICONS.me }
+    ];
+    const tabs = tabDefs.map(x => {
+      const on = !isDetail && s.tab === x.id;
+      const badge = x.id === 'queue' && !!t;
+      return {
+        label: x.label, d: x.d,
+        mark: on ? '#e8deff' : 'transparent',
+        ink: on ? '#21005d' : '#49454f',
+        badgeDisplay: badge ? 'flex' : 'none', badgeText: badge ? '1' : '',
+        go: () => this.setState({ tab: x.id, placeId: null })
+      };
+    });
+
+    const days = DAYS.map(d => {
+      const on = s.day === d;
+      return {
+        label: d, bg: on ? '#e8deff' : 'transparent',
+        bd: on ? '#6d4fc2' : 'rgba(34,28,51,.16)', fg: on ? '#4a2f9e' : '#49454f',
+        pick: () => this.setState({ day: d, slot: null, error: '' })
+      };
+    });
+
+    const slots = SLOTS.map(x => {
+      const taken = !!TAKEN[x] && s.day === 'Сегодня';
+      const on = s.slot === x;
+      return {
+        label: x, cursor: taken ? 'not-allowed' : 'pointer',
+        deco: taken ? 'line-through' : 'none',
+        bg: on ? '#e8deff' : 'transparent',
+        bd: on ? '#6d4fc2' : 'rgba(34,28,51,.16)',
+        fg: taken ? '#b8b3c8' : on ? '#4a2f9e' : '#1d1b20',
+        pick: taken ? () => this.setState({ error: 'Это время уже занято.' }) : () => this.setState({ slot: x, error: '' })
+      };
+    });
+
+    const settings = [
+      { key: 'notify', label: 'Звать по номеру', hint: 'Push, когда перед вами двое' },
+      { key: 'geo', label: 'Места рядом', hint: 'Геопозиция только при открытом экране' },
+      { key: 'biometry', label: 'Вход по отпечатку', hint: 'Вместо PIN-кода кошелька' }
+    ].map(x => {
+      const on = s[x.key];
+      return {
+        label: x.label, hint: x.hint,
+        track: on ? '#e8deff' : 'transparent',
+        bd: on ? '#6d4fc2' : 'rgba(34,28,51,.24)',
+        knob: on ? '#6d4fc2' : '#b8b3c8',
+        justify: on ? 'flex-end' : 'flex-start',
+        toggle: () => this.setState({ [x.key]: !on })
+      };
+    });
+
+    const langs = ['O\u2018zbek', 'Русский'].map(l => {
+      const on = s.lang === l;
+      return {
+        label: l, bg: on ? '#e8deff' : 'transparent', fg: on ? '#4a2f9e' : '#625b71',
+        pick: () => this.setState({ lang: l })
+      };
+    });
+
+    const heads = {
+      near: { kicker: 'Чиланзар · 12-квартал', title: 'Что рядом', meta: '9:30 · вторник' },
+      queue: { kicker: 'Талоны и брони', title: 'Очереди', meta: t ? 'талон активен' : 'нет активных' },
+      wallet: { kicker: 'Hamyon', title: 'Кошелёк', meta: 'Mahalla+ до 12 окт' },
+      me: { kicker: 'Профиль', title: 'Аброр', meta: s.lang }
+    };
+    const head = isDetail ? { kicker: '', title: '', meta: place.dist + ' · ' + place.hours } : heads[s.tab];
+
+    const takeAvail = place ? (place.queue === 0 ? 'Зайти без очереди' : 'Взять талон · ' + place.queue) : '';
+
+    return {
+      standalone: !(this.props && this.props.embedded),
+      pagePad: (this.props && this.props.embedded) ? '0' : '36px 16px 56px',
+      headKicker: head.kicker, headTitle: head.title, headMeta: head.meta,
+      isNear: !isDetail && s.tab === 'near',
+      isQueue: !isDetail && s.tab === 'queue',
+      isWallet: !isDetail && s.tab === 'wallet',
+      isMe: !isDetail && s.tab === 'me',
+      isDetail: isDetail, notDetail: !isDetail,
+      focus: focus,
+      focusKicker: t ? 'Ваш талон' : 'Ближе всего сейчас',
+      focusMeta: t ? 'обновлено 9:30' : 'по геопозиции',
+      cats: cats, list: list, listMeta: list.length + ' из ' + PLACES.length,
+      place: place ? Object.assign({}, place, {
+        queueLabel: this.qLabel(place),
+        heroId: 'mhero-' + place.id,
+        meta2: [
+          { k: 'Адрес', v: place.addr },
+          { k: 'Часы', v: place.hours },
+          { k: 'Телефон', v: place.phone },
+          { k: 'Рейтинг', v: place.rating + ' · 312 оценок' }
+        ]
+      }) : null,
+      takeLabel: takeAvail, takeTicket: this.take,
+      hasTicket: !!t, noTicket: !t,
+      ticket: t ? {
+        number: t.number, place: t.place,
+        figs: [
+          { n: t.ahead === 0 ? '—' : String(t.ahead), label: 'перед вами' },
+          { n: t.wait === 0 ? '0' : '~' + t.wait, label: 'минут' },
+          { n: '9:30', label: 'взят' }
+        ]
+      } : null,
+      advance: this.advance,
+      cancelTicket: () => { this.setState({ ticket: null }); this.flash('Талон отменён', ''); },
+      goNear: () => this.setState({ tab: 'near' }),
+      bookings: s.bookings.map(b => ({
+        place: b.place, when: b.when, status: b.status,
+        fg: b.status === 'бронь' ? '#4a2f9e' : '#79747e',
+        bd: b.status === 'бронь' ? '#6d4fc2' : 'rgba(34,28,51,.16)'
+      })),
+      balance: '412 500',
+      topUp: () => this.flash('Пополнение · Uzcard / Humo', 'демо'),
+      ledger: [
+        { what: 'Osh Markazi · стол на 4', when: 'вчера, 13:40', sum: '−98 000', fg: '#1d1b20' },
+        { what: 'Пополнение · Uzcard', when: '6 сент, 10:02', sum: '+300 000', fg: '#4a2f9e' },
+        { what: 'Mahalla+ · подписка', when: '1 сент', sum: '−29 000', fg: '#1d1b20' },
+        { what: 'Dorixona 24 · заказ', when: '31 авг, 21:11', sum: '−54 300', fg: '#1d1b20' },
+        { what: 'Usta Rustam · ремонт', when: '28 авг', sum: '−180 000', fg: '#1d1b20' }
+      ],
+      settings: settings, langs: langs, tabs: tabs,
+      openSheet: () => this.setState({ sheet: true, error: '', slot: null }),
+      closeSheet: () => this.setState({ sheet: false, error: '' }),
+      sheetOpen: s.sheet, sheetPlace: place ? place.name : '',
+      days: days, slots: slots,
+      confirm: this.confirm,
+      confirmLabel: s.slot ? 'Подтвердить · ' + s.slot : 'Подтвердить',
+      hasError: !!s.error, errorText: s.error,
+      toastOn: !!s.toast, toastText: s.toast ? s.toast.text : '', toastMeta: s.toast ? s.toast.meta : '',
+      back: () => this.setState({ placeId: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

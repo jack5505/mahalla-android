@@ -123,7 +123,7 @@ private fun SecurityContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.gutter, bottom = Spacing.gap),
+                .padding(start = Spacing.gutter, end = Spacing.gutter, bottom = Spacing.gap),
             verticalArrangement = Arrangement.spacedBy(Spacing.gap),
         ) {
             AppLockCard(armed = state.appLockArmed)

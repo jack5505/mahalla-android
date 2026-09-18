@@ -18,6 +18,7 @@ import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.gaming.data.GamingApi
 import uz.mahalla.feature.gaming.data.GamingBookingDto
 import uz.mahalla.feature.hospital.data.HospitalApi
+import uz.mahalla.feature.hospital.data.HospitalRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -71,7 +72,9 @@ class DefaultActivityRepository @Inject constructor(
     private val gamingApi: GamingApi,
     private val bookingApi: BookingApi,
     private val hospitalApi: HospitalApi,
+    private val hospitalRepository: HospitalRepository,
     private val cinemaApi: CinemaApi,
+    private val placeNameResolver: PlaceNameResolver,
 ) : ActivityRepository {
 
     /**
@@ -107,12 +110,32 @@ class DefaultActivityRepository @Inject constructor(
             }
 
             ActivityFeed(
-                items = items,
+                items = withPlaceNames(items),
                 failures = failures,
                 nextPages = nextPages,
                 requested = requested,
             )
         }
+
+    /**
+     * Подставляет `placeName`/`logoUrl`, дорезолвленные `GET places?ids=`
+     * (issue #182). Собирает неизвестные `placeId` со **всей** страницы
+     * разом — так на двадцать активностей уходит один запрос, а не двадцать.
+     * Резолв не удался — активность остаётся без имени, как до этой задачи.
+     */
+    private suspend fun withPlaceNames(items: List<Activity>): List<Activity> {
+        val placeIds = items.mapNotNull(Activity::placeId)
+        if (placeIds.isEmpty()) return items
+        val resolved = placeNameResolver.resolve(placeIds)
+        if (resolved.isEmpty()) return items
+        return items.map { activity ->
+            val place = activity.placeId?.let(resolved::get) ?: return@map activity
+            activity.copy(
+                placeName = place.name.takeIf(String::isNotBlank),
+                placeLogoUrl = place.logoUrl,
+            )
+        }
+    }
 
     private suspend fun load(
         source: ActivitySource,
@@ -150,8 +173,13 @@ class DefaultActivityRepository @Inject constructor(
 
         ActivitySource.DoctorAppointments -> apiCall {
             val dto = hospitalApi.myAppointments(page = page, size = size).payload()
+            // `HospitalAppointmentResponse` не называет врача, только
+            // `doctorId` (issue #219) — читается напрямую `HospitalApi`, в
+            // обход `HospitalRepository.myAppointments`, поэтому имя
+            // дотягивается тем же общим методом отдельно (issue #266).
+            val content = hospitalRepository.withDoctorNames(dto.content)
             SourcePage(
-                items = dto.content.mapNotNull { it.toActivity(ActivitySource.DoctorAppointments) },
+                items = content.mapNotNull { it.toActivity(ActivitySource.DoctorAppointments) },
                 hasMore = hasMorePages(page, dto.totalPages, dto.last),
             )
         }

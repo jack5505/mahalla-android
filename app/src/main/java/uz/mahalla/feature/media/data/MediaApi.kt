@@ -2,10 +2,14 @@ package uz.mahalla.feature.media.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import okhttp3.MultipartBody
+import retrofit2.http.DELETE
+import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.media.domain.MediaFile
@@ -27,10 +31,9 @@ import uz.mahalla.feature.media.domain.MediaType
  * на «голом» `@RefreshClient`. Гео-заголовки ставит `GeoHeaderInterceptor` на
  * обоих клиентах (issue #53) — отдельно о них заботиться не нужно.
  *
- * `GET media/entity/{entityId}` и `DELETE media/{id}` не объявлены намеренно:
- * показывать загруженное пока нечем (загрузчик изображений — задача #60), а
- * ручка, которую никто не зовёт, — это контракт, который никто не проверяет.
- * Появятся вместе с экранами, где галерея редактируется.
+ * `GET media/entity/{entityId}` и `DELETE media/{id}` (issue #185) отдают и
+ * принимают тот же конверт и ту же схему `MediaFile`, что и `upload`
+ * (`docs/API-CONTRACT.md`): отдельного curl'а на стенд под них не потребовалось.
  */
 interface MediaApi {
 
@@ -47,6 +50,19 @@ interface MediaApi {
         @Query("entityType") entityType: String?,
         @Query("entityId") entityId: String?,
     ): ApiResponse<MediaFileDto>
+
+    /** Галерея сущности (issue #185): всё, что к ней когда-либо загружено. */
+    @GET("media/entity/{entityId}")
+    suspend fun forEntity(@Path("entityId") entityId: String): ApiResponse<List<MediaFileDto>>
+
+    /**
+     * Удаление файла (issue #185). Необратимо, и прав на него из схемы не
+     * следует — экран решает, кому предложить кнопку, по [MediaFileDto.ownerId],
+     * а на отказ сервера (чужой файл, гонка с чужим удалением) отвечает его
+     * текстом, а не молчанием.
+     */
+    @DELETE("media/{id}")
+    suspend fun delete(@Path("id") id: String): ApiResponse<JsonElement>
 }
 
 /**
@@ -82,5 +98,6 @@ internal fun MediaFileDto.toDomain(): MediaFile? {
         type = MediaType.fromApi(type),
         sizeBytes = fileSize?.coerceAtLeast(0) ?: 0,
         originalName = originalName?.takeIf { it.isNotBlank() },
+        ownerId = ownerId?.takeIf { it.isNotBlank() },
     )
 }

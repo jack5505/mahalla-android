@@ -23,6 +23,9 @@ class FakeWalkInTicketStore : WalkInTicketStore {
 
     override suspend fun active(placeId: String): WalkInTicket? = tickets[placeId]
 
+    /** Как и настоящее хранилище — самый свежий из живых. */
+    override suspend fun activeAny(): WalkInTicket? = tickets.values.maxByOrNull { it.receivedAt }
+
     override suspend fun save(ticket: WalkInTicket) {
         saved += ticket
         if (WalkInStatusFlow.isActive(ticket.status)) {

@@ -29,6 +29,10 @@ class RoutesSerializationTest {
         val place = PlaceRoute(placeId = "p-42")
         assertEquals(place, json.decodeFromString<PlaceRoute>(json.encodeToString(place)))
 
+        // Сотрудники заведения (issue #189).
+        val staff = PlaceStaffRoute(placeId = "p-42")
+        assertEquals(staff, json.decodeFromString<PlaceStaffRoute>(json.encodeToString(staff)))
+
         val otp = OtpRoute(phone = "+998901234567", otpToken = "otp-1")
         assertEquals(otp, json.decodeFromString<OtpRoute>(json.encodeToString(otp)))
 
@@ -199,6 +203,8 @@ class RoutesSerializationTest {
             serializer<WalletRoute>().descriptor.serialName,
             serializer<ProfileRoute>().descriptor.serialName,
             serializer<MapRoute>().descriptor.serialName,
+            // «Избранное» (issue #75): вне графа табов, открывается из профиля.
+            serializer<SavedPlacesRoute>().descriptor.serialName,
             serializer<NotificationsRoute>().descriptor.serialName,
             // «Мои заведения» (issue #94): вне обоих графов, как уведомления.
             serializer<MyPlacesRoute>().descriptor.serialName,
@@ -208,6 +214,8 @@ class RoutesSerializationTest {
             serializer<ChangePinRoute>().descriptor.serialName,
             // Подписка (issue #103): тоже вне графов, открывается из профиля.
             serializer<SubscriptionRoute>().descriptor.serialName,
+            // Настройки уведомлений (эпик 11): из профиля и из их центра.
+            serializer<NotificationSettingsRoute>().descriptor.serialName,
         )
         // Маршруты обязаны быть различимы: одинаковые serialName склеили бы
         // разные destination'ы в один.
@@ -228,6 +236,46 @@ class RoutesSerializationTest {
     fun `place deep link is built from the scheme`() {
         assertEquals("mahalla://place/p-42", DeepLinks.place("p-42"))
         assertTrue(DeepLinks.PLACE_PATTERN.startsWith("${DeepLinks.SCHEME}://"))
+    }
+
+    /**
+     * Ссылки пуша (эпик 11). Placeholder обязан совпадать с именем поля
+     * маршрута: расхождение не ломает сборку, а тихо открывает приложение на
+     * главной вместо нужного экрана.
+     */
+    @Test
+    fun `order deep link placeholder matches the route argument`() {
+        val descriptor = serializer<OrderStatusRoute>().descriptor
+        assertEquals(1, descriptor.elementsCount)
+        assertEquals("orderId", descriptor.getElementName(0))
+        assertTrue(DeepLinks.ORDER_PATTERN.endsWith("{orderId}"))
+        assertEquals("mahalla://order/o-42", DeepLinks.order("o-42"))
+    }
+
+    /**
+     * У центра уведомлений и подписки аргументов нет — значит нет и
+     * placeholder'ов: ссылка с `{...}` не совпала бы ни с чем.
+     */
+    @Test
+    fun `argumentless deep links carry no placeholders`() {
+        listOf(DeepLinks.NOTIFICATIONS_PATTERN, DeepLinks.SUBSCRIPTION_PATTERN).forEach { pattern ->
+            assertTrue(pattern.startsWith("${DeepLinks.SCHEME}://"))
+            assertTrue(!pattern.contains("{"))
+        }
+        assertEquals("mahalla://notifications", DeepLinks.notifications())
+        assertEquals("mahalla://subscription", DeepLinks.subscription())
+    }
+
+    /** Разные хосты: одинаковые склеили бы два экрана в один deep link. */
+    @Test
+    fun `deep link patterns are distinct`() {
+        val patterns = listOf(
+            DeepLinks.PLACE_PATTERN,
+            DeepLinks.ORDER_PATTERN,
+            DeepLinks.NOTIFICATIONS_PATTERN,
+            DeepLinks.SUBSCRIPTION_PATTERN,
+        )
+        assertEquals(patterns.size, patterns.toSet().size)
     }
 
     @Test
@@ -434,11 +482,60 @@ class RoutesSerializationTest {
         // маршрутом (issue #100).
         val descriptor = serializer<PharmacyRoute>().descriptor
         assertEquals(
-            listOf("placeId", "placeName"),
+            listOf("placeId", "placeName", "isOwner"),
             (0 until descriptor.elementsCount).map(descriptor::getElementName),
         )
 
         val route = PharmacyRoute(placeId = "p-1")
         assertEquals(route, json.decodeFromString<PharmacyRoute>(json.encodeToString(route)))
+    }
+
+    @Test
+    fun `business routes carry the arguments their view models read`() {
+        // Все четыре ViewModel панели читают `SavedStateHandle` по именам из
+        // `BusinessArgs`: `toRoute()` в JVM-тесте разбирает маршрут настоящим
+        // `Bundle`, а android.jar заглушен, и аргументы молча приходят
+        // пустыми. Переименование поля маршрута тогда сделало бы `placeId`
+        // пустым, `access("")` вернул бы «доступа нет», и панель перестала бы
+        // открываться вовсе — без единой ошибки компиляции (эпик #16).
+        val expected = listOf(BusinessArgs.PLACE_ID, BusinessArgs.PLACE_NAME)
+
+        listOf(
+            serializer<BusinessRoute>().descriptor,
+            serializer<BusinessQueueRoute>().descriptor,
+            serializer<BusinessOrdersRoute>().descriptor,
+            serializer<BusinessMenuRoute>().descriptor,
+        ).forEach { descriptor ->
+            assertEquals(
+                expected,
+                (0 until descriptor.elementsCount).map(descriptor::getElementName),
+            )
+        }
+
+        val route = BusinessRoute(placeId = "p-1", placeName = "Osh Markazi")
+        assertEquals(route, json.decodeFromString<BusinessRoute>(json.encodeToString(route)))
+
+        val queue = BusinessQueueRoute(placeId = "p-1")
+        assertEquals(queue, json.decodeFromString<BusinessQueueRoute>(json.encodeToString(queue)))
+
+        val orders = BusinessOrdersRoute(placeId = "p-1")
+        assertEquals(orders, json.decodeFromString<BusinessOrdersRoute>(json.encodeToString(orders)))
+
+        val menu = BusinessMenuRoute(placeId = "p-1")
+        assertEquals(menu, json.decodeFromString<BusinessMenuRoute>(json.encodeToString(menu)))
+    }
+
+    @Test
+    fun `business routes are distinguishable from each other`() {
+        // Поля у всех четырёх одинаковые, а экраны разные: перепутанный
+        // `composable<…>` привёл бы к меню вместо очереди.
+        val names = listOf(
+            serializer<BusinessRoute>().descriptor.serialName,
+            serializer<BusinessQueueRoute>().descriptor.serialName,
+            serializer<BusinessOrdersRoute>().descriptor.serialName,
+            serializer<BusinessMenuRoute>().descriptor.serialName,
+        )
+
+        assertEquals(names.size, names.toSet().size)
     }
 }

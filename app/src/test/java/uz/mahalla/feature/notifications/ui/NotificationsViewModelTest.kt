@@ -98,6 +98,10 @@ class NotificationsViewModelTest {
         repository.defaultPage = page(listOf(notification("n-1")), hasMore = false)
         val viewModel = NotificationsViewModel(repository)
 
+        // Первый resume — это открытие экрана, список уже запросил `init`.
+        viewModel.onEvent(NotificationsEvent.ScreenResumed)
+        assertEquals(1, repository.unreadCalls)
+
         // Уведомление пришло, пока приложение было в фоне.
         repository.defaultPage = page(
             listOf(notification("n-2"), notification("n-1")),
@@ -350,6 +354,9 @@ class NotificationsViewModelTest {
         val gate = CompletableDeferred<Unit>()
         repository.markReadGate = gate
         val viewModel = NotificationsViewModel(repository)
+        // Первый resume — это открытие экрана; дальше resume уже настоящие
+        // возвраты на экран.
+        viewModel.onEvent(NotificationsEvent.ScreenResumed)
 
         viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
         // Пока отказ ехал, список перезапросили — и сервер сказал, что
@@ -385,6 +392,31 @@ class NotificationsViewModelTest {
         viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
 
         assertEquals(NotificationsEffect.OpenOrder("o-42"), viewModel.effects.first())
+    }
+
+    /**
+     * Подписка (эпик 11): цель без `entityId` — экран `SubscriptionRoute`
+     * аргументов не принимает. Сервер его и не присылает, и раньше такое
+     * уведомление никуда не вело.
+     */
+    @Test
+    fun `a subscription notification opens the subscription screen`() = runTest {
+        val repository = FakeNotificationsRepository()
+        repository.defaultPage = page(
+            listOf(
+                notification(
+                    id = "n-1",
+                    type = NotificationType.SubscriptionExpires,
+                    entityId = null,
+                ),
+            ),
+            hasMore = false,
+        )
+        val viewModel = NotificationsViewModel(repository)
+
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+
+        assertEquals(NotificationsEffect.OpenSubscription, viewModel.effects.first())
     }
 
     @Test

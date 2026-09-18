@@ -11,7 +11,6 @@ import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.PinLoginRequest
-import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
 import uz.mahalla.data.network.auth.SetupPinRequest
 import uz.mahalla.data.network.auth.TelegramCheckRequest
@@ -22,6 +21,7 @@ import uz.mahalla.data.network.auth.UserDto
 import uz.mahalla.data.network.auth.VerifyOtpRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.network.payload
+import uz.mahalla.data.prefs.FormOwnership
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.prefs.UserProfile
@@ -103,13 +103,6 @@ interface AuthRepository {
      */
     suspend fun checkTelegramLogin(deepLinkToken: String): ApiResult<TelegramLoginState>
 
-    /**
-     * Явное обновление токенов. Обычный путь — `TokenAuthenticator` по 401;
-     * этот метод нужен там, где сессию надо проверить до запроса (запуск
-     * приложения, разблокировка по PIN).
-     */
-    suspend fun refresh(): ApiResult<Unit>
-
     /** Локальные данные чистятся всегда, даже если запрос к серверу не ушёл. */
     suspend fun logout()
 }
@@ -119,6 +112,7 @@ class DefaultAuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val sessionStore: SessionStore,
     private val userProfileStore: UserProfileStore,
+    private val formOwnership: FormOwnership,
     private val pinStorage: PinStorage,
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
@@ -223,8 +217,7 @@ class DefaultAuthRepository @Inject constructor(
                 val session = result.data.tokens.toSession(sessionId = result.data.sessionId)
                 if (session != null) {
                     pendingServerPin = null
-                    sessionStore.save(session)
-                    saveProfile(result.data.user)
+                    signIn(session, result.data.user)
                     return ApiResult.Success(VerificationResult.Authorized(login))
                 }
 
@@ -321,8 +314,7 @@ class DefaultAuthRepository @Inject constructor(
 
         val session = tokens.toSession(sessionId = sessionId)
             ?: return ApiResult.Failure(ApiError.Serialization)
-        sessionStore.save(session)
-        saveProfile(user)
+        signIn(session, user)
         pendingServerPin = null
         return ApiResult.Success(LoginResult(isNewUser = user?.fullName.isNullOrBlank()))
     }
@@ -377,19 +369,58 @@ class DefaultAuthRepository @Inject constructor(
     }
 
     /**
-     * Кто вошёл — единственный источник этих данных (issue #61): отдельного
-     * `GET /users/me` у бэкенда нет, спросить профиль потом будет нечем.
-     * Ответ без блока `user` прежний профиль не стирает: это не «пользователь
-     * стал безымянным», а «эндпоинт про другое».
+     * Вход состоялся: сессия и профиль того, кого назвал сервер. Сюда
+     * сходятся все пути входа — SMS, оба PIN-шага и Telegram.
+     *
+     * Анкета сверяется первой (issue #243): с записью сессии приложение уже
+     * считается вошедшим, и умри процесс между двумя записями — следующий
+     * запуск открыл бы его с чужим адресом доставки, а второй сверки не будет.
+     * Ответ без `user` аккаунт не называет, и прежняя анкета считается чужой.
+     */
+    private suspend fun signIn(session: Session, user: UserDto?) {
+        // Уборка по дороге, как и в [clearLocalIdentity]: недоступный файл
+        // настроек не должен ронять вход.
+        runCatchingCancellable { formOwnership.claimFor(user?.id) }
+            .reportSwallowed("auth.claimForm")
+        sessionStore.save(session)
+        saveProfile(user)
+    }
+
+    /**
+     * Кто вошёл — пока единственный источник этих данных (issue #61):
+     * `GET /users/me` у бэкенда есть, но приложение его ещё не зовёт
+     * (issue #170). Ответ без блока `user` прежний профиль не стирает: это не
+     * «пользователь стал безымянным», а «эндпоинт про другое».
+     *
+     * Роль и статусы сохраняются вместе с именем (issue #237): бэкенд отдаёт
+     * их в том же блоке `user`, и раньше они молча выбрасывались — из-за этого
+     * настоящий владелец заведения ничем не отличался от покупателя, а
+     * заблокированный аккаунт выглядел сломанным приложением.
+     *
+     * Имя из анкеты покупателя, ещё не подтверждённое сервером
+     * (`UserProfile.fullNamePendingSync`, issue #234), этим ответом не
+     * стирается — вход предшествует анкете (`GeoRoute → RoleRoute(onboarding
+     * = true)` идёт уже после OTP/PIN), а ответ на вход анкету ещё не видел.
+     * Флаг переносится, только когда `current.id == user.id`; если ответ
+     * пришёл без `id` (`user.id == null`) и в сторе тоже `null` — сравнение
+     * даст `true`, поэтому при «пустом» входе имя тоже не теряется. Для
+     * другого аккаунта (первый вход, смена номера на устройстве) флаг не
+     * переносится — это не то же самое ожидание.
      */
     private suspend fun saveProfile(user: UserDto?) {
         if (user == null) return
+        val current = userProfileStore.current()
+        val stillPending = current.fullNamePendingSync && current.id == user.id
         userProfileStore.save(
             UserProfile(
                 id = user.id,
                 phone = user.phone,
-                fullName = user.fullName,
+                fullName = if (stillPending) current.fullName else user.fullName,
                 avatarUrl = user.avatarUrl,
+                serverRole = user.role,
+                verificationStatus = user.verificationStatus,
+                accountStatus = user.accountStatus,
+                fullNamePendingSync = stillPending,
             ),
         )
     }
@@ -487,43 +518,8 @@ class DefaultAuthRepository @Inject constructor(
             refreshExpiresIn = response.refreshExpiresIn,
         ).toSession(sessionId = null) ?: return ApiResult.Failure(ApiError.Serialization)
 
-        sessionStore.save(session)
-        saveProfile(response.user)
+        signIn(session, response.user)
         return ApiResult.Success(TelegramLoginState.Confirmed(login = login))
-    }
-
-    override suspend fun refresh(): ApiResult<Unit> {
-        val session = sessionStore.current() ?: return ApiResult.Failure(ApiError.Unauthorized)
-        val device = deviceInfoProvider.current().toDto()
-        val location = locationProvider.current()
-
-        val result = apiCall {
-            authApi.refresh(
-                RefreshTokenRequest(
-                    refreshToken = session.refreshToken,
-                    device = device,
-                    lat = location.latitude,
-                    lng = location.longitude,
-                ),
-            ).payload()
-        }
-
-        return when (result) {
-            is ApiResult.Success -> {
-                val refreshed = result.data.tokens
-                    .toSession(sessionId = result.data.sessionId ?: session.sessionId)
-                    ?: return ApiResult.Failure(ApiError.Serialization)
-                sessionStore.save(refreshed)
-                ApiResult.Success(Unit)
-            }
-
-            is ApiResult.Failure -> {
-                // Refresh-токен мёртв — сессии больше нет, иначе приложение
-                // будет вечно ходить с невалидной парой токенов.
-                if (result.error == ApiError.Unauthorized) sessionStore.clear()
-                result
-            }
-        }
     }
 
     override suspend fun logout() {
@@ -535,6 +531,8 @@ class DefaultAuthRepository @Inject constructor(
         }
         sessionStore.clear()
         // Имя и номер прошлого пользователя после выхода не показываем.
+        // Анкету не трогаем: через выход идёт и «забыли PIN», а чужому она
+        // не достанется и так — её отдаёт только вход (issue #243).
         userProfileStore.clear()
         // Незавершённый вход тоже сбрасываем: `sessionId` от прошлой попытки
         // после выхода не значит ничего.

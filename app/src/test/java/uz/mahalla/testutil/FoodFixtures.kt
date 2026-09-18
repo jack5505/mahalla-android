@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.data.CartRepository
+import uz.mahalla.feature.food.data.DeliveryFeeRepository
 import uz.mahalla.feature.food.data.MenuRepository
 import uz.mahalla.feature.food.data.OrderRepository
 import uz.mahalla.feature.food.domain.Cart
@@ -176,6 +177,26 @@ class FakeCartRepository : CartRepository {
     }
 }
 
+/**
+ * Стоимость доставки (issue #179) под тесты ViewModel.
+ *
+ * По умолчанию отвечает `null` — «доставка неизвестна»: это состояние экрана
+ * до ответа сервера, и тесты, которым доставка не интересна, проверяют ровно
+ * прежнее поведение.
+ */
+class FakeDeliveryFeeRepository : DeliveryFeeRepository {
+
+    var fee: ApiResult<Long?> = ApiResult.Success(null)
+
+    /** Суммы позиций, с которыми звали — по ним видно, сколько было запросов. */
+    val requestedSums: MutableList<Long> = mutableListOf()
+
+    override suspend fun deliveryFee(itemsSum: Long): ApiResult<Long?> {
+        requestedSums += itemsSum
+        return fee
+    }
+}
+
 class FakeOrderRepository : OrderRepository {
 
     var created: ApiResult<String> = ApiResult.Success("o-1")
@@ -188,14 +209,24 @@ class FakeOrderRepository : OrderRepository {
     var createdWith: Pair<Cart, CheckoutForm>? = null
         private set
 
+    /** Ключи идемпотентности всех попыток — по ним видно, повтор это или новый заказ. */
+    val createKeys = mutableListOf<String>()
+
+    val createCount: Int get() = createKeys.size
+
     var repeatedOrderId: String? = null
         private set
 
     var loadCount: Int = 0
         private set
 
-    override suspend fun create(cart: Cart, form: CheckoutForm): ApiResult<String> {
+    override suspend fun create(
+        cart: Cart,
+        form: CheckoutForm,
+        idempotencyKey: String,
+    ): ApiResult<String> {
         createdWith = cart to form
+        createKeys += idempotencyKey
         return created
     }
 

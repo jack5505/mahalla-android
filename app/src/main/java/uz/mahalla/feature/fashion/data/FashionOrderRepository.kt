@@ -11,8 +11,6 @@ import uz.mahalla.data.network.payload
 import uz.mahalla.feature.fashion.domain.CLOTHING_VERTICAL
 import uz.mahalla.feature.fashion.domain.FashionCartStore
 import uz.mahalla.feature.fashion.domain.FashionOrderPage
-import uz.mahalla.feature.food.data.OrderItemRequestDto
-import uz.mahalla.feature.food.data.PlaceOrderRequestDto
 import uz.mahalla.feature.food.data.toDomain
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.Order
@@ -21,8 +19,8 @@ import uz.mahalla.feature.food.domain.Order
  * Заказы одежды (issue #108).
  *
  * Оформление идёт по **одному магазину за раз**: корзина на сервере общая, а
- * `PlaceOrderRequest` принимает ровно один `placeId`. Разложить корзину по
- * магазинам умеет домен ([FashionCartStore]).
+ * `FashionPlaceOrderRequest` принимает ровно один `storeId`. Разложить корзину
+ * по магазинам умеет домен ([FashionCartStore]).
  *
  * Читается список общим `orders`-контроллером с фильтром `vertical=CLOTHING`:
  * у `fashion/orders/my` схема ответа перекрыта коллизией springdoc (см. KDoc
@@ -34,8 +32,15 @@ interface FashionOrderRepository {
      * Оформить заказ по магазину. Возвращается только идентификатор: ответ
      * `POST fashion/orders` описан перекрытой схемой, и читать из него что-то
      * кроме id — гадание.
+     *
+     * [promoCode] — проверенный код (issue #180, `GET promotions/check`);
+     * `null`, если код не применяли или отказ пришёл до подтверждения.
      */
-    suspend fun create(store: FashionCartStore, form: CheckoutForm): ApiResult<String>
+    suspend fun create(
+        store: FashionCartStore,
+        form: CheckoutForm,
+        promoCode: String? = null,
+    ): ApiResult<String>
 
     suspend fun myOrders(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<FashionOrderPage>
 
@@ -59,14 +64,16 @@ class DefaultFashionOrderRepository @Inject constructor(
 ) : FashionOrderRepository {
 
     /**
-     * `itemId` строки заказа — это **`variantId`**, а не id товара: в корзине
-     * бэкенда строка ключуется вариантом, и заказывают конкретный размер
-     * конкретного цвета. Проверить это живым запросом нельзя (`401` приходит
-     * до валидации тела), поэтому отправляемое тело закреплено тестом.
+     * Состав заказа в тело не идёт: сервер берёт его из своей корзины
+     * (`fashion/cart*`), которую клиент уже наполнил. [store] здесь только
+     * ради [FashionCartStore.storeId] и проверки на пустой магазин.
+     * Проверить тело живым запросом нельзя (`401` приходит до валидации),
+     * поэтому отправляемое тело закреплено тестом.
      */
     override suspend fun create(
         store: FashionCartStore,
         form: CheckoutForm,
+        promoCode: String?,
     ): ApiResult<String> {
         // Пустой заказ до сети не доходит: 400 сказал бы то же самое, но
         // платой были бы запрос и спиннер.
@@ -74,14 +81,12 @@ class DefaultFashionOrderRepository @Inject constructor(
 
         val result = apiCall {
             api.createOrder(
-                PlaceOrderRequestDto(
-                    placeId = store.storeId,
-                    items = store.items.map { item ->
-                        OrderItemRequestDto(itemId = item.variantId, quantity = item.quantity)
-                    },
+                FashionPlaceOrderRequestDto(
+                    storeId = store.storeId,
                     fulfillment = form.method.apiValue,
                     paymentMethod = form.payment.apiValue,
                     deliveryAddress = form.addressOrNull(),
+                    promoCode = promoCode?.trim()?.takeIf(String::isNotEmpty),
                 ),
             ).payload()
         }

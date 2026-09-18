@@ -9,7 +9,6 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.booking.data.AppointmentsSource
 import uz.mahalla.feature.booking.data.BookingRepository
 import uz.mahalla.feature.booking.domain.Appointment
@@ -70,6 +69,7 @@ class MyAppointmentsViewModel @Inject constructor(
         AppointmentVertical.Doctor -> hospitalRepository
     }
 
+    private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
 
@@ -84,14 +84,16 @@ class MyAppointmentsViewModel @Inject constructor(
 
     override fun onEvent(event: MyAppointmentsEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние. Деление на активные и прошедшие при этом
-            // пересчитывается всегда — время идёт и без запросов.
+            // Деление на активные и прошедшие пересчитывается всегда — время
+            // идёт и без запросов. Защита загрузки от дубля (первый resume,
+            // два resume подряд) — общая, см. MviViewModel.onScreenResumed
+            // (issue #145, #209).
             MyAppointmentsEvent.ScreenResumed -> {
                 updateState { withSections(appointmentsOrEmpty()) }
-                if (!currentState.appointments.isLoading && !currentState.isRefreshing) {
-                    load(showLoading = false)
-                }
+                onScreenResumed(
+                    isLoadInFlight = { loadJob?.isActive == true },
+                    load = { load(showLoading = false) },
+                )
             }
 
             MyAppointmentsEvent.Refreshed -> load(showLoading = false, refreshing = true)
@@ -149,7 +151,7 @@ class MyAppointmentsViewModel @Inject constructor(
                 cancelFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             applyPage(repository.myAppointments(page = 0))
             if (refreshing) updateState { copy(isRefreshing = false) }
         }

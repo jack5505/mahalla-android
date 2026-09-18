@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/styles.css">
+  <script src="_ds/classical-03aaab80-c3b5-4a17-b0f0-c8b3197af4c3/_ds_bundle.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; background: #ece6f4; }
+    a { color: #6d4fc2; } a:hover { color: #4a2f9e; }
+    * { -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 0; height: 0; }
+  </style>
+</helmet>
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:{{ pagePad }};box-sizing:border-box;font-family:'Inter',system-ui,sans-serif">
+  <x-import component-from-global-scope="AndroidDevice" from="./android-frame.jsx" width="{{ 393 }}" height="{{ 852 }}" hint-size="393px,852px">
+    <div style="height:100%;display:flex;flex-direction:column;position:relative;background:#fdf8ff;color:#1d1b20;font-family:'Inter',system-ui,sans-serif">
+
+      <sc-if value="{{ isWelcome }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;background:linear-gradient(160deg,#4f2fc0 0%,#7c5ce6 70%,#9d84f0 100%);color:#fff;padding:36px 24px 28px;position:relative;overflow:hidden">
+          <div style="position:absolute;right:-40px;top:60px;width:280px;height:280px;border-radius:50%;border:1px solid rgba(255,255,255,.18)"></div>
+          <div style="position:absolute;right:20px;top:120px;width:160px;height:160px;border-radius:50%;border:1px solid rgba(255,255,255,.22)"></div>
+          <div style="width:44px;height:44px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;font:700 22px/1 'Inter',system-ui,sans-serif;color:#4f2fc0">M</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;flex-direction:column;gap:14px;position:relative">
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;letter-spacing:.06em;color:#e8deff">MAHALLA</div>
+            <h1 style="margin:0;font:700 36px/1.08 'Inter',system-ui,sans-serif;letter-spacing:-.02em;color:#fff">Всё, что рядом с домом, — в одном приложении</h1>
+            <p style="margin:0;font:400 14px/1.55 'Inter',system-ui,sans-serif;color:#e8deff">Аптеки, еда, врачи, мастера и кино. Талоны в очередь и брони без звонков.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:28px;position:relative">
+            <button onClick="{{ toPhone }}" style="min-height:52px;cursor:pointer;background:#fff;border:0;border-radius:26px;color:#4f2fc0;font:600 15px/1 'Inter',system-ui,sans-serif">Начать</button>
+            <div style="text-align:center;font:400 11px/1.5 'Inter',system-ui,sans-serif;color:#e8deff">Продолжая, вы принимаете условия и политику</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;padding:16px 24px 24px;gap:22px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button onClick="{{ toWelcome }}" style="min-width:44px;min-height:44px;background:transparent;border:0;cursor:pointer;font:400 20px/1 'Inter',system-ui,sans-serif;color:#1d1b20;text-align:left">&#8592;</button>
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">Шаг 1 из 4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h1 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">Ваш номер телефона</h1>
+            <p style="margin:0;font:400 13.5px/1.55 'Inter',system-ui,sans-serif;color:#49454f">Пришлём код по SMS. Номер нужен, чтобы звать вас в очередь по имени.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:none;min-height:56px;padding:0 14px;border-radius:12px;background:#f1ecf7;display:flex;align-items:center;font:500 15px/1 'Inter',system-ui,sans-serif;color:#1d1b20;font-variant-numeric:tabular-nums">+998</div>
+            <input value="{{ phone }}" onChange="{{ setPhone }}" inputmode="numeric" placeholder="90 123 45 67" style="flex:1;min-width:0;min-height:56px;box-sizing:border-box;padding:0 16px;border-radius:12px;border:1px solid {{ phoneBd }};background:#fdf8ff;font:500 18px/1 'Inter',system-ui,sans-serif;letter-spacing:.04em;color:#1d1b20;font-variant-numeric:tabular-nums;outline:none" />
+          </div>
+          <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+            <div style="font:400 12px/1.4 'Inter',system-ui,sans-serif;color:#b3261e;margin-top:-12px">{{ errorText }}</div>
+          </sc-if>
+          <div style="flex:1"></div>
+          <button onClick="{{ sendCode }}" style="min-height:52px;cursor:pointer;background:#5b3fc4;border:0;border-radius:26px;color:#fff;font:600 15px/1 'Inter',system-ui,sans-serif">Получить код</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCode }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;padding:16px 24px 24px;gap:22px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button onClick="{{ toPhone }}" style="min-width:44px;min-height:44px;background:transparent;border:0;cursor:pointer;font:400 20px/1 'Inter',system-ui,sans-serif;color:#1d1b20;text-align:left">&#8592;</button>
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">Шаг 2 из 4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h1 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">Код из SMS</h1>
+            <p style="margin:0;font:400 13.5px/1.55 'Inter',system-ui,sans-serif;color:#49454f">Отправили на <span style="color:#1d1b20;font-weight:500;font-variant-numeric:tabular-nums">{{ phoneFull }}</span>. Введите четыре цифры.</p>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:center">
+            <sc-for list="{{ digits }}" as="d" hint-placeholder-count="4">
+              <button onClick="{{ d.type }}" style="width:64px;height:68px;border-radius:14px;border:1px solid {{ d.bd }};background:{{ d.bg }};font:600 28px/1 'Inter',system-ui,sans-serif;color:#1d1b20;font-variant-numeric:tabular-nums;cursor:pointer">{{ d.v }}</button>
+            </sc-for>
+          </div>
+          <div style="text-align:center;font:400 12px/1.5 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ codeHint }}</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button onClick="{{ verify }}" style="min-height:52px;cursor:pointer;background:#5b3fc4;border:0;border-radius:26px;color:#fff;font:600 15px/1 'Inter',system-ui,sans-serif">Подтвердить</button>
+            <button onClick="{{ fillDemo }}" style="min-height:44px;cursor:pointer;background:transparent;border:0;color:#5b3fc4;font:600 13px/1 'Inter',system-ui,sans-serif">Вставить код из уведомления</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPlace }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;padding:16px 24px 24px;gap:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button onClick="{{ toCode }}" style="min-width:44px;min-height:44px;background:transparent;border:0;cursor:pointer;font:400 20px/1 'Inter',system-ui,sans-serif;color:#1d1b20;text-align:left">&#8592;</button>
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">Шаг 3 из 4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h1 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">Ваша махалля</h1>
+            <p style="margin:0;font:400 13.5px/1.55 'Inter',system-ui,sans-serif;color:#49454f">Покажем места и очереди рядом с домом. Можно определить по геопозиции или выбрать вручную.</p>
+          </div>
+          <button onClick="{{ useGeo }}" style="min-height:56px;padding:0 16px;display:flex;align-items:center;gap:12px;cursor:pointer;background:#e8deff;border:0;border-radius:16px;color:#21005d;font:600 14px/1.2 'Inter',system-ui,sans-serif;text-align:left">
+            <span style="width:32px;height:32px;border-radius:50%;background:#5b3fc4;display:flex;align-items:center;justify-content:center;flex:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"></path></svg></span>
+            Определить по геопозиции
+          </button>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e">Или выберите</div>
+            <sc-for list="{{ hoods }}" as="h" hint-placeholder-count="4">
+              <button onClick="{{ h.pick }}" style="min-height:52px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;background:{{ h.bg }};border:1px solid {{ h.bd }};border-radius:14px;color:#1d1b20;font:500 14px/1.2 'Inter',system-ui,sans-serif;text-align:left">
+                <span>{{ h.name }}</span>
+                <span style="font:400 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">{{ h.meta }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ toPin }}" style="min-height:52px;cursor:pointer;background:{{ placeBtnBg }};border:0;border-radius:26px;color:#fff;font:600 15px/1 'Inter',system-ui,sans-serif">Продолжить</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPin }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;padding:16px 24px 24px;gap:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <button onClick="{{ toPlace }}" style="min-width:44px;min-height:44px;background:transparent;border:0;cursor:pointer;font:400 20px/1 'Inter',system-ui,sans-serif;color:#1d1b20;text-align:left">&#8592;</button>
+            <div style="font:500 11px/1 'Inter',system-ui,sans-serif;color:#79747e;font-variant-numeric:tabular-nums">Шаг 4 из 4</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <h1 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">PIN для кошелька</h1>
+            <p style="margin:0;font:400 13.5px/1.55 'Inter',system-ui,sans-serif;color:#49454f">Четыре цифры для оплаты и переводов. Позже можно включить вход по отпечатку.</p>
+          </div>
+          <div style="display:flex;gap:14px;justify-content:center;padding:10px 0">
+            <sc-for list="{{ pinDots }}" as="p" hint-placeholder-count="4">
+              <div style="width:16px;height:16px;border-radius:50%;border:2px solid #5b3fc4;background:{{ p.bg }}"></div>
+            </sc-for>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 12px">
+            <sc-for list="{{ keys }}" as="k" hint-placeholder-count="12">
+              <button onClick="{{ k.press }}" style="min-height:60px;border-radius:16px;border:0;background:{{ k.bg }};cursor:pointer;font:500 22px/1 'Inter',system-ui,sans-serif;color:{{ k.fg }};font-variant-numeric:tabular-nums">{{ k.label }}</button>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <button onClick="{{ finish }}" style="min-height:52px;cursor:pointer;background:{{ pinBtnBg }};border:0;border-radius:26px;color:#fff;font:600 15px/1 'Inter',system-ui,sans-serif">Готово</button>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:18px;text-align:center">
+          <div style="width:88px;height:88px;border-radius:50%;background:#e8deff;display:flex;align-items:center;justify-content:center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#5b3fc4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"></path></svg></div>
+          <h1 style="margin:0;font:600 26px/1.15 'Inter',system-ui,sans-serif;letter-spacing:-.01em">Готово, {{ hoodName }}</h1>
+          <p style="margin:0;font:400 13.5px/1.55 'Inter',system-ui,sans-serif;color:#49454f;max-width:280px">Нашли 6 открытых мест рядом. Талон в аптеку можно взять прямо сейчас — 3 человека в очереди.</p>
+          <button onClick="{{ toWelcome }}" style="margin-top:8px;min-height:52px;padding:0 28px;cursor:pointer;background:#5b3fc4;border:0;border-radius:26px;color:#fff;font:600 15px/1 'Inter',system-ui,sans-serif">Открыть Mahalla</button>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+  <sc-if value="{{ standalone }}" hint-placeholder-val="{{ true }}">
+    <div style="max-width:430px;font:400 11.5px/1.7 'Inter',system-ui,sans-serif;color:#49454f;text-align:center">Вход: приветствие → телефон → код из SMS → махалля → PIN → готово. Все шаги кликабельны.</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:1010},&quot;step&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;welcome&quot;,&quot;phone&quot;,&quot;code&quot;,&quot;place&quot;,&quot;pin&quot;,&quot;done&quot;],&quot;default&quot;:&quot;welcome&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Стартовый шаг&quot;},&quot;embedded&quot;:{&quot;editor&quot;:null,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const HOODS = [
+  { id: 'chil12', name: 'Чиланзар, 12-квартал', meta: '48 мест' },
+  { id: 'chil14', name: 'Чиланзар, 14-квартал', meta: '31 место' },
+  { id: 'yunus', name: 'Юнусабад, 4-квартал', meta: '57 мест' },
+  { id: 'sergeli', name: 'Сергели, Спутник', meta: '22 места' }
+];
+
+class Component extends DCLogic {
+  state = { step: null, phone: '', code: '', hood: null, pin: '', error: '' };
+
+  step() { return this.state.step || (this.props && this.props.step) || 'welcome'; }
+
+  renderVals() {
+    const s = this.state, step = this.step();
+    const go = x => () => this.setState({ step: x, error: '' });
+    const digits = [0, 1, 2, 3].map(i => ({
+      v: s.code[i] || '', bd: s.code.length === i ? '#5b3fc4' : '#cac4d0', bg: s.code[i] ? '#f1ecf7' : '#fdf8ff',
+      type: () => this.setState({ code: (s.code + String((i * 3 + 7) % 10)).slice(0, 4) })
+    }));
+    const hood = HOODS.filter(h => h.id === s.hood)[0];
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map(k => ({
+      label: k, bg: k === '' ? 'transparent' : k === '⌫' ? 'transparent' : '#f1ecf7', fg: '#1d1b20',
+      press: k === '' ? () => {} : k === '⌫' ? () => this.setState({ pin: s.pin.slice(0, -1) }) : () => this.setState({ pin: (s.pin + k).slice(0, 4) })
+    }));
+    const embedded = !!(this.props && this.props.embedded);
+    return {
+      standalone: !embedded, pagePad: embedded ? '0' : '36px 16px 56px',
+      isWelcome: step === 'welcome', isPhone: step === 'phone', isCode: step === 'code',
+      isPlace: step === 'place', isPin: step === 'pin', isDone: step === 'done',
+      toWelcome: go('welcome'), toPhone: go('phone'), toCode: go('code'), toPlace: go('place'),
+      phone: s.phone, setPhone: e => this.setState({ phone: e.target.value.replace(/[^0-9 ]/g, '').slice(0, 12), error: '' }),
+      phoneBd: s.error ? '#b3261e' : (s.phone ? '#5b3fc4' : '#cac4d0'),
+      phoneFull: '+998 ' + (s.phone || '90 123 45 67'),
+      sendCode: () => {
+        if (s.phone.replace(/ /g, '').length < 9) { this.setState({ error: 'Введите 9 цифр номера.' }); return; }
+        this.setState({ step: 'code', error: '' });
+      },
+      hasError: !!s.error, errorText: s.error,
+      digits: digits, codeHint: s.code.length === 4 ? 'Код принят' : 'Отправить ещё раз через 0:42',
+      fillDemo: () => this.setState({ code: '7036' }),
+      verify: () => this.setState({ step: s.code.length === 4 ? 'place' : 'code', code: s.code.length === 4 ? s.code : '7036' }),
+      useGeo: () => this.setState({ hood: 'chil12' }),
+      hoods: HOODS.map(h => ({
+        name: h.name, meta: h.meta,
+        bg: s.hood === h.id ? '#e8deff' : '#fdf8ff', bd: s.hood === h.id ? '#5b3fc4' : '#cac4d0',
+        pick: () => this.setState({ hood: h.id })
+      })),
+      placeBtnBg: s.hood ? '#5b3fc4' : '#cac4d0',
+      toPin: () => this.setState({ step: 'pin', hood: s.hood || 'chil12' }),
+      pinDots: [0, 1, 2, 3].map(i => ({ bg: s.pin.length > i ? '#5b3fc4' : 'transparent' })),
+      keys: keys, pinBtnBg: s.pin.length === 4 ? '#5b3fc4' : '#cac4d0',
+      finish: () => this.setState({ step: 'done', pin: s.pin.length === 4 ? s.pin : '1234' }),
+      hoodName: (hood || HOODS[0]).name.split(',')[0]
+    };
+  }
+}
+</script>
+</body>
+</html>

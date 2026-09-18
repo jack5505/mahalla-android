@@ -185,6 +185,11 @@ class SecurityViewModelTest {
         assertFalse(off.state.value.canToggleBiometric)
 
         onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = true))
+        // Флаг держит сервер (ADR 0013): без такого же ответа `pin/status`
+        // загрузка перепишет локальную копию в false, и проверять было бы нечего.
+        repository.status = ApiResult.Success(
+            ServerPinStatus(pinSet = true, biometricEnabled = true, lockedSecondsRemaining = 0),
+        )
         val on = viewModel(biometricStatus = BiometricStatus.NoHardware)
         // Флаг мог остаться от устройства, где датчик работал: выключить его
         // человек должен иметь возможность всегда.

@@ -5,6 +5,8 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.promotions.domain.CreatablePromoType
+import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.role.domain.MyPlace
 
 /**
@@ -28,7 +30,20 @@ data class MyPlacesState(
     val pendingPlaceId: String? = null,
     val actionFailure: ApiFailure? = null,
     val loadMoreFailure: ApiFailure? = null,
+    val promotionForm: NewPromotionFormState? = null,
 ) : UiState
+
+/** Форма новой акции заведения (issue #252, `POST promotions/places/{id}`). */
+data class NewPromotionFormState(
+    val placeId: String,
+    val placeName: String,
+    val draft: NewPromotionDraft = NewPromotionDraft(),
+    /** Ошибки полей показываются только после первой попытки сохранить —
+     * форма стартует пустой (тот же приём, что у [uz.mahalla.feature.pharmacy.ui.NewProductFormState]). */
+    val submitAttempted: Boolean = false,
+    val submitting: Boolean = false,
+    val failure: ApiFailure? = null,
+)
 
 sealed interface MyPlacesEvent : UiEvent {
     /**
@@ -43,6 +58,27 @@ sealed interface MyPlacesEvent : UiEvent {
     data class PlaceClicked(val placeId: String) : MyPlacesEvent
     data class AvailabilityToggled(val placeId: String) : MyPlacesEvent
     data object RegisterPlaceRequested : MyPlacesEvent
+
+    /** Открыть бизнес-панель этого заведения (эпик #16). */
+    data class BusinessPanelClicked(val placeId: String) : MyPlacesEvent
+
+    /** «Управлять товарами» на карточке аптеки (issue #252). */
+    data class ManageProductsClicked(val placeId: String) : MyPlacesEvent
+
+    data class ManageStaffClicked(val placeId: String) : MyPlacesEvent
+
+    // Новая акция заведения (issue #252) — доступно владельцу/менеджеру
+    // любой категории, не только аптеке.
+    data class AddPromotionClicked(val placeId: String) : MyPlacesEvent
+    data object PromotionFormDismissed : MyPlacesEvent
+    data class PromotionTitleChanged(val value: String) : MyPlacesEvent
+    data class PromotionDescriptionChanged(val value: String) : MyPlacesEvent
+    data class PromotionTypeChanged(val value: CreatablePromoType) : MyPlacesEvent
+    data class PromotionDiscountPercentChanged(val value: String) : MyPlacesEvent
+    data class PromotionDiscountAmountChanged(val value: String) : MyPlacesEvent
+    data class PromotionMinOrderChanged(val value: String) : MyPlacesEvent
+    data class PromotionCodeChanged(val value: String) : MyPlacesEvent
+    data object PromotionSubmitted : MyPlacesEvent
 }
 
 sealed interface MyPlacesEffect : UiEffect {
@@ -51,4 +87,24 @@ sealed interface MyPlacesEffect : UiEffect {
 
     /** Пустой список ведёт туда, где заведение регистрируют (issue #84). */
     data object OpenProviderForm : MyPlacesEffect
+
+    /**
+     * Бизнес-панель (эпик #16). Имя едет вместе с id: панель рисует шапку
+     * раньше, чем успевает подтвердить права, и пустой заголовок читался бы
+     * как чужой экран.
+     */
+    data class OpenBusinessPanel(val placeId: String, val placeName: String) : MyPlacesEffect
+
+    /** Витрина аптеки в режиме владельца (issue #252). */
+    data class OpenPharmacyManagement(val placeId: String, val placeName: String) : MyPlacesEffect
+
+    /** «Сотрудники» (issue #189) — доступно только владельцу. */
+    data class OpenStaff(val placeId: String) : MyPlacesEffect
+
+    /**
+     * Акция создана (issue #252). Список «моих заведений» акций не
+     * показывает — без явного сигнала успех и смахнутая шторка неотличимы, а
+     * типичный исход путаницы — повторный POST и дубль акции.
+     */
+    data object PromotionCreated : MyPlacesEffect
 }

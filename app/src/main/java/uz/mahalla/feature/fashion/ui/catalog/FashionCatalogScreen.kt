@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.FilterChipUi
@@ -43,7 +44,6 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.fashion.domain.FashionCategory
 import uz.mahalla.feature.fashion.domain.FashionProduct
 import uz.mahalla.feature.fashion.ui.FashionFailure
-import uz.mahalla.feature.fashion.ui.FashionLoadMore
 import uz.mahalla.feature.fashion.ui.priceText
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -193,8 +193,9 @@ private fun LazyListScope.productItems(
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    FashionLoadMore(
+                    LoadMoreAuto(
                         itemCount = products.data.size,
+                        isLoading = state.isLoadingMore,
                         failure = state.loadMoreFailure,
                         onLoadMore = { onEvent(FashionCatalogEvent.LoadMore) },
                     )

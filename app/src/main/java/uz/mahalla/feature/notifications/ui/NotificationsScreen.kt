@@ -16,7 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DoneAll
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +37,7 @@ import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
@@ -66,16 +67,23 @@ import java.time.Instant
 @Composable
 fun NotificationsScreen(
     onOrderClick: (String) -> Unit,
+    onOpenSubscription: () -> Unit,
+    onOpenSettings: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: NotificationsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Разрешение на уведомления (эпик 11) спрашивается здесь, а не на старте:
+    // человек уже открыл центр уведомлений, то есть уведомления ему нужны, и
+    // объяснять диалог не приходится.
+    val permission = rememberNotificationPermissionState()
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 is NotificationsEffect.OpenOrder -> onOrderClick(effect.orderId)
+                NotificationsEffect.OpenSubscription -> onOpenSubscription()
             }
         }
     }
@@ -90,6 +98,11 @@ fun NotificationsScreen(
         onEvent = viewModel::onEvent,
         onBack = onBack,
         modifier = modifier,
+        onOpenSettings = onOpenSettings,
+        showPermissionCard = !permission.enabled,
+        canRequestPermission = permission.canRequest,
+        onRequestPermission = permission.request,
+        onOpenSystemSettings = permission.openSystemSettings,
     )
 }
 
@@ -100,6 +113,11 @@ fun NotificationsContentScreen(
     onEvent: (NotificationsEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
+    showPermissionCard: Boolean = false,
+    canRequestPermission: Boolean = false,
+    onRequestPermission: () -> Unit = {},
+    onOpenSystemSettings: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         MahallaTopBar(
@@ -116,6 +134,11 @@ fun NotificationsContentScreen(
                         enabled = !state.isMarkingRead,
                     )
                 }
+                MahallaIconButton(
+                    icon = Icons.Outlined.Tune,
+                    contentDescription = stringResource(R.string.notification_settings_title),
+                    onClick = onOpenSettings,
+                )
             },
         )
         MahallaPullToRefresh(
@@ -127,6 +150,18 @@ fun NotificationsContentScreen(
                 contentPadding = PaddingValues(Spacing.gutter),
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
+                // Уведомления выключены (эпик 11) — первым пунктом, до
+                // списка: человек пришёл читать уведомления, и то, что они не
+                // придут, важнее любого из уже пришедших.
+                if (showPermissionCard) {
+                    item(key = "permission") {
+                        NotificationPermissionCard(
+                            canRequest = canRequestPermission,
+                            onRequest = onRequestPermission,
+                            onOpenSystemSettings = onOpenSystemSettings,
+                        )
+                    }
+                }
                 // Отказ отметки прочитанным — над списком, а не вместо него:
                 // уведомления уже на экране, и прятать их незачем. Что именно
                 // повторять, знает ViewModel (issue #95).
@@ -181,10 +216,11 @@ private fun LazyListScope.notificationItems(
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = items.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(NotificationsEvent.LoadMore) },
                     )
                 }
             }
@@ -291,41 +327,7 @@ private fun InlineFailure(
     }
 }
 
-/**
- * Хвост списка: догрузка следующей страницы по достижению конца. Провал
- * показывает кнопку с причиной — автотриггер по `itemCount` больше не
- * сработает, список ведь не вырос.
- */
-@Composable
-private fun LoadMoreItem(
-    state: NotificationsState,
-    itemCount: Int,
-    onEvent: (NotificationsEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        InlineFailure(
-            failure = failure,
-            onRetry = { onEvent(NotificationsEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(NotificationsEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
-    }
-}
-
 private const val LIST_SKELETONS = 4
-private val LOAD_MORE_INDICATOR = 24.dp
 private val UNREAD_DOT = 8.dp
 
 @ThemeLanguagePreviews

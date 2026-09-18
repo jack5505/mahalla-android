@@ -19,6 +19,7 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.pharmacy.domain.NewPharmacyProductDraft
 import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
 import uz.mahalla.feature.pharmacy.domain.PharmacyProductPage
 import uz.mahalla.feature.pharmacy.domain.ProductStock
@@ -287,6 +288,154 @@ class PharmacyViewModelTest {
             assertNull(viewModel.state.value.loadMoreFailure)
         }
 
+    @Test
+    fun `a customer never sees the owner actions`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel(isOwner = false)
+        runCurrent()
+
+        assertFalse(viewModel.state.value.isOwner)
+
+        // Экран сам не рисует кнопку, но проверка на месте — на случай, если
+        // событие всё-таки придёт.
+        viewModel.onEvent(PharmacyEvent.AddProductClicked)
+        assertNull(viewModel.state.value.createForm)
+    }
+
+    @Test
+    fun `an owner opens an empty form, and an unattempted submit shows no errors`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+
+            viewModel.onEvent(PharmacyEvent.AddProductClicked)
+
+            val form = viewModel.state.value.createForm
+            assertEquals(NewPharmacyProductDraft(), form?.draft)
+            assertFalse(form?.submitAttempted ?: true)
+        }
+
+    @Test
+    fun `submitting an invalid draft shows field errors instead of calling the server`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.AddProductClicked)
+
+            viewModel.onEvent(PharmacyEvent.CreateSubmitted)
+
+            assertTrue(viewModel.state.value.createForm?.submitAttempted == true)
+            assertTrue(repository.createRequests.isEmpty())
+        }
+
+    @Test
+    fun `a created product closes the form and reloads the showcase`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.AddProductClicked)
+            viewModel.onEvent(PharmacyEvent.CreateNameChanged("Paratsetamol"))
+            viewModel.onEvent(PharmacyEvent.CreatePriceChanged("12000"))
+            repository.requests.clear()
+
+            viewModel.onEvent(PharmacyEvent.CreateSubmitted)
+            runCurrent()
+
+            assertEquals(
+                "Paratsetamol",
+                repository.createRequests.single().second.name,
+            )
+            assertNull(viewModel.state.value.createForm)
+            // Список перечитан целиком — новый товар получит `id` от сервера.
+            assertEquals(1, repository.requests.size)
+        }
+
+    @Test
+    fun `a refused creation keeps the form open with the server's reason`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.createResult = ApiResult.Failure(ApiError.Forbidden)
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.AddProductClicked)
+            viewModel.onEvent(PharmacyEvent.CreateNameChanged("Paratsetamol"))
+            viewModel.onEvent(PharmacyEvent.CreatePriceChanged("12000"))
+
+            viewModel.onEvent(PharmacyEvent.CreateSubmitted)
+            runCurrent()
+
+            val form = viewModel.state.value.createForm
+            assertEquals(ApiError.Forbidden, form?.failure?.error)
+            assertFalse(form?.submitting ?: true)
+        }
+
+    @Test
+    fun `a customer never sees the stock editor either`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = false)
+            runCurrent()
+
+            viewModel.onEvent(PharmacyEvent.StockEditClicked(product("p-1")))
+
+            assertNull(viewModel.state.value.stockForm)
+        }
+
+    @Test
+    fun `a stock update patches the product in place, not a full reload`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.StockEditClicked(product("p-1")))
+            repository.stockResult = { productId, quantity ->
+                ApiResult.Success(
+                    PharmacyProduct(
+                        id = productId,
+                        name = "Paratsetamol",
+                        stockQuantity = quantity,
+                        stock = ProductStock.InStock,
+                    ),
+                )
+            }
+            repository.requests.clear()
+
+            viewModel.onEvent(PharmacyEvent.StockQuantityChanged("7"))
+            viewModel.onEvent(PharmacyEvent.StockSubmitted)
+            runCurrent()
+
+            assertEquals(Triple("p-1-place", "p-1", 7), repository.stockRequests.single())
+            assertNull(viewModel.state.value.stockForm)
+            assertEquals(
+                listOf(7),
+                viewModel.state.value.products.items().map { it.stockQuantity },
+            )
+            // Правка на месте, список не перечитывался.
+            assertTrue(repository.requests.isEmpty())
+        }
+
+    @Test
+    fun `a blank quantity is a field error, not a request with a stale value`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.StockEditClicked(product("p-1")))
+            viewModel.onEvent(PharmacyEvent.StockQuantityChanged(""))
+
+            viewModel.onEvent(PharmacyEvent.StockSubmitted)
+
+            assertTrue(viewModel.state.value.stockForm?.submitAttempted == true)
+            assertTrue(repository.stockRequests.isEmpty())
+        }
+
     private fun ScreenState<List<PharmacyProduct>>.items(): List<PharmacyProduct> =
         (this as? ScreenState.Content)?.data.orEmpty()
 
@@ -297,10 +446,14 @@ class PharmacyViewModelTest {
         stock = ProductStock.InStock,
     )
 
-    private fun viewModel() = PharmacyViewModel(
+    private fun viewModel(isOwner: Boolean = false) = PharmacyViewModel(
         repository = repository,
         savedStateHandle = SavedStateHandle(
-            mapOf("placeId" to "p-1-place", "placeName" to "Dori-Darmon"),
+            mapOf(
+                "placeId" to "p-1-place",
+                "placeName" to "Dori-Darmon",
+                "isOwner" to isOwner,
+            ),
         ),
     )
 }

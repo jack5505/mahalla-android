@@ -7,12 +7,15 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
+import uz.mahalla.feature.wallet.domain.IdempotencyKey
 
 /**
- * Вертикаль «Еда» (эпик 5): меню, заказы.
+ * Вертикаль «Еда» (эпик 5): меню, стоимость доставки, заказы.
  *
  * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы) — прежние пути
  * (`places/{id}/menu`, `orders`) были подобраны по образцу каталога и у
@@ -37,8 +40,46 @@ interface FoodApi {
     @GET("food/places/{placeId}/menu")
     suspend fun menu(@Path("placeId") placeId: String): ApiResponse<List<MenuSectionDto>>
 
+    /**
+     * Стоимость доставки до оформления (issue #179). Отвечает анонимно, схема —
+     * `ApiResponseMapStringLong`: `data` это **карта**, а не DTO с
+     * фиксированными полями, поэтому сумма читается по ключу
+     * [DeliveryFeeRepository.DELIVERY_AMOUNT_KEY], а отсутствие ключа — не
+     * ошибка разбора, а «доставка неизвестна».
+     *
+     * Значения — `JsonElement`, а не `Long`, хотя схема обещает числа:
+     * `ignoreUnknownKeys` карту не страхует (неизвестных ключей у неё не
+     * бывает), и одно чужое значение — `"currency":"UZS"` или
+     * `"deliveryAmount":null` — уронило бы разбор всего ответа, то есть
+     * убрало бы доставку из всех корзин. Разбирает значение
+     * `DefaultDeliveryFeeRepository`.
+     *
+     * `itemsAmount` обязателен и, как все деньги в API, считается в тийинах
+     * (issue #149): на стенде доставка бесплатна от 200 000 тийинов, так что
+     * ошибка единицы здесь меняет не цифру на экране, а сам ответ сервера.
+     */
+    @GET("food/delivery-fee")
+    suspend fun deliveryFee(
+        @Query("itemsAmount") itemsAmount: Long,
+    ): ApiResponse<Map<String, JsonElement>>
+
+    /**
+     * Оформление заказа.
+     *
+     * `Idempotency-Key` — **клиентское дополнение** (задача 8.3 эпика #12):
+     * поддержку на своей стороне бэкенд не подтверждал, в `/v3/api-docs`
+     * заголовка нет (см. `docs/API-CONTRACT.md`). Сервер, который его
+     * игнорирует, ведёт себя как раньше; сервер, который его прочтёт, не
+     * создаст второй заказ на повторе после оборванного соединения. Защиту от
+     * двойного списания сейчас держит клиент —
+     * [uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlow] не отправляет
+     * второй запрос, пока не ответил первый.
+     */
     @POST("food/orders")
-    suspend fun createOrder(@Body request: PlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
+    suspend fun createOrder(
+        @Header(IdempotencyKey.HEADER) idempotencyKey: String,
+        @Body request: PlaceOrderRequestDto,
+    ): ApiResponse<CreatedOrderDto>
 
     @GET("orders/{orderId}")
     suspend fun order(@Path("orderId") orderId: String): ApiResponse<OrderViewDto>
@@ -92,8 +133,12 @@ data class MenuItemDto(
 )
 
 /**
- * `PlaceOrderRequest` бэкенда. Больше в заказ положить нечего: ни промокода,
- * ни комментария, ни времени, ни модификаторов позиции контракт не принимает.
+ * `PlaceOrderRequest` бэкенда — общий с `FashionApi.createOrder`.
+ *
+ * Ни комментария, ни времени, ни модификаторов позиции контракт не принимает.
+ * Схема допускает ещё `promoCode` (см. `FashionPlaceOrderRequestDto`) —
+ * «Еда» промокоды не проверяет и не отправляет (issue #180 закрыла только
+ * «Одежду»), поле здесь не заводим, чтобы не намекать на обратное.
  */
 @Serializable
 data class PlaceOrderRequestDto(

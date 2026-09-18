@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -31,6 +32,9 @@ import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.ThemeMode
+import uz.mahalla.data.push.PushTokenRegistrar
+import uz.mahalla.data.push.PushTokenStore
+import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.update.data.AppUpdateGate
@@ -39,6 +43,7 @@ import uz.mahalla.feature.update.domain.UpdateDecision
 import uz.mahalla.testutil.FakeAppVersionRepository
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakePinStorage
+import uz.mahalla.testutil.FakePushTokenProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.io.File
 
@@ -287,7 +292,13 @@ class RootViewModelTest {
         val settings = SettingsDataStore(newDataStore())
         settings.setOnboardingCompleted(true)
         val lock = appLockManager()
-        val viewModel = viewModel(settings, appLockManager = lock)
+        // Сессия нужна авторизованная: иначе старт и так уходит в онбординг,
+        // и тест проверял бы не сброс входа, а его отсутствие.
+        val viewModel = viewModel(
+            settings = settings,
+            authRepository = FakeAuthRepository(initialAuthorized = true),
+            appLockManager = lock,
+        )
         assertFalse(viewModel.awaitReady().startWithOnboarding)
         lock.lockNow()
         assertTrue(lock.locked.value)
@@ -331,6 +342,14 @@ class RootViewModelTest {
         // Замок (issue #102) корень только показывает и разбирает после
         // сброса входа: на решение о старте графа он иначе не влияет.
         appLockManager,
+        // Токен пушей (эпик 11): корень спрашивает его на старте. Провайдер
+        // фейковый — Firebase в JVM-тесте не поднимается.
+        PushTokenRegistrar(FakePushTokenProvider(), PushTokenStore(newDataStore())),
+        // Каналы корень заводит там же: до первого пуша их не существует.
+        NotificationChannels(
+            context = ApplicationProvider.getApplicationContext(),
+            settings = SettingsDataStore(newDataStore()),
+        ),
         sessionExpiry,
     )
 
@@ -339,8 +358,11 @@ class RootViewModelTest {
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
     private fun newDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.create(
-        produceFile = { File(temporaryFolder.root, "root.preferences_pb") },
+        produceFile = { File(temporaryFolder.root, "root-${dataStoreCount++}.preferences_pb") },
     )
+
+    /** Разные файлы на разные хранилища: один файл — один экземпляр DataStore. */
+    private var dataStoreCount = 0
 
     private companion object {
         const val BUILD_URL = "http://10.0.2.2:8080/api/v1/"

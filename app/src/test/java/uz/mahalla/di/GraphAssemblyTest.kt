@@ -20,6 +20,7 @@ import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.device.AndroidDeviceInfoProvider
 import uz.mahalla.data.device.DeviceIdStore
+import uz.mahalla.data.push.PushTokenStore
 import uz.mahalla.data.location.AndroidLocationSource
 import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
@@ -27,6 +28,7 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.LanguageHeaderInterceptor
 import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
@@ -47,6 +49,7 @@ import uz.mahalla.feature.cinema.data.di.CinemaDataModule
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
 import uz.mahalla.feature.activity.data.DefaultActivityRepository
+import uz.mahalla.feature.activity.data.DefaultPlaceNameResolver
 import uz.mahalla.feature.discovery.data.di.DiscoveryDataModule
 import uz.mahalla.feature.fashion.data.di.FashionDataModule
 import uz.mahalla.feature.food.data.DefaultCartRepository
@@ -80,6 +83,8 @@ import uz.mahalla.feature.queue.data.DefaultWalkInRepository
 import uz.mahalla.feature.queue.data.di.QueueDataModule
 import uz.mahalla.feature.role.data.DefaultProviderRepository
 import uz.mahalla.feature.role.data.di.RoleDataModule
+import uz.mahalla.feature.social.data.DefaultSocialRepository
+import uz.mahalla.feature.social.data.di.SocialDataModule
 import uz.mahalla.feature.subscription.data.DefaultSubscriptionRepository
 import uz.mahalla.feature.subscription.data.di.SubscriptionDataModule
 import uz.mahalla.feature.wallet.data.DefaultWalletRepository
@@ -127,6 +132,7 @@ class GraphAssemblyTest {
             ),
             backendUrlInterceptor = backendUrlInterceptor,
             geoHeaderInterceptor = geoHeaderInterceptor(),
+            languageHeaderInterceptor = languageHeaderInterceptor(),
             httpInspector = inspector(),
             certificatePin = certificatePin(),
             overrideEnabled = true,
@@ -191,6 +197,10 @@ class GraphAssemblyTest {
                     api = DiscoveryDataModule.provideCatalogApi(retrofit),
                     placeDao = DatabaseModule.providePlaceDao(database),
                     locationProvider = locationProvider(context),
+                    media = DefaultMediaRepository(
+                        api = MediaDataModule.provideMediaApi(retrofit),
+                        compressor = AndroidImageCompressor(context),
+                    ),
                     clock = AppModule.provideClock(),
                 ),
             )
@@ -236,6 +246,41 @@ class GraphAssemblyTest {
         }
     }
 
+    /**
+     * Лайк, «Избранное» и комментарии (issue #75). Репозиторий стоит на
+     * каталоге: «Избранное» бэкенд отдаёт одними идентификаторами, и карточки
+     * дозапрашиваются его же ручкой.
+     */
+    @Test
+    fun `social graph assembles over the api, the catalog and the profile`() {
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val retrofit = NetworkModule.provideRetrofit(
+                OkHttpClient(),
+                NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                NetworkModule.provideBaseUrl(),
+            )
+            assertNotNull(
+                DefaultSocialRepository(
+                    api = SocialDataModule.provideSocialApi(retrofit),
+                    catalogRepository = DefaultCatalogRepository(
+                        api = DiscoveryDataModule.provideCatalogApi(retrofit),
+                        placeDao = DatabaseModule.providePlaceDao(database),
+                        locationProvider = locationProvider(context),
+                        media = DefaultMediaRepository(
+                            api = MediaDataModule.provideMediaApi(retrofit),
+                            compressor = AndroidImageCompressor(context),
+                        ),
+                        clock = AppModule.provideClock(),
+                    ),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
+                ),
+            )
+        } finally {
+            database.close()
+        }
+    }
+
     @Test
     fun `storage graph assembles on top of a single data store`() {
         val dataStore = sharedDataStore(context)
@@ -267,6 +312,7 @@ class GraphAssemblyTest {
             authApi = authApi,
             sessionStore = DataStoreSessionStore(dataStore),
             userProfileStore = DataStoreUserProfileStore(dataStore),
+            formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
@@ -349,15 +395,21 @@ class GraphAssemblyTest {
         )
 
         val api = SubscriptionDataModule.provideSubscriptionsApi(retrofit)
+        // История списаний (задача 9.3) живёт в контроллере платежей, но под
+        // тем же Bearer — значит и на том же клиенте.
+        val paymentsApi = SubscriptionDataModule.providePaymentsApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultSubscriptionRepository(api))
+        assertNotNull(paymentsApi)
+        assertNotNull(DefaultSubscriptionRepository(api, paymentsApi))
     }
 
     /**
      * Анкеты (issue #84): заявка продавца уходит в `POST /places`, а он
      * требует Bearer — значит API собирается на **основном** Retrofit. Роль и
-     * анкета покупателя живут в DataStore: профиля пользователя у бэкенда нет.
+     * анкета покупателя живут в DataStore: `PUT users/me` анкету целиком не
+     * принимает (только `fullName` и `avatarUrl`, issue #170), а роль там
+     * вообще не серверная, а локальный выбор (issue #237).
      */
     @Test
     fun `role forms assemble on the main retrofit and the data store`() {
@@ -464,7 +516,15 @@ class GraphAssemblyTest {
         val api = FreelancerDataModule.provideFreelancerApi(retrofit)
 
         assertNotNull(api)
-        assertNotNull(DefaultFreelancerRepository(api = api, clock = AppModule.provideClock()))
+        assertNotNull(
+            DefaultFreelancerRepository(
+                api = api,
+                // Кабинет мастера (issue #71) шлёт телефон в E.164 — тем же
+                // валидатором, что и анкета продавца.
+                phoneValidator = PhoneNumberValidator(),
+                clock = AppModule.provideClock(),
+            ),
+        )
     }
 
     /**
@@ -524,13 +584,21 @@ class GraphAssemblyTest {
             NetworkModule.provideBaseUrl(),
         )
 
+        val hospitalApi = HospitalDataModule.provideHospitalApi(retrofit)
         assertNotNull(
             DefaultActivityRepository(
                 fashionApi = FashionDataModule.provideFashionApi(retrofit),
                 gamingApi = GamingDataModule.provideGamingApi(retrofit),
                 bookingApi = BookingDataModule.provideBookingApi(retrofit),
-                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                hospitalApi = hospitalApi,
+                hospitalRepository = DefaultHospitalRepository(
+                    api = hospitalApi,
+                    clock = AppModule.provideClock(),
+                ),
                 cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
+                placeNameResolver = DefaultPlaceNameResolver(
+                    DiscoveryDataModule.provideCatalogApi(retrofit),
+                ),
             ),
         )
     }
@@ -551,6 +619,7 @@ class GraphAssemblyTest {
                 api = api,
                 store = DataStoreWalkInTicketStore(
                     dataStore = sharedDataStore(context),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
                     clock = AppModule.provideClock(),
                 ),
                 clock = AppModule.provideClock(),
@@ -665,6 +734,7 @@ class GraphAssemblyTest {
     ) = NetworkModule.provideRefreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
         geoHeaderInterceptor = geoHeaderInterceptor(),
+        languageHeaderInterceptor = languageHeaderInterceptor(),
         httpInspector = inspector(),
         certificatePin = certificatePin(),
         overrideEnabled = overrideEnabled,
@@ -681,8 +751,12 @@ class GraphAssemblyTest {
      * (issue #42): и репозиторий, и `TokenAuthenticator` собираются вместе с
      * ними, реализациями из графа.
      */
-    private fun deviceInfoProvider(context: Context) =
-        AndroidDeviceInfoProvider(DeviceIdStore(sharedDataStore(context)))
+    private fun deviceInfoProvider(context: Context) = AndroidDeviceInfoProvider(
+        deviceIdStore = DeviceIdStore(sharedDataStore(context)),
+        // Токен пушей — часть описания устройства (эпик 11): отдельной ручки
+        // регистрации у бэкенда нет, и уезжает он именно отсюда.
+        pushTokenStore = PushTokenStore(sharedDataStore(context)),
+    )
 
     /**
      * Координаты в заголовках каждого запроса (issue #53): без них бэкенд
@@ -692,6 +766,8 @@ class GraphAssemblyTest {
         locationProvider = locationProvider(context),
         clock = AppModule.provideClock(),
     )
+
+    private fun languageHeaderInterceptor() = LanguageHeaderInterceptor()
 
     private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
         locationSource = AndroidLocationSource(context),

@@ -2,11 +2,11 @@ package uz.mahalla.feature.fashion.ui.cart
 
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.fashion.data.FashionCartRepository
 import uz.mahalla.feature.fashion.domain.FashionCart
 import uz.mahalla.feature.fashion.domain.FashionCartItem
@@ -30,20 +30,24 @@ class FashionCartViewModel @Inject constructor(
     private val repository: FashionCartRepository,
 ) : MviViewModel<FashionCartState, FashionCartEvent, FashionCartEffect>(FashionCartState()) {
 
+    private var loadJob: Job? = null
+
     init {
         load()
     }
 
     override fun onEvent(event: FashionCartEvent) {
         when (event) {
-            // Пока идёт загрузка или изменение строки, перезапрашивать нечего:
-            // ответ приедет на уже сменившееся состояние.
-            FashionCartEvent.ScreenResumed -> {
-                val state = currentState
-                if (!state.cart.isLoading && !state.isRefreshing && state.pendingVariantId == null) {
-                    load(showLoading = false)
-                }
-            }
+            // Защита от дубля (первый resume, два resume подряд) — общая, см.
+            // MviViewModel.onScreenResumed (issue #145, #209). Изменение
+            // строки в полёте — тем более повод не перезапрашивать: ответ
+            // приедет на уже сменившееся состояние.
+            FashionCartEvent.ScreenResumed -> onScreenResumed(
+                isLoadInFlight = {
+                    loadJob?.isActive == true || currentState.pendingVariantId != null
+                },
+                load = { load(showLoading = false) },
+            )
 
             FashionCartEvent.Refreshed -> load(showLoading = false, refreshing = true)
             FashionCartEvent.Retry -> load()
@@ -73,7 +77,7 @@ class FashionCartViewModel @Inject constructor(
                 actionFailure = null,
             )
         }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             when (val result = repository.cart()) {
                 is ApiResult.Failure -> updateState {
                     copy(cart = ScreenState.Error(result.failure), isRefreshing = false)

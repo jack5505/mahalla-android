@@ -1,18 +1,22 @@
 package uz.mahalla.testutil
 
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.hospital.data.HospitalRepository
 import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.hospital.domain.DoctorAppointmentDraft
+import uz.mahalla.feature.hospital.domain.DoctorSlot
+import java.time.LocalDate
 
 /**
  * Больницы в памяти (issue #99): экраны проверяются без MockWebServer.
  *
- * Ответ на каждую страницу задаётся отдельно — иначе не отличить догрузку от
- * повторной загрузки первой страницы.
+ * Ответ на каждую пару «врач + день» и на каждую страницу задаётся отдельно
+ * — иначе не отличить догрузку от повторной загрузки первой страницы, а слоты
+ * одного дня от слотов другого (issue #181).
  */
 class FakeHospitalRepository : HospitalRepository {
 
@@ -20,6 +24,17 @@ class FakeHospitalRepository : HospitalRepository {
 
     /** Заведения, у которых спрашивали врачей, — по порядку запросов. */
     val requestedDoctors = mutableListOf<String>()
+
+    var doctorResult: ApiResult<Doctor>? = null
+
+    /** Слоты по паре «врач + день»; иначе [defaultSlots]. */
+    val slotsByRequest: MutableMap<Pair<String, LocalDate>, ApiResult<List<DoctorSlot>>> =
+        mutableMapOf()
+
+    var defaultSlots: ApiResult<List<DoctorSlot>> = ApiResult.Success(emptyList())
+
+    /** Что именно спрашивали: врач и день — по порядку запросов. */
+    val requestedSlots = mutableListOf<Pair<String, LocalDate>>()
 
     var bookResult: ApiResult<Appointment>? = null
 
@@ -37,9 +52,19 @@ class FakeHospitalRepository : HospitalRepository {
 
     val cancelled = mutableListOf<String>()
 
+    var appointmentResult: ApiResult<Appointment> = ApiResult.Success(Appointment(id = "a-1"))
+
     override suspend fun doctors(placeId: String): ApiResult<List<Doctor>> {
         requestedDoctors += placeId
         return doctorsResult
+    }
+
+    override suspend fun doctor(doctorId: String): ApiResult<Doctor> =
+        doctorResult ?: ApiResult.Success(Doctor(id = doctorId, name = ""))
+
+    override suspend fun slots(doctorId: String, date: LocalDate): ApiResult<List<DoctorSlot>> {
+        requestedSlots += doctorId to date
+        return slotsByRequest[doctorId to date] ?: defaultSlots
     }
 
     override suspend fun book(draft: DoctorAppointmentDraft): ApiResult<Appointment> {
@@ -48,7 +73,7 @@ class FakeHospitalRepository : HospitalRepository {
             Appointment(
                 id = "a-1",
                 date = draft.date,
-                startTime = draft.time,
+                startTime = draft.slot?.time,
                 status = AppointmentStatus.Pending,
             ),
         )
@@ -63,5 +88,19 @@ class FakeHospitalRepository : HospitalRepository {
         cancelled += appointment.id
         return cancelResult
             ?: ApiResult.Success(appointment.copy(status = AppointmentStatus.Cancelled))
+    }
+
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
+        appointmentResult
+
+    /** Записи, ушедшие в дотягивание имени врача, — по порядку вызовов. */
+    val withDoctorNamesCalls = mutableListOf<List<AppointmentDto>>()
+
+    /** Тождественная функция по умолчанию — тесты выше по стеку сами не про обогащение. */
+    var withDoctorNamesResult: ((List<AppointmentDto>) -> List<AppointmentDto>) = { it }
+
+    override suspend fun withDoctorNames(items: List<AppointmentDto>): List<AppointmentDto> {
+        withDoctorNamesCalls += items
+        return withDoctorNamesResult(items)
     }
 }

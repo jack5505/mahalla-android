@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.TextJoiner
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.MahallaButton
@@ -40,6 +41,7 @@ import uz.mahalla.feature.food.domain.CartTotals
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.PaymentMethod
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -47,10 +49,12 @@ import uz.mahalla.ui.theme.TabularNums
 /**
  * Оформление заказа одежды (issue #108): способ получения, адрес, оплата.
  *
- * Форма — та же, что у «Еды»: у бэкенда это один и тот же
- * `PlaceOrderRequest`. Ни комментария, ни времени доставки в нём нет, поэтому
- * их нет и на экране — поле, которое некуда отправить, обещало бы человеку
- * то, о чём магазин не узнает.
+ * Форма переиспользует [uz.mahalla.feature.food.domain.CheckoutForm] «Еды» —
+ * поля на экране совпадают, хотя тело запроса своё (issue #221:
+ * `FashionPlaceOrderRequestDto`, не общий с «Едой» `PlaceOrderRequestDto`).
+ * Ни комментария, ни времени доставки, ни выбора точки на карте, ни промокода
+ * на экране нет — поле, которое некуда отправить или нечем заполнить,
+ * обещало бы человеку то, о чём магазин не узнает.
  */
 @Composable
 fun FashionCheckoutScreen(
@@ -156,6 +160,8 @@ private fun CheckoutForm(
         color = colors.fgMuted,
     )
 
+    PromoCodeSection(state = state, onEvent = onEvent)
+
     SectionHeader(title = stringResource(R.string.checkout_method))
     MahallaSegmentedControl(
         options = listOf(
@@ -248,6 +254,75 @@ private fun CheckoutForm(
     }
 }
 
+/**
+ * Промокод чекаута «Одежды» (issue #180). `valid: false` не блокирует
+ * заказ — код просто показан как неподходящий, оформление остаётся доступным
+ * без него.
+ */
+@Composable
+private fun PromoCodeSection(
+    state: FashionCheckoutState,
+    onEvent: (FashionCheckoutEvent) -> Unit,
+) {
+    val applied = state.appliedPromo?.takeIf(PromoCheckResult::valid)
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.item / 2)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MahallaTextField(
+                value = state.promoCodeInput,
+                onValueChange = { onEvent(FashionCheckoutEvent.PromoCodeChanged(it)) },
+                label = stringResource(R.string.fashion_checkout_promo_label),
+                modifier = Modifier.weight(1f),
+                enabled = applied == null && !state.orderCreated && !state.promoChecking,
+                errorText = if (state.promoInvalid) {
+                    stringResource(R.string.fashion_checkout_promo_invalid)
+                } else {
+                    null
+                },
+            )
+            MahallaButton(
+                text = stringResource(
+                    if (applied != null) {
+                        R.string.fashion_checkout_promo_remove
+                    } else {
+                        R.string.fashion_checkout_promo_apply
+                    },
+                ),
+                onClick = {
+                    onEvent(
+                        if (applied != null) {
+                            FashionCheckoutEvent.PromoCodeRemoveClicked
+                        } else {
+                            FashionCheckoutEvent.PromoCodeApplyClicked
+                        },
+                    )
+                },
+                variant = if (applied != null) {
+                    MahallaButtonVariant.Secondary
+                } else {
+                    MahallaButtonVariant.Primary
+                },
+                state = ButtonState(
+                    enabled = (applied != null || state.promoCodeInput.isNotBlank()) && !state.orderCreated,
+                    loading = state.promoChecking,
+                ),
+                fillWidth = false,
+            )
+        }
+        applied?.let {
+            Text(
+                text = stringResource(R.string.promo_discount_amount, priceText(it.discountAmount)),
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+        state.promoCheckFailure?.let { FashionFailure(failure = it) }
+    }
+}
+
 @Composable
 private fun OrderLine(item: FashionCartItem) {
     Row(
@@ -264,12 +339,13 @@ private fun OrderLine(item: FashionCartItem) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
+            val joinTemplate = stringResource(R.string.text_joined_with_dot)
             val details = listOfNotNull(
-                item.variantLabel.takeIf(String::isNotBlank),
+                item.variantLabel(joinTemplate).takeIf(String::isNotBlank),
                 stringResource(R.string.quantity_value, item.quantity),
             )
             Text(
-                text = details.joinToString(" · "),
+                text = TextJoiner.join(joinTemplate, details),
                 style = MaterialTheme.typography.bodySmall,
                 color = LocalMahallaColors.current.fgMuted,
             )

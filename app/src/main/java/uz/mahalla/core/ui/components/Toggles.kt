@@ -1,5 +1,6 @@
 package uz.mahalla.core.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -154,10 +156,18 @@ fun MahallaSegmentedControl(
     enabled: Boolean = true,
 ) {
     val mahalla = LocalMahallaColors.current
+    // Дорожка — фон экрана с обводкой, а не заливка surfaceVariant: в новой
+    // палитре выбранный сегмент (#e8deff) и заливка дорожки (#f1ecf7) почти
+    // не различаются, и выбор переставал читаться. В макете (2d) у сегмента
+    // ровно обводка `outline`.
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            MahallaComponentDefaults.borderWidth,
+            MaterialTheme.colorScheme.outline,
+        ),
     ) {
         Row(
             modifier = Modifier
@@ -178,7 +188,7 @@ fun MahallaSegmentedControl(
                             onClick = { onSelect(index) },
                         ),
                     shape = MaterialTheme.shapes.extraSmall,
-                    color = if (selected) mahalla.accentSoft else MaterialTheme.colorScheme.surface,
+                    color = if (selected) mahalla.accentSoft else Color.Transparent,
                     contentColor = if (selected) {
                         MaterialTheme.colorScheme.onSecondaryContainer
                     } else {

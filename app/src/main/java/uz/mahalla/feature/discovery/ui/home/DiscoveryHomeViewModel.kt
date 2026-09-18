@@ -16,6 +16,7 @@ import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.feature.promotions.domain.PromotionPage
 import uz.mahalla.feature.promotions.domain.PromotionTarget
+import uz.mahalla.feature.queue.data.WalkInTicketStore
 import java.time.Clock
 import javax.inject.Inject
 
@@ -35,6 +36,7 @@ import javax.inject.Inject
 class DiscoveryHomeViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val promotions: PromotionsRepository,
+    private val tickets: WalkInTicketStore,
     private val clock: Clock,
 ) : MviViewModel<DiscoveryHomeState, DiscoveryHomeEvent, DiscoveryHomeEffect>(
     DiscoveryHomeState(),
@@ -45,12 +47,15 @@ class DiscoveryHomeViewModel @Inject constructor(
 
     init {
         load(refreshing = false)
+        readTicket()
     }
 
     override fun onEvent(event: DiscoveryHomeEvent) {
         when (event) {
             DiscoveryHomeEvent.Retry -> load(refreshing = false)
             DiscoveryHomeEvent.Refresh -> load(refreshing = true)
+            DiscoveryHomeEvent.ScreenResumed -> readTicket()
+            DiscoveryHomeEvent.TicketClicked -> openTicket()
             is DiscoveryHomeEvent.CategoryClicked ->
                 emitEffect(DiscoveryHomeEffect.OpenSearch(event.category))
 
@@ -64,6 +69,34 @@ class DiscoveryHomeViewModel @Inject constructor(
 
             is DiscoveryHomeEvent.PromotionClicked -> openPromotion(event.promotionId)
         }
+    }
+
+    /**
+     * Талон для фокус-карточки. Это чтение локального хранилища, а не запрос:
+     * ручки чтения талона у бэкенда нет (`WalkInApi`), поэтому здесь —
+     * последнее известное состояние и отдельный признак свежести его чисел.
+     *
+     * Перечитывается на каждом возврате на экран: талон могли отменить на
+     * экране очереди, а двухминутный срок жизни позиции мог истечь, пока
+     * приложение было в фоне.
+     */
+    private fun readTicket() {
+        viewModelScope.launch {
+            val ticket = tickets.activeAny()
+            val now = clock.instant()
+            updateState {
+                copy(
+                    ticket = ticket,
+                    ticketQueueInfoIsCurrent = ticket?.showsQueueInfo(now) == true,
+                    openedAt = now,
+                )
+            }
+        }
+    }
+
+    private fun openTicket() {
+        val ticket = currentState.ticket ?: return
+        emitEffect(DiscoveryHomeEffect.OpenTicket(ticket.placeId, ticket.placeName))
     }
 
     private fun load(refreshing: Boolean) {

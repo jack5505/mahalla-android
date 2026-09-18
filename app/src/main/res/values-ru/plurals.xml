@@ -34,6 +34,20 @@
         <item quantity="other">%1$d звезды</item>
     </plurals>
 
+    <plurals name="place_social_like">
+        <item quantity="one">Нравится, %1$d лайк</item>
+        <item quantity="few">Нравится, %1$d лайка</item>
+        <item quantity="many">Нравится, %1$d лайков</item>
+        <item quantity="other">Нравится, %1$d лайка</item>
+    </plurals>
+
+    <plurals name="place_social_unlike">
+        <item quantity="one">Убрать лайк, %1$d лайк</item>
+        <item quantity="few">Убрать лайк, %1$d лайка</item>
+        <item quantity="many">Убрать лайк, %1$d лайков</item>
+        <item quantity="other">Убрать лайк, %1$d лайка</item>
+    </plurals>
+
     <plurals name="role_error_too_long">
         <item quantity="one">Не больше %1$d символа</item>
         <item quantity="few">Не больше %1$d символов</item>
@@ -54,6 +68,22 @@
         <item quantity="few">%1$d минуты</item>
         <item quantity="many">%1$d минут</item>
         <item quantity="other">%1$d минуты</item>
+    </plurals>
+
+    <!-- Подпись под линией фокус-карточки на главной (макет 1a). -->
+    <plurals name="home_focus_wait">
+        <item quantity="one">~%1$d минута ожидания</item>
+        <item quantity="few">~%1$d минуты ожидания</item>
+        <item quantity="many">~%1$d минут ожидания</item>
+        <item quantity="other">~%1$d минуты ожидания</item>
+    </plurals>
+
+    <!-- «открыто N из M» у секции мест на главной; количество — N. -->
+    <plurals name="home_open_count">
+        <item quantity="one">открыто %1$d из %2$d</item>
+        <item quantity="few">открыто %1$d из %2$d</item>
+        <item quantity="many">открыто %1$d из %2$d</item>
+        <item quantity="other">открыто %1$d из %2$d</item>
     </plurals>
 
     <!-- Бронь (issue #97): длительность услуги. -->
@@ -174,6 +204,14 @@
         <item quantity="other">Слишком длинно: не больше %1$d символа.</item>
     </plurals>
 
+    <!-- Подтверждение оплаты (8.3, issue #12): сколько попыток PIN осталось. -->
+    <plurals name="payment_confirm_pin_wrong">
+        <item quantity="one">Неверный PIN. Осталась %1$d попытка.</item>
+        <item quantity="few">Неверный PIN. Осталось %1$d попытки.</item>
+        <item quantity="many">Неверный PIN. Осталось %1$d попыток.</item>
+        <item quantity="other">Неверный PIN. Осталось %1$d попытки.</item>
+    </plurals>
+
     <!-- Аптека (issue #100): остаток называется, только когда он кончается. -->
     <plurals name="pharmacy_stock_left">
         <item quantity="one">Осталась %1$d упаковка</item>
@@ -202,6 +240,20 @@
         <item quantity="few">Выберите от %1$d до %2$d часов</item>
         <item quantity="many">Выберите от %1$d до %2$d часов</item>
         <item quantity="other">Выберите от %1$d до %2$d часов</item>
+    </plurals>
+
+    <plurals name="business_menu_error_too_long">
+        <item quantity="one">Не длиннее %1$d символа</item>
+        <item quantity="few">Не длиннее %1$d символов</item>
+        <item quantity="many">Не длиннее %1$d символов</item>
+        <item quantity="other">Не длиннее %1$d символов</item>
+    </plurals>
+
+    <plurals name="business_menu_error_prep_large">
+        <item quantity="one">Не больше %1$d минуты</item>
+        <item quantity="few">Не больше %1$d минут</item>
+        <item quantity="many">Не больше %1$d минут</item>
+        <item quantity="other">Не больше %1$d минут</item>
     </plurals>
 
 </resources>

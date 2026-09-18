@@ -84,6 +84,10 @@ class ContrastTest {
             TEXT,
         ),
         ContrastPair("$theme error/surface", scheme.error, scheme.surface, TEXT),
+        // Снекбар — инверсные роли (редизайн «Focus»): текст и подпись действия
+        // на тёмной плашке.
+        ContrastPair("$theme inverseOnSurface/inverseSurface", scheme.inverseOnSurface, scheme.inverseSurface, TEXT),
+        ContrastPair("$theme inversePrimary/inverseSurface", scheme.inversePrimary, scheme.inverseSurface, TEXT),
         // Семантические пары MahallaColors — подписи и бейджи UI-кита.
         ContrastPair("$theme fgMuted/surface", colors.fgMuted, scheme.surface, TEXT),
         ContrastPair("$theme fgMuted/background", colors.fgMuted, scheme.background, TEXT),

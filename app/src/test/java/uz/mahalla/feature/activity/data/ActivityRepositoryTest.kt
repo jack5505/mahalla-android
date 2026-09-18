@@ -23,9 +23,12 @@ import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
 import uz.mahalla.feature.booking.data.BookingApi
 import uz.mahalla.feature.cinema.data.CinemaApi
+import uz.mahalla.feature.discovery.data.CatalogApi
 import uz.mahalla.feature.fashion.data.FashionApi
 import uz.mahalla.feature.gaming.data.GamingApi
+import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.HospitalApi
+import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
@@ -52,6 +55,15 @@ class ActivityRepositoryTest {
     private val bodies = ConcurrentHashMap<String, MockResponse>()
     private val requests = ConcurrentHashMap<String, RecordedRequest>()
 
+    /**
+     * Сколько раз спросили каждый путь. Отдельно от [requests] — та хранит
+     * только последнюю запись на путь, а батчинг `/places` проверяется именно
+     * числом обращений: без счётчика тест, разошедшийся по одному запросу на
+     * активность вместо одного на страницу, остался бы зелёным, потому что
+     * оба запроса дали бы одну и ту же строку.
+     */
+    private val requestCounts = ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -59,6 +71,8 @@ class ActivityRepositoryTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty().substringBefore('?')
                 requests[path] = request
+                requestCounts.computeIfAbsent(path) { java.util.concurrent.atomic.AtomicInteger() }
+                    .incrementAndGet()
                 return bodies[path] ?: envelope("""{"content":[],"last":true}""")
             }
         }
@@ -344,6 +358,70 @@ class ActivityRepositoryTest {
         assertEquals(ActivityStatus.Missed, appointment.status)
     }
 
+    // --- Имя врача у записи без названия услуги (issue #219, #266) ---
+
+    @Test
+    fun `a doctor appointment without a service name is enriched with the doctor's name`() = runTest {
+        respond(
+            "/hospitals/appointments/my",
+            """{"content":[{"id":"h-1","doctorId":"$DOCTOR","apptDate":"2026-09-11",
+               "status":"CONFIRMED"}],"last":true}""",
+        )
+        respond("/hospitals/doctors/$DOCTOR", """{"id":"$DOCTOR","name":"Aliyev Bekzod"}""")
+
+        val appointment = repository().feed().items.single()
+
+        assertEquals("Aliyev Bekzod", appointment.note)
+    }
+
+    @Test
+    fun `two doctor appointments with the same doctor share one name lookup`() = runTest {
+        respond(
+            "/hospitals/appointments/my",
+            """{"content":[
+                   {"id":"h-1","doctorId":"$DOCTOR","apptDate":"2026-09-11"},
+                   {"id":"h-2","doctorId":"$DOCTOR","apptDate":"2026-09-12"}
+               ],"last":true}""",
+        )
+        respond("/hospitals/doctors/$DOCTOR", """{"id":"$DOCTOR","name":"Aliyev Bekzod"}""")
+
+        val feed = repository().feed()
+
+        assertEquals(1, requestCounts.getValue("/hospitals/doctors/$DOCTOR").get())
+        assertTrue(feed.items.all { it.note == "Aliyev Bekzod" })
+    }
+
+    @Test
+    fun `a doctor appointment with a service name is not enriched again`() = runTest {
+        respond(
+            "/hospitals/appointments/my",
+            """{"content":[{"id":"h-1","doctorId":"$DOCTOR","serviceName":"Terapevt"}],
+               "last":true}""",
+        )
+
+        val appointment = repository().feed().items.single()
+
+        assertEquals("Terapevt", appointment.note)
+        assertFalse(requests.containsKey("/hospitals/doctors/$DOCTOR"))
+    }
+
+    @Test
+    fun `a failed doctor name lookup leaves the note empty, not the whole source failing`() = runTest {
+        respond(
+            "/hospitals/appointments/my",
+            """{"content":[{"id":"h-1","doctorId":"$DOCTOR","apptDate":"2026-09-11"}],
+               "last":true}""",
+        )
+        bodies["/hospitals/doctors/$DOCTOR"] = MockResponse().setResponseCode(500)
+
+        val feed = repository().feed()
+
+        assertTrue(feed.failures.isEmpty())
+        val appointment = feed.items.single()
+        assertEquals("h-1", appointment.id)
+        assertNull(appointment.note)
+    }
+
     @Test
     fun `a cinema ticket carries its seat`() = runTest {
         respond(
@@ -481,6 +559,66 @@ class ActivityRepositoryTest {
         assertNull(order.occurredAt)
     }
 
+    // --- Названия заведений (issue #182, снимает клиентскую часть #150) ---
+
+    @Test
+    fun `activities with different placeIds are resolved in one batched request`() = runTest {
+        // Два *разных* placeId — не один и тот же — иначе кэш резолвера сам
+        // спрятал бы второй запрос, и тест не отличил бы батчинг по странице
+        // от резолва по одной активности за раз.
+        respond(
+            "/orders",
+            """{"content":[{"id":"o-1","placeId":"p-1","vertical":"FOOD","status":"NEW"}],"last":true}""",
+        )
+        respond(
+            "/gaming/bookings/my",
+            """{"content":[{"id":"b-1","placeId":"p-2","status":"CONFIRMED"}],"last":true}""",
+        )
+        respond(
+            "/places",
+            """[{"id":"p-1","name":"Osh Markazi","logoUrl":"https://x/1.png"},
+               {"id":"p-2","name":"Ultra Play"}]""",
+        )
+
+        val feed = repository().feed()
+
+        // Один запрос на оба id сразу, а не по запросу на активность: если бы
+        // резолв шёл по одной активности за раз, `/places` спросили бы дважды.
+        assertEquals(1, requestCounts.getValue("/places").get())
+        assertEquals("ids=p-1&ids=p-2", requests.getValue("/places").requestUrl?.query)
+        val byId = feed.items.associateBy(Activity::id)
+        assertEquals("Osh Markazi", byId.getValue("o-1").placeName)
+        assertEquals("https://x/1.png", byId.getValue("o-1").placeLogoUrl)
+        assertEquals("Ultra Play", byId.getValue("b-1").placeName)
+    }
+
+    @Test
+    fun `a place resolution failure leaves the activity without a name, not out of the list`() = runTest {
+        respond(
+            "/orders",
+            """{"content":[{"id":"o-1","placeId":"p-1","status":"NEW"}],"last":true}""",
+        )
+        bodies["/places"] = MockResponse().setResponseCode(500)
+
+        val order = repository().feed().items.single()
+
+        assertEquals("o-1", order.id)
+        assertNull(order.placeName)
+        assertNull(order.placeLogoUrl)
+    }
+
+    @Test
+    fun `activities without a placeId make no places request`() = runTest {
+        // Билет кино не отдаёт `placeId` вовсе (issue #150) — резолвить
+        // нечего.
+        respond("/cinema/tickets/my", """{"content":[{"id":"t-1","status":"ACTIVE"}],"last":true}""")
+
+        val feed = repository().feed()
+
+        assertNull(feed.items.single().placeId)
+        assertFalse(requests.containsKey("/places"))
+    }
+
     // --- Пагинация ---
 
     @Test
@@ -541,12 +679,15 @@ class ActivityRepositoryTest {
             NetworkFactory.clientBuilder().build(),
             NetworkFactory.converterFactory(NetworkFactory.json()),
         )
+        val hospitalApi = retrofit.create(HospitalApi::class.java)
         return DefaultActivityRepository(
             fashionApi = retrofit.create(FashionApi::class.java),
             gamingApi = retrofit.create(GamingApi::class.java),
             bookingApi = retrofit.create(BookingApi::class.java),
-            hospitalApi = retrofit.create(HospitalApi::class.java),
+            hospitalApi = hospitalApi,
+            hospitalRepository = DefaultHospitalRepository(api = hospitalApi, clock = Clock.systemUTC()),
             cinemaApi = retrofit.create(CinemaApi::class.java),
+            placeNameResolver = DefaultPlaceNameResolver(retrofit.create(CatalogApi::class.java)),
         )
     }
 
@@ -556,6 +697,7 @@ class ActivityRepositoryTest {
         .setBody("""{"success":true,"data":$data}""")
 
     private companion object {
+        const val DOCTOR = "33333333-3333-3333-3333-333333333333"
         val ALL_PATHS = listOf(
             "/orders",
             "/gaming/bookings/my",

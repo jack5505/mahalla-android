@@ -1,6 +1,6 @@
 # Контракт бэкенда
 
-Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-06).
+Что клиент реально вызывает — извлечено из `*Api.kt` в коде (2026-09-08).
 Базовый путь: `https://api.mahalla.uz/api/v1/` (release),
 `https://189-74-96-232.nip.io/api/v1/` (debug) — `BuildConfig.API_BASE_URL`.
 
@@ -179,6 +179,35 @@ TrackEventRequest: {
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
 
+## users/me ✅ — `feature/profile/data/ProfileApi.kt`
+
+Профиль на сервере. Снято чтением живого `/v3/api-docs` 2026-09-10 (issue #237); приложение зовёт обе ручки — `GET` при открытии экрана профиля и при возврате на него, `PUT` из редактирования имени и после загрузки аватара (issue #170). Одиннадцать KDoc в коде утверждали, что этих ручек у бэкенда нет вовсе, — все переформулированы.
+
+Имя из анкеты покупателя (`RoleRepository.saveCustomer`) тоже уходит через `PUT`, но не сразу: анкета не ждёт сети (issue #234), а помечает `UserProfile.fullNamePendingSync` — следующий `ProfileRepository.refresh()` при открытии профиля шлёт `PUT` вместо `GET`, пока сервер не подтвердит имя.
+
+| Метод | Путь |
+|---|---|
+| GET | `users/me` → `MeResponse` |
+| PUT | `users/me` ← `UpdateMeRequest` → `MeResponse` |
+
+`MeResponse`: `id`, `phone`, `fullName`, `avatarUrl`, `language` (`UZ`/`RU`), `role`, `verificationStatus` (`UNVERIFIED`/`SMS_VERIFIED`/`FULL_VERIFIED`), `accountStatus` (`ACTIVE`/`TEMP_BLOCKED`/`PERM_BLOCKED`/`SUSPENDED`/`DELETED`), `telegramLinked`, `lastLoginAt`.
+
+`role` — четырнадцать значений: `USER`, `BARBER`, `BAKER`, `SHOP_OWNER`, `FOOD_OWNER`, `GAMING_OWNER`, `MUSEUM_OWNER`, `PARK_OWNER`, `MOSQUE_OWNER`, `PHARMACY_OWNER`, `HOSPITAL_OWNER`, `CINEMA_OWNER`, `FREELANCER`, `ADMIN`. Тот же набор и в `UserInfo` — блоке `user` ответа на вход, откуда приложение и берёт роль сейчас.
+
+**`PUT` принимает ровно два поля**, и это PATCH по смыслу (так написано в самом описании ручки):
+
+```json
+{"fullName": "Yangi ism", "avatarUrl": "https://.../a.png"}
+```
+
+- поля нет или `null` — **не меняется**; пустая строка — **очищается** (`{"avatarUrl": ""}` снимает аватар);
+- `fullName` ≤ 200 символов, `avatarUrl` ≤ 500 и по маске `^$|^https?://.+` — то есть адрес из `media/upload`.
+
+**Ни `language`, ни `role` отправить нечем** (сверено 2026-09-10, issue #237):
+
+- слово `language` встречается во всей схеме **один раз** — в `MeResponse`. Ни одно тело запроса его не принимает, поэтому язык приложения ведёт клиент (`SettingsDataStore`), а это поле **не разбирается**. `Accept-Language` пробит на стенде (issue #242, 2026-09-14): бэкенд его понимает — `users/me` без токена без заголовка отвечает `401` на uz, с `Accept-Language: ru` — на ru. Клиент вешает заголовок `LanguageHeaderInterceptor`'ом на каждый запрос обоих клиентов; SMS и push всё равно остаются на языке `users.language` (асинхронные, заголовка в момент отправки нет) — это по-прежнему задача бэкенду, подробно `docs/adr/0007`;
+- `role` меняет только админ через `PUT admin/users/{id}/role`. Значит по правам главный сервер, а локальный `settings.roleId` (`UserRole`) — вообще про другое: про анкету. Подробно — `docs/adr/0007-yazyk-i-rol-istochnik-istiny.md`.
+
 ## BookingApi ⚠️ частично
 
 `app/src/main/java/uz/mahalla/feature/booking/data/BookingApi.kt` — сверен пробой `contract/booking.sh` (2026-09-08), но только анонимная половина: всё под токеном требует `CONTRACT_REFRESH_TOKEN`, а его пока нет.
@@ -286,7 +315,9 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
   честнее закрыть его на сервере.
 
 `GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
-одной записи нет), `PUT appointments/{id}/status` — бизнес-панель, эпик #16.
+одной записи нет), `PUT appointments/{id}/status` бизнес-панель эпика #16 **не использует**: записи
+к мастеру она не ведёт — очередь в ней живая (`walkin`), а календарь записей
+остался вне панели (см. BusinessApi ниже).
 
 `price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
 отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
@@ -314,11 +345,28 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 |---|---|
 | GET | `places/nearby` |
 | GET | `places/map-bounds` |
+| GET | `places` (`ids=`) |
 | GET | `search` |
 | GET | `places/{id}` |
 | GET | `reviews/places/{placeId}` |
 | POST | `reviews` |
 | DELETE | `reviews/{id}` |
+
+**`GET places?ids=`** — заведения пачкой по id (issue #182, снимает
+клиентскую часть #150), снят со схемы при сверке issue #92:
+
+```
+GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
+→ List<Summary> {id, name, category, address, lat, lng, isAvailable,
+    ratingAvg, ratingCount, distanceMeters, logoUrl, subscriptionPlan}
+```
+
+`ids` обязателен и повторяемый. Ответ разбирается тем же `PlaceSummaryDto`,
+что у `nearby`/`map-bounds` — полей достаточно, `subscriptionPlan` клиенту не
+нужен и не разбирается. Лимита на число `ids` в схеме нет; клиент режет
+список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
+ограничение длины запроса на сервере — это не подтверждено ручкой, только
+предосторожность.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
@@ -341,15 +389,18 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 Радиусный `places/nearby` карта зовёт только для первого кадра, пока области
 ещё нет (в том числе когда MapKit не поднялся и кадра не будет вовсе).
 
-**Аватара автора отзыва у сервера нет вовсе** (сверено 2026-09-10, после
-развода коллизии; раньше схема `Response` была перекрыта, issue #60/#76).
-`ReviewResponse {id, placeId, userId, rating, text, isVerified, helpfulCount,
-ownerReply, createdAt}` — ни фото, ни имени, только `userId`. Три имени
-(`userAvatarUrl`, `avatarUrl`, `userAvatar`), под которыми `ReviewDto` ищет
-поле, ни одному ничего не соответствует — как и трём именам автора. Экран не
-ломается: пустое имя подменяется словом «аноним», и в аватаре видна его первая
-буква. Но настоящего автора у отзыва на экране нет и не будет, пока бэкенд не
-скажет, чем его называть — живой баг, issue #192.
+**Аватара и имени автора отзыва у сервера нет вовсе** (сверено 2026-09-10,
+после развода коллизии; раньше схема `Response` была перекрыта, issue
+#60/#76). `ReviewResponse {id, placeId, userId, rating, text, isVerified,
+helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, только `userId`.
+`ReviewDto` больше не гадает алиасы `userName`/`userAvatarUrl` — их снесли.
+Заодно добавлены поля `isVerified`, `helpfulCount`, `ownerReply` — они есть в
+`ReviewResponse`, но раньше в DTO не были описаны вовсе, поэтому молча
+отбрасывались (issue #192, закрыт отрицательным ответом бэкенда про
+имя/аватар). Экран
+показывает отзыв без имени (плейсхолдер «гость», первая буква в аватаре — от
+него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
+теперь разбирается и выводится под текстом отзыва.
 
 ## FashionApi ⚠️
 
@@ -376,15 +427,30 @@ ownerReply, createdAt}` — ни фото, ни имени, только `userId
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
 
-**Тело `POST fashion/orders` расходится со схемой — заказ, вероятно, не
-оформляется** (найдено при сверке 2026-09-10, issue #167; чинится в issue
-#221). Клиент шлёт туда `PlaceOrderRequestDto` «Еды» (`{placeId, items,
-fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается на свой
-`FashionPlaceOrderRequest`: обязателен **`storeId`**, поля `items` нет вовсе
-(состав берётся из серверной корзины `fashion/cart*`), зато есть
-`deliveryLat`, `deliveryLng` и `promoCode`. У «Еды» своя
-`FoodPlaceOrderRequest` (`placeId` + `items` обязательны) — одной схемы на два
-пути больше нет.
+**`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
+2026-09-10, issue #167; исправлено в issue #221). У пути свой
+`FashionPlaceOrderRequest`, отдельный от `FoodPlaceOrderRequest` «Еды»:
+обязателен **`storeId`** (а не `placeId`), поля `items` нет вовсе (состав
+заказа сервер берёт из серверной корзины `fashion/cart*`, которую клиент уже
+ведёт). Клиент отправляет `FashionPlaceOrderRequestDto` (`storeId`,
+`fulfillment`, `paymentMethod`, `deliveryAddress`).
+
+Схема допускает ещё `deliveryLat`/`deliveryLng` — клиент их **сознательно не
+шлёт**: на экране оформления нет выбора точки на карте, а угаданные
+координаты хуже, чем их отсутствие. Не проверено живым запросом (`401` до
+валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан) — тело закреплено
+тестом (`FashionOrderRepositoryTest`) до первой проверки под токеном.
+
+**`promoCode` подключён (issue #180)**: чекаут «Одежды» проверяет код через
+`GET promotions/check` (см. `PromotionsRepository.check`) и, если он валиден,
+шлёт его в `FashionPlaceOrderRequestDto.promoCode`. В общем
+`PlaceOrderRequestDto` (`app/.../food/data/FoodApi.kt`) поле тоже есть, но
+`FoodOrderRepository` его не заполняет — у «Еды» оно по-прежнему не уходит на
+сервер, это отдельная задача. `storeId`/`items`/`deliveryLat`/`deliveryLng` —
+по-прежнему расхождение, описанное выше, и это отдельная задача (#221), не
+эта. Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда
+автором задачи) — независимо не перепроверялась: под Bearer `401` приходит
+до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
 
 ## FoodApi ✅
 
@@ -393,9 +459,19 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 | Метод | Путь |
 |---|---|
 | GET | `food/places/{placeId}/menu` |
+| GET | `food/delivery-fee?itemsAmount=` |
 | POST | `food/orders` |
 | GET | `orders/{orderId}` |
 | POST | `food/orders/{orderId}/cancel` |
+
+**`food/delivery-fee` отдаёт карту, а не DTO** (issue #179, подключён): схема —
+`ApiResponseMapStringLong`, поэтому сумма читается по ключу `deliveryAmount`, а
+отсутствие ключа — не ошибка разбора, а «доставка неизвестна». `itemsAmount`
+обязателен, целый, **в тийинах** (issue #149) — как и ответ. Отвечает
+анонимно, параметра заведения у неё нет: на стенде это правило платформы
+(2026-09-10: от 200 000 тийинов доставка бесплатна, ниже — 10 000). Итог
+заказа всё равно считает сервер, поэтому в корзине и чекауте это **оценка**, а
+суммы оформленного заказа берутся из `GET orders/{orderId}`.
 
 **Картинки у позиции меню в схеме нет вовсе** (issue #60): у `ItemResponse` ни
 одного поля со ссылкой. `MenuItemDto` объявляет его на вырост под тремя
@@ -409,21 +485,78 @@ fulfillment, paymentMethod, deliveryAddress}`), а путь ссылается �
 ответов прочитаны 2026-09-10. Под токеном (`orders/my`, создание заказа) ответы
 не проверены: `401` приходит до валидации.
 
-| Метод | Путь |
-|---|---|
-| GET | `freelancers` |
-| GET | `freelancers/{id}` |
-| GET | `freelancers/{id}/services` |
-| POST | `freelancers/{id}/orders` |
-| GET | `freelancers/orders/my` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `freelancers` | ✅ анонимна, сегодня двое мастеров |
+| GET | `freelancers/{id}` | ✅ `404 NOT_FOUND` на неизвестного, `id` — uuid |
+| GET | `freelancers/{id}/services` | ✅ анонимна, поля сверены живым ответом |
+| POST | `freelancers/{id}/orders` | ⚠️ путь есть (`401`), тело не проверено |
+| GET | `freelancers/orders/my` | ⚠️ путь есть (`401`), схема не проверена |
+| GET | `freelancers/me` | ⚠️ путь есть (`401`), «нет анкеты» не проверено |
+| POST | `freelancers/me` | ⚠️ путь есть (`401`), тело не проверено |
+| POST | `freelancers/me/services` | ⚠️ путь есть (`401`), тело не проверено |
+| PUT | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| DELETE | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
+| PUT | `freelancers/me/toggle-availability` | ⚠️ путь есть (`401`) |
+| GET | `freelancers/me/orders` | ⚠️ путь есть (`401`), схема — та же `PageResponseOrderResponse` (issue #190) |
+| PUT | `freelancers/orders/{orderId}/status` | ⚠️ путь есть (`401`), тело `{status}` — то же перечисление, что `OrderResponse.status` (issue #190) |
 
-**`freelancers/{id}/services` отдаёт НЕ ту схему, которой её разбирают**
-(сверено 2026-09-10). Здесь `FreelancerServiceResponse {id, freelancerId,
-title, description, priceAmount, durationMinutes, isActive}`, а клиент
-разбирает ответ барберским `ServiceDto` (`name`, `price`) — у каждой услуги
-мастера будет пустое название и цена 0. До развода коллизии обе ручки
-выглядели как одна схема `ServiceResponse`, отсюда и ошибка; не всплыла она
-только потому, что каталог мастеров на стенде пуст. Живой баг, issue #216.
+**Услуги мастера — это `FreelancerServiceResponse`, а не `ServiceResponse`
+барбершопа** (issue #71, схема перечитана 2026-09-10). До этого они
+разбирались `ServiceDto` (`name`/`price`) «по той же схеме», и у каждой услуги
+мастера пропадали название и цена. Исправлено своим `FreelancerServiceDto`.
+Живой ответ 2026-09-09:
+
+```json
+{"id":"a2000000-…","freelancerId":"a1000000-…","title":"Landing page tayyorlash",
+ "description":"Responsive landing sahifa","priceAmount":250000000,
+ "durationMinutes":4320,"isActive":true}
+```
+
+**Тело `POST freelancers/me` (`FreelancerCreateRequest`)** прочитано по схеме
+как есть — на это имя ссылается ровно один путь, коллизии springdoc нет:
+обязательны `name` (≤200) и `profession` (≤100), необязательны `bio` (≤2000),
+`city` (≤100), `phone` (≤20), `hourlyRate` и `experienceYears` (`int32`, ≥0).
+Ручка одна на создание и правку (`upsert`), поэтому приложение шлёт анкету
+целиком и не открывает форму, пока не прочитает сохранённое.
+
+**Тело `POST`/`PUT freelancers/me/services` (`ServiceRequest`) не
+подтверждено:** имя схемы делят три пути, третий — чужой
+(`POST barber-services/places/{placeId}`), то есть возможна та же коллизия, из-за
+которой разъехались поля `ServiceResponse`. Поля взяты как показаны — `title`
+(≤200), `priceAmount` (`int64`, ≥0), `description` (≤2000), `durationMinutes`
+(`int32`, ≥0) — и закреплены тестом `FreelancerRepositoryTest`.
+
+**Что значит `404` на `GET freelancers/me`** — «анкеты ещё нет»: проверить под
+токеном было нечем, приложение считает так (`myProfile()` отдаёт `null`), и так
+же трактует успешный конверт с пустой `data`. Отказ **с кодом** остаётся
+отказом.
+
+**Можно ли очистить необязательное поле анкеты — неизвестно.** В `Json` проекта
+`explicitNulls = false`, поэтому стёртые `bio`/`city`/`phone`/`hourlyRate`/
+`experienceYears` уходят не как `null`, а отсутствующими ключами. Затрёт ли их
+сервер или поймёт как «не менять» (обычное поведение upsert) — из схемы не
+следует. Во втором случае мастер, стерший «О себе», сохранит анкету без ошибки,
+а после перечитывания текст вернётся в поле. Проверять на живом аккаунте вместе
+с телом запроса.
+
+**Отдаёт ли `GET freelancers/{id}/services` выключенные услуги — неизвестно.**
+Ручка анонимная, то есть сервер вправе отсеивать `isActive: false` сам. Кабинет
+мастера (issue #71) на всякий случай их не фильтрует и помечает бейджем «услуга
+выключена»; если сервер их не отдаёт, мастер просто никогда этой пометки не
+увидит. Отдельной ручки «мои услуги» в контроллере нет.
+
+**Входящие заказы мастера подключены черновиком (issue #190):**
+`GET freelancers/me/orders` и `PUT freelancers/orders/{orderId}/status`
+используются экраном «Входящие заказы» (`ui/orders/MyFreelancerIncomingOrders*`),
+но **ни путь, ни тело не проверены живым запросом**: `CONTRACT_REFRESH_TOKEN`
+не был задан ни на момент issue, ни в прогоне, который это писал. Схема ответа
+`incomingOrders` — та же `PageResponseOrderResponse`, что у `orders/my`, тело
+`{status}` смены статуса выведено из `OrderResponse.status`. Значения статуса
+не расширены: переиспользован тот же `FreelancerOrderStatus`, что уже
+подтверждён для `OrderResponse` (`PENDING`, `ACCEPTED`, `REJECTED`,
+`COMPLETED`) — своего перечисления для смены статуса мастером в схеме не
+описано, шлём те же значения.
 
 ## GamingApi ⚠️ частично
 
@@ -464,8 +597,11 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | Метод | Путь | |
 |---|---|---|
 | GET | `hospitals/places/{placeId}/doctors` | ✅ путь и `DoctorResponse` |
+| GET | `hospitals/doctors/{id}` | ✅ путь, та же `DoctorResponse`, что и в списке (issue #181); тем же путём «мои записи» дотягивают имя врача для больничной записи (issue #219) |
+| GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -485,26 +621,36 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `contract/booking.sh`.
 
 Клиент по-прежнему разбирает больничные ответы DTO брони (`AppointmentDto`):
-общих полей хватает на всё, что показывает экран, а `doctorId` и `complaint`
-теряются. Отсюда же следует, что `serviceName` у больничной записи не придёт
-никогда — на экране «мои записи» она останется без имени врача (issue #219).
+общих полей хватает на всё, что показывает экран, а `complaint` теряется —
+экран его не показывает. `serviceName` у больничной записи не приходит
+никогда: `doctorId` в `AppointmentDto` теперь объявлен, и «мои записи»
+дотягивают имя врача отдельным запросом `GET hospitals/doctors/{id}` на
+карточки без него (issue #219, `DefaultHospitalRepository.withDoctorNames`).
+Список «мои активности» (`ActivityRepository`, issue #73) этот запрос не
+делает — карточка записи к врачу там остаётся без подписи (issue #266).
 
-Ручки больниц, которые клиент **не** объявляет: `GET hospitals/doctors/{id}`,
-`GET hospitals/doctors/{id}/slots?date=` (`ApiResponseListString` — реальные
-свободные слоты; приложение вместо них рисует сетку времени из
-`DoctorSchedule`, issue #220), `GET hospitals/appointments/{id}`, а также
-бизнес-панельные
+**Слоты (issue #181, закрывает и #220).** Экран записи к врачу спрашивает
+`GET hospitals/doctors/{id}/slots?date=` на каждую пару «врач + день» и
+показывает ответ сервера как есть — `DoctorSchedule`, клиентская сетка
+времени, ушла вместе со своим тестом. `startTime` записи уходит той же
+строкой, что пришла в слоте, без разбора в `LocalTime` и повторной сборки:
+лишний шаг «разобрали → собрали заново» уже один раз стоил вертикали брони
+пяти часов расхождения между UTC и Asia/Tashkent (issue #144).
+
+Ручки больниц, которые клиент по-прежнему **не** объявляет — бизнес-панельные
 `POST hospitals/places/{placeId}/doctors`,
 `PUT hospitals/places/{placeId}/doctors/{id}` и
 `PUT hospitals/places/{placeId}/appointments/{id}/status` (эпик #16).
 
-## MediaApi ✅
+## MediaApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась).
+`app/src/main/java/uz/mahalla/feature/media/data/MediaApi.kt` — `POST` сверен: issue #101 (схема + curl'ы по стенду, форма запроса под токеном не проверялась). `GET`/`DELETE` (issue #185) объявлены **по схеме из этого же issue и `MediaFile` из `POST`**, живым запросом на стенд не перепроверены — сверить при первом расхождении.
 
 | Метод | Путь |
 |---|---|
 | POST | `media/upload` |
+| GET | `media/entity/{entityId}` |
+| DELETE | `media/{id}` |
 
 `multipart/form-data`, часть называется **`file`**; `entityType` и `entityId` —
 необязательные query-параметры. Ответ — `MediaFile` (`id`, `url`,
@@ -518,20 +664,30 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 проверяется на клиенте до отправки (`MediaUploadLimits`), а картинка
 сжимается.
 
-`GET media/entity/{entityId}` и `DELETE media/{id}` у бэкенда есть, но клиентом
-**не объявлены**: показывать и редактировать загруженное пока нечем.
+`GET media/entity/{entityId}` отдаёт `List<MediaFile>` той же схемы (плюс
+`createdAt`, клиентом не используется); файл без `url` в списке пропускается,
+а не роняет всю галерею. `DELETE media/{id}` отвечает пустым конвертом
+(`ensureSuccess`); прав на удаление в схеме нет — экран показывает кнопку
+только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
+любой другой) отвечает текстом, а не молчанием.
 
-## NotificationsApi ⚠️
+## NotificationsApi ✅ пути
 
-`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — пути и набор значений `type` сверены по схеме стенда (`GET /v3/api-docs`, 2026-09-09, эпик 11). Тела под токеном не сверены: `401` приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
 
-| Метод | Путь |
-|---|---|
-| GET | `notifications` |
-| GET | `notifications/unread-count` |
-| PUT | `notifications/read-all` |
-| PUT | `notifications/{id}/read` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `notifications` | `PageResponseNotificationResponse` |
+| GET | `notifications/unread-count` | число в `data` |
+| PUT | `notifications/read-all` | `ApiResponseVoid` |
+| PUT | `notifications/{id}/read` | `ApiResponseVoid` |
 
+`NotificationResponse.type` — ровно 13 значений: `WALKIN_REQUEST`,
+`WALKIN_ACCEPTED`, `WALKIN_DECLINED`, `WALKIN_COUNTER`, `WALKIN_COMPLETE`,
+`APPOINTMENT_BOOKED`, `APPOINTMENT_CONFIRMED`, `APPOINTMENT_REMINDER`,
+`ORDER_PLACED`, `ORDER_STATUS_UPDATED`, `REVIEW_ADDED`, `PROMOTION_CREATED`,
+`SUBSCRIPTION_EXPIRES`. `NotificationType.Unknown` при этом остаётся: список
+открытый, и незнакомый тип показывается, а не прячется.
 ## PinApi ✅ форма, ⚠️ успешный ответ
 
 `app/src/main/java/uz/mahalla/data/network/pin/PinApi.kt` — сверен со схемой и
@@ -580,11 +736,79 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 
 ## PharmacyApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+### Пуши (эпик 11) — чего в контракте НЕТ
+
+Сверено по полной схеме 2026-09-09, это не догадка:
+
+- **ручки регистрации устройства нет** — ни `devices`, ни `push/register`, ни
+  чего-либо подобного. Единственное место, куда клиент может положить токен, —
+  поле `fcmToken` внутри `AuthDeviceInfo`, то есть тела `auth/send-otp`,
+  `auth/verify-otp`, `auth/pin-login`, `auth/refresh`, `auth/telegram/*`.
+  Ограничение поля — 500 символов. Токен из-за этого уезжает не сразу, а с
+  ближайшим продлением сессии (см. `PushTokenRegistrar`, ADR 0009);
+- **серверных настроек уведомлений нет** — ни категорий, ни тихих часов.
+  Настройки локальные, в DataStore;
+- **схемы payload'а FCM нет.** Клиент читает `data` по именам полей
+  `NotificationResponse` — `id`, `type`, `entityId`, `title`, `body`
+  (`PushMessage.of`). Это имена самого бэкенда, но **не подтверждённые**:
+  сверить, когда бэкенд начнёт слать пуши.
+
+**Просьба к бэкенду:** слать **data-сообщения**. Сообщение с блоком
+`notification` в фоне показывает сама библиотека Firebase, минуя
+`MahallaMessagingService`, — тогда не работают ни каналы по категориям, ни
+тихие часы, ни переход по deep link'у на нужный экран.
+
+**NEEDS-PARTNER: `ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это
+заказ.** `NotificationTarget.Order` ведёт всякий такой пуш на
+`OrderStatusRoute(entityId)` → `GET orders/{orderId}` (`order-controller`,
+схема `OrderView`). Этот путь подтверждённо общий: та же ручка с фильтром
+`vertical=CLOTHING` уже читает заказы «Одежды» (`FashionOrderRepository`,
+issue #108) — то есть заказ еды и заказ одежды по одному и тому же `orderId`
+через неё резолвятся оба. А вот заказ мастера (issue #107,
+`FreelancerRepository`) через эту ручку **никогда не читался** — там свои
+`freelancers/{id}/orders` и `freelancers/orders/my`, `GET orders/{orderId}`
+для них не пробован ни разу. Если `ORDER_STATUS_UPDATED` уходит и по заказам
+мастеров (а `NotificationCategory.Orders` в клиенте объявляет и их тоже),
+нужно подтвердить: резолвит ли `order-controller` заказы вертикали мастеров
+тем же путём, что еду и одежду. Отслеживается issue #297: если да — можно
+ничего не делать; если нет — нужен `vertical` (или отдельный тип
+уведомления) в самом пуше, чтобы клиент не гадал.
+
+## PharmacyApi ✅
+
+`app/src/main/java/uz/mahalla/feature/pharmacy/data/PharmacyApi.kt`. `GET
+products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ НЕ СВЕРЕН» здесь стояла
+по ошибке — сам путь в KDoc файла отмечен как проверенный, файл её не
+повторял). `POST products` и `PUT products/{id}/stock` (issue #252, владелец
+правит витрину) сверены схемой `/v3/api-docs` 2026-09-11, но не живым
+запросом — обе требуют Bearer владельца заведения, а `CONTRACT_REFRESH_TOKEN`
+в песочнице не задан.
 
 | Метод | Путь |
 |---|---|
 | GET | `pharmacy/places/{placeId}/products` |
+| POST | `pharmacy/places/{placeId}/products` |
+| PUT | `pharmacy/places/{placeId}/products/{id}/stock` |
+
+**`POST products`** — тело `PharmacyCreateRequest`, имя в `/v3/api-docs`
+коллизией springdoc не перекрыто (встречается только в этом контроллере).
+Обязательны `name` (≤ 300) и `price` (тийины, issue #149); `manufacturer`,
+`description`, `dosageForm`, `strength`, `stockQuantity`,
+`requiresPrescription` необязательны и без ограничения длины в схеме. Ответ —
+`ProductResponse`, клиент его не использует: список товаров перечитывается
+отдельным запросом (тот же приём, что у `PUT places/{id}` выше).
+
+**`PUT products/{id}/stock`** — тело в схеме объявлено безымянной картой
+(`additionalProperties: integer`), тот же случай, что `walkin/accept`/
+`walkin/decline` в PR #161 и `reviews/{id}/reply` в issue #188. Имени ключа
+схема не называет — выведено из соседних схем того же контроллера: и
+`ProductResponse`, и `PharmacyCreateRequest` называют это поле
+`stockQuantity`. Отправляется как `{"stockQuantity": N}`. **Не проверено
+живым запросом** (нужен Bearer владельца заведения, которого в песочнице
+нет) — если бэкенд ждёт другой ключ, тело уйдёт с полем, которого он не
+узнает, и обновление молча не подействует, а не ответит ошибкой; при
+расхождении смотреть сюда в первую очередь и подтвердить настоящим curl'ом
+до релиза.
 
 ## SessionsApi ⚠️
 
@@ -598,12 +822,27 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 
 ## PromotionsApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/promotions/data/PromotionsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/promotions/data/PromotionsApi.kt`. Обе
+читающие ручки сняты живыми curl'ами 2026-09-04 (заметка «⚠️» относится к
+`POST` ниже, не к ним).
 
 | Метод | Путь |
 |---|---|
 | GET | `promotions/platform` |
 | GET | `promotions/places/{placeId}` |
+| POST | `promotions/places/{placeId}` |
+
+**`POST places/{placeId}`** (issue #252, владелец заводит акцию) — тело
+`CreatePromotionRequest` не сверено живым запросом (нужен Bearer владельца
+заведения, `CONTRACT_REFRESH_TOKEN` в песочнице не задан). Поля повторяют уже
+подтверждённые поля ответа `Promotion` того же контроллера (`title`,
+`description`, `promoType`, `discountPercent`, `discountAmount`,
+`minOrderAmount`, `promoCode`) — не выведены по аналогии с другой вертикалью,
+а взяты у собственной схемы контроллера. Клиент создаёт только три вида
+акции (`PERCENT_OFF`, `FIXED_OFF`, `FREE_DELIVERY`) — `BUY_X_GET_Y`,
+`HAPPY_HOUR`, `FLASH_SALE` требуют дополнительных условий, для которых на
+клиенте нет ни формы, ни подтверждённой схемы. При расхождении смотреть
+сюда в первую очередь и подтвердить настоящим curl'ом до релиза.
 
 ## WalkInApi ⚠️
 
@@ -624,19 +863,146 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 | GET | `places/my` |
 | PUT | `places/{id}/availability` |
 
-## SubscriptionsApi ⚠️
 
-`app/src/main/java/uz/mahalla/feature/subscription/data/SubscriptionsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+## BusinessApi ⚠️ пути сверены
+
+`app/src/main/java/uz/mahalla/feature/business/data/BusinessApi.kt` — бизнес-панель
+(эпик #16). Пути сняты с живого `/v3/api-docs` **2026-09-09** и проверены
+curl'ом: каждый отвечает `401 UNAUTHORIZED`, то есть существует и требует
+Bearer. Тела под токеном не проверены — секрета `CONTRACT_REFRESH_TOKEN` нет.
+
+| Метод | Путь | |
+|---|---|---|
+| GET | `analytics/places/{placeId}/dashboard` | ✅ путь есть (`401`) |
+| GET | `walkin/barber/dashboard?placeId=` | ✅ путь есть (`401`) |
+| PUT | `walkin/{id}/accept?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
+| PUT | `walkin/{id}/decline?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
+| PUT | `walkin/{id}/start?placeId=` | ✅ путь есть (`401`), тела нет |
+| PUT | `walkin/{id}/complete?placeId=` | ✅ путь есть (`401`), тела нет |
+| GET | `food/places/{placeId}/orders` | ✅ путь есть (`401`) |
+| PUT | `food/places/{placeId}/orders/{orderId}/status` | ✅ путь есть (`401`), тело ⚠️ |
+| GET | `food/places/{placeId}/menu` | ✅ (та же ручка, что у витрины) |
+| PUT | `food/items/{itemId}/toggle` | ✅ путь есть (`401`) |
+| POST | `food/places/{placeId}/items` | ✅ путь есть (`401`) |
+
+Плюс две уже описанные ручки, которые панель переиспользует: `GET places/my`
+(права, см. ниже) и `PUT places/{id}/availability` («пауза»).
+
+**Дашборд отдаёт словарь без схемы.** `ApiResponseMapStringLong` —
+`additionalProperties: integer(int64)`, ни одного объявленного ключа. Клиент
+разбирает его как `Map<String, Long?>` и показывает **то, что приехало**:
+подписи переведены только у знакомых ключей, остальные выводятся из имени
+(`total_revenue` → «Total revenue»). Придумать фиксированные поля значило бы
+получить пустой дашборд на первом же расхождении.
+
+**Три ручки принимают безымянную `Map` — springdoc не знает имён ключей**,
+потому что контроллеры принимают голую `Map`:
+
+- `PUT food/places/{id}/orders/{orderId}/status` — `Map<String, String>`. Ключ
+  **`status`** выведен, а не угадан: ровно эту операцию у двух соседних
+  вертикалей описывают настоящие схемы — `UpdateOrderStatusRequest`
+  (`freelancers/orders/{id}/status`) и `ModerateRequest`
+  (`admin/places/{id}/status`), и в обеих единственное обязательное поле
+  называется `status`. То же решение, что для `CreatePlaceRequest` в issue #84.
+- `PUT walkin/{id}/accept` — `Map<String, Integer>`, судя по
+  `WalkInResponse.counterTime` это встречное предложение по времени. Имени
+  ключа нет, поэтому клиент шлёт **пустой объект**: обычное «принять как есть».
+  Предложить другое время из панели пока нечем.
+- `PUT walkin/{id}/decline` — `Map<String, String>`, по всей видимости причина
+  отказа. Тоже пустой объект: поле, текст которого сервер молча выбросит,
+  обещало бы человеку разговор, которого не будет.
+
+**Расписания работы у бэкенда нет вовсе.** `UpdateRequest` заведения
+(`PUT places/{id}`) принимает `name`, `description`, `address`, `lat`, `lng`,
+`city`, `phone`, `website` — и всё. Единственный признак работы заведения —
+`isAvailable` («открыто сейчас»), он же «пауза». Пункт «расписание» из задачи
+12.4 поэтому не реализован.
+
+**Отдельной ручки прав нет.** Разделение витрины клиента и панели бизнеса
+держится на `GET places/my`: бэкенд возвращает только «свои» заведения вместе
+с `Mine.role` (`OWNER` / `MANAGER` / `STAFF`). Фильтра по `id` у ручки нет,
+поэтому доступ ищется перелистыванием страниц (`BusinessRepository.access`,
+предел — 20 страниц).
+## SocialApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы
+ответов сняты со схемы стенда (`/v3/api-docs`) и curl'ами, issue #75, но
+успешный путь не проверен: все семь ручек требуют Bearer, а входа в CI нет.
+Тело нового комментария springdoc описал как `Map<String,String>` — имя ключа
+(`text`) взято из `CommentResponse`, это предположение.
 
 | Метод | Путь |
 |---|---|
-| GET | `subscriptions/plans` |
-| GET | `subscriptions/current` |
-| POST | `subscriptions/subscribe` |
-| POST | `subscriptions/business/subscribe` |
-| POST | `subscriptions/trial` |
-| POST | `subscriptions/cancel` |
-| PUT | `subscriptions/auto-renew` |
+| GET | `places/{placeId}/status` |
+| POST | `places/{placeId}/like` |
+| POST | `places/{placeId}/save` |
+| GET | `places/{placeId}/comments` |
+| POST | `places/{placeId}/comments` |
+| DELETE | `comments/{id}` |
+| GET | `saved-places` |
+
+
+## PlaceStaffApi ✅
+
+`app/src/main/java/uz/mahalla/feature/role/data/PlaceStaffApi.kt` — сверен: issue #189 (`/v3/api-docs`, 2026-09-11).
+
+| Метод | Путь |
+|---|---|
+| GET | `places/{placeId}/staff` |
+| POST | `places/{placeId}/staff` |
+| PUT | `places/{placeId}/staff/{staffUserId}` |
+| DELETE | `places/{placeId}/staff/{staffUserId}` |
+
+`role` — закрытое перечисление **`STAFF`/`MANAGER`/`OWNER`**, то же самое, что
+уже приезжает в `Mine.role` у «моих заведений» (`ProviderApi.myPlaces`,
+issue #94) — второй домен-тип под тот же смысл не заводился, клиент
+переиспользует `PlaceStaffRole`. Схемы `PlaceStaffResponse`, `AddRequest`,
+`PlaceStaffChangeRoleRequest` в `/v3/api-docs` встречаются по одному разу,
+коллизии springdoc здесь нет.
+
+`PUT`/`DELETE` адресуют сотрудника по `{staffUserId}` — это `userId`, а не
+`id` записи `PlaceStaffResponse`; клиент `id` записи в домен не переводит,
+им всё равно нечего было бы делать. Найти пользователя по телефону схема не
+даёт (поиска по `users` нет) — ID в форму добавления вводится вручную.
+
+`geoExempt` (`boolean`, необязательный и в запросе, и в ответе) разобран
+DTO→домен, но в интерфейсе не показан: задача его не требовала.
+
+## SubscriptionsApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/subscription/data/SubscriptionsApi.kt` — пути и поля сверены со схемой стенда (`/v3/api-docs`, issue #103 от 2026-09-04, перепроверено 2026-09-08). **Успешные ответы под токеном не проверены**: все семь ручек требуют Bearer, а SMS-кода в CI нет — приходит `401` до валидации тела.
+
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `subscriptions/plans` | query `audience` (`USER`\|`BUSINESS`, дефолт `USER`) → `[PlanResponse]` |
+| GET | `subscriptions/current` | → `UserSubscriptionResponse`; пустой `data`, `404` и код `*NOT_FOUND` = «подписки нет» |
+| POST | `subscriptions/subscribe` | тело `{planCode, billingPeriod}` (`MONTHLY`\|`YEARLY`) |
+| POST | `subscriptions/business/subscribe` | то же тело, своя ручка для `audience=BUSINESS` |
+| POST | `subscriptions/trial` | **query** `planCode`, тела нет |
+| POST | `subscriptions/cancel` | **query** `reason` (у сервера свой дефолт), тела нет |
+| PUT | `subscriptions/auto-renew` | тело `{autoRenew}` |
+
+## PaymentsApi ⚠️
+
+`app/src/main/java/uz/mahalla/feature/subscription/data/PaymentsApi.kt` — сверен со схемой стенда 2026-09-08, живым ответом нет (ручка под Bearer).
+
+| Метод | Путь | Параметры |
+|---|---|---|
+| GET | `payments/transactions` | query `page`/`size` (дефолт `0`/`20`) → `PageResponsePaymentTransaction` |
+
+Что важно:
+
+- **Фильтра по назначению у ручки нет** — приезжают все платежи человека, и
+  списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
+- Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
+  `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
+  `purpose`, `purposeId`, `errorMessage`) — **без пары `amountSom`**, поэтому
+  единицу `amount` вывести нечем и она читается как тийины (у кошелька она
+  выводится из пары, issue #62). **Проверить первым же живым ответом.**
+- `GET payments/subscription` не используется: отдаёт строго меньше, чем
+  `subscriptions/current` (`plan` перечислением, без `daysRemaining`,
+  `isTrial` и грейс-периода). `POST payments/subscription/activate` принимает
+  `Map<String,String>` — поля неизвестны, использовать нечем.
 
 ## AppVersionApi ⚠️
 
@@ -660,6 +1026,29 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 `TopUpRequest.amount` — в тийинах, минимум `100000` (1 000 сум); человек
 вводит сумы, `Money.somToTiyin` переводит в репозитории (issue #149).
 
+**Ручки «списать с кошелька» нет и не ожидается.** Кошелёк — это
+`paymentMethod = WALLET` внутри запроса вертикали (`POST food/orders`,
+`POST fashion/orders`, `POST cinema/sessions/{id}/buy`, `POST appointments`,
+`POST subscriptions/subscribe`), деньги списывает сервер при создании заказа.
+Клиентская часть 8.3 (эпик #12) — вокруг этого запроса: проверка «доступно»
+из `GET wallet`, подтверждение PIN/биометрией и один запрос на одно
+подтверждение (`feature/wallet/ui/pay/WalletPaymentFlow`).
+
+**Коды отказа кошелька не сверены.** `WalletPaymentGuard` узнаёт
+`INSUFFICIENT_FUNDS` / `INSUFFICIENT_BALANCE` / `WALLET_INSUFFICIENT_FUNDS` /
+`NOT_ENOUGH_FUNDS` / `NOT_ENOUGH_BALANCE` и `WALLET_BLOCKED` / `WALLET_FROZEN` /
+`WALLET_SUSPENDED` / `WALLET_INACTIVE` — набор написан по догадке. Незнакомый
+код показывается текстом сервера, а не подменяется «пополните кошелёк»:
+соврать про причину хуже, чем показать чужую формулировку.
+
+**`Idempotency-Key` — клиентское дополнение, серверная поддержка не
+подтверждена.** `POST food/orders` уходит с этим заголовком (один ключ на одну
+оплату, тот же — на повтор после оборванного соединения); в `/v3/api-docs`
+заголовка нет. Сервер, который его игнорирует, ведёт себя как раньше — защиту
+от двойного списания сейчас держит клиент: второй запрос при неответившем
+первом не отправляется, и после успеха — тоже. Нужен ответ бэкенда: читает ли
+он заголовок и под каким именем.
+
 ---
 
 ## Как сверять
@@ -675,7 +1064,7 @@ CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/security
 `security.sh` — **только читающая**: `pin/change` сменил бы PIN живого
 аккаунта, а неверный код у `pin/change` и `pin/biometric` тратит серверную
 попытку и может залочить аккаунт. Такое дёргать автоматически нельзя, цена
-ошибки — человек, запертый вне приложения (ADR 0007).
+ошибки — человек, запертый вне приложения (ADR 0013).
 
 Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
 в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает

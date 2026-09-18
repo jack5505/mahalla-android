@@ -55,6 +55,12 @@ sealed interface NotificationsEvent : UiEvent {
 }
 
 sealed interface NotificationsEffect : UiEffect {
-    /** Статус заказа вертикали «Еда» — единственная цель, которую даёт контракт. */
+    /** Статус заказа вертикали «Еда». */
     data class OpenOrder(val orderId: String) : NotificationsEffect
+
+    /**
+     * Экран подписки (эпик 11): «подписка заканчивается» ведёт туда, где её
+     * продлевают. `entityId` для этого не нужен — тем цель и безопасна.
+     */
+    data object OpenSubscription : NotificationsEffect
 }
