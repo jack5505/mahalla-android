@@ -14,6 +14,7 @@ import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHoursCalculator
 import uz.mahalla.feature.place.domain.PlaceAction
@@ -49,6 +50,8 @@ class PlaceDetailsViewModel @Inject constructor(
     private val profileStore: UserProfileStore,
     private val analytics: AnalyticsTracker,
     private val clock: Clock,
+    /** Плитка карты (issue #286) сама Hilt не зовёт — передаётся экрану как есть. */
+    val mapInitializer: MapKitInitializer,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<PlaceDetailsState, PlaceDetailsEvent, PlaceDetailsEffect>(PlaceDetailsState()) {
 

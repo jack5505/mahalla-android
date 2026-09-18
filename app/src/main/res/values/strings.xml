@@ -636,6 +636,8 @@
     <string name="home_focus_rating">reyting %1$s</string>
     <string name="wallet_header_subscription">%1$s %2$s gacha</string>
     <string name="place_services_title">Xizmatlar</string>
+    <string name="place_map_tile_distance">%1$s piyoda</string>
+    <string name="place_map_tile_unavailable">Xarita mavjud emas</string>
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
     <string name="queue_field_name">Ismingiz</string>

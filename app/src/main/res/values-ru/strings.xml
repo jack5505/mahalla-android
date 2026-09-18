@@ -630,6 +630,8 @@
     <string name="home_focus_rating">рейтинг %1$s</string>
     <string name="wallet_header_subscription">%1$s до %2$s</string>
     <string name="place_services_title">Услуги</string>
+    <string name="place_map_tile_distance">%1$s пешком</string>
+    <string name="place_map_tile_unavailable">Карта недоступна</string>
     <string name="queue_title">Очередь</string>
     <string name="queue_form_description">Запрос уйдёт мастеру: он подтвердит запись или предложит другое время.</string>
     <string name="queue_field_name">Ваше имя</string>

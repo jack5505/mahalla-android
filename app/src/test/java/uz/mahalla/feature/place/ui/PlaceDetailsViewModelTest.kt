@@ -45,6 +45,7 @@ import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeSocialRepository
 import uz.mahalla.testutil.FakeUserProfileStore
 import uz.mahalla.testutil.MainDispatcherRule
+import uz.mahalla.testutil.fakeMapKitInitializer
 import uz.mahalla.testutil.place
 import uz.mahalla.testutil.promotion
 import java.time.Clock
@@ -926,6 +927,7 @@ class PlaceDetailsViewModelTest {
         profileStore = profileStore,
         analytics = analytics,
         clock = clock,
+        mapInitializer = fakeMapKitInitializer(),
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )
 

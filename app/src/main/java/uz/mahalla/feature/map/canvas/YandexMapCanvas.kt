@@ -68,6 +68,12 @@ fun YandexMapCanvas(
     camera: MapCameraPosition,
     modifier: Modifier = Modifier,
     showUserLocation: Boolean = false,
+    /**
+     * Жесты панорамирования/зума/поворота SDK (issue #286). `false` — плитка
+     * карты на карточке места: статичная точка внутри прокручиваемого списка,
+     * где собственные жесты MapKit конкурировали бы с прокруткой экрана.
+     */
+    gesturesEnabled: Boolean = true,
     onMarkerClick: (String) -> Unit = {},
     onCameraChanged: (MapCameraPosition) -> Unit = {},
     onVisibleBoundsChanged: (MapBounds) -> Unit = {},
@@ -97,6 +103,7 @@ fun YandexMapCanvas(
     val controller = remember(mapView) {
         MapCanvasController(
             mapView = mapView,
+            gesturesEnabled = gesturesEnabled,
             onMarkerClick = { id -> currentOnMarkerClick(id) },
             onCameraChanged = { position -> currentOnCameraChanged(position) },
             onVisibleBoundsChanged = { bounds -> currentOnVisibleBoundsChanged(bounds) },
@@ -302,6 +309,7 @@ private class MarkerIconCache(
  */
 private class MapCanvasController(
     private val mapView: MapView,
+    private val gesturesEnabled: Boolean,
     private val onMarkerClick: (String) -> Unit,
     private val onCameraChanged: (MapCameraPosition) -> Unit,
     private val onVisibleBoundsChanged: (MapBounds) -> Unit,
@@ -389,6 +397,12 @@ private class MapCanvasController(
 
     init {
         map.addCameraListener(cameraListenerRef)
+        if (!gesturesEnabled) {
+            map.isScrollGesturesEnabled = false
+            map.isZoomGesturesEnabled = false
+            map.isTiltGesturesEnabled = false
+            map.isRotateGesturesEnabled = false
+        }
     }
 
     fun applyCamera(camera: MapCameraPosition) {
