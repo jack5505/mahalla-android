@@ -3,19 +3,14 @@ package uz.mahalla.feature.notifications.ui.settings
 import android.app.Application
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.core.app.ApplicationProvider
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -28,6 +23,7 @@ import uz.mahalla.feature.notifications.domain.NotificationCategory
 import uz.mahalla.feature.notifications.domain.NotificationSettings
 import uz.mahalla.feature.notifications.domain.QuietHours
 import uz.mahalla.feature.notifications.push.NotificationChannels
+import uz.mahalla.testutil.MainDispatcherRule
 import java.io.File
 
 /**
@@ -45,20 +41,16 @@ class NotificationSettingsViewModelTest {
     @get:Rule
     val temporaryFolder = TemporaryFolder()
 
-    private val mainDispatcher = UnconfinedTestDispatcher()
-
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(mainDispatcher)
-    }
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
-    }
+    /**
+     * Через общее правило, а не своим `setMain`: тесты обязаны идти на том же
+     * планировщике, что и `viewModelScope`, иначе `runTest` не видит корутин
+     * ViewModel и падает по таймауту (`UncompletedCoroutinesError`).
+     */
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     @Test
-    fun `state mirrors the store`() = runTest {
+    fun `state mirrors the store`() = runTest(mainDispatcherRule.dispatcher) {
         val store = store()
         val viewModel = viewModel(store)
 
@@ -78,7 +70,7 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test
-    fun `quiet hours are switched on and off`() = runTest {
+    fun `quiet hours are switched on and off`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel(store())
 
         viewModel.onEvent(NotificationSettingsEvent.QuietHoursToggled(enabled = true))
@@ -93,7 +85,7 @@ class NotificationSettingsViewModelTest {
      * значением по умолчанию, и настройка молча съезжала бы.
      */
     @Test
-    fun `picking one bound leaves the other alone`() = runTest {
+    fun `picking one bound leaves the other alone`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel(store())
 
         viewModel.onEvent(
@@ -112,7 +104,7 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test
-    fun `picking the second bound keeps the first`() = runTest {
+    fun `picking the second bound keeps the first`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel(store())
 
         viewModel.onEvent(NotificationSettingsEvent.QuietHoursPicked(QuietHoursBound.From, 21))
@@ -128,7 +120,7 @@ class NotificationSettingsViewModelTest {
     }
 
     @Test
-    fun `dismissing the picker changes nothing`() = runTest {
+    fun `dismissing the picker changes nothing`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel(store())
 
         viewModel.onEvent(NotificationSettingsEvent.QuietHoursEditRequested(QuietHoursBound.To))
