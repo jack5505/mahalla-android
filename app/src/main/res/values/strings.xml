@@ -45,17 +45,20 @@
     <string name="http_inspector_subtitle">Ilova serverga qanday so\'rovlar yuborayotganini ko\'rish</string>
 
     <!-- Онбординг: welcome -->
-    <string name="onboarding_welcome_title">Mahalla — yoningizdagi xizmatlar</string>
-    <string name="onboarding_welcome_subtitle">Ovqat, dorixona, shifokor, navbat va buyurtmalar — bitta ilovada.</string>
-    <string name="onboarding_welcome_action">Kirish yoki ro\'yxatdan o\'tish</string>
+    <string name="onboarding_welcome_kicker">MAHALLA</string>
+    <string name="onboarding_welcome_title">Uyingiz yaqinidagi hamma narsa — bitta ilovada</string>
+    <string name="onboarding_welcome_subtitle">Dorixona, ovqat, shifokor, ustalar va kino. Navbatga talon va bron — qo\'ng\'iroqsiz.</string>
+    <string name="onboarding_welcome_action">Boshlash</string>
+    <string name="onboarding_welcome_consent">Davom etish orqali siz shartlar va siyosatga rozilik bildirasiz</string>
     <string name="onboarding_welcome_language">Ilova tili</string>
 
     <!-- Онбординг: телефон -->
+    <string name="onboarding_step_counter">Qadam %1$d / %2$d</string>
     <string name="onboarding_phone_title">Telefon raqamingiz</string>
     <string name="onboarding_phone_subtitle">Tasdiqlash kodini SMS orqali yuboramiz.</string>
     <string name="onboarding_phone_label">Telefon raqami</string>
     <string name="onboarding_phone_action">Kodni olish</string>
-    <string name="onboarding_phone_error">Raqam noto\'g\'ri kiritilgan</string>
+    <string name="onboarding_phone_error">Raqamning 9 ta raqamini kiriting</string>
     <string name="onboarding_phone_consent">Ommaviy oferta shartlariga roziman</string>
     <string name="onboarding_phone_consent_link">Ofertani o\'qish</string>
     <string name="onboarding_phone_consent_required">Davom etish uchun ofertaga rozilik bering</string>
@@ -99,6 +102,7 @@
     <string name="onboarding_pin_error_storage">PIN-kodni saqlab bo\'lmadi. Qaytadan urinib ko\'ring</string>
     <string name="onboarding_error_foreign_account">Server boshqa hisobni qaytardi. Bu qurilmaga avval boshqa raqam kirgan — kirish bekor qilindi. Telefon raqami bilan qaytadan kiring</string>
     <string name="onboarding_pin_forgot">PIN-kodni esdan chiqardingizmi?</string>
+    <string name="pin_pad_backspace">Raqamni o\'chirish</string>
 
     <!-- Онбординг: биометрия -->
     <string name="onboarding_biometric_title">Biometrika bilan kirish</string>
@@ -130,7 +134,7 @@
     <string name="city_qarshi">Qarshi</string>
 
     <!-- Основные разделы -->
-    <string name="discovery_title">Yaqin atrofda</string>
+    <string name="discovery_title">Yaqinda nima bor</string>
     <string name="wallet_title">Hamyon</string>
     <string name="wallet_available">Sarflash mumkin</string>
     <string name="wallet_balance_total">Hisobda</string>
@@ -183,6 +187,8 @@
     <string name="profile_logout_message">Qayta kirish uchun tasdiqlash kodi kerak bo\'ladi.</string>
     <string name="profile_saved_places">Saqlangan joylar</string>
     <string name="profile_saved_places_subtitle">Saqlangan joylar ro\'yxati</string>
+    <string name="profile_biometric_title">Barmoq izi bilan kirish</string>
+    <string name="profile_biometric_description">Hamyon PIN-kodi o\'rniga</string>
     <string name="profile_devices_title">Mening qurilmalarim</string>
     <string name="profile_devices_empty">Faol qurilmalar yo\'q</string>
     <string name="profile_device_unknown">Noma\'lum qurilma</string>
@@ -309,6 +315,20 @@
     <string name="promo_min_order">%1$s dan buyurtmaga</string>
     <string name="promo_code">Promo-kod: %1$s</string>
     <string name="promo_until">%1$s gacha</string>
+    <!-- Акция заведения (issue #252): владелец заводит акцию из «Моих заведений». -->
+    <string name="promotion_field_title">Sarlavha</string>
+    <string name="promotion_field_title_invalid">Sarlavhani kiriting</string>
+    <string name="promotion_field_description">Tavsif</string>
+    <string name="promotion_type_percent_off">Foizli chegirma</string>
+    <string name="promotion_type_fixed_off">Summaviy chegirma</string>
+    <string name="promotion_type_free_delivery">Bepul yetkazib berish</string>
+    <string name="promotion_field_discount_percent">Chegirma, %</string>
+    <string name="promotion_field_discount_percent_invalid">1 dan 100 gacha son kiriting</string>
+    <string name="promotion_field_discount_amount">Chegirma, so\'m</string>
+    <string name="promotion_field_discount_amount_invalid">Summani kiriting</string>
+    <string name="promotion_field_min_order">Minimal buyurtma, so\'m (ixtiyoriy)</string>
+    <string name="promotion_field_code">Promo-kod (ixtiyoriy)</string>
+    <string name="promotion_create_submit">Qo\'shish</string>
 
     <string name="distance_meters">%1$s m</string>
     <string name="distance_kilometers">%1$s km</string>
@@ -358,7 +378,8 @@
     <string name="place_hours_unknown">Ish vaqti noma\'lum</string>
     <string name="place_hours_around_the_clock">Kunu tun</string>
     <string name="place_hours_day_off">Dam olish kuni</string>
-    <string name="place_contacts_title">Aloqa</string>
+    <string name="place_meta_address">Manzil</string>
+    <string name="place_meta_phone">Telefon</string>
     <string name="place_reviews_title">Sharhlar</string>
     <string name="place_reviews_show_all">Barcha sharhlar</string>
     <string name="place_review_anonymous">Mehmon</string>
@@ -562,6 +583,10 @@
     <string name="my_places_available_description">O\'chirilsa, muassasa katalogda yopiq ko\'rinadi.</string>
     <!-- Управление витриной аптеки (issue #252). -->
     <string name="my_places_manage_products">Tovarlarni boshqarish</string>
+    <!-- Акция заведения (issue #252) — доступна любой категории. -->
+    <string name="my_places_add_promotion">Aksiya qo\'shish</string>
+    <string name="my_places_new_promotion_title">Yangi aksiya</string>
+    <string name="my_places_promotion_created">Aksiya qo\'shildi</string>
     <string name="my_places_status_pending">Moderatsiyada</string>
     <string name="my_places_status_active">Faol</string>
     <string name="my_places_status_suspended">To\'xtatilgan</string>
@@ -601,6 +626,16 @@
     <string name="image_gallery_of">%1$s suratlari</string>
 
     <!-- Очередь (walk-in, issue #96) -->
+    <string name="home_focus_ticket_kicker">Sizning navbatingiz</string>
+    <string name="home_focus_nearest_kicker">Hozir eng yaqin</string>
+    <string name="home_focus_ticket_position">Navbatda · %1$d</string>
+    <string name="home_focus_open_ticket">Navbatni ochish</string>
+    <string name="home_focus_open_place">Joy</string>
+    <string name="category_all">Hammasi</string>
+    <string name="home_focus_updated_at">%1$s da yangilangan</string>
+    <string name="home_focus_rating">reyting %1$s</string>
+    <string name="wallet_header_subscription">%1$s %2$s gacha</string>
+    <string name="place_services_title">Xizmatlar</string>
     <string name="queue_title">Navbat</string>
     <string name="queue_form_description">So\'rov ustaga yuboriladi: u yozilishni tasdiqlaydi yoki boshqa vaqt taklif qiladi.</string>
     <string name="queue_field_name">Ismingiz</string>
@@ -621,8 +656,9 @@
     <string name="queue_position_label">Navbatdagi o\'rningiz</string>
     <string name="queue_position_unknown">O\'rin usta yozilishni tasdiqlagach ko\'rinadi.</string>
     <string name="queue_position_outdated">Navbat o\'zgargan bo\'lishi mumkin: keyingi xabarni kuting.</string>
-    <string name="queue_wait_label">Taxminiy kutish: %1$s</string>
-    <string name="queue_wait_hours">%1$s soat</string>
+    <string name="queue_stat_wait">daqiqa</string>
+    <string name="queue_stat_wait_hours">soat</string>
+    <string name="queue_stat_taken">olindi</string>
     <string name="queue_cancel">Navbatni bekor qilish</string>
     <string name="queue_cancel_keep">Qoldirish</string>
     <string name="queue_cancel_confirm_title">Navbatni bekor qilasizmi?</string>
@@ -769,10 +805,62 @@
     <string name="freelancer_order_status_rejected">Rad etildi</string>
     <string name="freelancer_order_status_completed">Bajarildi</string>
 
+    <!-- Кабинет мастера: анкета и выставление услуг (issue #71) -->
+    <string name="my_services_title">Mening xizmatlarim</string>
+    <string name="my_services_profile_subtitle">Usta bo\'ling: anketa to\'ldiring va xizmatlaringizni qo\'ying</string>
+    <string name="my_services_intro_title">Siz hali usta emassiz</string>
+    <string name="my_services_intro_description">Anketani to\'ldiring — shundan keyin sizni ustalar katalogida topishadi va xizmatlaringizga buyurtma berishadi.</string>
+    <string name="my_services_become_master">Usta bo\'lish</string>
+    <string name="my_services_edit_profile">Anketani o\'zgartirish</string>
+    <string name="my_services_name_label">Ism</string>
+    <string name="my_services_profession_label">Mutaxassislik</string>
+    <string name="my_services_profession_placeholder">Masalan: santexnik</string>
+    <string name="my_services_city_label">Shahar (majburiy emas)</string>
+    <string name="my_services_city_placeholder">Masalan: Toshkent</string>
+    <string name="my_services_rate_label">Soatiga narx (majburiy emas)</string>
+    <string name="my_services_rate_hint">So\'mda. Kataloglagi kartochkangizda ko\'rinadi.</string>
+    <string name="my_services_experience_label">Tajriba, yil (majburiy emas)</string>
+    <string name="my_services_bio_label">O\'zingiz haqingizda (majburiy emas)</string>
+    <string name="my_services_bio_placeholder">Nima qilasiz, qanday ishlaysiz</string>
+    <string name="my_services_available_title">Buyurtma qabul qilaman</string>
+    <string name="my_services_available_description">O\'chirsangiz, katalogda «hozir band» deb ko\'rinasiz — kartochkangiz yo\'qolmaydi.</string>
+    <string name="my_services_section">Xizmatlarim</string>
+    <string name="my_services_add">Xizmat qo\'shish</string>
+    <string name="my_services_empty_title">Xizmat qo\'yilmagan</string>
+    <string name="my_services_empty_description">Mijoz buyurtmani ro\'yxatdan tanlaydi: xizmatsiz sizga buyurtma bera olmaydi.</string>
+    <string name="my_services_inactive">O\'chirilgan</string>
+    <string name="my_services_new_service">Yangi xizmat</string>
+    <string name="my_services_edit_service">O\'zgartirish</string>
+    <string name="my_services_service_title_label">Xizmat nomi</string>
+    <string name="my_services_service_title_placeholder">Masalan: kran almashtirish</string>
+    <string name="my_services_service_price_label">Narxi, so\'m</string>
+    <string name="my_services_service_duration_label">Davomiyligi, daqiqa (majburiy emas)</string>
+    <string name="my_services_service_duration_hint">Mijoz qancha vaqt ketishini biladi.</string>
+    <string name="my_services_service_description_label">Tavsif (majburiy emas)</string>
+    <string name="my_services_delete_title">Xizmatni olib tashlash</string>
+    <string name="my_services_delete_message">«%1$s» olib tashlansinmi? Mijozlar uni ro\'yxatda ko\'rmaydi.</string>
+    <string name="my_services_error_name_required">Ismni kiriting</string>
+    <string name="my_services_error_name_short">Ism juda qisqa: kamida %1$d ta belgi</string>
+    <string name="my_services_error_profession_required">Mutaxassislikni kiriting</string>
+    <string name="my_services_error_phone_invalid">Telefon raqamini to\'liq kiriting</string>
+    <string name="my_services_error_number_invalid">Raqamni tekshiring</string>
+    <string name="my_services_error_service_title_required">Xizmat nomini kiriting</string>
+    <string name="my_services_error_price_required">Narxni kiriting</string>
+
     <string name="my_freelancer_orders_title">Ustalardagi buyurtmalarim</string>
     <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
     <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
     <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
+
+    <!-- Входящие заказы мастера (issue #190) -->
+    <string name="freelancer_incoming_orders_title">Kiruvchi buyurtmalar</string>
+    <string name="freelancer_incoming_orders_profile_subtitle">Mijozlarning sizga bergan buyurtmalari</string>
+    <string name="freelancer_incoming_orders_empty_title">Hozircha buyurtma yo\'q</string>
+    <string name="freelancer_incoming_orders_empty_description">Mijoz xizmatingizni buyurtma qilganda shu yerda ko\'rinadi.</string>
+    <string name="freelancer_incoming_order_accept">Qabul qilish</string>
+    <string name="freelancer_incoming_order_reject">Rad etish</string>
+    <string name="freelancer_incoming_order_complete">Bajarildi deb belgilash</string>
+
     <!-- Вертикаль «Одежда» (issue #108) -->
     <string name="category_fashion">Kiyim</string>
     <string name="place_action_shop">Do\'kon</string>
@@ -813,6 +901,10 @@
     <string name="fashion_checkout_items">Buyurtma tarkibi</string>
     <string name="fashion_checkout_empty">Bu do\'kon bo\'yicha savat bo\'sh.</string>
     <string name="fashion_checkout_delivery_note">Yetkazib berish narxini do\'kon buyurtma rasmiylashtirilgach hisoblaydi.</string>
+    <string name="fashion_checkout_promo_label">Promo-kod</string>
+    <string name="fashion_checkout_promo_apply">Qo\'llash</string>
+    <string name="fashion_checkout_promo_remove">Olib tashlash</string>
+    <string name="fashion_checkout_promo_invalid">Promo-kod amal qilmaydi</string>
     <string name="fashion_checkout_submit">Buyurtmani tasdiqlash</string>
     <string name="fashion_order_created">Buyurtma qabul qilindi</string>
     <string name="fashion_open_orders">Buyurtmalarim</string>
@@ -988,6 +1080,146 @@
     <string name="gaming_status_completed">Tugadi</string>
     <string name="gaming_status_cancelled">Bekor qilindi</string>
     <string name="gaming_status_unknown">Holati aniq emas</string>
+
+    <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
+    <string name="notification_channel_orders">Buyurtmalar</string>
+    <string name="notification_channel_orders_description">Buyurtma qabul qilindi, tayyorlanmoqda, yetkazilmoqda.</string>
+    <string name="notification_channel_queue">Navbat</string>
+    <string name="notification_channel_queue_description">Talon holati va navbatingiz yaqinlashgani haqida.</string>
+    <string name="notification_channel_bookings">Yozuvlar</string>
+    <string name="notification_channel_bookings_description">Usta va shifokorga yozuvlar, eslatmalar.</string>
+    <string name="notification_channel_payments">To\'lovlar</string>
+    <string name="notification_channel_payments_description">Obuna, hisobdan yechish va hamyon haqida.</string>
+    <string name="notification_channel_marketing">Aksiyalar</string>
+    <string name="notification_channel_marketing_description">Chegirmalar va takliflar.</string>
+    <string name="notification_channel_other">Boshqalar</string>
+    <string name="notification_channel_other_description">Yuqoridagi turkumlarga kirmagan xabarlar.</string>
+
+    <string name="notification_permission_title">Bildirishnomalar o\'chirilgan</string>
+    <string name="notification_permission_description">Ruxsatsiz buyurtma, navbat va yozuv haqidagi xabarlar kelmaydi. Ularni faqat shu ro\'yxatda ko\'rasiz.</string>
+    <string name="notification_permission_allow">Ruxsat berish</string>
+    <string name="notification_permission_open_settings">Tizim sozlamalari</string>
+
+    <string name="notification_settings_title">Bildirishnoma sozlamalari</string>
+    <string name="notification_settings_profile_subtitle">Turkumlar va tinch soatlar</string>
+    <string name="notification_settings_categories">Turkumlar</string>
+    <string name="notification_settings_quiet_hours">Tinch soatlar</string>
+    <string name="notification_settings_quiet_hours_enabled">Tinch soatlarni yoqish</string>
+    <string name="notification_settings_quiet_hours_description">Bu vaqtda bildirishnomalar ovozsiz keladi.</string>
+    <string name="notification_settings_quiet_hours_from">Boshlanishi</string>
+    <string name="notification_settings_quiet_hours_to">Tugashi</string>
+    <string name="notification_settings_quiet_hours_selected">Tanlangan</string>
+    <string name="notification_settings_push_unavailable">Bu yig\'malada push xizmati sozlanmagan: xabarlar faqat bildirishnomalar markazida ko\'rinadi.</string>
+
+
+    <!-- Бизнес-панель (эпик #16) -->
+    <string name="business_title">Biznes panel</string>
+    <string name="business_open">Biznes panel</string>
+    <string name="business_no_access_title">Panel ochiq emas</string>
+    <string name="business_no_access_description">Bu joy sizning joylaringiz ro\'yxatida yo\'q.</string>
+    <string name="business_pending_title">Joy hali chop etilmagan</string>
+    <string name="business_pending_description">Moderatsiya arizani ko\'rib chiqmaguncha buyurtma ham, navbat ham bo\'lmaydi.</string>
+    <string name="business_metrics_title">Bugungi ko\'rsatkichlar</string>
+    <string name="business_metrics_empty">Bugun hali ko\'rsatkich yo\'q.</string>
+    <string name="business_metric_orders">Buyurtmalar</string>
+    <string name="business_metric_revenue">Tushum</string>
+    <string name="business_metric_views">Ko\'rishlar</string>
+    <string name="business_metric_reviews">Sharhlar</string>
+    <string name="business_pause_title">Hozir ochiq</string>
+    <string name="business_pause_description">O\'chirilsa, joy yangi buyurtma va navbat qabul qilmaydi.</string>
+    <string name="business_sections_title">Bo\'limlar</string>
+    <string name="business_no_sections_title">Bu turdagi joy uchun bo\'lim yo\'q</string>
+    <string name="business_no_sections_description">Navbat, buyurtma va menyu faqat sartaroshxona va oshxonalarda ishlaydi.</string>
+    <string name="business_section_queue">Navbat</string>
+    <string name="business_section_queue_description">Chaqirish, boshlash, yakunlash</string>
+    <string name="business_section_orders">Kiruvchi buyurtmalar</string>
+    <string name="business_section_orders_description">Qabul qilish va holatini o\'zgartirish</string>
+    <string name="business_section_menu">Menyu</string>
+    <string name="business_section_menu_description">Taomlar va stop-ro\'yxat</string>
+
+    <string name="business_queue_next_title">Navbatdagi</string>
+    <string name="business_queue_call_next">Keyingisini chaqirish</string>
+    <string name="business_queue_waiting">Navbatda: %1$d</string>
+    <string name="business_queue_unnamed">Ismi ko\'rsatilmagan</string>
+    <string name="business_queue_position">Navbatdagi o\'rni — %1$d</string>
+    <string name="business_queue_created_at">So\'ralgan vaqt: %1$s</string>
+    <string name="business_queue_empty_title">Navbat bo\'sh</string>
+    <string name="business_queue_empty_description">Hozircha hech kim yozilmagan.</string>
+    <string name="business_queue_accept">Qabul qilish</string>
+    <string name="business_queue_decline">Rad etish</string>
+    <string name="business_queue_start">Chaqirish</string>
+    <string name="business_queue_complete">Yakunlash</string>
+    <string name="business_queue_done_accept">%1$s qabul qilindi</string>
+    <string name="business_queue_done_decline">%1$s rad etildi</string>
+    <string name="business_queue_done_start">%1$s chaqirildi</string>
+    <string name="business_queue_done_complete">%1$s xizmati yakunlandi</string>
+    <string name="business_queue_status_pending">Javob kutilmoqda</string>
+    <string name="business_queue_status_accepted">Qabul qilindi</string>
+    <string name="business_queue_status_declined">Rad etildi</string>
+    <string name="business_queue_status_counter">Boshqa vaqt taklif qilindi</string>
+    <string name="business_queue_status_waiting">Kutmoqda</string>
+    <string name="business_queue_status_in_chair">Kresloda</string>
+    <string name="business_queue_status_completed">Yakunlandi</string>
+    <string name="business_queue_status_cancelled">Bekor qilindi</string>
+    <string name="business_queue_status_no_show">Kelmadi</string>
+    <string name="business_queue_status_expired">Muddati o\'tdi</string>
+    <string name="business_queue_status_unknown">Holati aniq emas</string>
+
+    <string name="business_orders_empty_title">Buyurtma yo\'q</string>
+    <string name="business_orders_empty_description">Bu bo\'limda hozircha buyurtma yo\'q.</string>
+    <string name="business_orders_no_number">Raqamsiz</string>
+    <string name="business_orders_new_count">Javob kutayotgan buyurtmalar: %1$d</string>
+    <string name="business_orders_meta">%1$s · %2$s</string>
+    <string name="business_orders_line">%1$d × %2$s</string>
+    <string name="business_orders_total">Jami</string>
+    <string name="business_orders_status_changed">%1$s — %2$s</string>
+    <string name="business_orders_filter_all">Hammasi</string>
+    <string name="business_orders_filter_new">Yangi</string>
+    <string name="business_orders_filter_accepted">Qabul qilingan</string>
+    <string name="business_orders_filter_preparing">Tayyorlanmoqda</string>
+    <string name="business_orders_filter_ready">Tayyor</string>
+    <string name="business_orders_status_new">Yangi</string>
+    <string name="business_orders_status_accepted">Qabul qilindi</string>
+    <string name="business_orders_status_preparing">Tayyorlanmoqda</string>
+    <string name="business_orders_status_ready">Tayyor</string>
+    <string name="business_orders_status_delivering">Yo\'lda</string>
+    <string name="business_orders_status_completed">Topshirildi</string>
+    <string name="business_orders_status_cancelled">Bekor qilindi</string>
+    <string name="business_orders_status_refunded">Puli qaytarildi</string>
+    <string name="business_orders_status_unknown">Holati aniq emas</string>
+    <string name="business_orders_action_accept">Qabul qilish</string>
+    <string name="business_orders_action_prepare">Tayyorlashni boshlash</string>
+    <string name="business_orders_action_ready">Tayyor</string>
+    <string name="business_orders_action_deliver">Yo\'lga chiqdi</string>
+    <string name="business_orders_action_complete">Topshirildi</string>
+    <string name="business_orders_action_cancel">Bekor qilish</string>
+
+    <string name="business_menu_empty_title">Menyu bo\'sh</string>
+    <string name="business_menu_empty_description">Birinchi taomni qo\'shing.</string>
+    <string name="business_menu_no_sections">Menyu bo\'limi yo\'q — taomni qo\'shishning iloji yo\'q.</string>
+    <string name="business_menu_unnamed_section">Nomsiz bo\'lim</string>
+    <string name="business_menu_unnamed_item">Nomsiz taom</string>
+    <string name="business_menu_halal">Halol</string>
+    <string name="business_menu_in_sale">Sotuvda</string>
+    <string name="business_menu_in_sale_description">O\'chirilsa, taom stop-ro\'yxatga tushadi.</string>
+    <string name="business_menu_stopped_count">Stop-ro\'yxatda: %1$d</string>
+    <string name="business_menu_stopped">%1$s stop-ro\'yxatga tushdi</string>
+    <string name="business_menu_resumed">%1$s yana sotuvda</string>
+    <string name="business_menu_created">%1$s qo\'shildi</string>
+    <string name="business_menu_add">Taom qo\'shish</string>
+    <string name="business_menu_save">Saqlash</string>
+    <string name="business_menu_section">Bo\'lim</string>
+    <string name="business_menu_field_name">Nomi</string>
+    <string name="business_menu_field_price">Narxi</string>
+    <string name="business_menu_field_price_hint">Eng kam narx — %1$s</string>
+    <string name="business_menu_field_description">Tavsifi</string>
+    <string name="business_menu_field_prep">Tayyorlash vaqti, daqiqa</string>
+    <string name="business_menu_error_name_required">Nomini kiriting.</string>
+    <string name="business_menu_error_price_required">Narxini kiriting.</string>
+    <string name="business_menu_error_price_number">Narx butun son bo\'lsin.</string>
+    <string name="business_menu_error_price_small">Eng kam narx — %1$s.</string>
+    <string name="business_menu_error_price_large">Narx juda katta — %1$s dan oshmasin.</string>
+    <string name="business_menu_error_prep_number">Vaqt butun son bo\'lsin.</string>
 
     <!-- Мои активности (issue #73) -->
     <string name="activity_title">Mening amallarim</string>

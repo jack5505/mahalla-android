@@ -34,13 +34,17 @@ class GeoViewModel @Inject constructor(
 
             GeoEvent.ChooseCityRequested -> updateState { copy(stage = GeoStage.CityPicker) }
 
-            is GeoEvent.CitySelected -> {
-                updateState { copy(selectedCity = event.city, busy = true) }
+            // Отметка города шаг не заканчивает: подтверждает его кнопка.
+            is GeoEvent.CitySelected -> updateState { copy(selectedCity = event.city) }
+
+            GeoEvent.ContinueClicked -> {
+                val city = currentState.selectedCity ?: return
+                updateState { copy(busy = true) }
                 viewModelScope.launch {
                     // Город не записался (нет места, битый файл) — держать
                     // пользователя на последнем шаге онбординга из-за
                     // настройки нельзя: город меняется и в профиле.
-                    runCatchingCancellable { onboardingRepository.setCity(event.city.id) }
+                    runCatchingCancellable { onboardingRepository.setCity(city.id) }
                         .reportSwallowed("settings.setCity")
                     updateState { copy(busy = false) }
                     emitEffect(GeoEffect.Finished)

@@ -16,6 +16,8 @@ import uz.mahalla.feature.fashion.domain.FashionCartStore
 import uz.mahalla.feature.food.domain.CartTotals
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
+import uz.mahalla.feature.promotions.data.PromotionsRepository
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.role.data.RoleRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.FashionArgs
@@ -38,6 +40,7 @@ class FashionCheckoutViewModel @Inject constructor(
     private val orderRepository: FashionOrderRepository,
     private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
+    private val promotionsRepository: PromotionsRepository,
     private val analytics: AnalyticsTracker,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<FashionCheckoutState, FashionCheckoutEvent, FashionCheckoutEffect>(
@@ -63,6 +66,12 @@ class FashionCheckoutViewModel @Inject constructor(
             FashionCheckoutEvent.SubmitClicked -> submit()
             FashionCheckoutEvent.TopUpClicked -> emitEffect(FashionCheckoutEffect.OpenWallet)
             FashionCheckoutEvent.OrdersClicked -> emitEffect(FashionCheckoutEffect.OpenOrders)
+            is FashionCheckoutEvent.PromoCodeChanged -> updateState {
+                copy(promoCodeInput = event.code, promoInvalid = false, promoCheckFailure = null)
+            }
+
+            FashionCheckoutEvent.PromoCodeApplyClicked -> applyPromoCode()
+            FashionCheckoutEvent.PromoCodeRemoveClicked -> removePromoCode()
         }
     }
 
@@ -137,7 +146,12 @@ class FashionCheckoutViewModel @Inject constructor(
      * совпадающий с причиной отказа.
      */
     private fun FashionCheckoutState.revalidated(): FashionCheckoutState {
-        val totals = CartTotals(subtotalSum = items.sumOf(FashionCartItem::totalSum))
+        val totals = CartTotals(
+            subtotalSum = items.sumOf(FashionCartItem::totalSum),
+            // Отказ (`valid: false`) скидку не даёт — `appliedPromo` в этом
+            // случае и так не заводится, см. [applyPromoCode].
+            discountSum = appliedPromo?.discountAmount ?: 0,
+        )
         return copy(
             totals = totals,
             errors = CheckoutValidator.validate(
@@ -147,6 +161,50 @@ class FashionCheckoutViewModel @Inject constructor(
                 walletBalanceSum = walletBalanceSum,
             ),
         )
+    }
+
+    /**
+     * Проверка кода (issue #180). Сумма считается по строкам корзины, без уже
+     * применённой скидки — второй код проверяется от полной цены, а не от
+     * уже уменьшенной.
+     */
+    private fun applyPromoCode() {
+        val state = currentState
+        val code = state.promoCodeInput.trim()
+        if (code.isEmpty() || state.promoChecking || state.isEmpty) return
+
+        updateState { copy(promoChecking = true, promoInvalid = false, promoCheckFailure = null) }
+        viewModelScope.launch {
+            val orderAmount = state.items.sumOf(FashionCartItem::totalSum)
+            when (val result = promotionsRepository.check(code, storeId, orderAmount)) {
+                is ApiResult.Failure -> updateState {
+                    copy(promoChecking = false, promoCheckFailure = result.failure)
+                }
+
+                is ApiResult.Success -> updateState {
+                    if (result.data.valid) {
+                        copy(
+                            promoChecking = false,
+                            appliedPromo = result.data,
+                            promoCodeInput = result.data.code,
+                        ).revalidated()
+                    } else {
+                        copy(promoChecking = false, appliedPromo = null, promoInvalid = true).revalidated()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun removePromoCode() {
+        updateState {
+            copy(
+                promoCodeInput = "",
+                appliedPromo = null,
+                promoInvalid = false,
+                promoCheckFailure = null,
+            ).revalidated()
+        }
     }
 
     /**
@@ -165,7 +223,8 @@ class FashionCheckoutViewModel @Inject constructor(
         updateState { copy(isSubmitting = true, submitError = null) }
         viewModelScope.launch {
             val store = FashionCartStore(storeId = storeId, items = state.items)
-            when (val result = orderRepository.create(store, state.form)) {
+            val promoCode = state.appliedPromo?.takeIf(PromoCheckResult::valid)?.code
+            when (val result = orderRepository.create(store, state.form, promoCode)) {
                 is ApiResult.Failure -> updateState {
                     copy(isSubmitting = false, submitError = result.failure)
                 }

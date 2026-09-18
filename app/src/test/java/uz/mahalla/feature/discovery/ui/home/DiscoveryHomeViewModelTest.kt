@@ -17,8 +17,11 @@ import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.feature.promotions.domain.PromotionPage
+import uz.mahalla.feature.queue.domain.WalkInStatus
+import uz.mahalla.feature.queue.domain.WalkInTicket
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakePromotionsRepository
+import uz.mahalla.testutil.FakeWalkInTicketStore
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
 import uz.mahalla.testutil.promotion
@@ -38,6 +41,8 @@ class DiscoveryHomeViewModelTest {
     private val repository = FakeCatalogRepository()
 
     private val promotions = FakePromotionsRepository()
+
+    private val tickets = FakeWalkInTicketStore()
 
     @Test
     fun `successful load splits the answer into sections`() = runTest {
@@ -271,13 +276,104 @@ class DiscoveryHomeViewModelTest {
         assertEquals(listOf("fresh"), viewModel.state.value.promotions.map(Promotion::id))
     }
 
+    // --- Фокус-карточка (макет 1a/1d) ---
+
+    @Test
+    fun `focus card takes the live ticket from the store`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        tickets.put(ticket(placeId = "p-9", placeName = "Barber House", receivedAt = NOW))
+
+        val state = viewModel().state.value
+
+        assertEquals("p-9", state.ticket?.placeId)
+        assertTrue("свежие числа талона должны показываться", state.ticketQueueInfoIsCurrent)
+    }
+
+    /**
+     * Позиция живёт две минуты (`WalkInTicket.QUEUE_INFO_TTL`): перечитать
+     * очередь нечем, и число получасовой давности карточка выдавать за
+     * текущее не должна — талон при этом остаётся.
+     */
+    @Test
+    fun `stale ticket keeps the card but hides the numbers`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        tickets.put(ticket(placeId = "p-9", receivedAt = NOW.minusSeconds(STALE_SECONDS)))
+
+        val state = viewModel().state.value
+
+        assertEquals("p-9", state.ticket?.placeId)
+        assertFalse("устаревшая позиция не показывается", state.ticketQueueInfoIsCurrent)
+    }
+
+    @Test
+    fun `without a ticket the card falls back to the nearest open place`() = runTest {
+        repository.respondWith(
+            listOf(
+                place("closed", isOpenNow = false, distanceMeters = 50),
+                place("open", isOpenNow = true, distanceMeters = 300),
+            ),
+        )
+
+        val state = viewModel().state.value
+
+        assertEquals(null, state.ticket)
+        // Закрытое ближе, но карточка отвечает на «куда можно сейчас».
+        assertEquals("open", state.nearestOpenPlace?.id)
+    }
+
+    @Test
+    fun `ticket click opens the queue of that place`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        tickets.put(ticket(placeId = "p-9", placeName = "Barber House", receivedAt = NOW))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(DiscoveryHomeEvent.TicketClicked)
+
+        assertEquals(
+            DiscoveryHomeEffect.OpenTicket("p-9", "Barber House"),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `returning to the screen rereads the cancelled ticket`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        tickets.put(ticket(placeId = "p-9", receivedAt = NOW))
+        val viewModel = viewModel()
+        // Талон отменили на экране очереди: хранилище живых больше не держит.
+        tickets.save(ticket(placeId = "p-9", receivedAt = NOW, status = WalkInStatus.Cancelled))
+
+        viewModel.onEvent(DiscoveryHomeEvent.ScreenResumed)
+
+        assertEquals(null, viewModel.state.value.ticket)
+    }
+
+    private fun ticket(
+        placeId: String,
+        receivedAt: Instant,
+        placeName: String = "Place $placeId",
+        status: WalkInStatus = WalkInStatus.Waiting,
+    ) = WalkInTicket(
+        id = "t-$placeId",
+        placeId = placeId,
+        placeName = placeName,
+        status = status,
+        queuePosition = 3,
+        estimatedWaitMinutes = 9,
+        receivedAt = receivedAt,
+    )
+
     private fun viewModel() = DiscoveryHomeViewModel(
         repository = repository,
         promotions = promotions,
+        tickets = tickets,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 
     private companion object {
         val NOW: Instant = Instant.parse("2026-09-04T12:00:00Z")
+
+        /** Заведомо больше `WalkInTicket.QUEUE_INFO_TTL` (две минуты). */
+        const val STALE_SECONDS = 600L
     }
 }

@@ -1,6 +1,7 @@
 package uz.mahalla.testutil
 
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentPage
 import uz.mahalla.feature.booking.domain.AppointmentStatus
@@ -91,4 +92,15 @@ class FakeHospitalRepository : HospitalRepository {
 
     override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
         appointmentResult
+
+    /** Записи, ушедшие в дотягивание имени врача, — по порядку вызовов. */
+    val withDoctorNamesCalls = mutableListOf<List<AppointmentDto>>()
+
+    /** Тождественная функция по умолчанию — тесты выше по стеку сами не про обогащение. */
+    var withDoctorNamesResult: ((List<AppointmentDto>) -> List<AppointmentDto>) = { it }
+
+    override suspend fun withDoctorNames(items: List<AppointmentDto>): List<AppointmentDto> {
+        withDoctorNamesCalls += items
+        return withDoctorNamesResult(items)
+    }
 }

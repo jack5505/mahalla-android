@@ -6,9 +6,12 @@ import uz.mahalla.feature.onboarding.domain.City
  * Анкета покупателя (issue #84): как зовут, где живёт и куда везти заказ.
  *
  * Хранится локально. `GET`/`PUT /users/me` у бэкенда есть (`docs/API-CONTRACT.md`),
- * но анкета — не про сервер: `city` и `address` он вообще не принимает
- * (`UpdateMeRequest` — только `fullName` и `avatarUrl`), а `fullName` анкеты
- * на сервер пока не уходит — это отдельная задача (issue #234). Анкета
+ * но анкета — не совсем про сервер: `city` и `address` он вообще не принимает
+ * (`UpdateMeRequest` — только `fullName` и `avatarUrl`). `fullName` анкеты
+ * туда всё же уходит, но не сразу и не отсюда — `RoleRepository.saveCustomer`
+ * лишь помечает его неподтверждённым (`UserProfile.fullNamePendingSync`), а
+ * шлёт `ProfileRepository.refresh()` при следующем открытии профиля (issue
+ * #234): анкета не должна ждать сеть, чтобы отпустить человека дальше. Анкета
  * остаётся тем, чем приложение пользуется само: имя показывается в шапке
  * профиля, город подставляется в координаты запросов
  * (`RequestLocationProvider`), а адрес — в оформление заказа, где его иначе

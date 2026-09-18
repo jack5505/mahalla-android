@@ -209,7 +209,7 @@ private fun PickerFooter(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = MapOverlayElevation,
         shadowElevation = MapOverlayElevation,

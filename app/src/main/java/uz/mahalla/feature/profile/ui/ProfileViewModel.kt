@@ -14,9 +14,12 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
+import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.media.data.MediaRepository
+import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.profile.data.ProfileRepository
 import uz.mahalla.feature.profile.data.SessionsRepository
 import uz.mahalla.feature.profile.domain.DeviceSession
@@ -40,6 +43,8 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val mediaRepository: MediaRepository,
     private val profileRepository: ProfileRepository,
+    private val biometricAvailability: BiometricAvailability,
+    private val notificationChannels: NotificationChannels,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
@@ -52,7 +57,12 @@ class ProfileViewModel @Inject constructor(
     private var nameSaveJob: Job? = null
 
     init {
-        updateState { copy(httpInspectorAvailable = httpInspector.isAvailable) }
+        updateState {
+            copy(
+                httpInspectorAvailable = httpInspector.isAvailable,
+                biometricStatus = biometricAvailability.status(),
+            )
+        }
         viewModelScope.launch {
             settingsDataStore.settings.collect { loaded ->
                 updateState { copy(settings = loaded) }
@@ -71,6 +81,11 @@ class ProfileViewModel @Inject constructor(
         when (event) {
             is ProfileEvent.LanguageSelected -> viewModelScope.launch {
                 settingsDataStore.setLanguage(event.language)
+                // Названия каналов идут строкой на языке из настроек
+                // (NotificationChannels.localizedContext), а не системы — без
+                // перезавода здесь они остались бы на старом языке до
+                // следующего перезапуска процесса.
+                notificationChannels.ensureAll()
                 if (localeManager.apply(event.language)) {
                     emitEffect(ProfileEffect.RecreateActivity)
                 }
@@ -79,6 +94,11 @@ class ProfileViewModel @Inject constructor(
             is ProfileEvent.ThemeSelected -> viewModelScope.launch {
                 settingsDataStore.setThemeMode(event.mode)
             }
+
+            is ProfileEvent.BiometricToggled -> toggleBiometric(event.enabled)
+            ProfileEvent.BiometricPromptSucceeded -> setBiometricEnabled(true)
+            ProfileEvent.BiometricPromptFailed -> updateState { copy(biometricPromptFailed = true) }
+            ProfileEvent.BiometricPromptCancelled -> Unit
 
             // Интента может не быть (сборка без инспектора) — тогда и строки в
             // профиле нет, но событие из старого состояния экрана прилететь
@@ -92,23 +112,27 @@ class ProfileViewModel @Inject constructor(
             // resume подряд) — общая, см. MviViewModel.onScreenResumed (issue
             // #145, #209); запрос по строке — тем более повод не грузить
             // список заново, иначе ответ приедет на уже сменившееся состояние.
-            ProfileEvent.ScreenResumed -> onScreenResumed(
-                isLoadInFlight = {
-                    currentState.pendingSessionId != null ||
-                        sessionsJob?.isActive == true ||
-                        profileRefreshJob?.isActive == true ||
-                        // Пока идёт своё сохранение имени или аватара, `GET`
-                        // не зовём: оба ответа переписывают профиль целиком,
-                        // и `GET`, обогнавший ещё не пришедший `PUT`, стёр бы
-                        // то, что человек только что сохранил.
-                        nameSaveJob?.isActive == true ||
-                        avatarJob?.isActive == true
-                },
-                load = {
-                    loadSessions(showLoading = false)
-                    refreshProfile()
-                },
-            )
+            ProfileEvent.ScreenResumed -> {
+                // Отпечаток могли добавить в настройках устройства и вернуться.
+                updateState { copy(biometricStatus = biometricAvailability.status()) }
+                onScreenResumed(
+                    isLoadInFlight = {
+                        currentState.pendingSessionId != null ||
+                            sessionsJob?.isActive == true ||
+                            profileRefreshJob?.isActive == true ||
+                            // Пока идёт своё сохранение имени или аватара, `GET`
+                            // не зовём: оба ответа переписывают профиль целиком,
+                            // и `GET`, обогнавший ещё не пришедший `PUT`, стёр бы
+                            // то, что человек только что сохранил.
+                            nameSaveJob?.isActive == true ||
+                            avatarJob?.isActive == true
+                    },
+                    load = {
+                        loadSessions(showLoading = false)
+                        refreshProfile()
+                    },
+                )
+            }
 
             ProfileEvent.SessionsRetryRequested -> loadSessions()
 
@@ -172,8 +196,14 @@ class ProfileViewModel @Inject constructor(
     private fun uploadAvatar(source: String) {
         // Имя сохраняется своим `PUT`: два одновременных `PUT` ответили бы в
         // произвольном порядке, и который приехал позже — тот и остался бы,
-        // даже если сервер обработал их в обратном порядке.
-        if (currentState.avatarUpload.inProgress || nameSaveJob?.isActive == true) return
+        // даже если сервер обработал их в обратном порядке. `profileRefreshJob`
+        // тоже может быть в полёте своим `PUT` (при fullNamePendingSync, issue
+        // #234) — те же два одновременных `PUT`, та же защита.
+        if (
+            currentState.avatarUpload.inProgress ||
+            nameSaveJob?.isActive == true ||
+            profileRefreshJob?.isActive == true
+        ) return
         updateState { copy(avatarUpload = AvatarUpload(inProgress = true)) }
         avatarJob = viewModelScope.launch {
             val result = mediaRepository.uploadImage(
@@ -218,6 +248,31 @@ class ProfileViewModel @Inject constructor(
      * @param showLoading скелетон вместо списка. При обновлении поверх уже
      * показанных устройств он не нужен: список бы мигал на каждом возврате.
      */
+    /**
+     * Выключить — сразу; включить — только после системного промпта. Без
+     * датчика или без отпечатков включать нечего: строка для этого отключена
+     * на экране, а сюда событие не должно доехать — если доехало, ничего не
+     * пишем.
+     */
+    private fun toggleBiometric(enabled: Boolean) {
+        updateState { copy(biometricPromptFailed = false) }
+        if (!enabled) {
+            setBiometricEnabled(false)
+            return
+        }
+        if (currentState.biometricStatus != BiometricStatus.Available) return
+        emitEffect(ProfileEffect.ShowBiometricPrompt)
+    }
+
+    private fun setBiometricEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            // Настройки могут не записаться (нет места, битый файл) — флаг не
+            // повод падать: PIN остаётся входом, как и в онбординге.
+            runCatchingCancellable { settingsDataStore.setBiometricEnabled(enabled) }
+                .reportSwallowed("settings.setBiometricEnabled")
+        }
+    }
+
     private fun loadSessions(showLoading: Boolean = true) {
         sessionsJob = viewModelScope.launch {
             if (showLoading) updateState { copy(sessions = ScreenState.Loading) }
@@ -228,6 +283,11 @@ class ProfileViewModel @Inject constructor(
 
     /**
      * `GET users/me` при открытии экрана и при возврате на него (issue #170).
+     *
+     * Если имя из анкеты покупателя ещё не подтверждено сервером
+     * (`UserProfile.fullNamePendingSync`, issue #234), уходит не `GET`, а
+     * повторный `PUT` — [ProfileRepository.refresh] сам решает, что отправить,
+     * экрану это не видно.
      *
      * Отказ не трогает состояние: [UserProfileStore] уже хранит то, что
      * сохранил вход, и `profile` в шапке остаётся прежним — не пустым и не
@@ -252,8 +312,17 @@ class ProfileViewModel @Inject constructor(
     private fun saveName() {
         val draft = currentState.nameEdit.draft.trim()
         if (draft.isEmpty() || draft.length > NameEdit.MAX_LENGTH) return
-        // Аватар сохраняется своим `PUT` — см. `uploadAvatar`.
-        if (currentState.nameEdit.saving || avatarJob?.isActive == true) return
+        // Аватар сохраняется своим `PUT` — см. `uploadAvatar`. `profileRefreshJob`
+        // тоже может быть в полёте своим `PUT`, если анкета покупателя ждёт
+        // подтверждения (issue #234, `fullNamePendingSync`) — не хватало бы
+        // только двух одновременных `PUT` на разные имена.
+        if (
+            currentState.nameEdit.saving ||
+            avatarJob?.isActive == true ||
+            profileRefreshJob?.isActive == true
+        ) {
+            return
+        }
         updateState { copy(nameEdit = nameEdit.copy(saving = true, failure = null)) }
         nameSaveJob = viewModelScope.launch {
             when (val result = profileRepository.updateProfile(fullName = draft)) {

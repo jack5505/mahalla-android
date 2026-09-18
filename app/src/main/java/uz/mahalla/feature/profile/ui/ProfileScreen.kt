@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +17,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +38,8 @@ import androidx.lifecycle.Lifecycle
 import uz.mahalla.R
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.locale.AppLanguage
+import uz.mahalla.core.ui.biometric.findFragmentActivity
+import uz.mahalla.core.ui.biometric.showBiometricPrompt
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaAsyncImage
@@ -52,6 +51,7 @@ import uz.mahalla.core.ui.components.MahallaDialog
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaListItem
+import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.components.MahallaSwitchRow
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
@@ -64,16 +64,21 @@ import uz.mahalla.core.ui.userMessage
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.ThemeMode
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.media.ui.mediaMessage
 import uz.mahalla.feature.media.ui.rememberPhotoPicker
+import uz.mahalla.feature.onboarding.domain.City
+import uz.mahalla.feature.onboarding.ui.labelRes
 import uz.mahalla.feature.profile.domain.AccountStatus
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.feature.profile.domain.DeviceSessionStatus
 import uz.mahalla.feature.profile.domain.VerificationStatus
 import uz.mahalla.feature.role.domain.UserRole
 import uz.mahalla.feature.role.ui.labelRes
+import uz.mahalla.ui.theme.FocusHeadline
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 import java.time.Instant
 
 /**
@@ -106,12 +111,23 @@ import java.time.Instant
  * (issue #107). Тоже отдельная строка и по той же причине: заказы у
  * фрилансеров приезжают из `freelancers/orders/my` и записью на время не
  * являются.
+ * @param onOpenMyServices открыть «мои услуги» — кабинет мастера (issue #71).
+ * Строка видна всем: мастером человек становится прямо на этом экране, а до
+ * анкеты исполнителя другого пути в приложении нет. Роль продавца здесь ни при
+ * чём — она про заведение, а мастер работает сам.
+ * @param onOpenMyFreelancerIncomingOrders открыть входящие заказы мастера
+ * (issue #190): принять, отклонить или отметить выполненным. Строка видна
+ * всем по той же причине, что и [onOpenMyServices] — мастером человек
+ * становится сам, права продавца здесь ни при чём.
  * @param onOpenMyFashionOrders открыть «мои заказы одежды» (issue #108).
  * Тоже всем и по той же причине: заказать одежду может кто угодно, а своего
  * таба у вертикали нет.
  * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
  * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
  * пробный период и отмена нужны обоим.
+ * @param onOpenNotificationSettings открыть настройки уведомлений (эпик 11).
+ * Строка в профиле, а не только в центре уведомлений: выключить маркетинг
+ * человек идёт в настройки приложения, а не в список пришедших сообщений.
  */
 @Composable
 fun ProfileScreen(
@@ -123,8 +139,11 @@ fun ProfileScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
@@ -132,6 +151,9 @@ fun ProfileScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val promptTitle = stringResource(R.string.onboarding_biometric_prompt_title)
+    val promptSubtitle = stringResource(R.string.onboarding_biometric_prompt_subtitle)
+    val promptNegative = stringResource(R.string.action_cancel)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -139,6 +161,25 @@ fun ProfileScreen(
                 ProfileEffect.RecreateActivity -> (context as? Activity)?.recreate()
                 is ProfileEffect.OpenHttpInspector -> context.startActivity(effect.intent)
                 ProfileEffect.LoggedOut -> onLoggedOut()
+
+                ProfileEffect.ShowBiometricPrompt -> {
+                    val activity = context.findFragmentActivity()
+                    if (activity == null) {
+                        // Без FragmentActivity (превью, тесты) промпт показать
+                        // нечем — тумблер честно остаётся выключенным.
+                        viewModel.onEvent(ProfileEvent.BiometricPromptFailed)
+                    } else {
+                        showBiometricPrompt(
+                            activity = activity,
+                            title = promptTitle,
+                            subtitle = promptSubtitle,
+                            negativeLabel = promptNegative,
+                            onSuccess = { viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded) },
+                            onCancelled = { viewModel.onEvent(ProfileEvent.BiometricPromptCancelled) },
+                            onFailed = { viewModel.onEvent(ProfileEvent.BiometricPromptFailed) },
+                        )
+                    }
+                }
             }
         }
     }
@@ -166,8 +207,11 @@ fun ProfileScreen(
         onOpenMyDoctorAppointments = onOpenMyDoctorAppointments,
         onOpenMyTickets = onOpenMyTickets,
         onOpenMyFreelancerOrders = onOpenMyFreelancerOrders,
+        onOpenMyServices = onOpenMyServices,
+        onOpenMyFreelancerIncomingOrders = onOpenMyFreelancerIncomingOrders,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
         onOpenSubscription = onOpenSubscription,
+        onOpenNotificationSettings = onOpenNotificationSettings,
         modifier = modifier,
         onOpenSavedPlaces = onOpenSavedPlaces,
         onChangeServer = onChangeServer,
@@ -176,7 +220,6 @@ fun ProfileScreen(
 }
 
 /** Разделено ради превью: сюда не попадает ни Hilt, ни навигация. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileContentScreen(
     state: ProfileState,
@@ -188,15 +231,18 @@ fun ProfileContentScreen(
     onOpenMyDoctorAppointments: () -> Unit,
     onOpenMyTickets: () -> Unit,
     onOpenMyFreelancerOrders: () -> Unit,
+    onOpenMyServices: () -> Unit,
+    onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
     onOpenSubscription: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
     onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
-        MahallaTopBar(title = stringResource(R.string.profile_title))
+        MahallaTopBar(title = stringResource(R.string.profile_title), brandMark = true)
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -210,6 +256,7 @@ fun ProfileContentScreen(
                 verification = state.verification,
                 account = state.account,
                 nameEdit = state.nameEdit,
+                city = City.fromId(state.settings.cityId),
                 onEvent = onEvent,
             )
 
@@ -226,7 +273,7 @@ fun ProfileContentScreen(
             // серверные права (issue #237) — их показывает шапка.
             MahallaListItem(
                 title = stringResource(R.string.role_profile_entry),
-                subtitle = stringResource(state.formRole.labelRes()),
+                subtitle = stringResource(state.formRole?.labelRes() ?: R.string.role_not_selected),
                 onClick = onOpenRole,
             )
 
@@ -282,6 +329,24 @@ fun ProfileContentScreen(
                 onClick = onOpenMyFreelancerOrders,
             )
 
+            // «Мои услуги» (issue #71) — обратная сторона той же вертикали:
+            // не заказать услугу, а выставить свою. Строка всем: анкету
+            // исполнителя заполняют прямо отсюда, другого пути к ней нет.
+            MahallaListItem(
+                title = stringResource(R.string.my_services_title),
+                subtitle = stringResource(R.string.my_services_profile_subtitle),
+                onClick = onOpenMyServices,
+            )
+
+            // Входящие заказы мастера (issue #190) — третья сторона той же
+            // вертикали: принять или отклонить то, что клиент уже заказал.
+            // Строка всем по той же причине, что у «Моих услуг».
+            MahallaListItem(
+                title = stringResource(R.string.freelancer_incoming_orders_title),
+                subtitle = stringResource(R.string.freelancer_incoming_orders_profile_subtitle),
+                onClick = onOpenMyFreelancerIncomingOrders,
+            )
+
             // «Мои заказы одежды» (issue #108): статус заказа двигает магазин,
             // и посмотреть его больше негде.
             MahallaListItem(
@@ -299,6 +364,15 @@ fun ProfileContentScreen(
                 onClick = onOpenSubscription,
             )
 
+            // Уведомления (эпик 11): категории и тихие часы. Тот же экран
+            // открывается из центра уведомлений — второго набора настроек не
+            // заводим, разошлись бы при первой правке.
+            MahallaListItem(
+                title = stringResource(R.string.notification_settings_title),
+                subtitle = stringResource(R.string.notification_settings_profile_subtitle),
+                onClick = onOpenNotificationSettings,
+            )
+
             // «Избранное» (issue #75): единственный вход в сохранённые места —
             // на самой карточке кнопка только добавляет и убирает.
             if (onOpenSavedPlaces != null) {
@@ -309,32 +383,58 @@ fun ProfileContentScreen(
                 )
             }
 
+            // Язык и тема — сегментами, как в макете (2d) и как на
+            // приветственном экране: выбор один из трёх, и рассыпанные чипы
+            // читались бы как фильтры, а не как переключатель.
             Text(
                 text = stringResource(R.string.profile_language),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-                AppLanguage.entries.forEach { language ->
-                    FilterChip(
-                        selected = state.settings.language == language,
-                        onClick = { onEvent(ProfileEvent.LanguageSelected(language)) },
-                        label = { Text(stringResource(language.labelRes())) },
-                    )
-                }
-            }
+            val languages = AppLanguage.entries
+            MahallaSegmentedControl(
+                options = languages.map { stringResource(it.labelRes()) },
+                selectedIndex = languages.indexOf(state.settings.language),
+                onSelect = { index -> onEvent(ProfileEvent.LanguageSelected(languages[index])) },
+            )
 
             Text(
                 text = stringResource(R.string.profile_theme),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-                ThemeMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = state.settings.themeMode == mode,
-                        onClick = { onEvent(ProfileEvent.ThemeSelected(mode)) },
-                        label = { Text(stringResource(mode.labelRes())) },
+            val themeModes = ThemeMode.entries
+            MahallaSegmentedControl(
+                options = themeModes.map { stringResource(it.labelRes()) },
+                selectedIndex = themeModes.indexOf(state.settings.themeMode),
+                onSelect = { index -> onEvent(ProfileEvent.ThemeSelected(themeModes[index])) },
+            )
+
+            // Тумблер отпечатка (макет 2d). Только при наличии датчика; без
+            // зарегистрированных отпечатков — выключен с объяснением.
+            if (state.showsBiometricRow) {
+                val enrolled = state.biometricStatus == BiometricStatus.Available
+                MahallaSwitchRow(
+                    title = stringResource(R.string.profile_biometric_title),
+                    checked = state.settings.biometricEnabled,
+                    onCheckedChange = { onEvent(ProfileEvent.BiometricToggled(it)) },
+                    description = stringResource(
+                        if (enrolled) {
+                            R.string.profile_biometric_description
+                        } else {
+                            R.string.onboarding_biometric_not_enrolled
+                        },
+                    ),
+                    // Выключить можно и без отпечатков: их могли удалить в
+                    // настройках устройства уже после включения, и запертый
+                    // включённый тумблер не дал бы снять флаг.
+                    enabled = enrolled || state.settings.biometricEnabled,
+                )
+                if (state.biometricPromptFailed) {
+                    Text(
+                        text = stringResource(R.string.onboarding_biometric_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -404,6 +504,10 @@ fun ProfileContentScreen(
  * Фото приезжает из `avatarUrl` (issue #60), а пока его нет — круг с
  * инициалами. Инициалы, а не силуэт: имя они уже говорят, и на устройстве, где
  * фото не загрузилось, шапка всё равно остаётся про конкретного человека.
+ *
+ * @param city кикер над именем (макет 2d). `null` — города не знаем: он
+ * сохраняется только когда человек выбрал его руками, отказавшись от
+ * геолокации, и придумывать «Чиланзар» из макета вместо этого нечем.
  */
 @Composable
 private fun ProfileHeader(
@@ -411,10 +515,18 @@ private fun ProfileHeader(
     verification: VerificationStatus,
     account: AccountStatus,
     nameEdit: NameEdit,
+    city: City?,
     onEvent: (ProfileEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     MahallaCard(modifier = modifier) {
+        if (city != null) {
+            Text(
+                text = stringResource(city.labelRes()),
+                style = MaterialTheme.typography.labelLarge,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
@@ -464,7 +576,7 @@ private fun ProfileHeader(
                             text = profile.fullName?.takeIf { it.isNotBlank() }
                                 ?: stringResource(R.string.profile_name_unknown),
                             modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = FocusHeadline,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         MahallaIconButton(
@@ -477,7 +589,9 @@ private fun ProfileHeader(
                 Text(
                     text = profile.phone?.takeIf { it.isNotBlank() }
                         ?: stringResource(R.string.profile_phone_unknown),
-                    style = MaterialTheme.typography.bodyMedium,
+                    // Телефон — моноширинными: в макете он подписан tnum, и
+                    // цифры номера не должны плясать рядом с именем.
+                    style = MaterialTheme.typography.labelLarge.merge(TabularNums),
                     color = LocalMahallaColors.current.fgMuted,
                 )
                 // Блокировка — цветом ошибки: строка «аккаунт заблокирован»
@@ -870,10 +984,13 @@ private fun ProfilePreview() {
             onOpenGamingBookings = {},
             onOpenMyAppointments = {},
             onOpenMyFreelancerOrders = {},
+            onOpenMyServices = {},
+            onOpenMyFreelancerIncomingOrders = {},
             onOpenMyDoctorAppointments = {},
             onOpenMyTickets = {},
             onOpenMyFashionOrders = {},
             onOpenSubscription = {},
+            onOpenNotificationSettings = {},
         )
     }
 }

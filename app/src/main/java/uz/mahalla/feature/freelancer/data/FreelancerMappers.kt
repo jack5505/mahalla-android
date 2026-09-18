@@ -42,21 +42,19 @@ internal fun FreelancerDto.toDomain(): Freelancer? {
 }
 
 /**
- * Разбор мягкий, как в каталоге: услуга без `id` отбрасывается — заказать её
- * нечем (`serviceId` идёт в тело заказа), а в списке она стала бы дубликатом
- * ключа. Домен переиспользует [BarberService] барбершопа: набор полей на
- * экране один и тот же, а `freelancerId` уже известен вызывающей стороне
- * (`route.freelancerId`) и на экран не идёт.
+ * Услуга мастера. Разбор мягкий, как у услуг заведения (issue #97): без `id`
+ * отбрасывается — заказать её нечем (`serviceId` обязателен в теле заказа), а
+ * в списке она стала бы дубликатом ключа.
  *
- * Выключенные (`isActive: false`) сюда доезжают — отсеивает их
- * [FreelancerRepository.services], чтобы правило было видно в одном месте
- * (то же решение, что у брони, issue #97).
+ * Выключенные (`isActive: false`) сюда доезжают: клиенту их отсеивает
+ * [FreelancerRepository.services], а в кабинете мастера они видны — это его
+ * услуги, и молча спрятать их значило бы соврать про состав.
  */
 internal fun FreelancerServiceDto.toDomain(): BarberService? {
     val serviceId = id?.takeIf { it.isNotBlank() } ?: return null
     return BarberService(
         id = serviceId,
-        title = title?.takeIf { it.isNotBlank() }.orEmpty(),
+        title = title?.trim()?.takeIf { it.isNotEmpty() }.orEmpty(),
         description = description?.trim()?.takeIf { it.isNotEmpty() },
         // Отрицательная цена — не скидка, а мусор.
         priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,

@@ -52,6 +52,15 @@ interface WalkInTicketStore {
     suspend fun active(placeId: String): WalkInTicket?
 
     /**
+     * Любой живой талон вошедшего — для фокус-карточки на главной: она
+     * спрашивает «есть ли талон вообще», не зная заведения.
+     *
+     * Если талонов несколько, отдаётся самый свежий: карточка отвечает на
+     * вопрос «что мне сейчас», а это последняя запись, а не первая.
+     */
+    suspend fun activeAny(): WalkInTicket?
+
+    /**
      * Запомнить состояние талона за тем, кто вошёл сейчас. Отдельного
      * «удалить» нет намеренно: отменённый и завершённый талон хранилище
      * выбрасывает само, а значит отмена — это та же запись нового состояния.
@@ -78,6 +87,20 @@ class DataStoreWalkInTicketStore @Inject constructor(
             // настройки означают «активного талона не знаем», и человек просто
             // увидит форму записи.
             .reportSwallowed("queue.readTicket")
+            .getOrNull()
+
+    override suspend fun activeAny(): WalkInTicket? =
+        runCatchingCancellable {
+            val now = clock.instant()
+            val owner = currentOwnerId()
+            decode(dataStore.data.first()[PreferenceKeys.WalkInTickets])
+                .filter { it.belongsTo(owner) && it.ticket.isAlive(now) }
+                .maxByOrNull { it.ticket.receivedAt }
+                ?.ticket
+        }
+            // Та же причина, что и у `active`: не прочитали — значит на главной
+            // просто не будет карточки талона.
+            .reportSwallowed("queue.readAnyTicket")
             .getOrNull()
 
     /**

@@ -67,3 +67,93 @@ val MahallaTypography = Typography(
 
 /** Суммы и номера талонов — моноширинные цифры, иначе прыгают при обновлении. */
 val TabularNums = TextStyle(fontFeatureSettings = "tnum")
+
+/**
+ * Крупные декоративные и «цифровые» стили редизайна «Focus»
+ * (`design_handoff_mahalla_focus/README.md`, раздел «Типографика»).
+ *
+ * Не заведены как слоты `Typography()`: `titleMedium`/`labelLarge`/`labelSmall`
+ * и т. д. уже используются кнопками, полями и карточками на всех 45 экранах
+ * приложения — изменение их размера задело бы вертикали, которые этот
+ * редизайн не трогает. Эти стили применяются точечно, только в
+ * переработанных экранах (онбординг, главная, карточка места, талон,
+ * кошелёк).
+ */
+
+/** Номер талона на карточке очереди — «A-15». Мержить с [TabularNums]. */
+val FocusDisplayTicket = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 48.sp,
+    lineHeight = 48.sp,
+)
+
+/** Баланс кошелька. Мержить с [TabularNums]. */
+val FocusDisplayBalance = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 40.sp,
+    lineHeight = 40.sp,
+)
+
+/** Заголовок приветственного экрана онбординга. */
+val FocusHeadlineWelcome = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.Bold,
+    fontSize = 36.sp,
+    lineHeight = 39.sp,
+    letterSpacing = (-0.72).sp,
+)
+
+/** Заголовки экранов, название места, фокус-карточка на главной. */
+val FocusHeadline = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 26.sp,
+    lineHeight = 30.sp,
+    letterSpacing = (-0.26).sp,
+)
+
+/** Заголовок шапки таба рядом со знаком M (общая шапка макета): Title 22/600. */
+val FocusTitleHeader = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 22.sp,
+    lineHeight = 26.sp,
+)
+
+/** Цифра в ячейке кода из SMS (шаг 0c). Мержить с [TabularNums]. */
+val FocusOtpDigit = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 28.sp,
+    lineHeight = 32.sp,
+)
+
+/** Цифра на клавише нампада PIN (шаг 0e). */
+val FocusPinKey = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.Medium,
+    fontSize = 22.sp,
+    lineHeight = 26.sp,
+)
+
+/** Заголовок шторки бронирования, «Активных талонов нет». */
+val FocusTitleSheet = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 20.sp,
+    lineHeight = 24.sp,
+)
+
+/**
+ * Декоративное число на фокус-карточке (opacity .14 — задаётся цветом в месте
+ * применения, не здесь).
+ */
+val FocusGhostNumeral = TextStyle(
+    fontFamily = Inter,
+    fontWeight = FontWeight.Normal,
+    fontSize = 118.sp,
+    lineHeight = 118.sp,
+    letterSpacing = (-4.72).sp,
+)

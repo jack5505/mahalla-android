@@ -18,7 +18,9 @@ import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
+import uz.mahalla.data.push.PushTokenRegistrar
 import uz.mahalla.feature.auth.data.AuthRepository
+import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
 import uz.mahalla.feature.update.data.AppUpdateGate
 import uz.mahalla.feature.update.domain.UpdateDecision
@@ -63,8 +65,29 @@ class RootViewModel @Inject constructor(
     private val backendUrlStore: BackendUrlStore,
     private val backendCertificatePin: BackendCertificatePin,
     private val appUpdateGate: AppUpdateGate,
+    private val pushTokenRegistrar: PushTokenRegistrar,
+    private val notificationChannels: NotificationChannels,
     sessionExpiry: SessionExpiry,
 ) : ViewModel() {
+
+    init {
+        // Пуши (эпик 11). Здесь, а не в `Application`: старт приложения не
+        // место для работы, которая ждёт ответа Firebase. Отдельной корутиной и
+        // не в `resolveStart` — splash не должен висеть, пока Firebase думает.
+        viewModelScope.launch {
+            // Токен спрашиваем сами: `onNewToken` срабатывает только при
+            // **смене** токена, а первый после установки приложение обязано
+            // забрать само — иначе на бэкенд не уедет ничего до переустановки.
+            runCatchingCancellable { pushTokenRegistrar.sync() }
+                .reportSwallowed("push.syncToken")
+            // Каналы обязаны существовать **до** первого пуша: сообщение с
+            // блоком `notification` в фоне показывает сама библиотека Firebase,
+            // и незаведённый канал `other` из манифеста она молча заменяет на
+            // своё «Разное» (см. NotificationChannels).
+            runCatchingCancellable { notificationChannels.ensureAll() }
+                .reportSwallowed("push.ensureChannels")
+        }
+    }
 
     /**
      * Сессия умерла, пока приложение работало (issue #138). Обрабатывает

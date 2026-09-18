@@ -55,6 +55,20 @@ data class MyPlace(
         get() = status == PlaceModerationStatus.Active && staffRole != PlaceStaffRole.Staff
 
     /**
+     * Показывать ли вход в бизнес-панель (эпик #16).
+     *
+     * Условие ровно одно — заведение прошло модерацию. Роль здесь **не**
+     * проверяется: сотруднику панель тоже нужна (он и вызывает следующего в
+     * очереди, и принимает заказы), просто разделов у него меньше — это решает
+     * уже `BusinessAccess` внутри самой панели.
+     *
+     * Заявке `PENDING` панель не нужна: ни заказов, ни очереди у неё быть не
+     * может, а вход в экран, который сможет сказать только «ждите модерацию»,
+     * повторяет то, что и так написано в этой же карточке.
+     */
+    val canOpenBusinessPanel: Boolean get() = status == PlaceModerationStatus.Active
+
+    /**
      * Управлять товарами витрины аптеки (issue #252) — тот же круг людей, что
      * и у [canToggleAvailability], и по той же причине: рядовой сотрудник не
      * должен получать кнопку, которая гарантированно откажет, а заявка на
@@ -66,6 +80,14 @@ data class MyPlace(
         get() = category == PlaceCategory.Pharmacy &&
             status == PlaceModerationStatus.Active &&
             staffRole != PlaceStaffRole.Staff
+
+    /**
+     * Заводить акцию заведения (issue #252, `POST promotions/places/{id}`) —
+     * тот же круг людей, что и у [canToggleAvailability], и по той же
+     * причине. В отличие от [canManageProducts] это действие не привязано к
+     * категории: акцию заводит любое заведение, а не одна вертикаль.
+     */
+    val canManagePromotion: Boolean get() = canToggleAvailability
 
     /**
      * Показывать ли переход на «Сотрудники» (issue #189).

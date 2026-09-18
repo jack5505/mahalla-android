@@ -11,9 +11,10 @@ import uz.mahalla.feature.freelancer.domain.FreelancerOrder
  * «Мои заказы у мастеров» (issue #107).
  *
  * Список только читается: отменить заказ клиенту нечем — статус меняет сам
- * мастер (`PUT freelancers/orders/{orderId}/status`, его кабинет — эпик #16),
- * а клиентской отмены в контракте нет вовсе. Кнопки, которая кончится
- * отказом, здесь поэтому нет.
+ * мастер, из своего экрана входящих заказов
+ * ([uz.mahalla.feature.freelancer.ui.orders.MyFreelancerIncomingOrdersScreen],
+ * issue #190), а клиентской отмены в контракте нет вовсе. Кнопки, которая
+ * кончится отказом, здесь поэтому нет.
  */
 data class MyFreelancerOrdersState(
     val orders: ScreenState<List<FreelancerOrder>> = ScreenState.Loading,

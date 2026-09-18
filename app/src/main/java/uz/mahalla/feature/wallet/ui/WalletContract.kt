@@ -5,6 +5,7 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.wallet.domain.TopUpDraft
 import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpProvider
@@ -42,6 +43,17 @@ data class WalletState(
     val topUp: TopUpState? = null,
     val paymentStarted: PaymentStarted? = null,
     val paymentOpenFailed: Boolean = false,
+    /**
+     * Подписка для карточки «Mahalla+» (макет 2c). `null` — её нет, ещё не
+     * приехала или бэкенд отказал: во всех трёх случаях карточки на экране
+     * просто нет.
+     *
+     * Своего состояния загрузки и ошибки у неё намеренно нет: за балансом сюда
+     * приходят, за подпиской — нет, и плашка «не удалось загрузить подписку»
+     * поверх приехавших денег была бы хуже отсутствующего блока. Та же логика,
+     * что у акций на главной (issue #104).
+     */
+    val subscription: Subscription? = null,
 ) : UiState {
 
     /**
@@ -103,9 +115,15 @@ sealed interface WalletEvent : UiEvent {
     data object PaymentOpenFailed : WalletEvent
 
     data object PaymentNoticeDismissed : WalletEvent
+
+    /** Нажата карточка «Mahalla+» — открыть экран подписки. */
+    data object SubscriptionClicked : WalletEvent
 }
 
 sealed interface WalletEffect : UiEffect {
     /** Веб-форма провайдера. Ссылка уже проверена `PaymentLink`. */
     data class OpenPaymentForm(val url: String) : WalletEffect
+
+    /** Экран подписки — тот же, что открывается из профиля (issue #103). */
+    data object OpenSubscription : WalletEffect
 }
