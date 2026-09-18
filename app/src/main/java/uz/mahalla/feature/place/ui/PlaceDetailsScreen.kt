@@ -100,6 +100,7 @@ import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.discovery.ui.distanceLabel
+import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.place.domain.OpeningHours
 import uz.mahalla.feature.place.domain.PlaceAction
@@ -186,6 +187,7 @@ fun PlaceDetailsScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onBack = onBack,
+        mapInitializer = viewModel.mapInitializer,
         modifier = modifier,
     )
 }
@@ -195,6 +197,7 @@ fun PlaceDetailsContent(
     state: PlaceDetailsState,
     onEvent: (PlaceDetailsEvent) -> Unit,
     onBack: () -> Unit,
+    mapInitializer: MapKitInitializer,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -223,7 +226,12 @@ fun PlaceDetailsContent(
             onRetry = { onEvent(PlaceDetailsEvent.Retry) },
             modifier = Modifier.padding(horizontal = Spacing.gutter),
         ) { details ->
-            DetailsList(details = details, state = state, onEvent = onEvent)
+            DetailsList(
+                details = details,
+                state = state,
+                onEvent = onEvent,
+                mapInitializer = mapInitializer,
+            )
         }
     }
 
@@ -271,6 +279,7 @@ private fun DetailsList(
     details: PlaceDetails,
     state: PlaceDetailsState,
     onEvent: (PlaceDetailsEvent) -> Unit,
+    mapInitializer: MapKitInitializer,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -279,12 +288,29 @@ private fun DetailsList(
         contentPadding = PaddingValues(bottom = Spacing.gutter),
     ) {
         item(key = "gallery") {
-            Gallery(
-                photos = details.photos,
-                placeName = details.place.name,
-                userId = state.userId,
-                onDeleteRequested = { onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(it)) },
-            )
+            // Плитка карты — рядом с фото (макет 1b): своей строки под неё нет,
+            // только у мест с координатами (issue #286).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            ) {
+                Gallery(
+                    photos = details.photos,
+                    placeName = details.place.name,
+                    userId = state.userId,
+                    onDeleteRequested = {
+                        onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(it))
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                details.place.point?.let { point ->
+                    PlaceMapTile(
+                        initializer = mapInitializer,
+                        point = point,
+                        distanceMeters = details.place.distanceMeters,
+                    )
+                }
+            }
         }
 
         state.galleryDeleteFailure?.let { failure ->
