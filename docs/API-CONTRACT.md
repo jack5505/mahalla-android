@@ -671,16 +671,61 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 только если `ownerId` файла совпал с вошедшим, а на отказ сервера (403 и
 любой другой) отвечает текстом, а не молчанием.
 
-## NotificationsApi ⚠️
+## NotificationsApi ✅ пути
 
-`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/notifications/data/NotificationsApi.kt` — пути и набор значений `type` сверены по схеме стенда (`GET /v3/api-docs`, 2026-09-09, эпик 11). Тела под токеном не сверены: `401` приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
 
-| Метод | Путь |
-|---|---|
-| GET | `notifications` |
-| GET | `notifications/unread-count` |
-| PUT | `notifications/read-all` |
-| PUT | `notifications/{id}/read` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `notifications` | `PageResponseNotificationResponse` |
+| GET | `notifications/unread-count` | число в `data` |
+| PUT | `notifications/read-all` | `ApiResponseVoid` |
+| PUT | `notifications/{id}/read` | `ApiResponseVoid` |
+
+`NotificationResponse.type` — ровно 13 значений: `WALKIN_REQUEST`,
+`WALKIN_ACCEPTED`, `WALKIN_DECLINED`, `WALKIN_COUNTER`, `WALKIN_COMPLETE`,
+`APPOINTMENT_BOOKED`, `APPOINTMENT_CONFIRMED`, `APPOINTMENT_REMINDER`,
+`ORDER_PLACED`, `ORDER_STATUS_UPDATED`, `REVIEW_ADDED`, `PROMOTION_CREATED`,
+`SUBSCRIPTION_EXPIRES`. `NotificationType.Unknown` при этом остаётся: список
+открытый, и незнакомый тип показывается, а не прячется.
+
+### Пуши (эпик 11) — чего в контракте НЕТ
+
+Сверено по полной схеме 2026-09-09, это не догадка:
+
+- **ручки регистрации устройства нет** — ни `devices`, ни `push/register`, ни
+  чего-либо подобного. Единственное место, куда клиент может положить токен, —
+  поле `fcmToken` внутри `AuthDeviceInfo`, то есть тела `auth/send-otp`,
+  `auth/verify-otp`, `auth/pin-login`, `auth/refresh`, `auth/telegram/*`.
+  Ограничение поля — 500 символов. Токен из-за этого уезжает не сразу, а с
+  ближайшим продлением сессии (см. `PushTokenRegistrar`, ADR 0009);
+- **серверных настроек уведомлений нет** — ни категорий, ни тихих часов.
+  Настройки локальные, в DataStore;
+- **схемы payload'а FCM нет.** Клиент читает `data` по именам полей
+  `NotificationResponse` — `id`, `type`, `entityId`, `title`, `body`
+  (`PushMessage.of`). Это имена самого бэкенда, но **не подтверждённые**:
+  сверить, когда бэкенд начнёт слать пуши.
+
+**Просьба к бэкенду:** слать **data-сообщения**. Сообщение с блоком
+`notification` в фоне показывает сама библиотека Firebase, минуя
+`MahallaMessagingService`, — тогда не работают ни каналы по категориям, ни
+тихие часы, ни переход по deep link'у на нужный экран.
+
+**NEEDS-PARTNER: `ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это
+заказ.** `NotificationTarget.Order` ведёт всякий такой пуш на
+`OrderStatusRoute(entityId)` → `GET orders/{orderId}` (`order-controller`,
+схема `OrderView`). Этот путь подтверждённо общий: та же ручка с фильтром
+`vertical=CLOTHING` уже читает заказы «Одежды» (`FashionOrderRepository`,
+issue #108) — то есть заказ еды и заказ одежды по одному и тому же `orderId`
+через неё резолвятся оба. А вот заказ мастера (issue #107,
+`FreelancerRepository`) через эту ручку **никогда не читался** — там свои
+`freelancers/{id}/orders` и `freelancers/orders/my`, `GET orders/{orderId}`
+для них не пробован ни разу. Если `ORDER_STATUS_UPDATED` уходит и по заказам
+мастеров (а `NotificationCategory.Orders` в клиенте объявляет и их тоже),
+нужно подтвердить: резолвит ли `order-controller` заказы вертикали мастеров
+тем же путём, что еду и одежду. Отслеживается issue #297: если да — можно
+ничего не делать; если нет — нужен `vertical` (или отдельный тип
+уведомления) в самом пуше, чтобы клиент не гадал.
 
 ## PharmacyApi ✅
 

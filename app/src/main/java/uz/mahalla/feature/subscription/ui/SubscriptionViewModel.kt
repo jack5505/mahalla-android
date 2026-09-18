@@ -10,7 +10,7 @@ import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.feature.role.data.RoleRepository
-import uz.mahalla.feature.role.domain.UserRole
+import uz.mahalla.feature.role.domain.providesServices
 import uz.mahalla.feature.subscription.data.SubscriptionRepository
 import uz.mahalla.feature.subscription.domain.PlanAudience
 import uz.mahalla.feature.subscription.domain.Subscription
@@ -154,17 +154,20 @@ class SubscriptionViewModel @Inject constructor(
     }
 
     /**
-     * Роль лежит локально (issue #84) и к правам на сервере отношения не
-     * имеет: бэкенд всё равно решает сам. Ошибиться здесь не страшно —
-     * покупатель, открывший заведение, просто увидит не тот набор тарифов и
-     * поправит роль в профиле.
+     * Аудитория — как и «Мои заведения» в профиле (issue #244): анкета
+     * продавца **или** права на сервере. До #244 здесь смотрели только на
+     * анкету, и настоящий владелец заведения, который её не заполнял, видел
+     * покупательские тарифы. Бэкенд всё равно решает сам — ошибиться здесь не
+     * страшно, но реже, чем раньше.
      */
-    private suspend fun audience(): PlanAudience =
-        if (roleRepository.current().role == UserRole.Provider) {
+    private suspend fun audience(): PlanAudience {
+        val profile = roleRepository.current()
+        return if (providesServices(profile.role, profile.serverRole)) {
             PlanAudience.Business
         } else {
             PlanAudience.User
         }
+    }
 
     private fun applyCurrent(result: ApiResult<Subscription?>) {
         when (result) {

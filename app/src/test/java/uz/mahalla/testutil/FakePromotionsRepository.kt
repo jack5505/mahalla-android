@@ -56,6 +56,15 @@ class FakePromotionsRepository : PromotionsRepository {
         createRequests += placeId to draft
         return createResult
     }
+
+    override suspend fun check(
+        code: String,
+        placeId: String,
+        orderAmountSum: Long,
+    ): ApiResult<PromoCheckResult> {
+        requestedChecks += Triple(code, placeId, orderAmountSum)
+        return check
+    }
 }
 
 /** Акция для тестов: обязательные поля заполнены, остальное задаётся точечно. */

@@ -28,8 +28,9 @@ import uz.mahalla.data.network.ApiResponse
  *
  * `placeId` — uuid: `promotions/places/1` отвечает `400 TYPE_MISMATCH`.
  *
- * `GET promotions/check` не используется: проверяет промокод, а применить его
- * в заказе нечем — поля под код в `PlaceOrderRequest` нет (issue #9).
+ * `GET promotions/check` используется в оформлении заказа «Одежды»
+ * (`FashionCheckoutViewModel`, issue #180): проверяет код заранее, а сам заказ
+ * несёт его в `promoCode` у `FashionPlaceOrderRequestDto`.
  *
  * **`POST places/{placeId}`** (issue #252, владелец заводит акцию) —
  * доступна из «Моих заведений» тем же приёмом, что и `POST
