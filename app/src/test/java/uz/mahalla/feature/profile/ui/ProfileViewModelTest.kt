@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -31,6 +32,7 @@ import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.media.domain.MediaRejection
+import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeBiometricAvailability
@@ -673,6 +675,10 @@ class ProfileViewModelTest {
         mediaRepository = media,
         profileRepository = profile,
         biometricAvailability = biometrics,
+        notificationChannels = NotificationChannels(
+            context = ApplicationProvider.getApplicationContext(),
+            settings = settings,
+        ),
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */

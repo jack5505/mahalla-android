@@ -11,6 +11,7 @@ import uz.mahalla.core.result.map
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.promotions.domain.CreatablePromoType
 import uz.mahalla.feature.promotions.domain.NewPromotionDraft
+import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.promotions.domain.PromoType
 import uz.mahalla.feature.promotions.domain.Promotion
 import uz.mahalla.feature.promotions.domain.PromotionFeed
@@ -39,6 +40,13 @@ interface PromotionsRepository {
     suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>>
 
     /**
+     * Проверка промокода перед оформлением (issue #180, `GET promotions/check`).
+     * [orderAmountSum] — сумы, как и весь домен; пересчёт в тийины (issue #149)
+     * делает реализация.
+     */
+    suspend fun check(code: String, placeId: String, orderAmountSum: Long): ApiResult<PromoCheckResult>
+
+    /**
      * Новая акция заведения (issue #252). Владелец правит своё заведение —
      * доступ проверяет бэкенд, клиент только не даёт заведомо невалидному
      * черновику уйти в сеть.
@@ -58,6 +66,15 @@ class DefaultPromotionsRepository @Inject constructor(
     override suspend fun placePromotions(placeId: String): ApiResult<List<Promotion>> =
         apiCall { api.placePromotions(placeId).payload() }
             .map { promotions -> promotions.mapNotNull(PromotionDto::toDomain) }
+
+    override suspend fun check(
+        code: String,
+        placeId: String,
+        orderAmountSum: Long,
+    ): ApiResult<PromoCheckResult> =
+        apiCall {
+            api.check(code = code, placeId = placeId, orderAmount = Money.somToTiyin(orderAmountSum)).payload()
+        }.map { it.toDomain(code) }
 
     /**
      * Черновик уже проверен формой (`canSubmit`), но повторная проверка тут
@@ -151,3 +168,15 @@ internal fun PromotionDto.toDomain(): Promotion? {
 }
 
 private val PERCENT_RANGE = 1..100
+
+/**
+ * `CheckResponse` → домен (issue #180). `valid` — по умолчанию `false`:
+ * молчание сервера о поле — не повод считать код принятым и показать скидку,
+ * которой, может, и не одобрили.
+ */
+internal fun PromoCheckDto.toDomain(requestedCode: String): PromoCheckResult = PromoCheckResult(
+    code = promoCode?.takeIf(String::isNotBlank) ?: requestedCode,
+    valid = valid == true,
+    discountAmount = discountAmount.tiyinToSom() ?: 0,
+    finalAmount = finalAmount.tiyinToSom(),
+)

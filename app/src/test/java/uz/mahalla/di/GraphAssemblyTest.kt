@@ -20,6 +20,7 @@ import uz.mahalla.core.di.AppModule
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.device.AndroidDeviceInfoProvider
 import uz.mahalla.data.device.DeviceIdStore
+import uz.mahalla.data.push.PushTokenStore
 import uz.mahalla.data.location.AndroidLocationSource
 import uz.mahalla.data.location.DefaultRequestLocationProvider
 import uz.mahalla.data.network.AuthInterceptor
@@ -576,12 +577,17 @@ class GraphAssemblyTest {
             NetworkModule.provideBaseUrl(),
         )
 
+        val hospitalApi = HospitalDataModule.provideHospitalApi(retrofit)
         assertNotNull(
             DefaultActivityRepository(
                 fashionApi = FashionDataModule.provideFashionApi(retrofit),
                 gamingApi = GamingDataModule.provideGamingApi(retrofit),
                 bookingApi = BookingDataModule.provideBookingApi(retrofit),
-                hospitalApi = HospitalDataModule.provideHospitalApi(retrofit),
+                hospitalApi = hospitalApi,
+                hospitalRepository = DefaultHospitalRepository(
+                    api = hospitalApi,
+                    clock = AppModule.provideClock(),
+                ),
                 cinemaApi = CinemaDataModule.provideCinemaApi(retrofit),
                 placeNameResolver = DefaultPlaceNameResolver(
                     DiscoveryDataModule.provideCatalogApi(retrofit),
@@ -699,8 +705,12 @@ class GraphAssemblyTest {
      * (issue #42): и репозиторий, и `TokenAuthenticator` собираются вместе с
      * ними, реализациями из графа.
      */
-    private fun deviceInfoProvider(context: Context) =
-        AndroidDeviceInfoProvider(DeviceIdStore(sharedDataStore(context)))
+    private fun deviceInfoProvider(context: Context) = AndroidDeviceInfoProvider(
+        deviceIdStore = DeviceIdStore(sharedDataStore(context)),
+        // Токен пушей — часть описания устройства (эпик 11): отдельной ручки
+        // регистрации у бэкенда нет, и уезжает он именно отсюда.
+        pushTokenStore = PushTokenStore(sharedDataStore(context)),
+    )
 
     /**
      * Координаты в заголовках каждого запроса (issue #53): без них бэкенд

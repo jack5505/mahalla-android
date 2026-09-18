@@ -230,7 +230,7 @@ class MyPlacesViewModelTest {
     fun `an active place leads to the business panel with its name`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
 
@@ -264,7 +264,7 @@ class MyPlacesViewModelTest {
         // сказать только «ждите модерацию», повторяет ту же карточку.
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Pending)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         val effects = mutableListOf<MyPlacesEffect>()
         backgroundScope.launch { viewModel.effects.toList(effects) }
@@ -286,7 +286,7 @@ class MyPlacesViewModelTest {
                 place("p-1", PlaceModerationStatus.Active).copy(staffRole = PlaceStaffRole.Staff),
             ),
         )
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.BusinessPanelClicked("p-1"))
 
@@ -300,7 +300,7 @@ class MyPlacesViewModelTest {
     fun `the business panel of an unknown place does not open`() = runTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1", PlaceModerationStatus.Active)))
-        val viewModel = MyPlacesViewModel(repository)
+        val viewModel = viewModel(repository)
 
         val effects = mutableListOf<MyPlacesEffect>()
         backgroundScope.launch { viewModel.effects.toList(effects) }
