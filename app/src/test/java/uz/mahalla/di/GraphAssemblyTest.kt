@@ -28,6 +28,7 @@ import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
 import uz.mahalla.data.network.GeoHeaderInterceptor
+import uz.mahalla.data.network.LanguageHeaderInterceptor
 import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.di.NetworkModule
@@ -126,6 +127,7 @@ class GraphAssemblyTest {
             ),
             backendUrlInterceptor = backendUrlInterceptor,
             geoHeaderInterceptor = geoHeaderInterceptor(),
+            languageHeaderInterceptor = languageHeaderInterceptor(),
             httpInspector = inspector(),
             certificatePin = certificatePin(),
             overrideEnabled = true,
@@ -689,6 +691,7 @@ class GraphAssemblyTest {
     ) = NetworkModule.provideRefreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
         geoHeaderInterceptor = geoHeaderInterceptor(),
+        languageHeaderInterceptor = languageHeaderInterceptor(),
         httpInspector = inspector(),
         certificatePin = certificatePin(),
         overrideEnabled = overrideEnabled,
@@ -720,6 +723,8 @@ class GraphAssemblyTest {
         locationProvider = locationProvider(context),
         clock = AppModule.provideClock(),
     )
+
+    private fun languageHeaderInterceptor() = LanguageHeaderInterceptor()
 
     private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
         locationSource = AndroidLocationSource(context),
