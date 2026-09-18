@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -24,6 +25,7 @@ import uz.mahalla.core.locale.LocaleContextWrapper
 import uz.mahalla.core.locale.LocaleEntryPoint
 import uz.mahalla.feature.root.ui.RootUiState
 import uz.mahalla.feature.root.ui.RootViewModel
+import uz.mahalla.feature.security.ui.lock.AppLockScreen
 import uz.mahalla.navigation.BackendUrlRoute
 import uz.mahalla.navigation.MahallaApp
 import uz.mahalla.navigation.MainGraph
@@ -77,6 +79,7 @@ class MainActivity : FragmentActivity() {
             // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
             // сбрасывал бы back stack (см. RootViewModel).
             val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
+            val locked by viewModel.locked.collectAsStateWithLifecycle()
             val controller = rememberNavController()
             // Ссылка держится только пока композиция жива: разобрать deep link
             // мёртвым контроллером нельзя, а `onNewIntent` приходит и после
@@ -114,8 +117,55 @@ class MainActivity : FragmentActivity() {
                         WelcomeRoute
                     },
                 )
+
+                // Замок приложения (issue #102) — оверлеем **поверх**
+                // навигации, а не маршрутом: он обязан накрывать любой экран,
+                // включая онбординг, обновление и ввод адреса бэкенда, и при
+                // этом не трогать back stack.
+                AppLockScreen(
+                    locked = locked,
+                    // «Забыли PIN» на экране блокировки уже выполнил выход
+                    // и сбросил флаг онбординга. Просто спрятать оверлей
+                    // мало: под ним остался экран, куда человека застал
+                    // фон, а сессии для него больше нет. Старт графа
+                    // пересчитывает `RootViewModel` — и он же снимает
+                    // замок. `recreate()`, как на смене языка, здесь не
+                    // годится: пересоздание сохраняет `ViewModelStore`, то
+                    // есть тот же зафиксированный старт.
+                    onAuthRestartRequired = viewModel::onAuthRestartRequired,
+                )
             }
         }
+    }
+
+    /**
+     * Прячем окно от снимка для «недавних» (issue #102).
+     *
+     * Снимок задачи система делает в промежутке между `onPause` и `onStop` —
+     * то есть **до** того, как замок защёлкнется: он срабатывает только на
+     * возврате. Без этого в списке задач оставался кошелёк с балансом, то
+     * есть дырка мимо самой фичи, ради которой замок и делали.
+     *
+     * Флаг ставится на паузе и снимается на резюме, а не висит постоянно,
+     * потому что `FLAG_SECURE` запрещает скриншот **и пока приложение на
+     * экране**: талон очереди и QR — как раз то, что человек показывает и
+     * сохраняет. Гейт «есть ли PIN» для этого не годится — PIN обязателен на
+     * входе (токены отдаёт только `setup-pin`/`pin-login`), так что он был бы
+     * истиной у всех и означал бы «запретить скриншоты навсегда».
+     *
+     * **Руками на устройстве не проверено** (эмулятора в CI нет): порядок
+     * «onPause → снимок» описан в документации, но на отдельных прошивках
+     * снимок делают раньше. Если окажется, что рано — флаг придётся вешать
+     * постоянно и отдельно решать судьбу скриншотов талона.
+     */
+    override fun onPause() {
+        super.onPause()
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     /**
