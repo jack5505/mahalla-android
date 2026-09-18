@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка в строке состояния (эпик 11). Отдельный файл, а не launcher-иконка:
+     в статус-баре Android берёт только альфа-канал и заливает его своим цветом,
+     поэтому цветная ic_launcher_foreground превратилась бы в белый квадрат.
+     Форма — та же временная заглушка-круг, заменится вместе с брендовой
+     иконкой. Размер 24dp: больший система всё равно ужмёт, потеряв резкость. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,4 a8,8 0 1,1 -0.01,0 z" />
+</vector>

@@ -15,6 +15,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.role.data.RoleProfile
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
 import uz.mahalla.feature.subscription.domain.BillingPeriod
 import uz.mahalla.feature.subscription.domain.ChargeProvider
@@ -98,6 +99,26 @@ class SubscriptionViewModelTest {
         val repository = FakeSubscriptionRepository()
 
         viewModel(repository, role = UserRole.Customer)
+
+        assertEquals(listOf(PlanAudience.User), repository.requestedAudiences)
+    }
+
+    @Test
+    fun `a server role alone is enough to show the business plans`() = runTest {
+        // Настоящий FOOD_OWNER, который анкету продавца не заполнял (issue
+        // #244): до этой правки видел покупательские тарифы.
+        val repository = FakeSubscriptionRepository()
+
+        viewModel(repository, role = null, serverRole = ServerRole.FoodOwner)
+
+        assertEquals(listOf(PlanAudience.Business), repository.requestedAudiences)
+    }
+
+    @Test
+    fun `an admin server role does not unlock the business plans`() = runTest {
+        val repository = FakeSubscriptionRepository()
+
+        viewModel(repository, role = null, serverRole = ServerRole.Admin)
 
         assertEquals(listOf(PlanAudience.User), repository.requestedAudiences)
     }
@@ -829,11 +850,12 @@ class SubscriptionViewModelTest {
 
     private fun viewModel(
         repository: FakeSubscriptionRepository,
-        role: UserRole = UserRole.Customer,
+        role: UserRole? = UserRole.Customer,
+        serverRole: ServerRole = ServerRole.Unknown,
         now: Instant = NOW,
     ) = SubscriptionViewModel(
         repository = repository,
-        roleRepository = FakeRoleRepository(RoleProfile(role = role)),
+        roleRepository = FakeRoleRepository(RoleProfile(role = role, serverRole = serverRole)),
         // Часы фиксированы: от них зависит прогноз продления, а «сегодня» в
         // тесте не должно зависеть от дня прогона.
         clock = Clock.fixed(now, DateTimeFormatters.AppZone),
