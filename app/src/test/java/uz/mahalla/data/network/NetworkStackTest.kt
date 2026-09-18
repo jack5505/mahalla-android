@@ -520,11 +520,16 @@ class NetworkStackTest {
         val auth = authenticator()
         val request = staleRequest()
 
+        // Разнесены по времени (issue #301) — иначе оба ответа одной пары
+        // схлопнутся во всплеск сами, и тест останется зелёным даже без
+        // сброса счётчика удачным refresh.
         server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
         auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
         server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
         auth.authenticate(route = null, response = unauthorized(request))
 
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
         server.enqueue(jsonResponse(REFRESHED_TOKENS_BODY))
         auth.authenticate(route = null, response = unauthorized(request))
         // Токен снова протух: только что обновлённая сессия опять становится
@@ -534,6 +539,7 @@ class NetworkStackTest {
 
         server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
         auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
         server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
         auth.authenticate(route = null, response = unauthorized(request))
 
