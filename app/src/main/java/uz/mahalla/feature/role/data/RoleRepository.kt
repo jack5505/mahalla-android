@@ -11,6 +11,7 @@ import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
+import uz.mahalla.feature.role.domain.ServerRole
 import uz.mahalla.feature.role.domain.UserRole
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,10 +55,18 @@ interface RoleRepository {
     suspend fun saveCustomer(form: CustomerForm): Boolean
 }
 
-/** Роль и анкета покупателя вместе: экран показывает их одним состоянием. */
+/**
+ * Роль и анкета покупателя вместе: экран показывает их одним состоянием.
+ *
+ * @param serverRole права на сервере (issue #237, #244) — тот же источник,
+ * что у [uz.mahalla.feature.profile.ui.ProfileState.serverRole]; читается из
+ * [uz.mahalla.data.prefs.UserProfileStore], который [RoleRepository] уже
+ * держит ради имени из анкеты.
+ */
 data class RoleProfile(
     val role: UserRole? = null,
     val customer: CustomerForm = CustomerForm(),
+    val serverRole: ServerRole = ServerRole.Unknown,
 )
 
 @Singleton
@@ -75,6 +84,7 @@ class DataStoreRoleRepository @Inject constructor(
                     city = City.fromId(appSettings.cityId),
                     address = appSettings.deliveryAddress.orEmpty(),
                 ),
+                serverRole = ServerRole.fromServer(userProfile.serverRole),
             )
         }.distinctUntilChanged()
 
