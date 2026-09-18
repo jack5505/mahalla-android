@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +63,16 @@ class RootViewModelTest {
 
     private val sessionExpiry = SessionExpiry()
 
+    /**
+     * `RootViewModel` подписывается на настройки через `viewModelScope` и не
+     * отписывается сам — без явного закрытия этот collect висит на
+     * `Dispatchers.Main` и после `resetMain()`, и может словить гонку в
+     * `TestMainDispatcher` уже в соседнем тесте полного прогона (issue #314).
+     * `ViewModelStore.clear()` закрывает scope так же, как это сделал бы
+     * реальный `ViewModelStoreOwner`.
+     */
+    private val viewModelStore = ViewModelStore()
+
     @Before
     fun setUp() {
         // viewModelScope живёт на Dispatchers.Main.
@@ -70,6 +81,7 @@ class RootViewModelTest {
 
     @After
     fun tearDown() {
+        viewModelStore.clear()
         Dispatchers.resetMain()
     }
 
@@ -274,6 +286,8 @@ class RootViewModelTest {
         assertEquals(0, versionRepository.checkCount)
     }
 
+    private var viewModelKeySeq = 0
+
     private fun viewModel(
         settings: SettingsDataStore,
         authRepository: FakeAuthRepository = FakeAuthRepository(),
@@ -295,7 +309,7 @@ class RootViewModelTest {
             settings = SettingsDataStore(newDataStore()),
         ),
         sessionExpiry,
-    )
+    ).also { viewModelStore.put("root-${viewModelKeySeq++}", it) }
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =
         state.first { it is RootUiState.Ready } as RootUiState.Ready
