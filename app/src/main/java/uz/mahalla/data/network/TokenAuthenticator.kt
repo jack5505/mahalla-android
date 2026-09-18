@@ -108,6 +108,10 @@ class TokenAuthenticator @Inject constructor(
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
                     sessionExpiry.notifyExpired()
+                    // Та же причина, что и у сброса ниже: следующий вход пишет
+                    // сессию мимо этого класса, и застрявший счётчик убил бы
+                    // её на первом же неоднозначном ответе (issue #198).
+                    consecutiveAmbiguousRefreshFailures = 0
                     return@synchronized null
                 }
                 // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать

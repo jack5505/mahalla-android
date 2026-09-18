@@ -264,6 +264,49 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `a new session after an explicit rejection starts the ambiguous counter over`() = runTest {
+        // Тот же риск, что и у смерти по счётчику: если до явного отказа
+        // сервера (401) уже был один прощённый неоднозначный ответ, счётчик
+        // остаётся ненулевым, а следующий вход пишет сессию мимо
+        // `TokenAuthenticator` — без сброса и здесь один неоднозначный ответ
+        // в новой сессии сразу добил бы счёт (issue #198).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val staleRequest = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertEquals("прощённый неоднозначный ответ", Session("stale", "refresh-1"), sessionStore.current())
+
+        server.enqueue(
+            envelopeError(
+                httpCode = 401,
+                code = "TOKEN_HIJACK",
+                message = "Xavfsizlik muammosi aniqlandi. Barcha sessiyalar bekor qilindi.",
+            ),
+        )
+        auth.authenticate(route = null, response = unauthorized(staleRequest))
+        assertNull("явный отказ убивает сессию", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+
+        sessionStore.save(Session("new-access", "new-refresh"))
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-2"}}"""))
+        auth.authenticate(route = null, response = unauthorized(newRequest))
+
+        assertEquals(
+            "один неоднозначный ответ в новой сессии — снова прощаем",
+            Session("new-access", "new-refresh"),
+            sessionStore.current(),
+        )
+        assertEquals("второго выброса на вход не случилось", 1, expiryEvents.size)
+    }
+
+    @Test
     fun `a refresh refused by the geo filter keeps the session`() = runTest {
         // 403 `GEO_*` на refresh — это `geoService.requireLocation`, первая
         // строка `refreshToken`, до разбора токена: токен тут ни при чём, и
