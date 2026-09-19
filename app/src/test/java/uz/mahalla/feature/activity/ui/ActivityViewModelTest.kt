@@ -116,25 +116,61 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `retrying from a total failure does not keep the section marks`() = runTest {
-        // Отметка раздела держится на списке, который она объясняет: ушёл
-        // список в скелетон — ушла и она.
+    fun `retrying a failed section only asks that source, keeping other cursors`() = runTest {
+        // Находка ревью PR #215: раньше «повторить» перечитывало
+        // FIRST_PAGES у всех пяти источников и откатывало курсор тех, что ни
+        // в чём не виноваты. Три страницы «Заказов» набраны кнопкой «показать
+        // ещё» — «повторить» у отметки «Кино» не должно их тронуть.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
-            failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
             items = listOf(activity("o-1", ActivitySource.Orders)),
+            failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
+            items = listOf(activity("o-2", ActivitySource.Orders)),
+            nextPages = mapOf(ActivitySource.Orders to 2),
         )
         val viewModel = ActivityViewModel(repository)
-        assertEquals(setOf(ActivitySource.CinemaTickets), viewModel.state.value.sourceFailures.keys)
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        assertEquals(mapOf(ActivitySource.Orders to 2), viewModel.state.value.nextPages)
 
-        // Список пропал (сессия истекла) — «повторить» показывает скелетон.
+        repository.feeds[setOf(ActivitySource.CinemaTickets)] = ActivityFeed(
+            items = listOf(activity("t-1", ActivitySource.CinemaTickets)),
+        )
+        viewModel.onEvent(ActivityEvent.Retry)
+        val state = viewModel.state.value
+
+        // «Кино» вылечилось и попало в список, а курсор «Заказов» — тот же,
+        // что был до «повторить».
+        assertTrue(state.sourceFailures.isEmpty())
+        assertEquals(mapOf(ActivitySource.Orders to 2), state.nextPages)
+        assertEquals(
+            setOf("Orders:o-1", "Orders:o-2", "CinemaTickets:t-1"),
+            (state.items as ScreenState.Content).data.map(Activity::key).toSet(),
+        )
+        // Ровно один новый запрос — только за «Кино».
+        assertEquals(mapOf(ActivitySource.CinemaTickets to 0), repository.requests.last())
+    }
+
+    @Test
+    fun `a resume from a total failure still does a full reload`() = runTest {
+        // Пустой курсор при полном отказе (issue #213) — не про что
+        // перечитывать, а перечитывать никого не значит потерять единственный
+        // шанс выйти из ScreenState.Error возвратом на таб.
+        val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
             failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
         )
-        viewModel.onEvent(ActivityEvent.Retry)
-
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
         assertTrue(viewModel.state.value.items is ScreenState.Error)
-        assertTrue(viewModel.state.value.sourceFailures.isEmpty())
+
+        repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
+        viewModel.onEvent(ActivityEvent.ScreenResumed)
+
+        assertEquals(ActivityFeed.FIRST_PAGES, repository.requests.last())
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
     }
 
     @Test
@@ -616,6 +652,54 @@ class ActivityViewModelTest {
 
         assertEquals(2, repository.requests.size)
         assertTrue(viewModel.state.value.items is ScreenState.Content)
+    }
+
+    @Test
+    fun `a resume that loses every source collapses to the error screen, not a blank list`() = runTest {
+        // Все пять источников успели отдать данные, а к возврату на таб
+        // сессия истекла у всех разом. Это тот же смысл, что и
+        // `ActivityFeed.isTotalFailure` в `load()`: нельзя молча стереть
+        // видимый список до пустого `Content` с пятью одинаковыми отметками
+        // «Unauthorized» — должен остаться один экран ошибки.
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // первый resume — открытие, не в счёт.
+
+        repository.defaultFeed = ActivityFeed(
+            failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
+        )
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // настоящий возврат.
+        val state = viewModel.state.value
+
+        assertEquals(ApiError.Unauthorized, (state.items as ScreenState.Error).error)
+        assertTrue(state.sourceFailures.isEmpty())
+        assertFalse(state.hasMore)
+    }
+
+    @Test
+    fun `coming back to the screen replays the pages already shown, not just the first`() = runTest {
+        // Issue #213: три нажатия «показать ещё» набрали список из трёх
+        // страниц. Уход на другой таб и возврат не имеет права откатить его к
+        // одной первой странице.
+        val repository = FakeActivityRepository()
+        repository.pageFeeds = { pages ->
+            val page = pages.getValue(ActivitySource.Orders)
+            ActivityFeed(
+                items = listOf(activity("o-$page", ActivitySource.Orders)),
+                nextPages = mapOf(ActivitySource.Orders to page + 1),
+            )
+        }
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // первый resume — открытие, не в счёт.
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        assertEquals(listOf("o-0", "o-1", "o-2"), viewModel.state.value.visible.map(Activity::id))
+
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // настоящий возврат.
+
+        assertEquals(listOf("o-0", "o-1", "o-2"), viewModel.state.value.visible.map(Activity::id))
+        assertTrue(viewModel.state.value.hasMore)
     }
 
     @Test
