@@ -9,7 +9,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.analytics.AnalyticsEvents
 import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.analytics.AnalyticsVertical
-import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
@@ -25,10 +24,10 @@ import javax.inject.Inject
 /**
  * Карточка фильма и покупка билета (issue #106).
  *
- * Два независимых запроса: афиша (в ней ищется сам фильм) и расписание
- * кинотеатра на выбранный день. Первый делается один раз, второй — на каждый
- * день; провал одного не прячет другого, как баланс и история в кошельке
- * (issue #62).
+ * Два независимых запроса: сам фильм (`GET cinema/movies/{id}`, issue #183 —
+ * до неё фильм искали по id в общей афише) и расписание кинотеатра на
+ * выбранный день. Первый делается один раз, второй — на каждый день; провал
+ * одного не прячет другого, как баланс и история в кошельке (issue #62).
  */
 @HiltViewModel
 class MovieViewModel @Inject constructor(
@@ -83,22 +82,20 @@ class MovieViewModel @Inject constructor(
 
             MovieEvent.BuyClicked -> buy()
             MovieEvent.MyTicketsClicked -> emitEffect(MovieEffect.OpenMyTickets)
+
+            MovieEvent.TrailerClicked -> {
+                val url = (currentState.movie as? ScreenState.Content)?.data?.trailerUrl
+                if (!url.isNullOrBlank()) emitEffect(MovieEffect.OpenTrailer(url))
+            }
         }
     }
 
     private fun loadMovie() {
         updateState { copy(movie = ScreenState.Loading) }
         viewModelScope.launch {
-            val state: ScreenState<Movie> = when (val result = repository.movies()) {
+            val state: ScreenState<Movie> = when (val result = repository.movie(route.movieId)) {
                 is ApiResult.Failure -> ScreenState.Error(result.failure)
-
-                is ApiResult.Success -> result.data
-                    .firstOrNull { it.id == route.movieId }
-                    // Фильма нет в афише — значит его сняли, пока человек шёл
-                    // сюда со списка. Это «не найдено», а не пустой экран:
-                    // сеансы ниже всё равно грузятся своим запросом.
-                    ?.let { movie -> ScreenState.Content(movie) }
-                    ?: ScreenState.Error(ApiError.NotFound)
+                is ApiResult.Success -> ScreenState.Content(result.data)
             }
             updateState { copy(movie = state) }
         }

@@ -3,6 +3,7 @@ package uz.mahalla.feature.hospital.data
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -265,6 +266,56 @@ class HospitalRepositoryTest {
         assertEquals("/hospitals/appointments/a-1", request.path)
         assertEquals(AppointmentStatus.Confirmed, appointment.status)
         assertEquals(LocalTime.of(9, 30), appointment.startTime)
+    }
+
+    /** Запрошенный `id` уже известен — его молчание в ответе не должно терять карточку. */
+    @Test
+    fun `appointment card without an id in the response falls back to the requested one`() = runTest {
+        server.enqueue(envelope("""{"status":"CONFIRMED"}"""))
+
+        val appointment = (repository().appointment("a-1") as ApiResult.Success).data
+
+        assertEquals("a-1", appointment.id)
+    }
+
+    /** Та же дотяжка имени, что и у списка (issue #219) — карточка не исключение. */
+    @Test
+    fun `appointment card without a service name is enriched with the doctor's name`() = runTest {
+        server.enqueue(envelope("""{"id":"a-1","doctorId":"$DOCTOR","status":"CONFIRMED"}"""))
+        server.enqueue(envelope("""{"id":"$DOCTOR","name":"Aliyev Bekzod"}"""))
+
+        val appointment = (repository().appointment("a-1") as ApiResult.Success).data
+
+        server.takeRequest()
+        assertEquals("/hospitals/doctors/$DOCTOR", server.takeRequest().path)
+        assertEquals("Aliyev Bekzod", appointment.serviceName)
+    }
+
+    @Test
+    fun `appointment card 404 is a not found failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"NOT_FOUND",
+                       "message":"Yozuv topilmadi"}}""",
+                ),
+        )
+
+        val result = repository().appointment("a-1")
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertEquals("Yozuv topilmadi", result.failure.server?.message)
+    }
+
+    @Test
+    fun `appointment card network failure is a no connection error`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repository().appointment("a-1")
+
+        assertEquals(ApiError.NoConnection, (result as ApiResult.Failure).error)
     }
 
     /**

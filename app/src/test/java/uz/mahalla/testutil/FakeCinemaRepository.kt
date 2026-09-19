@@ -1,5 +1,6 @@
 package uz.mahalla.testutil
 
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.cinema.data.CinemaRepository
 import uz.mahalla.feature.cinema.domain.CinemaSession
@@ -22,6 +23,18 @@ class FakeCinemaRepository : CinemaRepository {
     var moviesResult: ApiResult<List<Movie>> = ApiResult.Success(emptyList())
 
     var moviesRequests = 0
+
+    /** issue #183: карточка фильма читается по id, а не поиском по [moviesResult]. */
+    var movieResult: ApiResult<Movie> = ApiResult.Failure(ApiError.NotFound)
+
+    var movieRequests = 0
+
+    val requestedMovieIds = mutableListOf<String>()
+
+    /** issue #183: карточка билета читается по id, а не снимком из списка. */
+    var ticketResult: ApiResult<CinemaTicket> = ApiResult.Failure(ApiError.NotFound)
+
+    val requestedTicketIds = mutableListOf<String>()
 
     val schedules: MutableMap<LocalDate, ApiResult<List<CinemaSession>>> = mutableMapOf()
 
@@ -49,6 +62,17 @@ class FakeCinemaRepository : CinemaRepository {
     override suspend fun movies(): ApiResult<List<Movie>> {
         moviesRequests++
         return moviesResult
+    }
+
+    override suspend fun movie(movieId: String): ApiResult<Movie> {
+        movieRequests++
+        requestedMovieIds += movieId
+        return movieResult
+    }
+
+    override suspend fun ticket(ticketId: String): ApiResult<CinemaTicket> {
+        requestedTicketIds += ticketId
+        return ticketResult
     }
 
     override suspend fun schedule(

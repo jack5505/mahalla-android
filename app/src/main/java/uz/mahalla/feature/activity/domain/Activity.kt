@@ -199,6 +199,15 @@ sealed interface ActivityTarget {
      */
     data class FoodOrder(val orderId: String) : ActivityTarget
 
+    /** Карточка билета (issue #183): `GET cinema/tickets/{id}`. */
+    data class CinemaTicket(val ticketId: String) : ActivityTarget
+
+    /** Карточка записи к мастеру (issue #183): `GET appointments/{id}`. */
+    data class MasterAppointment(val appointmentId: String) : ActivityTarget
+
+    /** Карточка записи к врачу (issue #183): `GET hospitals/appointments/{id}`. */
+    data class DoctorAppointment(val appointmentId: String) : ActivityTarget
+
     /** Экрана для этой активности пока нет — строка не кликабельна. */
     data object None : ActivityTarget
 }

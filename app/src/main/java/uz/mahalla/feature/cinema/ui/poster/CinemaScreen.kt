@@ -151,7 +151,7 @@ private fun MovieRow(
     val colors = LocalMahallaColors.current
     MahallaCard(modifier = modifier, onClick = onClick) {
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-            MoviePoster()
+            MoviePoster(url = movie.posterUrl)
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(Spacing.item),
