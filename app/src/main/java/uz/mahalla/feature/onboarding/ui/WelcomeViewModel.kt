@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.core.result.runCatchingCancellable
@@ -19,9 +22,15 @@ import uz.mahalla.feature.onboarding.data.OnboardingRepository
 class WelcomeViewModel @Inject constructor(
     private val onboardingRepository: OnboardingRepository,
     private val localeManager: AppLocaleManager,
+    private val analytics: AnalyticsTracker,
 ) : MviViewModel<WelcomeState, WelcomeEvent, WelcomeEffect>(WelcomeState()) {
 
     init {
+        // Первый экран приложения — до входа. Аналитика уходит по `deviceId`
+        // (issue #226): раньше воронка «посмотрел → зарегистрировался →
+        // заказал» не измерялась вообще с этого шага, а не только теряла вид
+        // события.
+        analytics.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.ONBOARDING))
         viewModelScope.launch {
             onboardingRepository.settings.collect { settings ->
                 updateState { copy(language = settings.language) }

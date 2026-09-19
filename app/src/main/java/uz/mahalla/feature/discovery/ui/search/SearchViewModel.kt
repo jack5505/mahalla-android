@@ -7,6 +7,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
@@ -33,6 +35,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val historyStore: SearchHistoryStore,
+    private val analytics: AnalyticsTracker,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<SearchState, SearchEvent, SearchEffect>(SearchState()) {
 
@@ -117,6 +120,10 @@ class SearchViewModel @Inject constructor(
     private fun rememberQuery(query: String) {
         if (query.isBlank()) return
         viewModelScope.launch { historyStore.add(query) }
+        // Только явно выполненный поиск (issue #226) — не на каждую букву:
+        // иначе воронка «что искали» потонула бы в промежуточных обрывках
+        // набора, которые никто не досмотрел.
+        analytics.track(AnalyticsQueuedEvents.searched(query))
     }
 
     /**

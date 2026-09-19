@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import uz.mahalla.data.db.MahallaDatabase
 import uz.mahalla.data.db.MahallaMigrations
+import uz.mahalla.data.db.dao.AnalyticsEventDao
 import uz.mahalla.data.db.dao.CartDraftDao
 import uz.mahalla.data.db.dao.OrderDao
 import uz.mahalla.data.db.dao.PlaceDao
@@ -42,4 +43,7 @@ object DatabaseModule {
 
     @Provides
     fun provideCartDraftDao(database: MahallaDatabase): CartDraftDao = database.cartDraftDao()
+
+    @Provides
+    fun provideAnalyticsEventDao(database: MahallaDatabase): AnalyticsEventDao = database.analyticsEventDao()
 }

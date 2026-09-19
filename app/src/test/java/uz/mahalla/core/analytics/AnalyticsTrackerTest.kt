@@ -14,6 +14,7 @@ import org.junit.Test
 import uz.mahalla.core.analytics.di.AnalyticsModule
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.testutil.FakeAnalyticsEventQueue
 import uz.mahalla.testutil.FakeAnalyticsRepository
 
 /**
@@ -29,6 +30,7 @@ import uz.mahalla.testutil.FakeAnalyticsRepository
 class AnalyticsTrackerTest {
 
     private val repository = FakeAnalyticsRepository()
+    private val queue = FakeAnalyticsEventQueue()
     private val escaped = mutableListOf<Throwable>()
 
     @Test
@@ -95,7 +97,7 @@ class AnalyticsTrackerTest {
         // зелёными, а события начали бы теряться на закрытии экрана.
         // Здесь трекер берётся именно из модуля, без своей области и без
         // тестового диспетчера: он обязан доставить событие сам.
-        val tracker = AnalyticsModule.provideAnalyticsTracker(repository)
+        val tracker = AnalyticsModule.provideAnalyticsTracker(repository, queue)
 
         tracker.track(AnalyticsEvents.placeViewed("p-1"))
 
@@ -106,8 +108,34 @@ class AnalyticsTrackerTest {
         assertEquals(listOf(AnalyticsEvents.placeViewed("p-1")), repository.events)
     }
 
+    @Test
+    fun `a queued event without a place goes through the queue, not the repository`() = runTest {
+        val tracker = tracker()
+
+        tracker.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.WALLET))
+        runCurrent()
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.WALLET)),
+            queue.events,
+        )
+        assertTrue(repository.events.isEmpty())
+    }
+
+    @Test
+    fun `an exception inside the queue does not leave the coroutine`() = runTest {
+        queue.crash = IllegalStateException("не открылась БД")
+
+        tracker().track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.HOME))
+        runCurrent()
+
+        assertEquals(1, queue.events.size)
+        assertEquals(emptyList<Throwable>(), escaped)
+    }
+
     private fun TestScope.tracker() = DefaultAnalyticsTracker(
         repository = repository,
+        queue = queue,
         scope = CoroutineScope(
             SupervisorJob() +
                 StandardTestDispatcher(testScheduler) +

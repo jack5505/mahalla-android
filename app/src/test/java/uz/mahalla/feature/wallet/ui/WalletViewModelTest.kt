@@ -9,6 +9,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
@@ -23,6 +25,7 @@ import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeSubscriptionRepository
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -39,8 +42,20 @@ class WalletViewModelTest {
 
     private val subscriptions = FakeSubscriptionRepository()
 
-    private fun viewModel(repository: FakeWalletRepository) =
-        WalletViewModel(repository, subscriptions)
+    private fun viewModel(repository: FakeWalletRepository, analytics: FakeAnalyticsTracker = FakeAnalyticsTracker()) =
+        WalletViewModel(repository, subscriptions, analytics)
+
+    @Test
+    fun `opening the wallet is tracked as a screen without a place`() = runTest {
+        val analytics = FakeAnalyticsTracker()
+
+        viewModel(FakeWalletRepository(Wallet(balanceSum = 0, availableSum = 0)), analytics)
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.WALLET)),
+            analytics.queuedEvents,
+        )
+    }
 
     @Test
     fun `balance and history are loaded on open`() = runTest {

@@ -5,6 +5,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.core.result.ApiResult
@@ -45,6 +48,7 @@ class ProfileViewModel @Inject constructor(
     private val profileRepository: ProfileRepository,
     private val biometricAvailability: BiometricAvailability,
     private val notificationChannels: NotificationChannels,
+    private val analytics: AnalyticsTracker,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
 
     /** Загрузка фото: держим job, потому что её можно отменить (issue #101). */
@@ -57,6 +61,9 @@ class ProfileViewModel @Inject constructor(
     private var nameSaveJob: Job? = null
 
     init {
+        // Профиль у бэкенда не привязан к заведению — до issue #226 экран
+        // вообще не попадал в аналитику, а не только терял вид события.
+        analytics.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.PROFILE))
         updateState {
             copy(
                 httpInspectorAvailable = httpInspector.isAvailable,

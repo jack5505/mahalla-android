@@ -6,8 +6,10 @@ import androidx.navigation.toRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
 import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.analytics.AnalyticsVertical
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.feature.food.data.CartRepository
@@ -269,9 +271,24 @@ class CheckoutViewModel @Inject constructor(
                 idempotencyKey = key,
             )
             when (result) {
-                is ApiResult.Failure -> updateState {
-                    // Ключ остаётся: повтор — тот же заказ, а не второй.
-                    copy(isSubmitting = false, submitError = result.failure)
+                is ApiResult.Failure -> {
+                    // Пара к `ordered` ниже: тот же шаг воронки, но отказ, а
+                    // не успех. Только машинный код бэкенда (issue #226) —
+                    // сетевой обрыв или таймаут это не отказ бизнес-правила,
+                    // а «спросить не удалось», и в воронку не идёт.
+                    val businessError = result.error as? ApiError.Business
+                    if (businessError != null) {
+                        analytics.track(
+                            AnalyticsQueuedEvents.orderRejected(
+                                placeId = placeId,
+                                code = businessError.code.orEmpty(),
+                            ),
+                        )
+                    }
+                    updateState {
+                        // Ключ остаётся: повтор — тот же заказ, а не второй.
+                        copy(isSubmitting = false, submitError = result.failure)
+                    }
                 }
 
                 is ApiResult.Success -> {

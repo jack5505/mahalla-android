@@ -13,6 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.data.db.entity.AnalyticsEventEntity
 import uz.mahalla.data.db.entity.CartDraftItemEntity
 import uz.mahalla.data.db.entity.OrderEntity
 import uz.mahalla.data.db.entity.PlaceEntity
@@ -203,6 +204,48 @@ class MahallaDatabaseTest {
         distanceMeters = distanceMeters,
         isOpenNow = true,
         updatedAtEpochSeconds = 1_774_000_000L,
+    )
+
+    @Test
+    fun `queued analytics events come back in the order they were enqueued`() = runTest {
+        val dao = database.analyticsEventDao()
+        dao.insert(analyticsEvent(name = "search"))
+        dao.insert(analyticsEvent(name = "screen_view"))
+
+        assertEquals(listOf("search", "screen_view"), dao.oldest(10).map { it.name })
+    }
+
+    @Test
+    fun `sent events are removed by id, the rest of the queue stays`() = runTest {
+        val dao = database.analyticsEventDao()
+        dao.insert(analyticsEvent(name = "a"))
+        dao.insert(analyticsEvent(name = "b"))
+        val ids = dao.oldest(10).map { it.id }
+
+        dao.deleteByIds(listOf(ids.first()))
+
+        assertEquals(listOf("b"), dao.oldest(10).map { it.name })
+    }
+
+    @Test
+    fun `events older than the threshold are trimmed`() = runTest {
+        val dao = database.analyticsEventDao()
+        dao.insert(analyticsEvent(name = "stale", enqueuedAtEpochSecond = 1_000))
+        dao.insert(analyticsEvent(name = "fresh", enqueuedAtEpochSecond = 3_000))
+
+        val removed = dao.deleteOlderThan(2_000)
+
+        assertEquals(1, removed)
+        assertEquals(listOf("fresh"), dao.oldest(10).map { it.name })
+    }
+
+    private fun analyticsEvent(
+        name: String,
+        enqueuedAtEpochSecond: Long = 1_774_000_000L,
+    ) = AnalyticsEventEntity(
+        name = name,
+        occurredAt = "2026-09-19T08:00:00Z",
+        enqueuedAtEpochSecond = enqueuedAtEpochSecond,
     )
 
     private fun order(id: String, createdAtEpochSeconds: Long) = OrderEntity(

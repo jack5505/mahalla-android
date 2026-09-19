@@ -5,6 +5,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
@@ -38,6 +41,7 @@ class DiscoveryHomeViewModel @Inject constructor(
     private val promotions: PromotionsRepository,
     private val tickets: WalkInTicketStore,
     private val clock: Clock,
+    private val analytics: AnalyticsTracker,
 ) : MviViewModel<DiscoveryHomeState, DiscoveryHomeEvent, DiscoveryHomeEffect>(
     DiscoveryHomeState(),
 ) {
@@ -46,6 +50,9 @@ class DiscoveryHomeViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
+        // Главная не привязана к заведению — до issue #226 таб был не виден
+        // аналитике вовсе, а не только терял вид события.
+        analytics.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.HOME))
         load(refreshing = false)
         readTicket()
     }
@@ -56,8 +63,14 @@ class DiscoveryHomeViewModel @Inject constructor(
             DiscoveryHomeEvent.Refresh -> load(refreshing = true)
             DiscoveryHomeEvent.ScreenResumed -> readTicket()
             DiscoveryHomeEvent.TicketClicked -> openTicket()
-            is DiscoveryHomeEvent.CategoryClicked ->
+            is DiscoveryHomeEvent.CategoryClicked -> {
+                // Шаг воронки до выбора заведения (issue #226): заведения тут
+                // ещё нет, только категория, которую открывают.
+                analytics.track(
+                    AnalyticsQueuedEvents.verticalOpened(event.category.apiValue.lowercase()),
+                )
                 emitEffect(DiscoveryHomeEffect.OpenSearch(event.category))
+            }
 
             is DiscoveryHomeEvent.PlaceClicked ->
                 emitEffect(DiscoveryHomeEffect.OpenPlace(event.placeId))

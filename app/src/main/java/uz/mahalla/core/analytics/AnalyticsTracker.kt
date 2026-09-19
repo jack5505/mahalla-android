@@ -20,10 +20,17 @@ import uz.mahalla.data.network.analytics.AnalyticsRepository
  * Интерфейс, а не прямой вызов репозитория, — по тем же двум причинам, что у
  * `CrashReporter` (issue #74): в тестах подставляется фейк, а замена сбора не
  * расползается по восьми ViewModel.
+ *
+ * Два метода — два разных бэкендовых конвейера ([AnalyticsEvent] → `track`,
+ * [AnalyticsQueuedEvent] → `events`, issue #226), а не два трекера, чтобы
+ * экрану не нужно было решать, какой из них внедрять.
  */
 interface AnalyticsTracker {
 
     fun track(event: AnalyticsEvent)
+
+    /** Событие без обязательного заведения — см. [AnalyticsEventQueue]. */
+    fun track(event: AnalyticsQueuedEvent)
 }
 
 /**
@@ -45,6 +52,7 @@ interface AnalyticsTracker {
  */
 class DefaultAnalyticsTracker(
     private val repository: AnalyticsRepository,
+    private val queue: AnalyticsEventQueue,
     private val scope: CoroutineScope,
 ) : AnalyticsTracker {
 
@@ -58,16 +66,28 @@ class DefaultAnalyticsTracker(
             // рассчитывать на чужую аккуратность. `Error` (не `Exception`)
             // не ловится намеренно: `OutOfMemoryError` глотать нечестно.
             runCatchingCancellable { repository.track(event) }
-                .onFailure { error -> log(event, error::class.java.simpleName) }
+                .onFailure { error -> log(event.type.serverName, error::class.java.simpleName) }
                 .onSuccess { result ->
-                    if (result is ApiResult.Failure) log(event, reasonOf(result.error))
+                    if (result is ApiResult.Failure) log(event.type.serverName, reasonOf(result.error))
                 }
         }
     }
 
-    private fun log(event: AnalyticsEvent, reason: String) {
+    /**
+     * Запись на диск и попытка отправки — целиком внутри [AnalyticsEventQueue],
+     * этому методу остаётся не пустить исключение выше по той же причине, что
+     * и у [track] с [AnalyticsEvent].
+     */
+    override fun track(event: AnalyticsQueuedEvent) {
+        scope.launch {
+            runCatchingCancellable { queue.enqueue(event) }
+                .onFailure { error -> log(event.name, error::class.java.simpleName) }
+        }
+    }
+
+    private fun log(eventName: String, reason: String) {
         if (BuildConfig.DEBUG) {
-            Log.d(TAG, "${event.type.serverName} не отправлено: $reason")
+            Log.d(TAG, "$eventName не отправлено: $reason")
         }
     }
 
