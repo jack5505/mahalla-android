@@ -13,6 +13,7 @@ import androidx.navigation.toRoute
 import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
+import uz.mahalla.feature.booking.ui.appointment.AppointmentScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
 import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
@@ -20,6 +21,7 @@ import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
 import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
 import uz.mahalla.feature.cinema.ui.movie.MovieScreen
 import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
+import uz.mahalla.feature.cinema.ui.ticket.TicketScreen
 import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.fashion.ui.cart.FashionCartScreen
@@ -260,6 +262,12 @@ fun MahallaNavHost(
                     // оформления. Возврат «назад» ведёт обратно в список.
                     onFoodOrderClick = { orderId ->
                         navController.navigate(OrderStatusRoute(orderId))
+                    },
+                    // Карточки билета и записи (issue #183) — «назад» ведёт
+                    // обратно в «мои активности».
+                    onTicketClick = { ticketId -> navController.navigate(TicketRoute(ticketId)) },
+                    onAppointmentClick = { appointmentId, vertical ->
+                        navController.navigate(AppointmentRoute(appointmentId, vertical))
                     },
                     // Пустое состояние ведёт на главную — это переключение
                     // таба, а не переход вглубь: `navigateToTab` не растит
@@ -664,6 +672,12 @@ fun MahallaNavHost(
             MyTicketsScreen(onBack = { navController.navigateUp() })
         }
 
+        // Карточка билета (issue #183): вход — «мои активности», у экрана
+        // нет своих переходов дальше.
+        composable<TicketRoute> {
+            TicketScreen(onBack = { navController.navigateUp() })
+        }
+
         // Вертикаль «Больницы» (эпик #11, issue #99): к врачу записываются с
         // карточки места, а следят за записью в «моих записях к врачу».
         composable<DoctorBookingRoute> {
@@ -742,6 +756,13 @@ fun MahallaNavHost(
                 },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Карточка записи (issue #183): вход — «мои активности», у экрана нет
+        // своих переходов дальше — ни отмены, ни переноса, они остались в
+        // списке.
+        composable<AppointmentRoute> {
+            AppointmentScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с

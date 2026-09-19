@@ -22,6 +22,7 @@ import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.testutil.FakeActivityRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Instant
@@ -769,9 +770,68 @@ class ActivityViewModelTest {
     }
 
     @Test
+    fun `a cinema ticket opens its card`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(
+                activity("t-1", ActivitySource.CinemaTickets, target = ActivityTarget.CinemaTicket("t-1")),
+            ),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        viewModel.onEvent(ActivityEvent.ActivityClicked("CinemaTickets:t-1"))
+
+        assertEquals(ActivityEffect.OpenTicket("t-1"), viewModel.effects.first())
+    }
+
+    @Test
+    fun `a master appointment opens its card with the barber vertical`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(
+                activity(
+                    "a-1",
+                    ActivitySource.MasterAppointments,
+                    target = ActivityTarget.MasterAppointment("a-1"),
+                ),
+            ),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        viewModel.onEvent(ActivityEvent.ActivityClicked("MasterAppointments:a-1"))
+
+        assertEquals(
+            ActivityEffect.OpenAppointment("a-1", AppointmentVertical.Barber.name),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
+    fun `a doctor appointment opens its card with the doctor vertical`() = runTest {
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(
+                activity(
+                    "h-1",
+                    ActivitySource.DoctorAppointments,
+                    target = ActivityTarget.DoctorAppointment("h-1"),
+                ),
+            ),
+        )
+        val viewModel = ActivityViewModel(repository)
+
+        viewModel.onEvent(ActivityEvent.ActivityClicked("DoctorAppointments:h-1"))
+
+        assertEquals(
+            ActivityEffect.OpenAppointment("h-1", AppointmentVertical.Doctor.name),
+            viewModel.effects.first(),
+        )
+    }
+
+    @Test
     fun `an activity without a screen leads nowhere`() = runTest {
-        // У брони, записи и билета своих экранов ещё нет: строка не
-        // кликабельна, и эффекта у неё быть не должно.
+        // У брони игровых зон своего экрана ещё нет: строка не кликабельна, и
+        // эффекта у неё быть не должно.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("b-1", ActivitySource.GamingBookings)),

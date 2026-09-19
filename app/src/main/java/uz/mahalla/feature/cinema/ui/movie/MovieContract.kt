@@ -14,10 +14,9 @@ import java.time.LocalDate
 /**
  * Состояние карточки фильма (issue #106): описание → день → сеанс → покупка.
  *
- * @param movie сам фильм. Ищется в общей афише (`GET cinema/movies`), а не
- * запрашивается по id: `GET cinema/movies/{id}` требует Bearer (`401` без
- * токена — проверено), хотя показывает то же самое, и до входа карточка
- * фильма из-за него была бы недоступна.
+ * @param movie сам фильм — `GET cinema/movies/{id}` (issue #183). Требует
+ * Bearer (`401` без токена — проверено), но это не проблема: `MovieRoute`
+ * лежит в `MainGraph` и открывается только после входа.
  * @param sessions сеансы **этого** кинотеатра на [selectedDate], уже без
  * прошедших и отменённых ([uz.mahalla.feature.cinema.domain.CinemaSchedule]).
  * Отдельным состоянием от [movie]: расписание перезапрашивается на каждый
@@ -64,6 +63,9 @@ sealed interface MovieEvent : UiEvent {
 
     /** «Мои билеты» — с подтверждения покупки. */
     data object MyTicketsClicked : MovieEvent
+
+    /** Ссылка на трейлер — открывается вовне, у экрана нет своего плеера. */
+    data object TrailerClicked : MovieEvent
 }
 
 sealed interface MovieEffect : UiEffect {
@@ -72,4 +74,7 @@ sealed interface MovieEffect : UiEffect {
      * сервера — вместе со статусом, который кинотеатр может изменить.
      */
     data object OpenMyTickets : MovieEffect
+
+    /** `trailerUrl` фильма — ведёт в браузер или установленное приложение. */
+    data class OpenTrailer(val url: String) : MovieEffect
 }

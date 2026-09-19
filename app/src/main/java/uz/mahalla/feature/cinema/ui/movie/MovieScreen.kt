@@ -1,5 +1,9 @@
 package uz.mahalla.feature.cinema.ui.movie
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +26,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -39,6 +44,7 @@ import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
+import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaFilterChip
 import uz.mahalla.core.ui.components.MahallaTextField
@@ -83,10 +89,14 @@ fun MovieScreen(
         viewModel.onEvent(MovieEvent.ScreenResumed)
     }
 
+    val context = LocalContext.current
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 MovieEffect.OpenMyTickets -> onOpenMyTickets()
+                is MovieEffect.OpenTrailer -> context.startActivitySafely(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(effect.url)),
+                )
             }
         }
     }
@@ -169,7 +179,7 @@ private fun MovieBlock(
 
         is ScreenState.Content -> MahallaCard(modifier = modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.gap)) {
-                MoviePoster()
+                MoviePoster(url = movie.data.posterUrl)
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
                     Text(
                         text = movie.data.displayTitle(prefersUzbekTitle())
@@ -205,6 +215,15 @@ private fun MovieBlock(
                     modifier = Modifier.padding(top = Spacing.item),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            movie.data.trailerUrl?.let {
+                MahallaButton(
+                    text = stringResource(R.string.cinema_movie_trailer),
+                    onClick = { onEvent(MovieEvent.TrailerClicked) },
+                    modifier = Modifier.padding(top = Spacing.item),
+                    variant = MahallaButtonVariant.Secondary,
+                    fillWidth = false,
                 )
             }
         }
@@ -497,6 +516,15 @@ internal fun TicketFacts(ticket: CinemaTicket, modifier: Modifier = Modifier) {
     }
 }
 
+/** Смотреть трейлер умеют не все устройства. Отсутствие обработчика — не повод падать. */
+private fun Context.startActivitySafely(intent: Intent) {
+    try {
+        startActivity(intent)
+    } catch (notFound: ActivityNotFoundException) {
+        // Обработчика нет — молча ничего не делаем, экран остаётся на месте.
+    }
+}
+
 @ThemeLanguagePreviews
 @Composable
 private fun MoviePreview() {
@@ -513,6 +541,7 @@ private fun MoviePreview() {
                         durationMinutes = 155,
                         ageRating = "16+",
                         description = "Arrakis sayyorasidagi kurash haqida.",
+                        trailerUrl = "https://youtube.com/watch?v=preview",
                     ),
                 ),
                 dates = listOf(LocalDate.of(2026, 9, 4), LocalDate.of(2026, 9, 5)),

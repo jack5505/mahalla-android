@@ -13,6 +13,7 @@ import uz.mahalla.feature.activity.domain.ActivityFeed
 import uz.mahalla.feature.activity.domain.ActivityMerge
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import javax.inject.Inject
 
 /**
@@ -282,15 +283,25 @@ class ActivityViewModel @Inject constructor(
         ActivityMerge.append(current, next)
 
     /**
-     * Переход по строке. Цель разбирает [ActivityTarget]: у брони, записи и
-     * билета экрана ещё нет, поэтому эффекта нет вовсе — такая строка и не
-     * кликабельна.
+     * Переход по строке. Цель разбирает [ActivityTarget]: у брони экрана ещё
+     * нет, поэтому эффекта нет вовсе — такая строка и не кликабельна.
      */
     private fun open(key: String) {
         val activity = currentState.items.dataOrNull()?.firstOrNull { it.key == key } ?: return
         when (val target = activity.target) {
             is ActivityTarget.FoodOrder ->
                 emitEffect(ActivityEffect.OpenFoodOrder(target.orderId))
+
+            is ActivityTarget.CinemaTicket ->
+                emitEffect(ActivityEffect.OpenTicket(target.ticketId))
+
+            is ActivityTarget.MasterAppointment -> emitEffect(
+                ActivityEffect.OpenAppointment(target.appointmentId, AppointmentVertical.Barber.name),
+            )
+
+            is ActivityTarget.DoctorAppointment -> emitEffect(
+                ActivityEffect.OpenAppointment(target.appointmentId, AppointmentVertical.Doctor.name),
+            )
 
             ActivityTarget.None -> Unit
         }

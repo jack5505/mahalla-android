@@ -26,7 +26,7 @@ import uz.mahalla.data.network.ApiResponse
  * | `GET cinema/movies` | `200`, `data: []` на пустом каталоге |
  * | `GET cinema/places/{placeId}/schedule?date=…` | `200` |
  * | `GET cinema/movies/{id}` | **`401`** |
- * | `buy`, `tickets/my`, `tickets/{id}/cancel` | `401` |
+ * | `buy`, `tickets/my`, `tickets/{id}`, `tickets/{id}/cancel` | `401` |
  *
  * Покупка и билеты требуют Bearer, поэтому API целиком собирается на
  * **основном** Retrofit: «голый» `@RefreshClient` их сломал бы, а читающим
@@ -41,6 +41,16 @@ interface CinemaApi {
      */
     @GET("cinema/movies")
     suspend fun movies(): ApiResponse<List<MovieDto>>
+
+    /**
+     * Карточка фильма (issue #183). `data` — та же `Movie`, что и в афише, но
+     * требует Bearer (`401` без токена — проверено по живому `/v3/api-docs`
+     * 2026-09-19), в отличие от анонимного списка. Экран фильма (`MovieRoute`)
+     * лежит в `MainGraph` и открывается только после входа, поэтому
+     * противоречия с анонимной афишей нет.
+     */
+    @GET("cinema/movies/{id}")
+    suspend fun movie(@Path("id") movieId: String): ApiResponse<MovieDto>
 
     /**
      * Расписание кинотеатра на **один** день: `date` обязателен, без него
@@ -67,6 +77,14 @@ interface CinemaApi {
         @Query("page") page: Int,
         @Query("size") size: Int,
     ): ApiResponse<CinemaTicketPageDto>
+
+    /**
+     * Карточка билета (issue #183). `data` — `TicketResponse`, та же схема,
+     * что у покупки, списка и возврата, — разбирается тем же [CinemaTicketDto].
+     * Требует Bearer.
+     */
+    @GET("cinema/tickets/{id}")
+    suspend fun ticket(@Path("id") ticketId: String): ApiResponse<CinemaTicketDto>
 
     /** Вернуть билет. `PUT`, тела нет. Требует Bearer. */
     @PUT("cinema/tickets/{id}/cancel")
