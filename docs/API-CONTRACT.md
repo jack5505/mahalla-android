@@ -1071,8 +1071,11 @@ DTO→домен, но в интерфейсе не показан: задача
 
 Что важно:
 
-- **Фильтра по назначению у ручки нет** — приезжают все платежи человека, и
-  списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
+- **Фильтра по назначению у ручки нет** — приезжают все платежи человека.
+  Списания за подписку (эпик 9.3, `SubscriptionRepository.charges`)
+  отбираются на клиенте по `purpose`; вкладка «Платежи» в кошельке
+  (issue #184, `feature/wallet/data/PaymentsRepository`) показывает всё без
+  фильтра — та же ручка, два потребителя.
 - Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
   `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
   `purpose`, `purposeId`, `errorMessage`). Пары `amountSom` у него нет, но она и
@@ -1114,6 +1117,12 @@ DTO→домен, но в интерфейсе не показан: задача
 Клиентская часть 8.3 (эпик #12) — вокруг этого запроса: проверка «доступно»
 из `GET wallet`, подтверждение PIN/биометрией и один запрос на одно
 подтверждение (`feature/wallet/ui/pay/WalletPaymentFlow`).
+
+**Вкладка «Платежи» (issue #184) — не отсюда.** `WalletApi.transactions`
+отдаёт движения по счёту (пополнение/списание, без провайдера и причины
+отказа); сами платежи PAYME/CLICK/UZUM со статусом и `errorMessage` берутся
+отдельной ручкой `GET payments/transactions` через `PaymentsRepository` — см.
+«PaymentsApi» выше.
 
 **Коды отказа кошелька не сверены.** `WalletPaymentGuard` узнаёт
 `INSUFFICIENT_FUNDS` / `INSUFFICIENT_BALANCE` / `WALLET_INSUFFICIENT_FUNDS` /

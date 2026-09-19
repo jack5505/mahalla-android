@@ -6,6 +6,7 @@ import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.wallet.domain.PaymentTransaction
 import uz.mahalla.feature.wallet.domain.TopUpDraft
 import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpProvider
@@ -54,6 +55,18 @@ data class WalletState(
      * что у акций на главной (issue #104).
      */
     val subscription: Subscription? = null,
+    /** Вкладка под историей — операции по счёту или платежи (issue #184). */
+    val selectedTab: WalletTab = WalletTab.Transactions,
+    /**
+     * История платежей PAYME/CLICK/UZUM (`GET payments/transactions`,
+     * issue #184) — независимая от [transactions] ручка со своей пагинацией.
+     * Грузится сразу вместе с балансом: переключение вкладки не должно ждать
+     * сеть, если оно уже приехало.
+     */
+    val payments: ScreenState<List<PaymentTransaction>> = ScreenState.Loading,
+    val hasMorePayments: Boolean = false,
+    val isLoadingMorePayments: Boolean = false,
+    val loadMorePaymentsFailure: ApiFailure? = null,
 ) : UiState {
 
     /**
@@ -96,6 +109,15 @@ data class PaymentStarted(
     val provider: TopUpProvider,
 )
 
+/** Вкладка под историей кошелька (issue #184). */
+enum class WalletTab {
+    /** Движения по счёту (`wallet/transactions`) — то, что было раньше. */
+    Transactions,
+
+    /** Платежи PAYME/CLICK/UZUM (`payments/transactions`) с их статусом. */
+    Payments,
+}
+
 sealed interface WalletEvent : UiEvent {
     /** Экран вернулся на передний план: баланс мог измениться в другом месте. */
     data object ScreenResumed : WalletEvent
@@ -104,6 +126,11 @@ sealed interface WalletEvent : UiEvent {
     data object Retry : WalletEvent
     data object TransactionsRetry : WalletEvent
     data object LoadMore : WalletEvent
+
+    /** Переключение вкладки «Операции»/«Платежи» (issue #184). */
+    data class TabSelected(val tab: WalletTab) : WalletEvent
+    data object PaymentsRetry : WalletEvent
+    data object LoadMorePayments : WalletEvent
 
     data object TopUpClicked : WalletEvent
     data object TopUpDismissed : WalletEvent
