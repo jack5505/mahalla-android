@@ -7,7 +7,6 @@ import uz.mahalla.BuildConfig
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
-import uz.mahalla.data.network.analytics.AnalyticsRepository
 
 /**
  * Точка входа для экранов: «выстрелил и забыл» (issue #169).
