@@ -84,7 +84,19 @@
 
 Клиент живёт в целых сумах: домен, экраны и Room хранят сумы, а пересчёт делает
 `core/format/Money` ровно один раз — в маппере DTO → домен (`tiyinToSom`) и при
-сборке тела запроса (`somToTiyin`, сейчас это только `POST wallet/top-up`).
+сборке тела запроса (`somToTiyin`). Исходящих денежных полей стало много, и их
+число растёт с каждой вертикалью, где владелец сам назначает цену. На 2026-09-18
+это `POST wallet/top-up` (`amount`), `POST food/places/{placeId}/items`
+(`price`), `POST pharmacy/places/{placeId}/products` (`price`),
+`POST freelancers/me` (`hourlyRate` — единственное денежное поле в `int32`,
+перевод через `Math.toIntExact`, чтобы переполнение падало, а не молча
+обрезалось), `POST freelancers/me/services` и
+`PUT freelancers/me/services/{serviceId}` (`priceAmount`, тело общее),
+`POST promotions/places/{placeId}` (`discountAmount`, `minOrderAmount`), плюс
+query у `GET promotions/check` (`orderAmount`) и `GET food/delivery-fee`
+(`itemsAmount` — доменное значение в репозитории названо `itemsSum`, но на
+проводе параметр `itemsAmount`). **Новое поле, которое клиент отправляет, без
+`somToTiyin` — это цена в сто раз меньше задуманной** (issue #236).
 Дробные близнецы `balanceSom`, `amountSom`, `monthlyPriceSom`, `pricePaidSom`
 — то же число в сумах для чтения ответа глазами; клиент их **игнорирует**, а не
 выводит из них единицу, как делал раньше `WalletAmounts`. Проценты
@@ -205,7 +217,7 @@ TrackEventRequest: {
 
 **Ни `language`, ни `role` отправить нечем** (сверено 2026-09-10, issue #237):
 
-- слово `language` встречается во всей схеме **один раз** — в `MeResponse`. Ни одно тело запроса его не принимает. Про `Accept-Language` схема молчит, и это ничего не значит: в ней не объявлены ни `X-Geo-*`, ни `Authorization` — springdoc заголовки из фильтров не показывает (единственный объявленный header во всём контракте — `X-Session-Id` у `auth/logout`), так что понимает бэкенд этот заголовок или нет, надо проверять пробой (issue #242). Как бы то ни было, в тела запросов язык не положить, поэтому язык приложения ведёт клиент (`SettingsDataStore`), а это поле **не разбирается**;
+- слово `language` встречается во всей схеме **один раз** — в `MeResponse`. Ни одно тело запроса его не принимает, поэтому язык приложения ведёт клиент (`SettingsDataStore`), а это поле **не разбирается**. `Accept-Language` пробит на стенде (issue #242, 2026-09-14): бэкенд его понимает — `users/me` без токена без заголовка отвечает `401` на uz, с `Accept-Language: ru` — на ru. Клиент вешает заголовок `LanguageHeaderInterceptor`'ом на каждый запрос обоих клиентов; SMS и push всё равно остаются на языке `users.language` (асинхронные, заголовка в момент отправки нет) — это по-прежнему задача бэкенду, подробно `docs/adr/0007`;
 - `role` меняет только админ через `PUT admin/users/{id}/role`. Значит по правам главный сервер, а локальный `settings.roleId` (`UserRole`) — вообще про другое: про анкету. Подробно — `docs/adr/0007-yazyk-i-rol-istochnik-istiny.md`.
 
 ## BookingApi ⚠️ частично
@@ -688,6 +700,53 @@ price, apptDate, startTime, endTime, status, createdAt}`). Записи разн
 `ORDER_PLACED`, `ORDER_STATUS_UPDATED`, `REVIEW_ADDED`, `PROMOTION_CREATED`,
 `SUBSCRIPTION_EXPIRES`. `NotificationType.Unknown` при этом остаётся: список
 открытый, и незнакомый тип показывается, а не прячется.
+## PinApi ✅ форма, ⚠️ успешный ответ
+
+`app/src/main/java/uz/mahalla/data/network/pin/PinApi.kt` — сверен со схемой и
+пробой `contract/security.sh` (issue #102, 2026-09-09). Форма запросов взята из
+`/v3/api-docs` и совпадает с кодом дословно; успешного ответа **под токеном
+никто не видел** — без него все три ручки отвечают `401 UNAUTHORIZED`.
+
+| Метод | Путь | Тело / query | |
+|---|---|---|---|
+| GET | `pin/status` | query `deviceId` (обяз.) | ✅ форма |
+| PUT | `pin/change` | `{currentPin, newPin, deviceId}` | ✅ форма |
+| PUT | `pin/biometric` | `{enabled, deviceId, pin}` | ✅ форма |
+
+**Оба кода — ровно шесть цифр**: у `currentPin`, `newPin` и `pin` в схеме стоит
+`pattern: ^[0-9]{6}$`. `Char.isDigit()` для проверки не годится — он принимает
+и полноширинные `１２３４５６`, которые бэкенд отвергнет.
+
+**PIN у `pin/biometric` обязателен** (`required: [deviceId, enabled, pin]`):
+включение отпечатка — смена настройки безопасности, и подтверждают её кодом.
+
+Ответ `pin/status` — `{pinSet, biometricEnabled, lockedSecondsRemaining,
+pinChangedAt, lastUsedAt}`, все поля необязательные. `lockedSecondsRemaining`
+считает сервер: **своего счётчика попыток в серверном режиме приложение не
+ведёт** (issue #51).
+
+Три ручки контроллера не подключены осознанно: `POST pin/set` и
+`POST pin/reset` требуют пары `otpToken` + `otpCode` (установку делает
+`auth/setup-pin`, сброс — выход и вход заново), `DELETE pin` выключил бы
+app-lock при живой сессии. `POST pin/verify` не понадобился — подтверждение
+кодом делают сами `change` и `biometric`.
+
+## SessionApi (замок) ✅ форма, ⚠️ успешный ответ
+
+`app/src/main/java/uz/mahalla/data/network/auth/SessionApi.kt` — сверен со
+схемой и пробой (issue #102, 2026-09-09).
+
+| Метод | Путь | Тело | |
+|---|---|---|---|
+| POST | `auth/session/check` | `{device}` → `{sessionValid, pinRequired, user, reason}` | ✅ форма |
+| POST | `auth/pin-resume` | `{device, pin, lat, lng}` → `AuthResponse` | ✅ форма |
+
+**Обе ручки требуют Bearer** — в отличие от анонимных `auth/pin-login` и
+`auth/setup-pin`. Проверено живым запросом: без токена приходит
+`401 UNAUTHORIZED`. Поэтому `PinApi` и `SessionApi` собираются на **основном**
+Retrofit, а не на `@RefreshClient`, где живёт остальная авторизация.
+
+## PharmacyApi ⚠️
 
 ### Пуши (эпик 11) — чего в контракте НЕТ
 
@@ -949,9 +1008,11 @@ DTO→домен, но в интерфейсе не показан: задача
   списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
 - Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
   `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
-  `purpose`, `purposeId`, `errorMessage`) — **без пары `amountSom`**, поэтому
-  единицу `amount` вывести нечем и она читается как тийины (у кошелька она
-  выводится из пары, issue #62). **Проверить первым же живым ответом.**
+  `purpose`, `purposeId`, `errorMessage`). Пары `amountSom` у него нет, но она и
+  не нужна: `amount` — тийины, потому что так устроены все целые денежные поля
+  («Общее для всех запросов»), а не потому, что рядом нет дробного близнеца.
+  Вывод единицы из наличия пары — механизм удалённого `WalletAmounts`
+  (issue #149, #236); здесь его не восстанавливать.
 - `GET payments/subscription` не используется: отдаёт строго меньше, чем
   `subscriptions/current` (`plan` перечислением, без `daysRemaining`,
   `isTrial` и грейс-периода). `POST payments/subscription/activate` принимает
@@ -1006,12 +1067,18 @@ DTO→домен, но в интерфейсе не показан: задача
 
 ## Как сверять
 
-Руками не надо — есть харнесс. Пилот пока на одной вертикали (`booking`),
-остальные добавляются по образцу.
+Руками не надо — есть харнесс. Сейчас две пробы, остальные добавляются
+по образцу.
 
 ```bash
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/booking.sh
+CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/security.sh
 ```
+
+`security.sh` — **только читающая**: `pin/change` сменил бы PIN живого
+аккаунта, а неверный код у `pin/change` и `pin/biometric` тратит серверную
+попытку и может залочить аккаунт. Такое дёргать автоматически нельзя, цена
+ошибки — человек, запертый вне приложения (ADR 0013).
 
 Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
 в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает

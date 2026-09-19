@@ -24,9 +24,9 @@ data class OtpFieldState(
     /** Индекс ячейки, в которую пойдёт следующая цифра; null — код набран. */
     val focusedIndex: Int? get() = if (isComplete) null else code.length
 
-    /** Только цифры и не длиннее [length]: вставка «код: 123456» тоже сработает. */
+    /** Только ASCII-цифры и не длиннее [length]: вставка «код: 123456» тоже сработает. */
     fun onInput(raw: String): OtpFieldState =
-        copy(code = raw.filter(Char::isDigit).take(length), isError = false)
+        copy(code = raw.filter { it in '0'..'9' }.take(length), isError = false)
 
     fun digitAt(index: Int): Char? = code.getOrNull(index)
 

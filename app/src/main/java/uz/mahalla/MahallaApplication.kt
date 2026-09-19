@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
 import uz.mahalla.core.crash.CrashReporter
 import uz.mahalla.core.crash.CrashReporting
+import uz.mahalla.feature.security.data.AppLockObserver
 import javax.inject.Inject
 import javax.inject.Provider
 
@@ -14,7 +15,7 @@ import javax.inject.Provider
  * инициализация подсистем — через Hilt-модули и `@Inject`, иначе старт
  * приложения превращается в свалку.
  *
- * Исключений два, и оба вынужденные.
+ * Исключений три, и все вынужденные.
  *
  * Отчёты о падениях (issue #74): обработчик обязан встать раньше кода, который
  * может упасть, а сделать это из ленивой зависимости нельзя — до первого
@@ -24,6 +25,10 @@ import javax.inject.Provider
  * `Application`, другого места объявить его нет. Сам загрузчик приезжает из
  * графа через [Provider], поэтому создаётся не на старте, а при первой
  * картинке.
+ *
+ * Замок приложения (issue #102): подписаться на жизненный цикл процесса надо
+ * до первого ухода в фон, а «первый уход» может случиться раньше, чем
+ * откроется любой экран.
  */
 @HiltAndroidApp
 class MahallaApplication : Application(), ImageLoaderFactory {
@@ -34,6 +39,9 @@ class MahallaApplication : Application(), ImageLoaderFactory {
     @Inject
     lateinit var imageLoader: Provider<ImageLoader>
 
+    @Inject
+    lateinit var appLockObserver: AppLockObserver
+
     override fun onCreate() {
         // Hilt внедряет поля Application именно здесь, поэтому раньше
         // super.onCreate() до crashReporter не добраться.
@@ -42,6 +50,7 @@ class MahallaApplication : Application(), ImageLoaderFactory {
         // Проглоченные ошибки сообщаются из функций верхнего уровня, которым
         // нечего внедрять, — см. CrashReporting.
         CrashReporting.install(crashReporter)
+        appLockObserver.install()
     }
 
     override fun newImageLoader(): ImageLoader = imageLoader.get()

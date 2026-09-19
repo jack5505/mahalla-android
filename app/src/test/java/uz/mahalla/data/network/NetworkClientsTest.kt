@@ -51,6 +51,7 @@ class NetworkClientsTest {
         },
         clock = Clock.systemUTC(),
     )
+    private val languageInterceptor = LanguageHeaderInterceptor()
 
     @Before
     fun setUp() {
@@ -166,6 +167,46 @@ class NetworkClientsTest {
         val seen = requireNotNull(inspector.request)
         assertEquals("41.311100", seen.header(GeoHeaderInterceptor.HEADER_LATITUDE))
         assertEquals("69.279700", seen.header(GeoHeaderInterceptor.HEADER_LONGITUDE))
+    }
+
+    @Test
+    fun `the language header is added before the token and seen by the inspector`() {
+        val defaultLocale = java.util.Locale.getDefault()
+        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("ru-RU"))
+        try {
+            val inspector = RecordingInspector()
+            val client = NetworkFactory.mainClient(
+                backendUrlInterceptor = addressInterceptor,
+                authInterceptor = tokenInterceptor,
+                authenticator = Authenticator.NONE,
+                languageHeaderInterceptor = languageInterceptor,
+                inspector = inspector,
+            )
+            server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+
+            client.newCall(Request.Builder().url(server.url("/users/me")).build())
+                .execute()
+                .close()
+
+            assertEquals(
+                listOf(addressInterceptor, languageInterceptor, tokenInterceptor, inspector),
+                client.interceptors,
+            )
+            val seen = requireNotNull(inspector.request)
+            assertEquals("ru", seen.header(LanguageHeaderInterceptor.HEADER_ACCEPT_LANGUAGE))
+        } finally {
+            java.util.Locale.setDefault(defaultLocale)
+        }
+    }
+
+    @Test
+    fun `the bare client carries the language header too`() {
+        val client = NetworkFactory.refreshClient(
+            backendUrlInterceptor = addressInterceptor,
+            languageHeaderInterceptor = languageInterceptor,
+        )
+
+        assertEquals(listOf(addressInterceptor, languageInterceptor), client.interceptors)
     }
 
     @Test
