@@ -74,6 +74,11 @@ class KeystorePinStorage @Inject constructor(
             preferences[PreferenceKeys.PinSalt] = salt.toBase64()
             preferences[PreferenceKeys.PinHash] = encryptedHash.toBase64()
             preferences[PreferenceKeys.PinLength] = pin.length
+            // Счётчик неверных попыток принадлежит сохранённому коду
+            // (`PinAttemptStore`, issue #102): новый код — новый счёт. Иначе
+            // потраченные попытки переезжали бы через вход и смену PIN, и
+            // одна опечатка на первом же замке выкидывала бы в SMS-вход.
+            preferences.remove(PreferenceKeys.PinFailedAttempts)
         }
     }
 
@@ -95,6 +100,10 @@ class KeystorePinStorage @Inject constructor(
             preferences.remove(PreferenceKeys.PinHash)
             preferences.remove(PreferenceKeys.PinSalt)
             preferences.remove(PreferenceKeys.PinLength)
+            // Кода нет — считать попытки к нему нечему. Выход из аккаунта
+            // проходит здесь же (`AuthRepository.logout`), поэтому счётчик не
+            // достаётся следующему пользователю устройства.
+            preferences.remove(PreferenceKeys.PinFailedAttempts)
         }
     }
 

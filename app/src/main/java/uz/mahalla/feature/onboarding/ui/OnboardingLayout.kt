@@ -207,12 +207,20 @@ fun OnboardingNotice(
  * [showMessage] выключается там, где тот же текст уже показан подписью поля:
  * на экране кода сообщение сервера подставляется под ячейки, и повторять его
  * вторым абзацем незачем — подробности при этом остаются доступны.
+ *
+ * [action] — слот под кнопку, которой отказ лечится на месте (обычно
+ * «Повторить»). Он нужен там, где экран без этого запроса неполон: на экране
+ * безопасности (issue #102) отказ `pin/status` не прячет экран, но без
+ * повтора строка «PIN-код установлен» не появится до следующего захода.
+ * Слот, а не своя копия блока: третья вариация «текст + подробности + кнопка»
+ * разъезжается с первыми двумя при первой же правке.
  */
 @Composable
 fun OnboardingApiError(
     failure: ApiFailure,
     modifier: Modifier = Modifier,
     showMessage: Boolean = true,
+    action: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -220,5 +228,6 @@ fun OnboardingApiError(
     ) {
         if (showMessage) OnboardingError(failure.userMessage())
         failure.server?.let { MahallaErrorDetails(server = it) }
+        action?.invoke(this)
     }
 }

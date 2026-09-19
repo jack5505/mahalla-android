@@ -24,6 +24,35 @@ object NetworkFactory {
 
     const val CONTENT_TYPE = "application/json"
 
+    /**
+     * Ручки, у которых секрет лежит в теле — запроса **или ответа**.
+     *
+     * Критерий: тело несёт то, чем можно войти или заплатить. Сюда попадают
+     * PIN (`pin/change`, `pin/biometric`, `pin-resume`, `setup-pin`,
+     * `pin-login`), код из SMS и токены (`verify-otp`, `refresh`), а также
+     * обе телеграм-ручки: ответ
+     * `telegram/check` кладёт `accessToken` и `refreshToken` **в корень**, и
+     * `Level.BODY` печатает ответы так же, как запросы (issue #46).
+     * `send-otp` — не токен, но номер телефона с точными координатами и
+     * `otpToken` в ответе; в logcat это те же персональные данные.
+     *
+     * Сравнение по концу пути, а не целиком: базовый адрес несёт префикс
+     * `/api/v1/`, и он же меняется на стенде (issue #26). Завершающий слэш
+     * срезается — иначе `…/pin/change/` прошёл бы мимо списка.
+     */
+    private val SECRET_BODY_PATHS = listOf(
+        "pin/change",
+        "pin/biometric",
+        "auth/pin-resume",
+        "auth/setup-pin",
+        "auth/pin-login",
+        "auth/verify-otp",
+        "auth/send-otp",
+        "auth/refresh",
+        "auth/telegram/init",
+        "auth/telegram/check",
+    )
+
     private const val CONNECT_TIMEOUT_SECONDS = 15L
     private const val READ_TIMEOUT_SECONDS = 30L
     private const val WRITE_TIMEOUT_SECONDS = 30L
@@ -45,22 +74,58 @@ object NetworkFactory {
     fun clientBuilder(
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
+        logger: HttpLoggingInterceptor.Logger = HttpLoggingInterceptor.Logger.DEFAULT,
     ): OkHttpClient.Builder = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .allowPinnedCertificate(certificatePin)
         .apply {
-            if (logBodies) {
-                addInterceptor(
-                    HttpLoggingInterceptor().apply {
-                        setLevel(HttpLoggingInterceptor.Level.BODY)
-                        // Иначе access/refresh-токены уезжают в logcat целиком.
-                        redactHeader(AuthInterceptor.HEADER_AUTHORIZATION)
-                    },
-                )
-            }
+            if (logBodies) addInterceptor(loggingInterceptor(logger))
         }
+
+    /**
+     * Инспектор трафика в logcat — с телом, но не у всех ручек (issue #102).
+     *
+     * `HttpLoggingInterceptor` умеет прятать заголовки (`redactHeader`), но не
+     * тело, а PIN, код из SMS и refresh-токен приложение шлёт именно телом.
+     * В debug-сборке `Level.BODY` печатал их в logcat открытым текстом —
+     * читает его кто угодно, у кого есть adb, а PIN здесь тот же, что открывает
+     * кошелёк. Поэтому ручки из [SECRET_BODY_PATHS] логируются на `BASIC`:
+     * строка запроса, код и время ответа остаются (этого хватает, чтобы понять,
+     * что пошло не так), тело не печатается вовсе.
+     *
+     * Уровень выбирается на запрос, а не переключается у общего экземпляра:
+     * `level` — обычное изменяемое поле, и на параллельных запросах
+     * переключение успевало бы не туда. Два экземпляра стоят дешевле гонки.
+     */
+    internal fun loggingInterceptor(
+        logger: HttpLoggingInterceptor.Logger = HttpLoggingInterceptor.Logger.DEFAULT,
+    ): Interceptor {
+        val full = HttpLoggingInterceptor(logger).apply {
+            setLevel(HttpLoggingInterceptor.Level.BODY)
+            // Иначе access/refresh-токены уезжают в logcat целиком.
+            redactHeader(AuthInterceptor.HEADER_AUTHORIZATION)
+        }
+        val withoutBody = HttpLoggingInterceptor(logger).apply {
+            setLevel(HttpLoggingInterceptor.Level.BASIC)
+            redactHeader(AuthInterceptor.HEADER_AUTHORIZATION)
+        }
+        return Interceptor { chain ->
+            val secret = carriesSecretBody(chain.request().url.encodedPath)
+            (if (secret) withoutBody else full).intercept(chain)
+        }
+    }
+
+    /**
+     * Прячется ли тело этой ручки от logcat. `internal`, потому что проверить
+     * это иначе нечем: уровень живёт внутри `HttpLoggingInterceptor`, наружу
+     * он его не отдаёт.
+     */
+    internal fun carriesSecretBody(path: String): Boolean {
+        val normalized = path.trimEnd('/')
+        return SECRET_BODY_PATHS.any { normalized.endsWith(it) }
+    }
 
     /**
      * Основной клиент: адрес бэкенда → координаты → язык → Bearer → инспектор,

@@ -62,6 +62,8 @@ import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
 import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
+import uz.mahalla.feature.security.ui.SecurityScreen
+import uz.mahalla.feature.security.ui.pin.ChangePinScreen
 import uz.mahalla.feature.social.ui.saved.SavedPlacesScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
@@ -297,6 +299,8 @@ fun MahallaNavHost(
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
                     // «Мои брони» игровых зон (issue #98).
                     onOpenGamingBookings = { navController.navigate(GamingBookingsRoute) },
+                    // Безопасность (issue #102): смена PIN и биометрия.
+                    onOpenSecurity = { navController.navigate(SecurityRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
                     // «Мои билеты» (issue #106): своего таба у кино нет.
@@ -417,6 +421,18 @@ fun MahallaNavHost(
                 },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Безопасность (issue #102) — вне обоих графов: строка из профиля.
+        composable<SecurityRoute> {
+            SecurityScreen(
+                onBack = { navController.navigateUp() },
+                onChangePin = { navController.navigate(ChangePinRoute) },
+            )
+        }
+
+        composable<ChangePinRoute> {
+            ChangePinScreen(onBack = { navController.navigateUp() })
         }
 
         // «Мои заведения» (issue #94) — вне обоих графов, как центр
