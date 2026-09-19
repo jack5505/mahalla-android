@@ -42,7 +42,7 @@ class BottomNavItemTest {
 
     @Test
     fun `activity tab is labelled with the activity wording, not orders`() {
-        assertEquals(R.string.nav_activity, BottomNavItem.Orders.labelRes)
+        assertEquals(R.string.nav_activity, BottomNavItem.Activities.labelRes)
         assertEquals("Amallarim", contextFor("uz").getString(R.string.nav_activity))
         assertEquals("Активности", contextFor("ru").getString(R.string.nav_activity))
     }
