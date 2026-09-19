@@ -269,6 +269,11 @@ fun MahallaNavHost(
                     onAppointmentClick = { appointmentId, vertical ->
                         navController.navigate(AppointmentRoute(appointmentId, vertical))
                     },
+                    // Талон очереди (issue #287) — на тот же `QueueRoute`, что
+                    // и у фокус-карточки главной.
+                    onQueueClick = { placeId, placeName ->
+                        navController.navigate(QueueRoute(placeId, placeName))
+                    },
                     // Пустое состояние ведёт на главную — это переключение
                     // таба, а не переход вглубь: `navigateToTab` не растит
                     // стек и сохраняет состояние табов.

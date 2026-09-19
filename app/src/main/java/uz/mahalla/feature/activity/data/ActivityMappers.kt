@@ -15,6 +15,7 @@ import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.cinema.data.CinemaTicketDto
 import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.gaming.data.GamingBookingDto
+import uz.mahalla.feature.queue.domain.WalkInTicket
 import java.time.Instant
 import java.time.LocalTime
 
@@ -172,3 +173,30 @@ internal fun CinemaTicketDto.toActivity(): Activity? {
         target = ActivityTarget.CinemaTicket(ticketId),
     )
 }
+
+/**
+ * [WalkInTicket] → строка списка (issue #287).
+ *
+ * Источник не сетевой (`WalkInTicketStore`, ADR 0009), поэтому здесь нет
+ * `?`-возврата по битому id, как у остальных четырёх мапперов: домен уже
+ * гарантирует непустые [WalkInTicket.id]/[WalkInTicket.placeId] (см.
+ * `StoredTicket.toDomain`).
+ *
+ * `occurredAt` — время создания запроса, а не последнего чтения
+ * ([WalkInTicket.receivedAt]): талон не про «когда о нём узнали», а про
+ * «когда встали в очередь», и это тот же смысл, что у времени брони/записи.
+ * Позиция в очереди и время ожидания в список активностей не идут — они
+ * живут ровно две минуты ([WalkInTicket.showsQueueInfo]), и это уже подробность
+ * экрана очереди, а не строки в общем списке.
+ */
+internal fun WalkInTicket.toActivity(): Activity = Activity(
+    id = id,
+    source = ActivitySource.WalkIn,
+    kind = ActivityKind.WalkInTicket,
+    status = ActivityStatus.ofWalkIn(status),
+    occurredAt = createdAt ?: receivedAt,
+    note = serviceName?.takeIf { it.isNotBlank() },
+    target = ActivityTarget.WalkInTicket(placeId = placeId, placeName = placeName),
+    placeId = placeId.takeIf { it.isNotBlank() },
+    placeName = placeName.takeIf { it.isNotBlank() },
+)
