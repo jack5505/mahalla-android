@@ -39,6 +39,7 @@ import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.security.AndroidKeystorePinCipher
+import uz.mahalla.data.security.AndroidKeystoreSessionCipher
 import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
@@ -119,7 +120,7 @@ class GraphAssemblyTest {
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
 
-        val sessionStore = DataStoreSessionStore(sharedDataStore(context))
+        val sessionStore = DataStoreSessionStore(sharedDataStore(context), AndroidKeystoreSessionCipher())
         val client = NetworkModule.provideOkHttpClient(
             authInterceptor = AuthInterceptor(sessionStore),
             tokenAuthenticator = TokenAuthenticator(
@@ -310,7 +311,7 @@ class GraphAssemblyTest {
 
         val repository = DefaultAuthRepository(
             authApi = authApi,
-            sessionStore = DataStoreSessionStore(dataStore),
+            sessionStore = DataStoreSessionStore(dataStore, AndroidKeystoreSessionCipher()),
             userProfileStore = DataStoreUserProfileStore(dataStore),
             formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
@@ -674,7 +675,7 @@ class GraphAssemblyTest {
             DefaultSecurityRepository(
                 pinApi = pinApi,
                 sessionApi = sessionApi,
-                sessionStore = DataStoreSessionStore(dataStore),
+                sessionStore = DataStoreSessionStore(dataStore, AndroidKeystoreSessionCipher()),
                 onboardingRepository = DataStoreOnboardingRepository(settings),
                 pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
                 deviceInfoProvider = FakeDeviceInfoProvider(),
