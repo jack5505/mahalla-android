@@ -31,6 +31,11 @@ import uz.mahalla.feature.activity.domain.ActivitySource
  * «повторить» не осталась без объяснения (issue #53).
  * @param nextPages курсор догрузки: у какого источника какая страница
  * следующая. Пусто — догружать нечего.
+ * @param loadedPages сколько страниц каждого источника уже набрано кнопкой
+ * «показать ещё» и отражено в [items]. Источник без ответа (провал первой
+ * страницы) — ноль. Нужен только возврату на экран (issue #213): без этого
+ * счётчика он не знает, сколько страниц перечитать, и откатывает список к
+ * первой.
  */
 data class ActivityState(
     val items: ScreenState<List<Activity>> = ScreenState.Loading,
@@ -40,6 +45,7 @@ data class ActivityState(
     val isLoadingMore: Boolean = false,
     val loadMoreFailure: ApiFailure? = null,
     val nextPages: Map<ActivitySource, Int> = emptyMap(),
+    val loadedPages: Map<ActivitySource, Int> = emptyMap(),
 ) : UiState {
 
     val hasMore: Boolean get() = nextPages.isNotEmpty()
