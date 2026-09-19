@@ -11,6 +11,19 @@ import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.fashion.data.AddToCartRequestDto
+import uz.mahalla.feature.fashion.data.CartItemDto
+import uz.mahalla.feature.fashion.data.CatalogDto
+import uz.mahalla.feature.fashion.data.FashionApi
+import uz.mahalla.feature.fashion.data.FashionCategoryDto
+import uz.mahalla.feature.fashion.data.FashionPlaceOrderRequestDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
+import uz.mahalla.feature.fashion.data.OrderPageDto
+import uz.mahalla.feature.fashion.data.ProductDetailDto
+import uz.mahalla.feature.food.data.CreatedOrderDto
+import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.queue.domain.WalkInStatus
@@ -403,6 +416,61 @@ class BusinessRepositoryTest {
         assertEquals(WalkInStatus.Declined, (result as ApiResult.Success).data.status)
     }
 
+    /** Заказы «Одежды» идут в `fashion/stores/{id}/orders`, а не в `food/...` (issue #187). */
+    @Test
+    fun `a fashion place asks the fashion api for its orders`() = runTest {
+        val fashionApi = RecordingFashionApi()
+        fashionApi.storeOrdersResponse = FashionStoreOrderPageDto(
+            content = listOf(
+                FashionStoreOrderDto(
+                    id = "o-1",
+                    orderNumber = "C-1",
+                    status = "READY",
+                    fulfillment = "DELIVERY",
+                    paymentMethod = "CASH",
+                    totalAmount = 84_000,
+                    items = listOf(
+                        FashionStoreOrderItemDto(
+                            variantId = "v-1",
+                            productName = "Koylak",
+                            colorName = "Ko'k",
+                            size = "M",
+                            quantity = 1,
+                            unitPrice = 84_000,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val page = (
+            repository(fashionApi = fashionApi)
+                .orders("store-1", category = PlaceCategory.Fashion) as ApiResult.Success
+            ).data
+
+        assertEquals("store-1", fashionApi.storeOrdersRequest?.first)
+        val order = page.items.single()
+        assertEquals(OrderStatus.ReadyForPickup, order.status)
+        assertEquals("Koylak, Ko'k, M", order.lines.single().name)
+    }
+
+    /** Смена статуса «Одежды» тоже уходит на `fashion/stores/{id}/orders/{orderId}/status`. */
+    @Test
+    fun `a fashion status change sends the status under the key named status`() = runTest {
+        val fashionApi = RecordingFashionApi()
+        fashionApi.updateOrderResponse = FashionStoreOrderDto(id = "o-1", status = "ACCEPTED")
+
+        val result = repository(fashionApi = fashionApi).updateOrderStatus(
+            placeId = "store-1",
+            orderId = "o-1",
+            status = OrderStatus.Confirmed,
+            category = PlaceCategory.Fashion,
+        )
+
+        assertEquals(mapOf("status" to "ACCEPTED"), fashionApi.updateStatusBody)
+        assertEquals(OrderStatus.Confirmed, (result as ApiResult.Success).data.status)
+    }
+
     @Test
     fun `the queue drops the entries without an id`() = runTest {
         val api = RecordingBusinessApi()
@@ -420,7 +488,12 @@ class BusinessRepositoryTest {
     private fun repository(
         provider: FakeProviderRepository = FakeProviderRepository(),
         api: BusinessApi = RecordingBusinessApi(),
-    ) = DefaultBusinessRepository(api = api, providerRepository = provider)
+        fashionApi: FashionApi = FakeFashionApi(),
+    ): BusinessRepository = DefaultBusinessRepository(
+        api = api,
+        fashionApi = fashionApi,
+        providerRepository = provider,
+    )
 
     private fun place(id: String) = MyPlace(
         id = id,
@@ -524,3 +597,87 @@ private class RecordingBusinessApi : BusinessApi {
         return ApiResponse(data = itemResponse)
     }
 }
+
+/**
+ * `FashionApi` в памяти для двух ручек `storeOrders`/`updateStoreOrderStatus`
+ * (issue #187) — остальные `DefaultBusinessRepository` не зовёт вовсе, и
+ * тестами здесь не нужны.
+ */
+private class RecordingFashionApi : FashionApi {
+
+    var storeOrdersResponse: FashionStoreOrderPageDto = FashionStoreOrderPageDto()
+    var updateOrderResponse: FashionStoreOrderDto = FashionStoreOrderDto(id = "o-1", status = "NEW")
+
+    /** `storeId` вместе со статусом, чтобы проверить, что путь получает верный магазин. */
+    var storeOrdersRequest: Pair<String, String?>? = null
+    var updateStatusBody: Map<String, String>? = null
+
+    override suspend fun categories(): ApiResponse<List<FashionCategoryDto>> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun catalog(
+        storeId: String,
+        categoryId: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<CatalogDto> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun product(productId: String): ApiResponse<ProductDetailDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun cart(): ApiResponse<List<CartItemDto>> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun addToCart(body: AddToCartRequestDto): ApiResponse<CartItemDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun updateCartItem(
+        variantId: String,
+        quantity: Int,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun removeCartItem(
+        variantId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun createOrder(body: FashionPlaceOrderRequestDto): ApiResponse<CreatedOrderDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun myOrders(
+        vertical: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<OrderPageDto> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun order(orderId: String): ApiResponse<OrderViewDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun cancelOrder(
+        orderId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun storeOrders(
+        storeId: String,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<FashionStoreOrderPageDto> {
+        storeOrdersRequest = storeId to status
+        return ApiResponse(data = storeOrdersResponse)
+    }
+
+    override suspend fun updateStoreOrderStatus(
+        storeId: String,
+        orderId: String,
+        body: Map<String, String>,
+    ): ApiResponse<FashionStoreOrderDto> {
+        updateStatusBody = body
+        return ApiResponse(data = updateOrderResponse)
+    }
+}
+
+/** `FashionApi` по умолчанию для тестов, которым сама одежда не нужна. */
+private class FakeFashionApi : FashionApi by RecordingFashionApi()

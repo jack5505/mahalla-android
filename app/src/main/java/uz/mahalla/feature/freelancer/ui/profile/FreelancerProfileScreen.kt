@@ -1,7 +1,5 @@
 package uz.mahalla.feature.freelancer.ui.profile
 
-import android.content.ActivityNotFoundException
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
@@ -50,6 +48,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.core.ui.startActivitySafely
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.BarberService
 import uz.mahalla.feature.booking.ui.InlineFailure
@@ -578,18 +577,6 @@ private fun OrderedBlock(
             text = stringResource(R.string.freelancer_order_open_my),
             onClick = { onEvent(FreelancerProfileEvent.MyOrdersClicked) },
         )
-    }
-}
-
-/**
- * Набирать номер умеют не все устройства (и не все оболочки). Отсутствие
- * приложения-обработчика — не повод падать.
- */
-private fun Context.startActivitySafely(intent: Intent) {
-    try {
-        startActivity(intent)
-    } catch (notFound: ActivityNotFoundException) {
-        // Обработчика нет — молча ничего не делаем, экран остаётся на месте.
     }
 }
 

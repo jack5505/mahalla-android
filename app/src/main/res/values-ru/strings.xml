@@ -1020,6 +1020,7 @@
     <string name="cinema_empty_title">Афиша пуста</string>
     <string name="cinema_empty_description">Кинотеатр ещё не завёл фильмов. Загляните позже.</string>
     <string name="cinema_movie_unnamed">Название не указано</string>
+    <string name="cinema_movie_trailer">Смотреть трейлер</string>
     <string name="cinema_sessions_title">Сеансы</string>
     <string name="cinema_sessions_empty_title">На этот день сеансов нет</string>
     <string name="cinema_sessions_empty_description">Выберите другой день: в афише ближайшие две недели.</string>

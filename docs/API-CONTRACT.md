@@ -230,6 +230,7 @@ TrackEventRequest: {
 | GET | `barber-services/places/{placeId}/slots` | ✅ |
 | POST | `appointments` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `appointments/my` | ⚠️ не проверено — нужен токен |
+| GET | `appointments/{id}` | ✅ путь сверен по живому `/v3/api-docs` 2026-09-19 (`operationId: byId`, issue #183); ответ — нужен токен |
 | POST | `appointments/{id}/cancel` | ⚠️ не проверено — нужен токен |
 
 **Тело `POST appointments` сверено чтением** (2026-09-10, после развода
@@ -326,10 +327,15 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
   котором у человека две записи; клиент это окно закрывает как может, но
   честнее закрыть его на сервере.
 
-`GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
-одной записи нет), `PUT appointments/{id}/status` бизнес-панель эпика #16 **не использует**: записи
-к мастеру она не ведёт — очередь в ней живая (`walkin`), а календарь записей
-остался вне панели (см. BusinessApi ниже).
+`GET appointments/{id}` теперь читает карточка записи (issue #183, экран один
+на обе вертикали — см. `HospitalApi` ниже). `PUT appointments/{id}/status`
+бизнес-панель эпика #16 **не использует**: записи к мастеру она не ведёт —
+очередь в ней живая (`walkin`), а календарь записей остался вне панели (см.
+BusinessApi ниже).
+
+`AppointmentBookingResponse` в живой схеме 2026-09-19 отдаёт ещё и
+`placeName`/`placeLogoUrl` — оба поля новые, `AppointmentDto` их пока не
+разбирает (см. разбор той же пары у `TicketResponse` в `CinemaApi` выше).
 
 `price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
 отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
@@ -337,17 +343,38 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 `app/src/test/resources/contract/booking/services.json`). За подравнивание
 бороды стенд отдаёт `3000000` — 30 000 сум.
 
-## CinemaApi ⚠️
+## CinemaApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/cinema/data/CinemaApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/cinema/data/CinemaApi.kt` — пути сверены с живым `/v3/api-docs` 2026-09-19 (issue #183): все семь существуют и совпадают с объявленными. Тела и схемы `buy`/`schedule` по-прежнему НЕ СВЕРЕНЫ — писались по описанию задачи, проверить перед правкой.
 
-| Метод | Путь |
-|---|---|
-| GET | `cinema/movies` |
-| GET | `cinema/places/{placeId}/schedule` |
-| POST | `cinema/sessions/{sessionId}/buy` |
-| GET | `cinema/tickets/my` |
-| PUT | `cinema/tickets/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `cinema/movies` | ⚠️ путь подтверждён, схема `Movie` не пересверена |
+| GET | `cinema/movies/{id}` | ✅ путь и схема (issue #183); требует Bearer |
+| GET | `cinema/places/{placeId}/schedule` | ⚠️ не пересверено |
+| POST | `cinema/sessions/{sessionId}/buy` | ⚠️ не пересверено |
+| GET | `cinema/tickets/my` | ⚠️ путь подтверждён, схема ответа сменилась на `TicketResponse` |
+| GET | `cinema/tickets/{id}` | ✅ путь и схема (issue #183); требует Bearer |
+| PUT | `cinema/tickets/{id}/cancel` | ⚠️ путь подтверждён |
+
+**Схема билета в `/v3/api-docs` теперь называется `TicketResponse`, а не
+`CinemaTicket`** (сверено 2026-09-19) — она отдаёт `{id, sessionId, placeId,
+userId, placeName, placeLogoUrl, seatNumber, qrCode, price, status,
+createdAt}`, то есть три новых поля (`placeId`, `placeName`, `placeLogoUrl`)
+против того, что разбирает `CinemaTicketDto` сейчас. Схема одна на все четыре
+пути (`buy`, `my`, `{id}`, `{id}/cancel`), поэтому `CinemaTicketDto` — по-прежнему
+один тип на всех четырёх, просто не читает три новых поля: расширять его —
+отдельная задача, не выдумывать здесь. Та же новая пара `placeName` +
+`placeLogoUrl` появилась и у `AppointmentBookingResponse`, и у
+`HospitalAppointmentResponse` (см. ниже) — если бэкенд стал называть заведение
+сам, `PlaceNameResolver` (issue #182) и подтягивание имени врача (issue #219)
+могут оказаться избыточными для этих трёх ответов. Не проверено и не сделано в
+этом PR — задача на отдельное issue.
+
+**`Movie`** отдаёт ровно то, что уже разбирает `MovieDto` (issue #183):
+`{id, placeId, title, titleUz, description, genre, durationMinutes,
+releaseDate, posterUrl, trailerUrl, isActive, rating}` — совпадение подтверждено
+чтением схемы, отдельная контрактная проба не заводилась.
 
 ## CatalogApi ✅
 
@@ -431,6 +458,28 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+| GET | `fashion/stores/{storeId}/orders` |
+| PUT | `fashion/stores/{storeId}/orders/{orderId}/status` |
+
+**`fashion/stores/{storeId}/orders` (`GET`) и `.../status` (`PUT`) — бизнес-панель,
+заказы «Одежды» (issue #187)**. Оба пути и тело сняты живым `/v3/api-docs`
+**2026-09-19**: `GET` отвечает `ApiResponsePageResponseFashionOrderResponse`,
+`status` — то же перечисление, что уже разбирает `OrderStatus` («Еда»,
+`NEW|ACCEPTED|PREPARING|READY|IN_DELIVERY|DELIVERED|CANCELLED|REFUNDED`) —
+заводить второе перечисление под вертикаль не пришлось. `fulfillment`
+(`PICKUP|DELIVERY|DINE_IN`) и `paymentMethod` (`CASH|WALLET`) — те же
+значения, что и у `FoodOrderResponse`. Строка заказа (`FashionOrderItemResponse`)
+устроена иначе: `variantId`/`colorName`/`size` вместо `itemId`/`itemName` —
+клиент собирает имя строки из трёх полей.
+
+`PUT .../status` принимает `Map<String, String>` без объявленной схемы — тот
+же класс дефекта, что у трёх безымянных тел `BusinessApi` («Еда»): ключ
+**`status`** выведен по тому же правилу (соседние ручки той же операции,
+`UpdateOrderStatusRequest`/`ModerateRequest`, называют его так же), не
+угадан. Отдельно: **у операции `PUT` springdoc не перечисляет `storeId` среди
+параметров**, хотя путь его требует буквально — тоже дефект документации, а
+не повод убрать `storeId` из Retrofit-интерфейса: без него URL остался бы с
+`{storeId}` внутри.
 
 `GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
 отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
@@ -629,7 +678,7 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
-| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181), карточка записи — issue #183; разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -637,11 +686,13 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 `POST appointments/{id}/cancel`. В схеме от 2026-09-09 своя отмена есть, и
 заодно рассосалась коллизия springdoc, из-за которой обе вертикали выглядели
 одной сущностью: у больниц теперь свои `HospitalBookRequest` и
-`HospitalAppointmentResponse` (`{id, doctorId, apptDate, startTime, complaint,
-status, createdAt}`), у брони — `AppointmentBookRequest` и
-`AppointmentBookingResponse` (`{id, placeId, userId, serviceId, serviceName,
-price, apptDate, startTime, endTime, status, createdAt}`). Записи разные —
-значит, общая ручка чужую отменить не может.
+`HospitalAppointmentResponse` (`{id, placeId, doctorId, userId, placeName,
+placeLogoUrl, apptDate, startTime, complaint, status, createdAt}`), у брони —
+`AppointmentBookRequest` и `AppointmentBookingResponse` (`{id, placeId, userId,
+serviceId, placeName, placeLogoUrl, serviceName, price, apptDate, startTime,
+endTime, status, createdAt}`). Записи разные — значит, общая ручка чужую
+отменить не может. `placeName`/`placeLogoUrl` — новая пара 2026-09-19, клиент
+её пока не разбирает (см. `CinemaApi` выше про ту же пару у `TicketResponse`).
 
 Живой пробой это не доказать: `401` приходит до маршрутизации, оба пути
 отвечают им одинаково (проверено `curl` 2026-09-10), а `CONTRACT_REFRESH_TOKEN`

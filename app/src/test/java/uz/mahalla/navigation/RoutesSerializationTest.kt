@@ -420,6 +420,16 @@ class RoutesSerializationTest {
         assertEquals(route, json.decodeFromString<MovieRoute>(json.encodeToString(route)))
     }
 
+    /** Карточка билета (issue #183): единственный аргумент — id билета. */
+    @Test
+    fun `ticket route carries only the ticket id`() {
+        val descriptor = serializer<TicketRoute>().descriptor
+        assertEquals(listOf("ticketId"), (0 until descriptor.elementsCount).map(descriptor::getElementName))
+
+        val route = TicketRoute(ticketId = "t-1")
+        assertEquals(route, json.decodeFromString<TicketRoute>(json.encodeToString(route)))
+    }
+
     /**
      * Экран «мои записи» один на обе вертикали (issue #99), и различает их
      * единственный аргумент. Имя аргумента ViewModel читает из
@@ -441,6 +451,27 @@ class RoutesSerializationTest {
             route,
             json.decodeFromString<MyAppointmentsRoute>(json.encodeToString(route)),
         )
+    }
+
+    /**
+     * Карточка записи (issue #183) — экран тоже один на обе вертикали, тем же
+     * приёмом, что и «мои записи».
+     */
+    @Test
+    fun `appointment route carries the id and the vertical its view model reads`() {
+        val descriptor = serializer<AppointmentRoute>().descriptor
+        assertEquals(
+            listOf("appointmentId", "vertical"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        assertEquals(
+            AppointmentVertical.Barber.name,
+            AppointmentRoute(appointmentId = "a-1").vertical,
+        )
+
+        val route = AppointmentRoute(appointmentId = "a-1", vertical = AppointmentVertical.Doctor.name)
+        assertEquals(route, json.decodeFromString<AppointmentRoute>(json.encodeToString(route)))
     }
 
     /**
@@ -503,7 +534,6 @@ class RoutesSerializationTest {
         listOf(
             serializer<BusinessRoute>().descriptor,
             serializer<BusinessQueueRoute>().descriptor,
-            serializer<BusinessOrdersRoute>().descriptor,
             serializer<BusinessMenuRoute>().descriptor,
         ).forEach { descriptor ->
             assertEquals(
@@ -512,13 +542,22 @@ class RoutesSerializationTest {
             )
         }
 
+        // У заказов третье поле — категория заведения (issue #187): она
+        // решает, food- или fashion-ручку звать, и переименование сломало бы
+        // это ровно так же тихо, как и переименование `placeId`.
+        val ordersDescriptor = serializer<BusinessOrdersRoute>().descriptor
+        assertEquals(
+            expected + BusinessArgs.CATEGORY,
+            (0 until ordersDescriptor.elementsCount).map(ordersDescriptor::getElementName),
+        )
+
         val route = BusinessRoute(placeId = "p-1", placeName = "Osh Markazi")
         assertEquals(route, json.decodeFromString<BusinessRoute>(json.encodeToString(route)))
 
         val queue = BusinessQueueRoute(placeId = "p-1")
         assertEquals(queue, json.decodeFromString<BusinessQueueRoute>(json.encodeToString(queue)))
 
-        val orders = BusinessOrdersRoute(placeId = "p-1")
+        val orders = BusinessOrdersRoute(placeId = "p-1", category = "FOOD")
         assertEquals(orders, json.decodeFromString<BusinessOrdersRoute>(json.encodeToString(orders)))
 
         val menu = BusinessMenuRoute(placeId = "p-1")
@@ -527,7 +566,7 @@ class RoutesSerializationTest {
 
     @Test
     fun `business routes are distinguishable from each other`() {
-        // Поля у всех четырёх одинаковые, а экраны разные: перепутанный
+        // Поля у всех четырёх почти одинаковые, а экраны разные: перепутанный
         // `composable<…>` привёл бы к меню вместо очереди.
         val names = listOf(
             serializer<BusinessRoute>().descriptor.serialName,

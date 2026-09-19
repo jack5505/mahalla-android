@@ -1,36 +1,29 @@
 package uz.mahalla.feature.cinema.ui
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import uz.mahalla.R
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.userMessage
+import uz.mahalla.core.ui.components.MahallaAsyncImage
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.feature.cinema.domain.CinemaTicketStatus
-import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 
 /**
@@ -48,33 +41,24 @@ import uz.mahalla.ui.theme.Spacing
 fun prefersUzbekTitle(): Boolean = Locale.current.language.equals("uz", ignoreCase = true)
 
 /**
- * Место под постер.
- *
- * Картинки не будет, пока в проекте нет загрузчика изображений: `posterUrl`
- * доезжает до домена и подставится сюда без изменений экрана. Пока — плашка с
- * иконкой, а не пустота: без неё карточка фильма выглядит как недогруженная.
+ * Постер фильма (issue #183: `posterUrl` доехал до домена, но экраны его не
+ * показывали, пока в проекте не появился загрузчик изображений). Нет ссылки
+ * или не загрузилась — иконка на приглушённом фоне, как у любой другой
+ * картинки в приложении ([MahallaAsyncImage]).
  */
 @Composable
 fun MoviePoster(
+    url: String?,
     modifier: Modifier = Modifier,
     width: Int = POSTER_WIDTH,
     height: Int = POSTER_HEIGHT,
 ) {
-    Box(
-        modifier = modifier
-            .width(width.dp)
-            .height(height.dp)
-            .clip(RoundedCornerShape(Spacing.item))
-            .background(LocalMahallaColors.current.skeleton),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Movie,
-            contentDescription = null,
-            modifier = Modifier.size(POSTER_ICON.dp),
-            tint = LocalMahallaColors.current.fgMuted,
-        )
-    }
+    MahallaAsyncImage(
+        url = url,
+        contentDescription = null,
+        modifier = modifier.width(width.dp).height(height.dp),
+        fallbackIcon = Icons.Outlined.Movie,
+    )
 }
 
 /**
@@ -135,4 +119,3 @@ fun CinemaTicketStatus.tone(): MahallaTone = when (this) {
 
 private const val POSTER_WIDTH = 72
 private const val POSTER_HEIGHT = 104
-private const val POSTER_ICON = 28
