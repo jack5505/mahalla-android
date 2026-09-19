@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +43,8 @@ import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaCheckboxRow
+import uz.mahalla.core.ui.components.MahallaDialog
+import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.components.MahallaSnackbarHost
@@ -88,6 +92,16 @@ fun BusinessMenuScreen(
             when (effect) {
                 is BusinessMenuEffect.ItemCreated -> snackbar.show(
                     text = context.getString(R.string.business_menu_created, effect.name),
+                    tone = MahallaTone.Success,
+                )
+
+                is BusinessMenuEffect.ItemUpdated -> snackbar.show(
+                    text = context.getString(R.string.business_menu_updated, effect.name),
+                    tone = MahallaTone.Success,
+                )
+
+                is BusinessMenuEffect.ItemDeleted -> snackbar.show(
+                    text = context.getString(R.string.business_menu_deleted, effect.name),
                     tone = MahallaTone.Success,
                 )
 
@@ -164,6 +178,17 @@ fun BusinessMenuContentScreen(
 
     if (state.isFormVisible) {
         NewMenuItemSheet(state = state, onEvent = onEvent)
+    }
+
+    state.pendingDelete?.let { item ->
+        MahallaDialog(
+            title = stringResource(R.string.business_menu_delete_title),
+            text = stringResource(R.string.business_menu_delete_message, item.name),
+            confirmLabel = stringResource(R.string.business_menu_delete_confirm),
+            onConfirm = { onEvent(BusinessMenuEvent.DeleteConfirmed) },
+            onDismiss = { onEvent(BusinessMenuEvent.DeleteDismissed) },
+            destructive = true,
+        )
     }
 }
 
@@ -263,6 +288,20 @@ private fun MenuItemCard(
                     tone = MahallaTone.Success,
                 )
             }
+            // Правка и удаление (issue #288) — рядом с названием, а не под
+            // стоп-листом: тот переключатель нужен на ходу, а эти два — реже.
+            MahallaIconButton(
+                icon = Icons.Outlined.Edit,
+                contentDescription = stringResource(R.string.business_menu_edit_action),
+                onClick = { onEvent(BusinessMenuEvent.EditItemClicked(item.id)) },
+                enabled = enabled,
+            )
+            MahallaIconButton(
+                icon = Icons.Outlined.Delete,
+                contentDescription = stringResource(R.string.business_menu_delete_action),
+                onClick = { onEvent(BusinessMenuEvent.DeleteClicked(item.id)) },
+                enabled = enabled,
+            )
         }
 
         Text(
@@ -297,8 +336,9 @@ private fun MenuItemCard(
 }
 
 /**
- * Форма новой позиции. В шторке, а не отдельным экраном: полей пять, и ради
- * них не стоит терять из виду меню, куда позиция ляжет.
+ * Форма позиции — новой или уже выставленной (issue #288). В шторке, а не
+ * отдельным экраном: полей пять, и ради них не стоит терять из виду меню,
+ * куда позиция ляжет.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -309,7 +349,11 @@ private fun NewMenuItemSheet(
     val sections = (state.menu as? ScreenState.Content)?.data?.sections.orEmpty()
     MahallaBottomSheet(
         onDismiss = { onEvent(BusinessMenuEvent.FormDismissed) },
-        title = stringResource(R.string.business_menu_add),
+        title = if (state.form.isNew) {
+            stringResource(R.string.business_menu_add)
+        } else {
+            stringResource(R.string.business_menu_edit_title)
+        },
     ) {
         // Выбор раздела показываем только когда их несколько: сегмент из
         // одной кнопки — это вопрос без вариантов ответа.

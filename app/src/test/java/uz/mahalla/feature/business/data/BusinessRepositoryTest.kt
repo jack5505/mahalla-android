@@ -405,6 +405,123 @@ class BusinessRepositoryTest {
         assertEquals(0, api.menuCalls)
     }
 
+    /** Правка без `itemId` — не форма правки, значит спрашивать сервер нечем (issue #288). */
+    @Test
+    fun `an update without an item id is refused before the request`() = runTest {
+        val api = RecordingBusinessApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(sectionId = "s-1", name = "Osh", priceText = "32000"),
+        )
+
+        assertNull(api.updatedItem)
+        assertEquals(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `an invalid update form is refused before the request`() = runTest {
+        val api = RecordingBusinessApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "", priceText = ""),
+        )
+
+        assertNull(api.updatedItem)
+        assertEquals(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a valid update goes to the item's own path with every field`() = runTest {
+        val api = RecordingBusinessApi()
+
+        repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(
+                itemId = "i-1",
+                sectionId = "s-1",
+                name = "  Osh  ",
+                priceText = "45000",
+                description = "  Palov  ",
+                prepMinutesText = "20",
+                isHalal = true,
+            ),
+        )
+
+        assertEquals("i-1", api.updatedItemId)
+        val sent = api.updatedItem!!
+        assertEquals("s-1", sent.menuId)
+        assertEquals("Osh", sent.name)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 45000 → 4_500_000.
+        assertEquals(4_500_000L, sent.price)
+        assertEquals("Palov", sent.description)
+        assertEquals(20, sent.prepMinutes)
+        assertEquals(true, sent.isHalal)
+    }
+
+    /** Ответ `ItemResponse` не говорит про соседние позиции — меню перечитывается целиком. */
+    @Test
+    fun `the menu is re-read after a successful update`() = runTest {
+        val api = RecordingBusinessApi()
+        api.menuResponse = listOf(
+            MenuSectionDto(
+                id = "s-1",
+                items = listOf(MenuItemDto(id = "i-1", name = "Osh", price = 45_000)),
+            ),
+        )
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "Osh", priceText = "45000"),
+        )
+
+        assertEquals(
+            listOf("i-1"),
+            (result as ApiResult.Success).data.sections.single().items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a refused update does not re-read the menu`() = runTest {
+        val api = FailingUpdateApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "Osh", priceText = "45000"),
+        )
+
+        assertTrue(result is ApiResult.Failure)
+        assertEquals(0, api.menuCalls)
+    }
+
+    @Test
+    fun `a delete goes to the item's own path and the menu is re-read`() = runTest {
+        val api = RecordingBusinessApi()
+        api.menuResponse = listOf(MenuSectionDto(id = "s-1", items = emptyList()))
+
+        val result = repository(api = api).deleteItem("p-1", "i-1")
+
+        assertEquals("i-1", api.deletedItemId)
+        assertTrue((result as ApiResult.Success).data.sections.single().items.isEmpty())
+    }
+
+    @Test
+    fun `a refused delete does not re-read the menu`() = runTest {
+        val api = FailingDeleteApi()
+
+        val result = repository(api = api).deleteItem("p-1", "i-1")
+
+        assertTrue(result is ApiResult.Failure)
+        assertEquals(0, api.menuCalls)
+    }
+
     @Test
     fun `declining a ticket sends an empty body - the key name is unknown`() = runTest {
         val api = RecordingBusinessApi()
@@ -520,6 +637,37 @@ private class FailingCreateApi : BusinessApi by RecordingBusinessApi() {
     ): ApiResponse<MenuItemDto> = ApiResponse(success = false, data = null)
 }
 
+/** Правка отказывает: меню после отказа перечитываться не должно (issue #288). */
+private class FailingUpdateApi : BusinessApi by RecordingBusinessApi() {
+
+    var menuCalls = 0
+
+    override suspend fun menu(placeId: String): ApiResponse<List<MenuSectionDto>> {
+        menuCalls++
+        return ApiResponse(data = emptyList())
+    }
+
+    override suspend fun updateItem(
+        itemId: String,
+        body: UpdateMenuItemRequest,
+    ): ApiResponse<MenuItemDto> = ApiResponse(success = false, data = null)
+}
+
+/** Удаление отказывает: меню после отказа перечитываться не должно (issue #288). */
+private class FailingDeleteApi : BusinessApi by RecordingBusinessApi() {
+
+    var menuCalls = 0
+
+    override suspend fun menu(placeId: String): ApiResponse<List<MenuSectionDto>> {
+        menuCalls++
+        return ApiResponse(data = emptyList())
+    }
+
+    override suspend fun deleteItem(
+        itemId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> = ApiResponse(success = false)
+}
+
 /**
  * API панели в памяти: MockWebServer тут не нужен — проверяются тела запросов
  * и разбор ответов, а не сам HTTP (он общий и покрыт в `data/network`).
@@ -538,6 +686,9 @@ private class RecordingBusinessApi : BusinessApi {
     var declineBody: Map<String, String>? = null
     var statusBody: Map<String, String>? = null
     var createdItem: CreateMenuItemRequest? = null
+    var updatedItem: UpdateMenuItemRequest? = null
+    var updatedItemId: String? = null
+    var deletedItemId: String? = null
 
     override suspend fun dashboard(placeId: String) = ApiResponse(data = dashboardResponse)
 
@@ -595,6 +746,21 @@ private class RecordingBusinessApi : BusinessApi {
     ): ApiResponse<MenuItemDto> {
         createdItem = body
         return ApiResponse(data = itemResponse)
+    }
+
+    override suspend fun updateItem(
+        itemId: String,
+        body: UpdateMenuItemRequest,
+    ): ApiResponse<MenuItemDto> {
+        updatedItemId = itemId
+        updatedItem = body
+        return ApiResponse(data = itemResponse)
+    }
+
+    /** `ApiResponseVoid`: `data` пустая и при успехе, как у [toggleItem]. */
+    override suspend fun deleteItem(itemId: String): ApiResponse<kotlinx.serialization.json.JsonElement> {
+        deletedItemId = itemId
+        return ApiResponse(success = true)
     }
 }
 

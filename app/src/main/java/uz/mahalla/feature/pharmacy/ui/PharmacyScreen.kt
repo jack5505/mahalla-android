@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocalPharmacy
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,7 @@ import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
+import uz.mahalla.core.ui.components.MahallaDialog
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
@@ -139,6 +141,17 @@ fun PharmacyContent(
 
     state.createForm?.let { form -> NewProductSheet(form = form, onEvent = onEvent) }
     state.stockForm?.let { form -> StockEditSheet(form = form, onEvent = onEvent) }
+    state.editForm?.let { form -> EditProductSheet(form = form, onEvent = onEvent) }
+    state.deleteConfirmation?.let { product ->
+        MahallaDialog(
+            title = stringResource(R.string.pharmacy_delete_title),
+            text = stringResource(R.string.pharmacy_delete_message, product.name),
+            confirmLabel = stringResource(R.string.pharmacy_delete_confirm),
+            onConfirm = { onEvent(PharmacyEvent.DeleteConfirmed) },
+            onDismiss = { onEvent(PharmacyEvent.DeleteDismissed) },
+            destructive = true,
+        )
+    }
 }
 
 /**
@@ -181,11 +194,17 @@ private fun LazyListScope.productItems(
         }
 
         is ScreenState.Content -> {
+            state.deleteFailure?.let { failure ->
+                item(key = "delete-failure") { InlineFailure(failure = failure) }
+            }
             items(products.data, key = PharmacyProduct::id) { product ->
                 ProductCard(
                     product = product,
                     isOwner = state.isOwner,
+                    isDeleting = product.id in state.deletingProductIds,
                     onEditStock = { onEvent(PharmacyEvent.StockEditClicked(product)) },
+                    onEdit = { onEvent(PharmacyEvent.EditProductClicked(product)) },
+                    onDelete = { onEvent(PharmacyEvent.DeleteProductClicked(product)) },
                 )
             }
             if (state.hasMore || state.loadMoreFailure != null) {
@@ -215,7 +234,10 @@ private fun ProductCard(
     product: PharmacyProduct,
     modifier: Modifier = Modifier,
     isOwner: Boolean = false,
+    isDeleting: Boolean = false,
     onEditStock: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
 ) {
     val colors = LocalMahallaColors.current
     val absent = product.stock == ProductStock.OutOfStock
@@ -245,6 +267,22 @@ private fun ProductCard(
                     icon = Icons.Outlined.Edit,
                     contentDescription = stringResource(R.string.pharmacy_edit_stock_action),
                     onClick = onEditStock,
+                    enabled = !isDeleting,
+                )
+                // Правка карточки и удаление (issue #288) — отдельные иконки
+                // от остатка: у остатка своя ручка и смысл «сколько осталось»,
+                // а тут — название, цена, производитель.
+                MahallaIconButton(
+                    icon = Icons.Outlined.Edit,
+                    contentDescription = stringResource(R.string.pharmacy_edit_product_action),
+                    onClick = onEdit,
+                    enabled = !isDeleting,
+                )
+                MahallaIconButton(
+                    icon = Icons.Outlined.Delete,
+                    contentDescription = stringResource(R.string.pharmacy_delete_action),
+                    onClick = onDelete,
+                    enabled = !isDeleting,
                 )
             }
         }
@@ -403,6 +441,83 @@ private fun NewProductSheet(
             onClick = { onEvent(PharmacyEvent.CreateSubmitted) },
             state = ButtonState(
                 enabled = !showErrors || draft.canSubmit,
+                loading = form.submitting,
+            ),
+        )
+    }
+}
+
+/**
+ * Правка товара (issue #288, `PUT products/{id}`). Без остатка и описания —
+ * у остатка своя форма ([StockEditSheet]), а описание сервер не отдаёт вовсе
+ * (см. KDoc `PharmacyRepository.updateProduct`): показать здесь пустое поле
+ * значило бы дать стереть то, чего человек не видит.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditProductSheet(
+    form: EditProductFormState,
+    onEvent: (PharmacyEvent) -> Unit,
+) {
+    val draft = form.draft
+    val showErrors = form.submitAttempted
+    MahallaBottomSheet(
+        onDismiss = { onEvent(PharmacyEvent.EditFormDismissed) },
+        title = stringResource(R.string.pharmacy_edit_product_title),
+    ) {
+        MahallaTextField(
+            value = draft.name,
+            onValueChange = { onEvent(PharmacyEvent.EditNameChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_name),
+            errorText = if (showErrors && !draft.isNameValid) {
+                stringResource(R.string.pharmacy_field_name_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.priceText,
+            onValueChange = { onEvent(PharmacyEvent.EditPriceChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_price),
+            errorText = if (showErrors && !draft.isPriceValid) {
+                stringResource(R.string.pharmacy_field_price_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.manufacturer,
+            onValueChange = { onEvent(PharmacyEvent.EditManufacturerChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_manufacturer),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.dosageForm,
+            onValueChange = { onEvent(PharmacyEvent.EditDosageFormChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_dosage_form),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.strength,
+            onValueChange = { onEvent(PharmacyEvent.EditStrengthChanged(it)) },
+            label = stringResource(R.string.pharmacy_field_strength),
+            enabled = !form.submitting,
+        )
+        MahallaSwitchRow(
+            title = stringResource(R.string.pharmacy_field_prescription),
+            checked = draft.requiresPrescription,
+            onCheckedChange = { onEvent(PharmacyEvent.EditPrescriptionChanged(it)) },
+            enabled = !form.submitting,
+        )
+        form.failure?.let { failure -> InlineFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.pharmacy_edit_product_submit),
+            onClick = { onEvent(PharmacyEvent.EditSubmitted) },
+            state = ButtonState(
+                enabled = !showErrors || (draft.isNameValid && draft.isPriceValid),
                 loading = form.submitting,
             ),
         )

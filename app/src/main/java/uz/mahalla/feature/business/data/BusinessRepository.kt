@@ -114,6 +114,12 @@ interface BusinessRepository {
     /** Новая позиция меню (задача 12.4). */
     suspend fun createItem(placeId: String, form: NewMenuItemForm): ApiResult<BusinessMenu>
 
+    /** Правка позиции меню (issue #288, задача 12.4 бэкенда — #221). */
+    suspend fun updateItem(placeId: String, form: NewMenuItemForm): ApiResult<BusinessMenu>
+
+    /** Удаление позиции меню (issue #288, задача 12.4 бэкенда — #221). */
+    suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu>
+
     companion object {
         /** Код отказа, когда заведения нет среди «моих». */
         const val NO_ACCESS_CODE = BusinessAccess.NO_ACCESS_CODE
@@ -334,6 +340,61 @@ class DefaultBusinessRepository @Inject constructor(
         }
         return when (created) {
             is ApiResult.Failure -> created
+            is ApiResult.Success -> menu(placeId)
+        }
+    }
+
+    /**
+     * Правка позиции меню (issue #288). Тот же приём, что у [createItem]:
+     * форма проверяется на клиенте, а после успеха меню перечитывается
+     * целиком — ответ `ItemResponse` не говорит, остался ли раздел тем же,
+     * если бэкенд решил иначе.
+     */
+    override suspend fun updateItem(
+        placeId: String,
+        form: NewMenuItemForm,
+    ): ApiResult<BusinessMenu> {
+        val itemId = form.itemId ?: return ApiResult.Failure(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+        )
+        val trimmed = form.trimmed()
+        val errors = NewMenuItemValidator.validate(trimmed)
+        if (errors.isNotEmpty()) {
+            return ApiResult.Failure(ApiError.Business(BusinessRepository.INVALID_FORM_CODE))
+        }
+
+        val updated = apiCall {
+            api.updateItem(
+                itemId = itemId,
+                body = UpdateMenuItemRequest(
+                    menuId = trimmed.sectionId,
+                    name = trimmed.name,
+                    price = Money.somToTiyin(
+                        trimmed.priceOrNull() ?: NewMenuItemForm.MIN_PRICE_SUM,
+                    ),
+                    description = trimmed.description.takeIf(String::isNotEmpty),
+                    prepMinutes = trimmed.prepMinutesOrNull(),
+                    isHalal = trimmed.isHalal.takeIf { it },
+                ),
+            ).payload()
+        }
+        return when (updated) {
+            is ApiResult.Failure -> updated
+            is ApiResult.Success -> menu(placeId)
+        }
+    }
+
+    /**
+     * Удаление позиции меню (issue #288). `ensureSuccess`, а не `payload`: как
+     * и у [toggleStopList], ответ — `ApiResponseVoid`. Меню перечитывается у
+     * сервера, а не вычёркивается на месте: удаляет ли бэкенд строку или
+     * ставит стоп-лист, контракт не говорит (тот же приём, что у
+     * `deleteMyService`, issue #71).
+     */
+    override suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu> {
+        val deleted = apiCall { api.deleteItem(itemId).ensureSuccess() }
+        return when (deleted) {
+            is ApiResult.Failure -> deleted
             is ApiResult.Success -> menu(placeId)
         }
     }
