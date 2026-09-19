@@ -1023,6 +1023,7 @@
     <string name="cinema_empty_title">Afisha bo\'sh</string>
     <string name="cinema_empty_description">Kinoteatr hali film kiritmagan. Keyinroq qarab ko\'ring.</string>
     <string name="cinema_movie_unnamed">Nomi ko\'rsatilmagan film</string>
+    <string name="cinema_movie_trailer">Treylerni ko\'rish</string>
     <string name="cinema_sessions_title">Seanslar</string>
     <string name="cinema_sessions_empty_title">Bu kunga seans yo\'q</string>
     <string name="cinema_sessions_empty_description">Boshqa kunni tanlang: afishada yaqin ikki hafta bor.</string>

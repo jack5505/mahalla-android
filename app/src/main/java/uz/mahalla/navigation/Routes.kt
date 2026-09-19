@@ -364,7 +364,8 @@ data class BookingRoute(
  * [uz.mahalla.feature.booking.data.AppointmentsSource].
  *
  * Других аргументов нет: список грузится с сервера целиком, а конкретная
- * запись никуда не ведёт — своего экрана у неё нет.
+ * запись открывается своим маршрутом ([AppointmentRoute]) — из «моих
+ * активностей».
  */
 @Serializable
 data class MyAppointmentsRoute(
@@ -381,6 +382,21 @@ data class MyAppointmentsRoute(
 object MyAppointmentsArgs {
     const val VERTICAL = "vertical"
 }
+
+/**
+ * Карточка одной записи (issue #183) — сейчас единственный вход в неё: «мои
+ * активности» (`ActivityTarget.MasterAppointment`/`DoctorAppointment`). Экран
+ * один на обе вертикали, как и [MyAppointmentsRoute]: [vertical] выбирает
+ * источник (`appointments/{id}` против `hospitals/appointments/{id}`) и
+ * заголовок.
+ *
+ * Своего эффекта навигации у экрана нет — «назад» ведёт туда, откуда открыли.
+ */
+@Serializable
+data class AppointmentRoute(
+    val appointmentId: String,
+    val vertical: String = AppointmentVertical.Barber.name,
+)
 
 // --- Вертикаль «Мастера» (issue #107) ---
 
@@ -563,11 +579,21 @@ data class MovieRoute(
  * откуда пришли.
  *
  * Аргументов нет: список грузится с сервера страницами, а конкретный билет
- * никуда не ведёт — своего экрана у него нет (`GET cinema/tickets/{id}`
- * отдаёт ровно то же, что и строка списка).
+ * открывается своим маршрутом ([TicketRoute]) — из «моих активностей».
  */
 @Serializable
 data object MyTicketsRoute
+
+/**
+ * Карточка одного билета (issue #183) — сейчас единственный вход в неё: «мои
+ * активности» (`ActivityTarget.CinemaTicket`). Список «Мои билеты» экран не
+ * открывает: там уже показан весь тот же набор полей строкой, лишний переход
+ * ничего не добавил бы.
+ *
+ * Своего эффекта навигации у экрана нет — «назад» ведёт туда, откуда открыли.
+ */
+@Serializable
+data class TicketRoute(val ticketId: String)
 
 // --- Вертикаль «Аптека» (issue #100) ---
 

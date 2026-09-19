@@ -77,5 +77,15 @@ sealed interface ActivityEffect : UiEffect {
     /** Статус заказа «Еды» — единственный экран, который даёт контракт. */
     data class OpenFoodOrder(val orderId: String) : ActivityEffect
 
+    /** Карточка билета (issue #183). */
+    data class OpenTicket(val ticketId: String) : ActivityEffect
+
+    /**
+     * Карточка записи (issue #183). [vertical] — имя константы
+     * [uz.mahalla.feature.booking.domain.AppointmentVertical], тем же приёмом,
+     * что и у [uz.mahalla.navigation.MyAppointmentsRoute].
+     */
+    data class OpenAppointment(val appointmentId: String, val vertical: String) : ActivityEffect
+
     data object OpenDiscovery : ActivityEffect
 }

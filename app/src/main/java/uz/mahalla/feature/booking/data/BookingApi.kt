@@ -60,6 +60,14 @@ interface BookingApi {
     ): ApiResponse<AppointmentPageDto>
 
     /**
+     * Карточка записи по id (issue #183). `data` — та же
+     * `AppointmentBookingResponse`, что у создания и списка. Требует Bearer,
+     * путь подтверждён по живому `/v3/api-docs` 2026-09-19 (`operationId: byId`).
+     */
+    @GET("appointments/{id}")
+    suspend fun appointment(@Path("id") appointmentId: String): ApiResponse<AppointmentDto>
+
+    /**
      * Отмена. Ответ — та же запись, но разбирать его обязательным не считаем:
      * успешный запрос уже означает, что запись отменена (см.
      * [BookingRepository]).

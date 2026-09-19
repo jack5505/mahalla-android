@@ -245,6 +245,8 @@ class ActivityRepositoryTest {
         // 09:30 в Ташкенте — это 04:30 UTC. Разворачивать местную дату в UTC
         // значило бы показать запись на пять часов позже.
         assertEquals(Instant.parse("2026-09-10T04:30:00Z"), appointment.occurredAt)
+        // Карточка записи (issue #183) — строка кликабельна.
+        assertEquals(ActivityTarget.MasterAppointment("a-1"), appointment.target)
     }
 
     @Test
@@ -356,6 +358,9 @@ class ActivityRepositoryTest {
         assertEquals(ActivitySource.DoctorAppointments, appointment.source)
         assertEquals(ActivityKind.DoctorAppointment, appointment.kind)
         assertEquals(ActivityStatus.Missed, appointment.status)
+        // Карточка записи (issue #183) — своя цель, а не `MasterAppointment`
+        // барбера: у записи к врачу другой экран и другая ручка.
+        assertEquals(ActivityTarget.DoctorAppointment("h-1"), appointment.target)
     }
 
     // --- Имя врача у записи без названия услуги (issue #219, #266) ---
@@ -439,6 +444,8 @@ class ActivityRepositoryTest {
         assertEquals(ActivityStatus.Confirmed, ticket.status)
         assertEquals("D-12", ticket.note)
         assertEquals(35_000L, ticket.amount)
+        // Карточка билета (issue #183) — строка кликабельна.
+        assertEquals(ActivityTarget.CinemaTicket("t-1"), ticket.target)
     }
 
     @Test

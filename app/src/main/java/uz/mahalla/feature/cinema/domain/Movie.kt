@@ -72,3 +72,38 @@ object CinemaPoster {
         movie.isActive && (movie.placeId.isNullOrBlank() || movie.placeId == placeId)
     }
 }
+
+/**
+ * Проверка ссылки на трейлер (issue #183).
+ *
+ * Ссылку присылает сервер, а адрес сервера в debug-сборке вводит пользователь
+ * (issue #26) — без проверки подменённый бэкенд запускал бы на устройстве
+ * произвольный intent (`market://`, `intent://`, чужой deep link, в том числе
+ * наш `mahalla://`). То же правило, что у ссылки на бота (issue #46), на
+ * магазин (issue #80) и на форму оплаты (issue #90).
+ *
+ * Только `https`, на любой хост: трейлер может лежать на YouTube, Vimeo или
+ * своём сервере кинотеатра, а открывает его браузер или то приложение,
+ * которое зарегистрировано на этот хост как App Link (YouTube — сам, без
+ * отдельной схемы `vnd.youtube:`, которую сервер и не присылает).
+ *
+ * Разбор ручной, без `android.net.Uri`: правило проверяется JVM-тестом, а
+ * `Uri` в юнит-тестах заглушен и молча вернул бы `null` у каждого поля — тест
+ * был бы зелёным при любой реализации.
+ */
+object TrailerLink {
+
+    private const val HTTPS = "https://"
+
+    fun sanitize(url: String?): String? {
+        val candidate = url?.trim().orEmpty()
+        if (candidate.isEmpty()) return null
+        if (!candidate.startsWith(HTTPS, ignoreCase = true)) return null
+        val host = candidate.substring(HTTPS.length)
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+        if (host.isEmpty() || candidate.any(Char::isWhitespace)) return null
+        return candidate
+    }
+}

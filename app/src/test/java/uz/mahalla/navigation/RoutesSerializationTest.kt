@@ -420,6 +420,16 @@ class RoutesSerializationTest {
         assertEquals(route, json.decodeFromString<MovieRoute>(json.encodeToString(route)))
     }
 
+    /** Карточка билета (issue #183): единственный аргумент — id билета. */
+    @Test
+    fun `ticket route carries only the ticket id`() {
+        val descriptor = serializer<TicketRoute>().descriptor
+        assertEquals(listOf("ticketId"), (0 until descriptor.elementsCount).map(descriptor::getElementName))
+
+        val route = TicketRoute(ticketId = "t-1")
+        assertEquals(route, json.decodeFromString<TicketRoute>(json.encodeToString(route)))
+    }
+
     /**
      * Экран «мои записи» один на обе вертикали (issue #99), и различает их
      * единственный аргумент. Имя аргумента ViewModel читает из
@@ -441,6 +451,27 @@ class RoutesSerializationTest {
             route,
             json.decodeFromString<MyAppointmentsRoute>(json.encodeToString(route)),
         )
+    }
+
+    /**
+     * Карточка записи (issue #183) — экран тоже один на обе вертикали, тем же
+     * приёмом, что и «мои записи».
+     */
+    @Test
+    fun `appointment route carries the id and the vertical its view model reads`() {
+        val descriptor = serializer<AppointmentRoute>().descriptor
+        assertEquals(
+            listOf("appointmentId", "vertical"),
+            (0 until descriptor.elementsCount).map(descriptor::getElementName),
+        )
+
+        assertEquals(
+            AppointmentVertical.Barber.name,
+            AppointmentRoute(appointmentId = "a-1").vertical,
+        )
+
+        val route = AppointmentRoute(appointmentId = "a-1", vertical = AppointmentVertical.Doctor.name)
+        assertEquals(route, json.decodeFromString<AppointmentRoute>(json.encodeToString(route)))
     }
 
     /**
