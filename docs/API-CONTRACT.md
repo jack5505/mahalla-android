@@ -558,6 +558,22 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 выключена»; если сервер их не отдаёт, мастер просто никогда этой пометки не
 увидит. Отдельной ручки «мои услуги» в контроллере нет.
 
+**`scheduledAt` заказа мастера уходит и читается местным ташкентским
+временем (issue #205, по прецеденту #144)**: было — зоне-менее строка читалась
+как UTC (`parseServerInstant`), а отправлялась зоне-содержащей
+(`Instant.toString()` с `Z`) — трактовка была замкнута сама на себя, поэтому
+симптома в приложении не было видно. Теперь и отправка (`freelancerRequestTime`
+в `FreelancerMappers.kt`), и чтение (`parseServerSlotInstant`) — в
+Asia/Tashkent, тот же случай, что `startTime` брони игровой зоны и
+`apptDate` + `startTime` записи к мастеру. **Трактовка бэкенда не
+подтверждена** — как и раньше, `401` на `POST freelancers/{id}/orders`
+приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан; если
+бэкенд хранит поле как `Instant`/`OffsetDateTime`, а не зоне-менее
+`LocalDateTime`, эта правка — регресс. Проверить под токеном вместе с
+`startTime` игровой зоны (issue #232), когда появится `CONTRACT_REFRESH_TOKEN`.
+`createdAt` (отметка сервера) читается как и раньше — `parseServerInstant`,
+UTC.
+
 **Входящие заказы мастера подключены черновиком (issue #190):**
 `GET freelancers/me/orders` и `PUT freelancers/orders/{orderId}/status`
 используются экраном «Входящие заказы» (`ui/orders/MyFreelancerIncomingOrders*`),

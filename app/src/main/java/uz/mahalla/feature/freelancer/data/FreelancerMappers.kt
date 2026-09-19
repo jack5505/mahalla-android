@@ -1,6 +1,11 @@
 package uz.mahalla.feature.freelancer.data
 
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.parseServerSlotInstant
 import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.booking.domain.BarberService
@@ -100,11 +105,33 @@ private fun FreelancerOrderDto.order(orderId: String) = FreelancerOrder(
     serviceTitle = serviceTitle?.trim()?.takeIf { it.isNotEmpty() },
     priceSum = priceAmount.tiyinToSom()?.coerceAtLeast(0) ?: 0,
     status = FreelancerOrderStatus.fromApi(status),
-    scheduledAt = parseServerInstant(scheduledAt),
+    // Время слота, не отметка сервера — parseServerSlotInstant (issue #205,
+    // по прецеденту #144).
+    scheduledAt = parseServerSlotInstant(scheduledAt),
     address = address?.trim()?.takeIf { it.isNotEmpty() },
     comment = comment?.trim()?.takeIf { it.isNotEmpty() },
     createdAt = parseServerInstant(createdAt),
 )
+
+/**
+ * Время визита для тела заказа мастера (issue #205, по прецеденту `#144` —
+ * см. `gamingRequestTime` в `feature/gaming/data/GamingMappers.kt`).
+ *
+ * `scheduledAt` — время слота, которое выбрал человек по часам на стене, а не
+ * отметка сервера: тот же случай, что `startTime` брони игровой зоны и
+ * `apptDate` + `startTime` записи к мастеру. Уходит зоне-менее в **местном
+ * ташкентском** времени и читается обратно так же — [parseServerSlotInstant].
+ * Отправка и чтение — две стороны одного решения, менять их можно только
+ * вместе: до этой правки чтение уже читало зоне-менее строку как UTC, а
+ * отправка уходила зоне-содержащей (`Instant.toString()`), и трактовка была
+ * замкнута сама на себя, поэтому симптома не было видно.
+ */
+internal fun freelancerRequestTime(instant: Instant): String =
+    REQUEST_TIME_PATTERN.format(instant.atZone(DateTimeFormatters.AppZone))
+
+/** Секунды пишутся всегда — как в `gamingRequestTime`. */
+private val REQUEST_TIME_PATTERN: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss", Locale.ROOT)
 
 internal fun FreelancerOrderPageDto.toDomain(): FreelancerOrderPage = FreelancerOrderPage(
     items = content.mapNotNull(FreelancerOrderDto::toDomain),
