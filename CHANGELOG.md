@@ -3114,3 +3114,48 @@ Issue #236 завели, когда #158, #161 и #173 были ещё откр�
 фразы в контракте, и она успела вырасти заново в том же файле. Проверять
 стоило не только код, но и документ, который этот код описывает.
 
+---
+
+## Этап: кошелёк — вкладка «Платежи» (issue #184)
+
+Кошелёк показывал только `wallet/transactions` — движения по счёту, без
+провайдера и без причины отказа. Платёж PAYME/CLICK/UZUM (`payments/transactions`)
+и его статус видны не были: пополнение (#93) уходило в форму провайдера и
+дальше терялось — чем закончилось, экран не знал.
+
+**Своей ручки не заводили.** `PaymentsApi` (`GET payments/transactions`) уже
+существовал в `feature/subscription/data` — списания за подписку читает через
+него `SubscriptionRepository.charges`, фильтруя по `purpose`. Новый
+`feature/wallet/data/PaymentsRepository` переиспользует ту же ручку без
+фильтра: вкладке «Платежи» нужны все платежи человека, а не только подписочные.
+
+**Сделано:**
+
+- `PaymentTransaction`/`PaymentTransactionPage` в `feature/wallet/domain` —
+  переиспользуют `ChargeStatus`/`ChargeProvider` из `subscription.domain`
+  вместо копии тех же перечислений;
+- `WalletTab` в `WalletContract` и вкладка «Платежи» рядом с «Операциями»
+  (`MahallaSegmentedControl`) в `WalletScreen`; обе истории грузятся сразу при
+  открытии экрана, переключение вкладки не ходит в сеть повторно;
+- своя пагинация и догрузка платежей в `WalletViewModel` — те же правила, что
+  у истории операций (дедупликация по id, страница считается локально, отказ
+  догрузки не стирает уже показанное);
+- в строке платежа — провайдер, сумма, бейдж статуса (`PENDING`/`FAILED`/
+  `CANCELLED`/`REFUNDED`; `PAID` без бейджа, как обычная операция) и текст
+  `errorMessage` у отказа.
+
+**Вне объёма, как решено прошлым прогоном (2026-09-10):**
+
+- `GET payments/subscription` не используется — отдаёт строго меньше, чем
+  `subscriptions/current` (issue #103);
+- `POST payments/subscription/activate` принимает `Map<String,String>` без
+  единого именованного поля — issue #250, блокер `jack5505/mahalla#249`;
+- `POST payments/click/callback` и `/payme/callback` не трогаются — их зовёт
+  провайдер, не приложение.
+
+**Проверено.** `testDebugUnitTest` (2810 тестов, 4 пропущено), `assembleDebug`
+и `lintDebug` — зелёные. Один тест (`NotificationSettingsViewModelTest`,
+«quiet hours are switched on and off») падал при полном прогоне и проходил
+изолированно — существующая нестабильность, к этому кошельку не относится, не
+трогалась.
+

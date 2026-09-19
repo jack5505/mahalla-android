@@ -11,7 +11,10 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.toScreenState
 import uz.mahalla.feature.subscription.data.SubscriptionRepository
 import uz.mahalla.feature.subscription.domain.Subscription
+import uz.mahalla.feature.wallet.data.PaymentsRepository
 import uz.mahalla.feature.wallet.data.WalletRepository
+import uz.mahalla.feature.wallet.domain.PaymentTransaction
+import uz.mahalla.feature.wallet.domain.PaymentTransactionPage
 import uz.mahalla.feature.wallet.domain.TopUpDraft
 import uz.mahalla.feature.wallet.domain.TopUpValidator
 import uz.mahalla.feature.wallet.domain.WalletTransaction
@@ -33,11 +36,14 @@ import javax.inject.Inject
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
     private val subscriptions: SubscriptionRepository,
+    private val paymentsRepository: PaymentsRepository,
 ) : MviViewModel<WalletState, WalletEvent, WalletEffect>(WalletState()) {
 
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
+    private var loadMorePaymentsJob: Job? = null
+    private var loadedPaymentsPage = 0
 
     init {
         load()
@@ -62,6 +68,14 @@ class WalletViewModel @Inject constructor(
             WalletEvent.TransactionsRetry -> loadTransactions()
 
             WalletEvent.LoadMore -> loadMore()
+
+            // Обе вкладки грузятся сразу при открытии экрана: переключение —
+            // это просто смена того, что показывать, без похода в сеть.
+            is WalletEvent.TabSelected -> updateState { copy(selectedTab = event.tab) }
+
+            WalletEvent.PaymentsRetry -> loadPayments()
+
+            WalletEvent.LoadMorePayments -> loadMorePayments()
 
             // Шторка открывается только поверх приехавшего баланса: без него
             // человек не знает, сколько у него есть, и пополнять вслепую незачем.
@@ -165,19 +179,25 @@ class WalletViewModel @Inject constructor(
         if (showLoading) updateState { copy(wallet = ScreenState.Loading) }
         if (refreshing) updateState { copy(isRefreshing = true) }
         resetHistory(showLoading = showLoading)
+        resetPayments(showLoading = showLoading)
         loadJob = viewModelScope.launch {
-            // Баланс и история — две независимые ручки: последовательный
-            // запрос удвоил бы время до первого экрана без всякой причины.
+            // Баланс и история — независимые ручки: последовательный запрос
+            // удвоил бы время до первого экрана без всякой причины.
             val balance = async { repository.wallet() }
             val history = async { repository.transactions(page = 0) }
             // Подписка — третья ручка и тоже параллельно: карточка «Mahalla+»
             // стоит над историей, и ждать её последовательно значит держать
             // экран пустым дольше без всякой причины.
             val subscription = async { subscriptions.current() }
+            // Платежи (вкладка «Платежи», issue #184) — четвёртая и тоже сразу:
+            // переключение вкладки не должно ждать сеть, если история уже
+            // загружена вместе с остальным.
+            val paymentsHistory = async { paymentsRepository.transactions(page = 0) }
             val walletState = balance.await().toScreenState()
             updateState { copy(wallet = walletState) }
             applyHistory(history.await())
             applySubscription(subscription.await())
+            applyPayments(paymentsHistory.await())
             // Индикатор снимается, когда приехали оба ответа: иначе он гаснет
             // над списком, который ещё грузится.
             if (refreshing) updateState { copy(isRefreshing = false) }
@@ -280,6 +300,83 @@ class WalletViewModel @Inject constructor(
         next: List<WalletTransaction>,
     ): List<WalletTransaction> {
         val known = current.mapTo(mutableSetOf(), WalletTransaction::id)
+        return current + next.filter { known.add(it.id) }
+    }
+
+    // --- Вкладка «Платежи» (issue #184) ---
+
+    private fun loadPayments() {
+        resetPayments(showLoading = true)
+        viewModelScope.launch { applyPayments(paymentsRepository.transactions(page = 0)) }
+    }
+
+    private fun resetPayments(showLoading: Boolean) {
+        loadMorePaymentsJob?.cancel()
+        loadedPaymentsPage = 0
+        updateState {
+            copy(
+                payments = if (showLoading) ScreenState.Loading else payments,
+                isLoadingMorePayments = false,
+                loadMorePaymentsFailure = null,
+            )
+        }
+    }
+
+    private fun applyPayments(result: ApiResult<PaymentTransactionPage>) {
+        when (result) {
+            is ApiResult.Failure -> updateState {
+                copy(payments = ScreenState.Error(result.failure), hasMorePayments = false)
+            }
+
+            is ApiResult.Success -> updateState {
+                copy(
+                    payments = if (result.data.items.isEmpty()) {
+                        ScreenState.Empty
+                    } else {
+                        ScreenState.Content(result.data.items)
+                    },
+                    hasMorePayments = result.data.hasMore,
+                )
+            }
+        }
+    }
+
+    /** Догрузка страницы платежей — то же правило, что у [loadMore]. */
+    private fun loadMorePayments() {
+        val state = currentState
+        if (!state.hasMorePayments || state.isLoadingMorePayments) return
+        val loaded = state.payments as? ScreenState.Content ?: return
+        if (loadMorePaymentsJob?.isActive == true) return
+
+        val nextPage = loadedPaymentsPage + 1
+        updateState { copy(isLoadingMorePayments = true, loadMorePaymentsFailure = null) }
+        loadMorePaymentsJob = viewModelScope.launch {
+            when (val result = paymentsRepository.transactions(page = nextPage)) {
+                is ApiResult.Failure -> updateState {
+                    copy(isLoadingMorePayments = false, loadMorePaymentsFailure = result.failure)
+                }
+
+                is ApiResult.Success -> {
+                    loadedPaymentsPage = nextPage
+                    updateState {
+                        copy(
+                            payments = ScreenState.Content(
+                                appendedPayments(loaded.data, result.data.items),
+                            ),
+                            hasMorePayments = result.data.hasMore,
+                            isLoadingMorePayments = false,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun appendedPayments(
+        current: List<PaymentTransaction>,
+        next: List<PaymentTransaction>,
+    ): List<PaymentTransaction> {
+        val known = current.mapTo(mutableSetOf(), PaymentTransaction::id)
         return current + next.filter { known.add(it.id) }
     }
 }
