@@ -85,7 +85,7 @@ fun AppLockScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                AppLockEffect.ShowBiometricPrompt -> {
+                is AppLockEffect.ShowBiometricPrompt -> {
                     val activity = context.findFragmentActivity()
                     if (activity == null) {
                         // Промпт показать нечем (превью, тест) — экран остаётся
@@ -97,7 +97,8 @@ fun AppLockScreen(
                             title = promptTitle,
                             subtitle = promptSubtitle,
                             negativeLabel = promptNegative,
-                            onSuccess = { viewModel.onEvent(AppLockEvent.BiometricSucceeded) },
+                            cryptoObject = effect.cryptoObject,
+                            onSuccess = { viewModel.onEvent(AppLockEvent.BiometricSucceeded(it)) },
                             onCancelled = { viewModel.onEvent(AppLockEvent.BiometricCancelled) },
                             onFailed = { viewModel.onEvent(AppLockEvent.BiometricFailed) },
                         )

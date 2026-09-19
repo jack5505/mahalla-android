@@ -5,8 +5,10 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import uz.mahalla.data.security.AndroidBiometricAvailability
+import uz.mahalla.data.security.AndroidBiometricCipher
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.DefaultPaymentConfirmationPolicy
 import uz.mahalla.data.security.KeystorePinStorage
@@ -30,6 +32,9 @@ interface SecurityModule {
 
     @Binds
     fun bindBiometricAvailability(impl: AndroidBiometricAvailability): BiometricAvailability
+
+    @Binds
+    fun bindBiometricCipher(impl: AndroidBiometricCipher): BiometricCipher
 
     @Binds
     fun bindPaymentConfirmationPolicy(

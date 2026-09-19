@@ -1,5 +1,6 @@
 package uz.mahalla.feature.food.ui.checkout
 
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -71,6 +72,7 @@ fun CheckoutScreen(
         state = state,
         onEvent = viewModel::onEvent,
         onBack = onBack,
+        prepareBiometricCryptoObject = viewModel::prepareBiometricCryptoObject,
         modifier = modifier,
     )
 }
@@ -81,6 +83,7 @@ fun CheckoutContent(
     onEvent: (CheckoutEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    prepareBiometricCryptoObject: suspend () -> BiometricPrompt.CryptoObject? = { null },
 ) {
     val currency = stringResource(R.string.currency_uzs)
     Column(modifier = modifier.fillMaxSize()) {
@@ -151,7 +154,8 @@ fun CheckoutContent(
         PaymentConfirmSheet(
             state = payment,
             onPinChanged = { onEvent(CheckoutEvent.PaymentPinChanged(it)) },
-            onBiometricConfirmed = { onEvent(CheckoutEvent.PaymentBiometricConfirmed) },
+            prepareBiometricCryptoObject = prepareBiometricCryptoObject,
+            onBiometricConfirmed = { onEvent(CheckoutEvent.PaymentBiometricConfirmed(it)) },
             onBiometricRejected = { onEvent(CheckoutEvent.PaymentBiometricRejected) },
             onRetry = { onEvent(CheckoutEvent.PaymentRetried) },
             onTopUp = { onEvent(CheckoutEvent.TopUpClicked) },

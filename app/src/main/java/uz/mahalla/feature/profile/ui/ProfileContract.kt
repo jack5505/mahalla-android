@@ -1,6 +1,7 @@
 package uz.mahalla.feature.profile.ui
 
 import android.content.Intent
+import androidx.biometric.BiometricPrompt
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
@@ -133,7 +134,7 @@ sealed interface ProfileEvent : UiEvent {
      * без единого подтверждения (то же правило, что на шаге онбординга).
      */
     data class BiometricToggled(val enabled: Boolean) : ProfileEvent
-    data object BiometricPromptSucceeded : ProfileEvent
+    data class BiometricPromptSucceeded(val cryptoObject: BiometricPrompt.CryptoObject) : ProfileEvent
     data object BiometricPromptFailed : ProfileEvent
     data object BiometricPromptCancelled : ProfileEvent
     data object HttpInspectorRequested : ProfileEvent
@@ -178,7 +179,7 @@ sealed interface ProfileEffect : UiEffect {
     data object RecreateActivity : ProfileEffect
 
     /** Системный BiometricPrompt живёт в Activity — показывает его экран. */
-    data object ShowBiometricPrompt : ProfileEffect
+    data class ShowBiometricPrompt(val cryptoObject: BiometricPrompt.CryptoObject) : ProfileEffect
 
     /** Экран инспектора трафика: интент отдаёт сама библиотека (issue #30). */
     data class OpenHttpInspector(val intent: Intent) : ProfileEffect

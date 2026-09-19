@@ -19,6 +19,7 @@ import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.security.domain.ServerPinStatus
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeSecurityRepository
@@ -75,7 +76,7 @@ class SecurityViewModelTest {
 
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
 
-        assertEquals(SecurityEffect.ShowBiometricPrompt, viewModel.effects.first())
+        assertTrue(viewModel.effects.first() is SecurityEffect.ShowBiometricPrompt)
         // Ни кода, ни запроса ещё не было: обещать вход по отпечатку до того,
         // как он сработал хоть раз, нельзя.
         assertNull(viewModel.state.value.pinPrompt)
@@ -87,7 +88,7 @@ class SecurityViewModelTest {
         val viewModel = viewModel()
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
 
-        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded)
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
         assertEquals(true, viewModel.state.value.pinPrompt)
         // Шторка рисует поле как `enabled = !busy`: забытый флаг оставил бы её
         // с мёртвым полем, то есть включить биометрию было бы нельзя вовсе.
@@ -143,7 +144,7 @@ class SecurityViewModelTest {
         repository.biometricResult = ApiResult.Failure(ApiError.Business("PIN_INVALID"))
         val viewModel = viewModel()
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
-        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded)
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         viewModel.onEvent(SecurityEvent.PinChanged("000000"))
 
@@ -158,7 +159,7 @@ class SecurityViewModelTest {
     fun `dismissing the sheet cancels the toggle`() = runTest {
         val viewModel = viewModel()
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
-        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded)
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         viewModel.onEvent(SecurityEvent.PinPromptDismissed)
 
@@ -172,11 +173,40 @@ class SecurityViewModelTest {
         repository.biometricResult = ApiResult.Success(false)
         val viewModel = viewModel()
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
-        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded)
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         viewModel.onEvent(SecurityEvent.PinChanged("123456"))
 
         assertFalse(viewModel.state.value.biometricEnabled)
+    }
+
+    @Test
+    fun `server refusal clears the biometric key`() = runTest {
+        // Сервер выключил (или отверг включение) — ключ Keystore и маркер
+        // больше не нужны: следующее включение создаст их заново (issue #318).
+        repository.biometricResult = ApiResult.Success(false)
+        val cipher = FakeBiometricCipher()
+        val viewModel = viewModel(biometricCipher = cipher)
+        viewModel.onEvent(SecurityEvent.BiometricToggled(true))
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+
+        viewModel.onEvent(SecurityEvent.PinChanged("123456"))
+
+        assertTrue(cipher.cleared)
+    }
+
+    @Test
+    fun `a crypto operation that fails stops the toggle`() = runTest {
+        // Датчик отработал, но ключ не смог зашифровать маркер (issue #318)
+        // — просить PIN на то, что не включилось, незачем.
+        val viewModel = viewModel(biometricCipher = FakeBiometricCipher(enrollmentSucceeds = false))
+        viewModel.onEvent(SecurityEvent.BiometricToggled(true))
+
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+
+        assertTrue(viewModel.state.value.biometricPromptFailed)
+        assertNull(viewModel.state.value.pinPrompt)
+        assertTrue(repository.biometricCalls.isEmpty())
     }
 
     @Test
@@ -267,12 +297,14 @@ class SecurityViewModelTest {
     private fun viewModel(
         pinStorage: FakePinStorage = FakePinStorage(initialPin = "123456"),
         biometricStatus: BiometricStatus = BiometricStatus.Available,
+        biometricCipher: FakeBiometricCipher = FakeBiometricCipher(),
     ) = SecurityViewModel(
         securityRepository = repository,
         onboardingRepository = onboarding,
         biometricAvailability = object : BiometricAvailability {
             override fun status(): BiometricStatus = biometricStatus
         },
+        biometricCipher = biometricCipher,
         appLockManager = AppLockManager(
             sessionStore = FakeSessionStore(Session("a-1", "r-1")),
             pinStorage = pinStorage,

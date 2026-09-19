@@ -13,6 +13,7 @@ import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toScreenState
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
 import uz.mahalla.feature.security.data.SecurityRepository
 import uz.mahalla.feature.security.domain.AppLockManager
@@ -35,6 +36,7 @@ class SecurityViewModel @Inject constructor(
     private val securityRepository: SecurityRepository,
     private val onboardingRepository: OnboardingRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val biometricCipher: BiometricCipher,
     private val appLockManager: AppLockManager,
 ) : MviViewModel<SecurityState, SecurityEvent, SecurityEffect>(SecurityState()) {
 
@@ -72,10 +74,22 @@ class SecurityViewModel @Inject constructor(
             // снять: поле ввода в шторке нарисовано как `enabled = !busy`, и
             // забытый флаг оставил бы шторку с мёртвым полем — то есть
             // включить биометрию было бы нельзя вовсе.
-            SecurityEvent.BiometricPromptSucceeded ->
-                updateState {
-                    copy(busy = false, pinPrompt = pendingEnable, pin = cleared(), failure = null)
+            is SecurityEvent.BiometricPromptSucceeded -> viewModelScope.launch {
+                // Датчик подтвердил, но код всё равно спрашиваем только если
+                // ключ реально расшифровал маркер (issue #318): успешный
+                // колбэк промпта сам по себе этого не доказывает.
+                val enrolled = runCatchingCancellable {
+                    biometricCipher.completeEnrollment(event.cryptoObject)
+                }.reportSwallowed("security.completeEnrollment").getOrDefault(false)
+                if (enrolled) {
+                    updateState {
+                        copy(busy = false, pinPrompt = pendingEnable, pin = cleared(), failure = null)
+                    }
+                } else {
+                    pendingEnable = null
+                    updateState { copy(busy = false, biometricPromptFailed = true) }
                 }
+            }
 
             SecurityEvent.BiometricPromptFailed -> {
                 pendingEnable = null
@@ -129,7 +143,15 @@ class SecurityViewModel @Inject constructor(
             // Включение начинается с датчика: обещать вход по отпечатку до
             // того, как он сработал хоть раз, нельзя.
             updateState { copy(busy = true) }
-            emitEffect(SecurityEffect.ShowBiometricPrompt)
+            viewModelScope.launch {
+                val cryptoObject = biometricCipher.prepareEnrollment()
+                if (cryptoObject == null) {
+                    pendingEnable = null
+                    updateState { copy(busy = false, biometricPromptFailed = true) }
+                } else {
+                    emitEffect(SecurityEffect.ShowBiometricPrompt(cryptoObject))
+                }
+            }
         } else {
             // Выключение датчика не требует: человек как раз говорит, что
             // пользоваться им не будет.
@@ -152,6 +174,13 @@ class SecurityViewModel @Inject constructor(
             when (val result = securityRepository.setBiometricEnabled(enabled, pin)) {
                 is ApiResult.Success -> {
                     pendingEnable = null
+                    // Сервер выключил (подтвердил выключение или отверг
+                    // включение) — ключ и маркер больше не нужны, следующее
+                    // включение создаст их заново.
+                    if (!result.data) {
+                        runCatchingCancellable { biometricCipher.clear() }
+                            .reportSwallowed("security.clearBiometricCipher")
+                    }
                     // Флаг приезжает из репозитория (он же его и записал):
                     // сервер вправе ответить не тем, о чём просили.
                     updateState {

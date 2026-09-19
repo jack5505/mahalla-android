@@ -46,7 +46,7 @@ fun BiometricScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                BiometricEffect.ShowPrompt -> {
+                is BiometricEffect.ShowPrompt -> {
                     val activity = context.findFragmentActivity()
                     if (activity == null) {
                         // Экран без FragmentActivity (превью, тесты) — промпт
@@ -58,7 +58,8 @@ fun BiometricScreen(
                             title = promptTitle,
                             subtitle = promptSubtitle,
                             negativeLabel = promptNegative,
-                            onSuccess = { viewModel.onEvent(BiometricEvent.PromptSucceeded) },
+                            cryptoObject = effect.cryptoObject,
+                            onSuccess = { viewModel.onEvent(BiometricEvent.PromptSucceeded(it)) },
                             onCancelled = { viewModel.onEvent(BiometricEvent.PromptCancelled) },
                             onFailed = { viewModel.onEvent(BiometricEvent.PromptFailed) },
                         )

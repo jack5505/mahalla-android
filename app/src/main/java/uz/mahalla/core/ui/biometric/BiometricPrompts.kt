@@ -32,6 +32,11 @@ fun Context.findFragmentActivity(): FragmentActivity? {
 /**
  * Показать промпт.
  *
+ * @param cryptoObject ключ Keystore, привязанный к биометрии ([BiometricCipher],
+ * issue #318): без него успех колбэка ничего не доказывает, кроме того, что
+ * система «сказала да». Вызывающий готовит его заранее (`prepareEnrollment`/
+ * `prepareVerification`) и после успеха прогоняет через него шифрование —
+ * `onSuccess` отдаёт тот же `CryptoObject` для этого.
  * @param onCancelled человек закрыл диалог сам — это не ошибка, и пугать его
  * сообщением о сбое не за что.
  * @param onFailed промпт не сработал: датчик занят, политика запретила,
@@ -42,7 +47,8 @@ fun showBiometricPrompt(
     title: String,
     subtitle: String,
     negativeLabel: String,
-    onSuccess: () -> Unit,
+    cryptoObject: BiometricPrompt.CryptoObject,
+    onSuccess: (BiometricPrompt.CryptoObject) -> Unit,
     onCancelled: () -> Unit,
     onFailed: () -> Unit,
 ) {
@@ -51,7 +57,12 @@ fun showBiometricPrompt(
         ContextCompat.getMainExecutor(activity),
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                onSuccess()
+                // `cryptoObject` в результате пуст только если промпт показали
+                // без него — здесь он передан всегда. Но `onFailed`, а не
+                // крэш: платёж и разблокировка важнее гарантии, которую даёт
+                // только реальное устройство.
+                val authenticated = result.cryptoObject
+                if (authenticated != null) onSuccess(authenticated) else onFailed()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -72,5 +83,6 @@ fun showBiometricPrompt(
             .setNegativeButtonText(negativeLabel)
             .setAllowedAuthenticators(AndroidBiometricAvailability.AUTHENTICATORS)
             .build(),
+        cryptoObject,
     )
 }

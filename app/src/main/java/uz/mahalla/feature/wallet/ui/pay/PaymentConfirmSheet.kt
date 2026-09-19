@@ -1,5 +1,6 @@
 package uz.mahalla.feature.wallet.ui.pay
 
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +54,8 @@ import uz.mahalla.ui.theme.TabularNums
 fun PaymentConfirmSheet(
     state: WalletPaymentState,
     onPinChanged: (String) -> Unit,
-    onBiometricConfirmed: () -> Unit,
+    prepareBiometricCryptoObject: suspend () -> BiometricPrompt.CryptoObject?,
+    onBiometricConfirmed: (BiometricPrompt.CryptoObject) -> Unit,
     onBiometricRejected: () -> Unit,
     onRetry: () -> Unit,
     onTopUp: () -> Unit,
@@ -67,6 +69,7 @@ fun PaymentConfirmSheet(
     ) {
         BiometricConfirmation(
             amountSum = state.amountSum,
+            prepareCryptoObject = prepareBiometricCryptoObject,
             onConfirmed = onBiometricConfirmed,
             onRejected = onBiometricRejected,
         )
@@ -270,7 +273,8 @@ private fun PaymentRejection(
 @Composable
 private fun BiometricConfirmation(
     amountSum: Long,
-    onConfirmed: () -> Unit,
+    prepareCryptoObject: suspend () -> BiometricPrompt.CryptoObject?,
+    onConfirmed: (BiometricPrompt.CryptoObject) -> Unit,
     onRejected: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -284,9 +288,11 @@ private fun BiometricConfirmation(
 
     LaunchedEffect(amountSum) {
         val activity = context.findFragmentActivity()
-        if (activity == null) {
-            // Промпт показать нечем (превью, нестандартный контекст) —
-            // подтверждаем PIN'ом, а не зависаем на пустой шторке.
+        // `null` — секрета нет или ключ инвалидирован (issue #318): активити
+        // нет по тем же причинам, что и раньше. В обоих случаях показать
+        // промпт нечем — подтверждаем PIN'ом, а не зависаем на пустой шторке.
+        val cryptoObject = if (activity == null) null else prepareCryptoObject()
+        if (activity == null || cryptoObject == null) {
             onRejected()
         } else {
             showBiometricPrompt(
@@ -294,6 +300,7 @@ private fun BiometricConfirmation(
                 title = title,
                 subtitle = subtitle,
                 negativeLabel = negative,
+                cryptoObject = cryptoObject,
                 onSuccess = onConfirmed,
                 onCancelled = onRejected,
                 onFailed = onRejected,

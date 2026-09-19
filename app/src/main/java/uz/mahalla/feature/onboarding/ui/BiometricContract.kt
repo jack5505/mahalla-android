@@ -1,5 +1,6 @@
 package uz.mahalla.feature.onboarding.ui
 
+import androidx.biometric.BiometricPrompt
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
@@ -24,7 +25,9 @@ sealed interface BiometricEvent : UiEvent {
      * настройки вместе с записью в back stack.
      */
     data object ScreenResumed : BiometricEvent
-    data object PromptSucceeded : BiometricEvent
+
+    /** Промпт подтвердил датчик — `cryptoObject` прогоняется через шифрование (issue #318). */
+    data class PromptSucceeded(val cryptoObject: BiometricPrompt.CryptoObject) : BiometricEvent
     data object PromptFailed : BiometricEvent
 
     /** Отмена самого промпта — не ошибка, просто ничего не произошло. */
@@ -34,7 +37,7 @@ sealed interface BiometricEvent : UiEvent {
 
 sealed interface BiometricEffect : UiEffect {
     /** Показать системный BiometricPrompt — он живёт только в Activity. */
-    data object ShowPrompt : BiometricEffect
+    data class ShowPrompt(val cryptoObject: BiometricPrompt.CryptoObject) : BiometricEffect
 
     /** Шаг пройден (включили или пропустили) — дальше геолокация. */
     data object Finished : BiometricEffect

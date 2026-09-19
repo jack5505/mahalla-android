@@ -8,6 +8,7 @@ import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
 
 /**
@@ -24,6 +25,7 @@ import uz.mahalla.feature.onboarding.data.OnboardingRepository
 class BiometricViewModel @Inject constructor(
     private val onboardingRepository: OnboardingRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val biometricCipher: BiometricCipher,
 ) : MviViewModel<BiometricState, BiometricEvent, BiometricEffect>(
     BiometricState(status = biometricAvailability.status()),
 ) {
@@ -33,7 +35,14 @@ class BiometricViewModel @Inject constructor(
             BiometricEvent.Enable -> {
                 if (!currentState.canEnable) return
                 updateState { copy(busy = true, promptFailed = false) }
-                emitEffect(BiometricEffect.ShowPrompt)
+                viewModelScope.launch {
+                    val cryptoObject = biometricCipher.prepareEnrollment()
+                    if (cryptoObject == null) {
+                        updateState { copy(busy = false, promptFailed = true) }
+                    } else {
+                        emitEffect(BiometricEffect.ShowPrompt(cryptoObject))
+                    }
+                }
             }
 
             // Статус читается заново, а не один раз в конструкторе: отпечаток
@@ -42,7 +51,17 @@ class BiometricViewModel @Inject constructor(
                 copy(status = biometricAvailability.status())
             }
 
-            BiometricEvent.PromptSucceeded -> setEnabled(true)
+            is BiometricEvent.PromptSucceeded -> viewModelScope.launch {
+                // Датчик подтвердил, но включаем только если ключ реально
+                // расшифровал маркер (issue #318) — успешный колбэк промпта
+                // сам по себе этого не доказывает.
+                val enrolled = runCatchingCancellable {
+                    biometricCipher.completeEnrollment(event.cryptoObject)
+                }.reportSwallowed("biometric.completeEnrollment").getOrDefault(false)
+                if (enrolled) setEnabled(true) else updateState {
+                    copy(busy = false, promptFailed = true)
+                }
+            }
             BiometricEvent.PromptFailed -> updateState { copy(busy = false, promptFailed = true) }
             BiometricEvent.PromptCancelled -> updateState { copy(busy = false) }
             BiometricEvent.Skip -> setEnabled(false)

@@ -1,5 +1,6 @@
 package uz.mahalla.feature.food.ui.checkout
 
+import androidx.biometric.BiometricPrompt
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
@@ -81,7 +82,7 @@ sealed interface CheckoutEvent : UiEvent {
 
     /** Подтверждение оплаты из кошелька (8.3) — события общей шторки. */
     data class PaymentPinChanged(val pin: String) : CheckoutEvent
-    data object PaymentBiometricConfirmed : CheckoutEvent
+    data class PaymentBiometricConfirmed(val cryptoObject: BiometricPrompt.CryptoObject) : CheckoutEvent
     data object PaymentBiometricRejected : CheckoutEvent
     data object PaymentRetried : CheckoutEvent
     data object PaymentDismissed : CheckoutEvent
