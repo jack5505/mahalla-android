@@ -1281,6 +1281,7 @@
     <string name="activity_source_master_appointments">Ustaga yozilishlar</string>
     <string name="activity_source_doctor_appointments">Shifokorga yozilishlar</string>
     <string name="activity_source_cinema_tickets">Kino chiptalari</string>
+    <string name="activity_source_walkin">Navbat</string>
     <!-- Вид активности: названия заведения бэкенд не отдаёт ни в одном ответе -->
     <string name="activity_kind_food_order">Ovqat buyurtmasi</string>
     <string name="activity_kind_clothing_order">Kiyim buyurtmasi</string>
@@ -1292,6 +1293,7 @@
     <string name="activity_kind_master_appointment">Ustaga yozilish</string>
     <string name="activity_kind_doctor_appointment">Shifokorga yozilish</string>
     <string name="activity_kind_cinema_ticket">Kino chiptasi</string>
+    <string name="activity_kind_walkin_ticket">Navbat</string>
     <!-- Общий вид статусов пяти источников -->
     <string name="activity_status_placed">Qabul qilindi</string>
     <string name="activity_status_confirmed">Tasdiqlandi</string>
