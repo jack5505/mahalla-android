@@ -503,7 +503,6 @@ class RoutesSerializationTest {
         listOf(
             serializer<BusinessRoute>().descriptor,
             serializer<BusinessQueueRoute>().descriptor,
-            serializer<BusinessOrdersRoute>().descriptor,
             serializer<BusinessMenuRoute>().descriptor,
         ).forEach { descriptor ->
             assertEquals(
@@ -512,13 +511,22 @@ class RoutesSerializationTest {
             )
         }
 
+        // У заказов третье поле — категория заведения (issue #187): она
+        // решает, food- или fashion-ручку звать, и переименование сломало бы
+        // это ровно так же тихо, как и переименование `placeId`.
+        val ordersDescriptor = serializer<BusinessOrdersRoute>().descriptor
+        assertEquals(
+            expected + BusinessArgs.CATEGORY,
+            (0 until ordersDescriptor.elementsCount).map(ordersDescriptor::getElementName),
+        )
+
         val route = BusinessRoute(placeId = "p-1", placeName = "Osh Markazi")
         assertEquals(route, json.decodeFromString<BusinessRoute>(json.encodeToString(route)))
 
         val queue = BusinessQueueRoute(placeId = "p-1")
         assertEquals(queue, json.decodeFromString<BusinessQueueRoute>(json.encodeToString(queue)))
 
-        val orders = BusinessOrdersRoute(placeId = "p-1")
+        val orders = BusinessOrdersRoute(placeId = "p-1", category = "FOOD")
         assertEquals(orders, json.decodeFromString<BusinessOrdersRoute>(json.encodeToString(orders)))
 
         val menu = BusinessMenuRoute(placeId = "p-1")
@@ -527,7 +535,7 @@ class RoutesSerializationTest {
 
     @Test
     fun `business routes are distinguishable from each other`() {
-        // Поля у всех четырёх одинаковые, а экраны разные: перепутанный
+        // Поля у всех четырёх почти одинаковые, а экраны разные: перепутанный
         // `composable<…>` привёл бы к меню вместо очереди.
         val names = listOf(
             serializer<BusinessRoute>().descriptor.serialName,

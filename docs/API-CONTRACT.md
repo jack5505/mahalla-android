@@ -431,6 +431,28 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+| GET | `fashion/stores/{storeId}/orders` |
+| PUT | `fashion/stores/{storeId}/orders/{orderId}/status` |
+
+**`fashion/stores/{storeId}/orders` (`GET`) и `.../status` (`PUT`) — бизнес-панель,
+заказы «Одежды» (issue #187)**. Оба пути и тело сняты живым `/v3/api-docs`
+**2026-09-19**: `GET` отвечает `ApiResponsePageResponseFashionOrderResponse`,
+`status` — то же перечисление, что уже разбирает `OrderStatus` («Еда»,
+`NEW|ACCEPTED|PREPARING|READY|IN_DELIVERY|DELIVERED|CANCELLED|REFUNDED`) —
+заводить второе перечисление под вертикаль не пришлось. `fulfillment`
+(`PICKUP|DELIVERY|DINE_IN`) и `paymentMethod` (`CASH|WALLET`) — те же
+значения, что и у `FoodOrderResponse`. Строка заказа (`FashionOrderItemResponse`)
+устроена иначе: `variantId`/`colorName`/`size` вместо `itemId`/`itemName` —
+клиент собирает имя строки из трёх полей.
+
+`PUT .../status` принимает `Map<String, String>` без объявленной схемы — тот
+же класс дефекта, что у трёх безымянных тел `BusinessApi` («Еда»): ключ
+**`status`** выведен по тому же правилу (соседние ручки той же операции,
+`UpdateOrderStatusRequest`/`ModerateRequest`, называют его так же), не
+угадан. Отдельно: **у операции `PUT` springdoc не перечисляет `storeId` среди
+параметров**, хотя путь его требует буквально — тоже дефект документации, а
+не повод убрать `storeId` из Retrofit-интерфейса: без него URL остался бы с
+`{storeId}` внутри.
 
 `GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
 отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
