@@ -87,8 +87,8 @@ class ActivityRepositoryTest {
     @Test
     fun `orders are read from the shared endpoint and land in the list`() = runTest {
         // Заказы читаются общей ручкой, а не `food/orders/my`: у неё схема
-        // `OrderView` однозначна, а у food-ручки имя схемы перекрыто
-        // коллизией springdoc.
+        // `OrderView` однозначна, а имя схемы food-ручки больше не перекрыто
+        // коллизией springdoc (issue #235) — решение не изменилось.
         respond(
             "/orders",
             """{"content":[{"id":"o-1","orderNumber":"F-2026-0042","placeId":"p-1",

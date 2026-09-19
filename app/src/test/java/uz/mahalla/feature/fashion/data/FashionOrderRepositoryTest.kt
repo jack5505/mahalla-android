@@ -206,8 +206,9 @@ class FashionOrderRepositoryTest {
 
     @Test
     fun `cancelling succeeds even when the response body says nothing`() = runTest {
-        // Ответ отмены описан перекрытой коллизией схемой — разбирать из него
-        // статус значило бы превращать удачную отмену в «не удалось».
+        // Имя схемы ответа (`FashionOrderResponse`) больше не перекрыто
+        // коллизией (issue #235) — тело всё равно не разбирают: статус
+        // перечитывают у order().
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)

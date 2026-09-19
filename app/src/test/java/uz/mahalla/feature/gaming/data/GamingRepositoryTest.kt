@@ -26,9 +26,11 @@ import java.time.ZoneOffset
  *
  * Контракт снят со стенда 2026-09-04: `GET gaming/places/{id}/zones` (ручка
  * анонимна — `200` с `data: []` без токена), `POST gaming/bookings` и
- * `GET gaming/bookings/my` (обе `401 UNAUTHORIZED` без токена). Тело
- * `POST` в схеме перекрыто коллизией springdoc, поэтому его форма — решение
- * приложения (см. [GamingApi]), и эти тесты её и закрепляют.
+ * `GET gaming/bookings/my` (обе `401 UNAUTHORIZED` без токена). Тело `POST`
+ * называлось `BookRequest` и было перекрыто коллизией springdoc, поэтому его
+ * форма была решением приложения; сверка 2026-09-10 подтвердила её чтением
+ * схемы `GamingBookRequest` (см. [GamingApi]), и эти тесты закрепляют уже
+ * проверенную форму.
  */
 class GamingRepositoryTest {
 
