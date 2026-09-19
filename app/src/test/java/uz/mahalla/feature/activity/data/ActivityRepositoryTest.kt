@@ -358,7 +358,8 @@ class ActivityRepositoryTest {
         assertEquals(ActivitySource.DoctorAppointments, appointment.source)
         assertEquals(ActivityKind.DoctorAppointment, appointment.kind)
         assertEquals(ActivityStatus.Missed, appointment.status)
-        // Карточка записи (issue #183) — своя, барберская, цель не подходит.
+        // Карточка записи (issue #183) — своя цель, а не `MasterAppointment`
+        // барбера: у записи к врачу другой экран и другая ручка.
         assertEquals(ActivityTarget.DoctorAppointment("h-1"), appointment.target)
     }
 

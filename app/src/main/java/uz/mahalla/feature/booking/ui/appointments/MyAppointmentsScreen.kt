@@ -231,41 +231,8 @@ private fun AppointmentCard(
     onEvent: (MyAppointmentsEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMahallaColors.current
     MahallaCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = appointment.serviceName
-                    ?: stringResource(vertical.unnamedRes()),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            MahallaBadge(
-                text = stringResource(appointment.status.labelRes()),
-                tone = appointment.status.tone(),
-            )
-        }
-
-        Text(
-            text = appointment.whenText(),
-            modifier = Modifier.padding(top = Spacing.item),
-            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        appointment.priceSum.takeIf { it > 0 }?.let { price ->
-            Text(
-                text = MoneyFormatter.withCurrency(price, stringResource(R.string.currency_uzs)),
-                modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                color = colors.fgMuted,
-            )
-        }
+        AppointmentSummary(appointment = appointment, vertical = vertical)
 
         // Перенос выше отмены: время можно передвинуть, и предлагать это
         // первым честнее, чем сразу отдавать слот другому. Кнопки в столбец, а
@@ -290,6 +257,51 @@ private fun AppointmentCard(
                 state = ButtonState(enabled = enabled && !pending, loading = pending),
             )
         }
+    }
+}
+
+/**
+ * Услуга, статус, время и цена записи — общее тело карточки для «Моих
+ * записей» и карточки одной записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen]). Кнопки
+ * (перенос, отмена) сюда не входят: список их показывает, карточка одной
+ * записи — нет (issue #183), и это единственное, чем они отличаются.
+ */
+@Composable
+internal fun AppointmentSummary(appointment: Appointment, vertical: AppointmentVertical) {
+    val colors = LocalMahallaColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = appointment.serviceName
+                ?: stringResource(vertical.unnamedRes()),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        MahallaBadge(
+            text = stringResource(appointment.status.labelRes()),
+            tone = appointment.status.tone(),
+        )
+    }
+
+    Text(
+        text = appointment.whenText(),
+        modifier = Modifier.padding(top = Spacing.item),
+        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+
+    appointment.priceSum.takeIf { it > 0 }?.let { price ->
+        Text(
+            text = MoneyFormatter.withCurrency(price, stringResource(R.string.currency_uzs)),
+            modifier = Modifier.padding(top = Spacing.item),
+            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+            color = colors.fgMuted,
+        )
     }
 }
 

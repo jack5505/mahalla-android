@@ -15,8 +15,11 @@ import java.time.LocalDate
  * Состояние карточки фильма (issue #106): описание → день → сеанс → покупка.
  *
  * @param movie сам фильм — `GET cinema/movies/{id}` (issue #183). Требует
- * Bearer (`401` без токена — проверено), но это не проблема: `MovieRoute`
- * лежит в `MainGraph` и открывается только после входа.
+ * Bearer (`401` без токена — проверено), но это не проблема: гостевого режима
+ * в графе нет ([uz.mahalla.navigation.MahallaNavHost] заводит `MovieRoute`
+ * лишь после `OnboardingGraph` с телефоном и OTP), поэтому открыть его без
+ * входа нельзя, даже хоть он и не внутри `MainGraph` — тот несёт только
+ * четыре таба.
  * @param sessions сеансы **этого** кинотеатра на [selectedDate], уже без
  * прошедших и отменённых ([uz.mahalla.feature.cinema.domain.CinemaSchedule]).
  * Отдельным состоянием от [movie]: расписание перезапрашивается на каждый

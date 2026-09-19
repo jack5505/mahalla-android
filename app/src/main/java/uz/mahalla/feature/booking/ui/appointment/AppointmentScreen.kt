@@ -1,19 +1,13 @@
 package uz.mahalla.feature.booking.ui.appointment
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -21,9 +15,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
-import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.CardSkeleton
-import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaTopBar
@@ -34,13 +26,8 @@ import uz.mahalla.feature.booking.domain.Appointment
 import uz.mahalla.feature.booking.domain.AppointmentStatus
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.InlineFailure
-import uz.mahalla.feature.booking.ui.appointments.labelRes
-import uz.mahalla.feature.booking.ui.appointments.tone
-import uz.mahalla.feature.booking.ui.appointments.unnamedRes
-import uz.mahalla.feature.booking.ui.appointments.whenText
-import uz.mahalla.ui.theme.LocalMahallaColors
+import uz.mahalla.feature.booking.ui.appointments.AppointmentSummary
 import uz.mahalla.ui.theme.Spacing
-import uz.mahalla.ui.theme.TabularNums
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -123,40 +110,8 @@ private fun AppointmentCard(
     vertical: AppointmentVertical,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMahallaColors.current
     MahallaCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = appointment.serviceName ?: stringResource(vertical.unnamedRes()),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            MahallaBadge(
-                text = stringResource(appointment.status.labelRes()),
-                tone = appointment.status.tone(),
-            )
-        }
-
-        Text(
-            text = appointment.whenText(),
-            modifier = Modifier.padding(top = Spacing.item),
-            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        appointment.priceSum.takeIf { it > 0 }?.let { price ->
-            Text(
-                text = MoneyFormatter.withCurrency(price, stringResource(R.string.currency_uzs)),
-                modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                color = colors.fgMuted,
-            )
-        }
+        AppointmentSummary(appointment = appointment, vertical = vertical)
     }
 }
 

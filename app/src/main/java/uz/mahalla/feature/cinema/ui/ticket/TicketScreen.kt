@@ -107,17 +107,13 @@ fun TicketContent(
 private fun TicketCard(ticket: CinemaTicket, modifier: Modifier = Modifier) {
     val colors = LocalMahallaColors.current
     MahallaCard(modifier = modifier) {
+        // Заголовок карточки не дублирует шапку экрана («Билет в кино» уже в
+        // `MahallaTopBar`) — здесь только статус, названия фильма в билете нет.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = stringResource(R.string.my_tickets_item_title),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
             MahallaBadge(
                 text = stringResource(ticket.status.labelRes()),
                 tone = ticket.status.tone(),

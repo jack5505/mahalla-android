@@ -1,7 +1,5 @@
 package uz.mahalla.feature.cinema.ui.movie
 
-import android.content.ActivityNotFoundException
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
@@ -52,6 +50,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
+import uz.mahalla.core.ui.startActivitySafely
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.cinema.domain.CinemaSession
 import uz.mahalla.feature.cinema.domain.CinemaTicket
@@ -513,15 +512,6 @@ internal fun TicketFacts(ticket: CinemaTicket, modifier: Modifier = Modifier) {
                 color = colors.fgMuted,
             )
         }
-    }
-}
-
-/** Смотреть трейлер умеют не все устройства. Отсутствие обработчика — не повод падать. */
-private fun Context.startActivitySafely(intent: Intent) {
-    try {
-        startActivity(intent)
-    } catch (notFound: ActivityNotFoundException) {
-        // Обработчика нет — молча ничего не делаем, экран остаётся на месте.
     }
 }
 
