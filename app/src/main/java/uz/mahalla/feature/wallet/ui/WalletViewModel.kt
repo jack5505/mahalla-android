@@ -5,6 +5,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
@@ -33,6 +36,7 @@ import javax.inject.Inject
 class WalletViewModel @Inject constructor(
     private val repository: WalletRepository,
     private val subscriptions: SubscriptionRepository,
+    private val analytics: AnalyticsTracker,
 ) : MviViewModel<WalletState, WalletEvent, WalletEffect>(WalletState()) {
 
     private var loadJob: Job? = null
@@ -40,6 +44,9 @@ class WalletViewModel @Inject constructor(
     private var loadedPage = 0
 
     init {
+        // Кошелёк не привязан к заведению — до issue #226 экран был не виден
+        // аналитике вовсе, а не только терял вид события.
+        analytics.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.WALLET))
         load()
     }
 

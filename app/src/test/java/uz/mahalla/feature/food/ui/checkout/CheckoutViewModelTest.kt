@@ -18,6 +18,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.analytics.AnalyticsEvents
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
 import uz.mahalla.core.analytics.AnalyticsVertical
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
@@ -466,6 +467,40 @@ class CheckoutViewModelTest {
 
         // Иначе воронка покажет заказы, которых не было.
         assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    /**
+     * Пара к «a created order is an ORDER» (issue #226): тот же шаг воронки,
+     * но с исходом «сервер отказал», а не «сервер подтвердил».
+     */
+    @Test
+    fun `a business refusal is tracked as an order rejection with the server code`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Failure(ApiError.Business("OUT_OF_STOCK"))
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.orderRejected(PLACE_ID, "OUT_OF_STOCK")),
+            analytics.queuedEvents,
+        )
+    }
+
+    @Test
+    fun `a network failure is not a business rejection`() = runTest {
+        seed()
+        orderRepository.created = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
+        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
+
+        viewModel.onEvent(CheckoutEvent.SubmitClicked)
+
+        // "Спросить не удалось" — не отказ бизнес-правила, в воронку не идёт.
+        assertEquals(emptyList<Any>(), analytics.queuedEvents)
     }
 
     /** Аналитика (issue #169): проверяем, что событие ушло и один раз. */

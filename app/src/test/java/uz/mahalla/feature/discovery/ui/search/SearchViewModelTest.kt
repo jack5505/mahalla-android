@@ -17,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
@@ -25,6 +26,7 @@ import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.discovery.domain.PlaceSort
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakeSearchHistoryStore
 import uz.mahalla.testutil.MainDispatcherRule
@@ -52,6 +54,23 @@ class SearchViewModelTest {
 
     private val repository = FakeCatalogRepository()
     private val history = FakeSearchHistoryStore()
+    private val analytics = FakeAnalyticsTracker()
+
+    @Test
+    fun `an explicitly submitted query is tracked, unlike intermediate typing`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SearchEvent.QueryChanged("osh"))
+        advanceUntilIdle()
+        assertTrue(analytics.queuedEvents.isEmpty())
+
+        viewModel.onEvent(SearchEvent.QuerySubmitted)
+        advanceUntilIdle()
+
+        assertEquals(listOf(AnalyticsQueuedEvents.searched("osh")), analytics.queuedEvents)
+    }
 
     @Test
     fun `initial load runs without waiting for the debounce`() = runTest {
@@ -450,6 +469,7 @@ class SearchViewModelTest {
     ) = SearchViewModel(
         repository = repository,
         historyStore = history,
+        analytics = analytics,
         savedStateHandle = SavedStateHandle(
             mapOf("categoryId" to categoryId, "query" to query),
         ),

@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.data.db.di.DatabaseModule
+import uz.mahalla.data.db.entity.AnalyticsEventEntity
 import uz.mahalla.data.db.entity.CartDraftItemEntity
 import uz.mahalla.feature.food.domain.CartCalculator
 
@@ -236,6 +237,35 @@ class MahallaMigrationsTest {
         val database = DatabaseModule.provideDatabase(context)
         try {
             assertTrue(database.cartDraftDao().items("place-4").isEmpty())
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * v4 → v5 (issue #226): новая таблица не мешает существующим данным и
+     * сама принимает запись сразу после миграции.
+     */
+    @Test
+    fun `analytics event queue is usable right after upgrading from version 4`() = runTest {
+        createLegacyDatabase(version = 4) { db ->
+            db.execSQL(CREATE_PLACES_V2)
+            db.execSQL(CREATE_PLACES_CATEGORY_INDEX)
+            db.execSQL(CREATE_ORDERS)
+            db.execSQL(CREATE_CART_DRAFT_ITEMS_V3)
+        }
+
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            database.analyticsEventDao().insert(
+                AnalyticsEventEntity(
+                    name = "search",
+                    occurredAt = "2026-09-19T08:00:00Z",
+                    enqueuedAtEpochSecond = 1_774_000_000L,
+                ),
+            )
+
+            assertEquals(1, database.analyticsEventDao().count())
         } finally {
             database.close()
         }

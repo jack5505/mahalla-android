@@ -7,9 +7,12 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.data.prefs.AppSettings
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.io.IOException
@@ -25,9 +28,25 @@ class WelcomeViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun `opening welcome is tracked as a screen before login`() = runTest(mainDispatcherRule.dispatcher) {
+        val analytics = FakeAnalyticsTracker()
+
+        WelcomeViewModel(FakeOnboardingRepository(), FakeLocaleManager(needsRecreate = false), analytics)
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.ONBOARDING)),
+            analytics.queuedEvents,
+        )
+    }
+
+    @Test
     fun `state follows the stored language`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeOnboardingRepository(AppSettings(language = AppLanguage.RUSSIAN))
-        val viewModel = WelcomeViewModel(repository, FakeLocaleManager(needsRecreate = false))
+        val viewModel = WelcomeViewModel(
+            repository,
+            FakeLocaleManager(needsRecreate = false),
+            FakeAnalyticsTracker(),
+        )
 
         advanceUntilIdle()
 
@@ -38,7 +57,7 @@ class WelcomeViewModelTest {
     fun `selecting a language stores it`() = runTest(mainDispatcherRule.dispatcher) {
         val repository = FakeOnboardingRepository()
         val localeManager = FakeLocaleManager(needsRecreate = false)
-        val viewModel = WelcomeViewModel(repository, localeManager)
+        val viewModel = WelcomeViewModel(repository, localeManager, FakeAnalyticsTracker())
 
         viewModel.onEvent(WelcomeEvent.LanguageSelected(AppLanguage.UZBEK))
         advanceUntilIdle()
@@ -55,6 +74,7 @@ class WelcomeViewModelTest {
         val viewModel = WelcomeViewModel(
             FakeOnboardingRepository(),
             FakeLocaleManager(needsRecreate = true),
+            FakeAnalyticsTracker(),
         )
 
         viewModel.onEvent(WelcomeEvent.LanguageSelected(AppLanguage.RUSSIAN))
@@ -69,7 +89,7 @@ class WelcomeViewModelTest {
         val repository = FakeOnboardingRepository()
         repository.writeFailure = IOException("нет места")
         val localeManager = FakeLocaleManager(needsRecreate = false)
-        val viewModel = WelcomeViewModel(repository, localeManager)
+        val viewModel = WelcomeViewModel(repository, localeManager, FakeAnalyticsTracker())
 
         viewModel.onEvent(WelcomeEvent.LanguageSelected(AppLanguage.RUSSIAN))
         advanceUntilIdle()

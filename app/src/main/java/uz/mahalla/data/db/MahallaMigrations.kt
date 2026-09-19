@@ -111,6 +111,27 @@ object MahallaMigrations {
         }
     }
 
+    /**
+     * v4 → v5 (issue #226): очередь `analytics/events` на диске — новая
+     * таблица, существующие не трогаются.
+     */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `analytics_events` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `name` TEXT NOT NULL,
+                    `occurredAt` TEXT NOT NULL,
+                    `placeId` TEXT,
+                    `metadataJson` TEXT,
+                    `enqueuedAtEpochSecond` INTEGER NOT NULL
+                )
+                """.trimIndent(),
+            )
+        }
+    }
+
     /** Все миграции по порядку — этот список уходит в `Room.databaseBuilder`. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

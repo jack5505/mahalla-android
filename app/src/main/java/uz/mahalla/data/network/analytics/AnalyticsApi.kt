@@ -8,42 +8,59 @@ import retrofit2.http.POST
 import uz.mahalla.data.network.ApiResponse
 
 /**
- * Продуктовая аналитика (контроллер `analytics`, issue #169).
+ * Продуктовая аналитика (контроллер `analytics`, issue #169, #226).
  *
- * Контракт снят со стенда 2026-09-10 (`/v3/api-docs` + curl'ы):
+ * Два пути с разным устройством отправки — не потому, что так красивее, а
+ * потому, что бэкенд их сам развёл по разным правилам:
  *
- * | ручка | без токена | тело |
- * |---|---|---|
- * | `POST analytics/track` | **`401 UNAUTHORIZED`** | `TrackEventRequest` |
+ * | ручка | заведение | без identity | батч | время события |
+ * |---|---|---|---|---|
+ * | `POST analytics/track` | обязательно | `401` | нет | нет (issue #226) |
+ * | `POST analytics/events` | необязательно | `400 ANALYTICS_IDENTITY_REQUIRED` без `deviceId` **и** токена | до 100 | `occurredAt`, клиент задаёт сам |
  *
- * Три вещи, из которых следует всё остальное устройство отправки:
+ * ## `track`
  *
- * 1. **Токен обязателен.** Аноним с гео-заголовками получает `401`, поэтому
- *    события до входа отправлять некуда — `DefaultAnalyticsRepository` их не
- *    шлёт вовсе, а не тратит запрос на заведомый отказ.
- * 2. **Батчинга нет.** Под `analytics` у бэкенда ровно два пути — этот `track`
- *    и `places/{placeId}/dashboard` (бизнес-панель, эпик #16). Ручки вроде
- *    `analytics/track/batch` в схеме нет, значит одно событие — один запрос.
- * 3. **Поля времени события в запросе нет.** Момент события — это момент, когда
- *    запрос доехал до сервера, и отложенная отправка молча сдвинула бы всю
- *    воронку. Отсюда решение не копить события в офлайне (`docs/adr/0006`).
+ * Контракт снят со стенда 2026-09-10: `TrackEventRequest`, `eventType` —
+ * закрытое перечисление из девяти значений. Токен обязателен (аноним с
+ * гео-заголовками получает `401`), поэтому события до входа
+ * `DefaultAnalyticsRepository` не шлёт вовсе. `lat`/`lng` объявлены в схеме, а
+ * в [TrackEventRequest] не заведены: координаты уже уходят в
+ * `X-Geo-Lat`/`X-Geo-Lng` (`GeoHeaderInterceptor`) — берёт ли их бэкенд из
+ * заголовков для этой ручки, из схемы не следует (допущение, issue #226).
  *
- * `lat`/`lng` объявлены в схеме бэкенда, а в [TrackEventRequest] не заведены
- * вовсе: координаты уже уходят в
- * `X-Geo-Lat`/`X-Geo-Lng` (`GeoHeaderInterceptor`). **Это допущение, а не
- * проверенный факт:** правило «координаты не дублировать» в контракте написано
- * про query-параметры, а берёт ли бэкенд гео события из заголовков — из схемы
- * не следует. Если не берёт, все события приедут без координат, и гео-половина
- * `places/{placeId}/dashboard` останется пустой — молча (issue #226).
- * API собирается на **основном** Retrofit — ради
- * `AuthInterceptor` и `TokenAuthenticator`: событие после протухшего access
- * должно уехать после refresh, а не потеряться.
+ * ## `events`
+ *
+ * Контракт зафиксирован issue #226 (комментарий бэкенда 2026-09-19,
+ * `jack5505/mahalla#217`): свободное `name` вместо закрытого перечисления,
+ * `placeId` необязателен, `deviceId` — ключ identity без токена (**слать и
+ * под токеном тоже**: так анонимная часть воронки сшивается с авторизованной),
+ * `occurredAt` — ISO-8601 UTC, не старше 30 суток и не более чем на 5 минут в
+ * будущем. Ответ — `accepted`: сколько из пачки реально записано; может быть
+ * меньше присланного (события вне окна `occurredAt` или с `metadata` больше
+ * 4 КБ отбрасываются поштучно, остальные из пачки — нет), **переотправлять
+ * разницу не нужно**, повтор её не спасёт. Целиком запрос отклоняется только
+ * на `VALIDATION_ERROR` (400), `ANALYTICS_IDENTITY_REQUIRED` (400),
+ * `RATE_LIMITED` (429) и 5xx — состав ручек-констант классификации см.
+ * `DefaultAnalyticsEventQueue`. Дедупликации на сервере нет (`jack5505/mahalla#267`
+ * открыт под неё) — повтор пачки после таймаута задвоит события, поэтому
+ * ретраится только то, что осталось в очереди, а не последний ответ.
+ *
+ * Обе ручки — на **основном** Retrofit (issue #228, п. 1: осознанный
+ * компромисс, `TokenAuthenticator` может разлогинить по фоновому событию, но
+ * мёртвая сессия мертва независимо от того, кто её обнаружил первым). Для
+ * `events` это не критично: ручка работает и без токена, поэтому запрос не
+ * шлётся заведомым отказом даже без сессии, а `deviceId` не даёт очереди
+ * зависнуть на одном протухшем `Authorization`.
  */
 interface AnalyticsApi {
 
     /** Ответ — конверт без полезной нагрузки: `data` пуст и при успехе. */
     @POST("analytics/track")
     suspend fun track(@Body body: TrackEventRequest): ApiResponse<JsonElement>
+
+    /** `data.accepted` — см. KDoc интерфейса. */
+    @POST("analytics/events")
+    suspend fun events(@Body body: AnalyticsEventsRequest): ApiResponse<AnalyticsEventsResponse>
 }
 
 /**
@@ -60,4 +77,31 @@ data class TrackEventRequest(
     @SerialName("placeId") val placeId: String,
     @SerialName("eventType") val eventType: String,
     @SerialName("metadata") val metadata: Map<String, String>? = null,
+)
+
+/** Тело `POST analytics/events`. `deviceId` — всегда, независимо от токена. */
+@Serializable
+data class AnalyticsEventsRequest(
+    @SerialName("deviceId") val deviceId: String,
+    @SerialName("events") val events: List<AnalyticsEventItemRequest>,
+)
+
+/**
+ * Одно событие пачки. `name` — свободная строка (маска `[A-Za-z0-9_.:-]`,
+ * ≤ 64 символа — обе стороны следит клиент, обе завёл сервер), `occurredAt` —
+ * ISO-8601 UTC момента, когда событие произошло у клиента, а не когда дошло
+ * до сервера (issue #226 — этим и отличается от `TrackEventRequest`).
+ */
+@Serializable
+data class AnalyticsEventItemRequest(
+    @SerialName("name") val name: String,
+    @SerialName("occurredAt") val occurredAt: String,
+    @SerialName("placeId") val placeId: String? = null,
+    @SerialName("metadata") val metadata: Map<String, String>? = null,
+)
+
+/** `accepted` — сколько событий пачки реально записано, см. KDoc интерфейса. */
+@Serializable
+data class AnalyticsEventsResponse(
+    @SerialName("accepted") val accepted: Int = 0,
 )

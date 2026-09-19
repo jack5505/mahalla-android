@@ -9,6 +9,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.state.ScreenState
@@ -19,6 +21,7 @@ import uz.mahalla.feature.promotions.domain.PromotionFeed
 import uz.mahalla.feature.promotions.domain.PromotionPage
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.queue.domain.WalkInTicket
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeWalkInTicketStore
@@ -43,6 +46,27 @@ class DiscoveryHomeViewModelTest {
     private val promotions = FakePromotionsRepository()
 
     private val tickets = FakeWalkInTicketStore()
+
+    private val analytics = FakeAnalyticsTracker()
+
+    @Test
+    fun `opening the home tab is tracked as a screen without a place`() = runTest {
+        viewModel()
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.HOME)),
+            analytics.queuedEvents,
+        )
+    }
+
+    @Test
+    fun `tapping a category tracks a funnel step before any place is chosen`() = runTest {
+        // viewModel() уже отправил `screen_view` открытием главной — этот тест
+        // про то, что добавляется следующим шагом.
+        viewModel().onEvent(DiscoveryHomeEvent.CategoryClicked(PlaceCategory.Food))
+
+        assertEquals(AnalyticsQueuedEvents.verticalOpened("food"), analytics.queuedEvents.last())
+    }
 
     @Test
     fun `successful load splits the answer into sections`() = runTest {
@@ -368,6 +392,7 @@ class DiscoveryHomeViewModelTest {
         promotions = promotions,
         tickets = tickets,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        analytics = analytics,
     )
 
     private companion object {

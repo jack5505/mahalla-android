@@ -4,6 +4,9 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.dataOrNull
@@ -33,12 +36,16 @@ import javax.inject.Inject
 @HiltViewModel
 class ActivityViewModel @Inject constructor(
     private val repository: ActivityRepository,
+    private val analytics: AnalyticsTracker,
 ) : MviViewModel<ActivityState, ActivityEvent, ActivityEffect>(ActivityState()) {
 
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
 
     init {
+        // «Мои активности» не привязаны к заведению — до issue #226 таб был
+        // не виден аналитике вовсе, а не только терял вид события.
+        analytics.track(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.ACTIVITIES))
         load()
     }
 

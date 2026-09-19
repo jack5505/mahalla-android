@@ -11,6 +11,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ServerError
@@ -23,6 +25,7 @@ import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
 import uz.mahalla.testutil.FakeActivityRepository
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.MainDispatcherRule
 import java.time.Instant
 
@@ -39,6 +42,18 @@ class ActivityViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     @Test
+    fun `opening the tab is tracked as a screen without a place`() = runTest {
+        val analytics = FakeAnalyticsTracker()
+
+        ActivityViewModel(FakeActivityRepository(), analytics)
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.ACTIVITIES)),
+            analytics.queuedEvents,
+        )
+    }
+
+    @Test
     fun `activities of all sources land in one list`() = runTest {
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
@@ -49,7 +64,7 @@ class ActivityViewModelTest {
             ),
         )
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         assertEquals(3, (state.items as ScreenState.Content).data.size)
         // Первая загрузка спрашивает все пять источников с нулевой страницы.
@@ -70,7 +85,7 @@ class ActivityViewModelTest {
             ),
         )
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         // Ровно то, чего требует T7: данные показаны, сбойный раздел отмечен.
         assertTrue(state.items is ScreenState.Content)
@@ -88,7 +103,7 @@ class ActivityViewModelTest {
             items = listOf(activity("o-1", ActivitySource.Orders)),
             failures = mapOf(ActivitySource.GamingBookings to ApiFailure(ApiError.Timeout)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.Retry)
 
@@ -105,7 +120,7 @@ class ActivityViewModelTest {
             failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
         )
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         // Истёкшая сессия — не «вы ещё ничего не заказывали».
         assertEquals(ApiError.Unauthorized, (state.items as ScreenState.Error).error)
@@ -123,7 +138,7 @@ class ActivityViewModelTest {
             failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
             items = listOf(activity("o-1", ActivitySource.Orders)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         assertEquals(setOf(ActivitySource.CinemaTickets), viewModel.state.value.sourceFailures.keys)
 
         // Список пропал (сессия истекла) — «повторить» показывает скелетон.
@@ -140,7 +155,7 @@ class ActivityViewModelTest {
     fun `an empty answer from everyone is an empty state, not an error`() = runTest {
         val repository = FakeActivityRepository()
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         assertTrue(state.items is ScreenState.Empty)
         assertFalse(state.hasMore)
@@ -155,7 +170,7 @@ class ActivityViewModelTest {
             failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
         )
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         assertTrue(state.items is ScreenState.Empty)
         assertEquals(setOf(ActivitySource.CinemaTickets), state.sourceFailures.keys)
@@ -172,7 +187,7 @@ class ActivityViewModelTest {
                 activity("done", status = ActivityStatus.Completed, at = "2026-09-01T10:00:00Z"),
             ),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         assertEquals(listOf("active"), viewModel.state.value.visible.map(Activity::id))
 
@@ -190,7 +205,7 @@ class ActivityViewModelTest {
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("done", status = ActivityStatus.Completed)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         // Всё выполнено: вкладка «активные» пуста, но человек-то не новичок —
         // экран не имеет права показать «вы ещё ничего не заказывали».
@@ -234,7 +249,7 @@ class ActivityViewModelTest {
             }
         }
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val state = viewModel.state.value
 
         // Догрузка шла сама, пока курсор не опустел, — и активное приехало.
@@ -270,7 +285,7 @@ class ActivityViewModelTest {
             }
         }
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val state = viewModel.state.value
 
         assertEquals(2, repository.requests.size)
@@ -292,7 +307,7 @@ class ActivityViewModelTest {
             )
         }
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         assertEquals(2, repository.requests.size)
         assertTrue(viewModel.state.value.visible.isEmpty())
@@ -313,7 +328,7 @@ class ActivityViewModelTest {
             )
         }
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val state = viewModel.state.value
 
         // Первая страница плюс потолок догрузки (`MAX_DRAIN_PAGES`).
@@ -332,7 +347,7 @@ class ActivityViewModelTest {
             items = listOf(activity("active", status = ActivityStatus.InProgress)),
             nextPages = mapOf(ActivitySource.Orders to 1),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         val gate = CompletableDeferred<Unit>()
         repository.gate = gate
@@ -362,7 +377,7 @@ class ActivityViewModelTest {
         repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
             failures = mapOf(ActivitySource.Orders to ApiFailure(ApiError.Timeout)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         assertEquals(2, repository.requests.size)
 
         viewModel.onEvent(ActivityEvent.FilterSelected(ActivityFilter.Active))
@@ -384,7 +399,7 @@ class ActivityViewModelTest {
             failures = mapOf(ActivitySource.Orders to ApiFailure(ApiError.Timeout)),
         )
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val state = viewModel.state.value
 
         // Дёргать сеть по кругу молча нельзя: причина уходит в хвост списка
@@ -410,7 +425,7 @@ class ActivityViewModelTest {
                 )
             }
         }
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         // На «активных» есть что показать — доливать нечего.
         assertEquals(1, repository.requests.size)
@@ -437,7 +452,7 @@ class ActivityViewModelTest {
             }
         }
 
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val state = viewModel.state.value
 
         // Догрузка прошла сама, и приехавшая активность видна.
@@ -459,7 +474,7 @@ class ActivityViewModelTest {
             }
         }
 
-        val state = ActivityViewModel(repository).state.value
+        val state = ActivityViewModel(repository, FakeAnalyticsTracker()).state.value
 
         assertTrue(state.items is ScreenState.Empty)
         assertFalse(state.hasMore)
@@ -477,7 +492,7 @@ class ActivityViewModelTest {
         repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
             items = listOf(activity("o-2", ActivitySource.Orders)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.LoadMore)
         val state = viewModel.state.value
@@ -504,7 +519,7 @@ class ActivityViewModelTest {
                 nextPages = mapOf(ActivitySource.Orders to page + 1),
             )
         }
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         assertEquals(listOf(0), repository.requests.map { it.getValue(ActivitySource.Orders) })
 
@@ -526,7 +541,7 @@ class ActivityViewModelTest {
         repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
             items = listOf(activity("o-1", ActivitySource.Orders), activity("o-2", ActivitySource.Orders)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.LoadMore)
 
@@ -549,7 +564,7 @@ class ActivityViewModelTest {
         repository.feeds[setOf(ActivitySource.Orders)] = ActivityFeed(
             failures = mapOf(ActivitySource.Orders to ApiFailure(ApiError.Timeout)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.LoadMore)
         val state = viewModel.state.value
@@ -572,7 +587,7 @@ class ActivityViewModelTest {
             failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
             nextPages = mapOf(ActivitySource.Orders to 2),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.LoadMore)
         val state = viewModel.state.value
@@ -590,7 +605,7 @@ class ActivityViewModelTest {
     fun `load more does nothing when there is nothing more`() = runTest {
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.LoadMore)
 
@@ -603,7 +618,7 @@ class ActivityViewModelTest {
     fun `coming back to the screen re-reads the list`() = runTest {
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         // Первый resume — это открытие экрана, его список уже запросил `init`.
         viewModel.onEvent(ActivityEvent.ScreenResumed)
@@ -628,7 +643,7 @@ class ActivityViewModelTest {
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("active", status = ActivityStatus.InProgress)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         assertEquals(1, repository.requests.size)
 
         viewModel.onEvent(ActivityEvent.ScreenResumed)
@@ -646,7 +661,7 @@ class ActivityViewModelTest {
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("active", status = ActivityStatus.InProgress)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         viewModel.onEvent(ActivityEvent.ScreenResumed)
 
         val gate = CompletableDeferred<Unit>()
@@ -674,7 +689,7 @@ class ActivityViewModelTest {
             items = listOf(activity("stale", status = ActivityStatus.InProgress)),
             nextPages = mapOf(ActivitySource.Orders to 1),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         val loadMoreGate = CompletableDeferred<Unit>()
         repository.gate = loadMoreGate
@@ -718,7 +733,7 @@ class ActivityViewModelTest {
             items = listOf(activity("active", status = ActivityStatus.InProgress)),
             nextPages = mapOf(ActivitySource.Orders to 1),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         val gate = CompletableDeferred<Unit>()
         repository.gate = gate
@@ -742,7 +757,7 @@ class ActivityViewModelTest {
     fun `pull to refresh keeps the list on screen while it reloads`() = runTest {
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(items = listOf(activity("o-1", ActivitySource.Orders)))
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.Refreshed)
         val state = viewModel.state.value
@@ -761,7 +776,7 @@ class ActivityViewModelTest {
                 activity("o-1", ActivitySource.Orders, target = ActivityTarget.FoodOrder("o-1")),
             ),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.ActivityClicked("Orders:o-1"))
 
@@ -776,7 +791,7 @@ class ActivityViewModelTest {
         repository.defaultFeed = ActivityFeed(
             items = listOf(activity("b-1", ActivitySource.GamingBookings)),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
         val booking = (viewModel.state.value.items as ScreenState.Content).data.single()
 
         assertFalse(booking.isActionable)
@@ -798,7 +813,7 @@ class ActivityViewModelTest {
                 activity("o-1", ActivitySource.Orders, target = ActivityTarget.FoodOrder("o-1")),
             ),
         )
-        val viewModel = ActivityViewModel(repository)
+        val viewModel = ActivityViewModel(repository, FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.ActivityClicked("Orders:gone"))
         viewModel.onEvent(ActivityEvent.DiscoveryRequested)
@@ -808,7 +823,7 @@ class ActivityViewModelTest {
 
     @Test
     fun `the empty state button goes to discovery`() = runTest {
-        val viewModel = ActivityViewModel(FakeActivityRepository())
+        val viewModel = ActivityViewModel(FakeActivityRepository(), FakeAnalyticsTracker())
 
         viewModel.onEvent(ActivityEvent.DiscoveryRequested)
 

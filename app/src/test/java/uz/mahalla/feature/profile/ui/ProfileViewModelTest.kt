@@ -21,6 +21,9 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import uz.mahalla.core.analytics.AnalyticsQueuedEvents
+import uz.mahalla.core.analytics.AnalyticsScreens
+import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.locale.AppLanguage
 import uz.mahalla.core.locale.AppLocaleManager
 import uz.mahalla.core.result.ApiError
@@ -34,6 +37,7 @@ import uz.mahalla.feature.media.domain.MediaFile
 import uz.mahalla.feature.media.domain.MediaRejection
 import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.profile.domain.DeviceSession
+import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeBiometricAvailability
 import uz.mahalla.testutil.FakeHttpInspector
@@ -61,6 +65,18 @@ class ProfileViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
+
+    @Test
+    fun `opening the profile is tracked as a screen without a place`() = runTest {
+        val analytics = FakeAnalyticsTracker()
+
+        viewModel(analytics = analytics)
+
+        assertEquals(
+            listOf(AnalyticsQueuedEvents.screenOpened(AnalyticsScreens.PROFILE)),
+            analytics.queuedEvents,
+        )
+    }
 
     @Test
     fun `inspector row opens the traffic screen`() = runTest {
@@ -665,6 +681,7 @@ class ProfileViewModelTest {
         media: FakeMediaRepository = FakeMediaRepository(),
         profile: FakeProfileRepository = FakeProfileRepository(profileStore),
         biometrics: FakeBiometricAvailability = FakeBiometricAvailability(),
+        analytics: AnalyticsTracker = FakeAnalyticsTracker(),
     ) = ProfileViewModel(
         settingsDataStore = settings,
         localeManager = RecreatingLocaleManager,
@@ -679,6 +696,7 @@ class ProfileViewModelTest {
             context = ApplicationProvider.getApplicationContext(),
             settings = settings,
         ),
+        analytics = analytics,
     )
 
     /** На один файл в процессе допустим ровно один экземпляр DataStore. */
