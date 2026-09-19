@@ -131,7 +131,12 @@ class ActivityViewModel @Inject constructor(
      */
     private suspend fun replay() {
         val target = currentState.loadedPages
-        var remaining = target.mapValues { (_, loaded) -> loaded.coerceAtLeast(1) }
+        // Тот же потолок, что и у `drain()`, и по той же причине: без него
+        // источник, который человек дотянул до полусотни страниц кнопкой
+        // «показать ещё» за много сессий, реплеился бы на каждый возврат на
+        // экран той же полусотней запросов — а `drain()` на пустой вкладке и
+        // сам может довести `loadedPages` ровно до потолка.
+        var remaining = target.mapValues { (_, loaded) -> loaded.coerceIn(1, MAX_DRAIN_PAGES) }
         var level = 0
         var items = emptyList<Activity>()
         val failures = mutableMapOf<ActivitySource, ApiFailure>()
@@ -187,6 +192,10 @@ class ActivityViewModel @Inject constructor(
                 loadMoreFailure = null,
             )
         }
+        // Та же догрузка пустой вкладки, что и в `load()` (issue #143): за
+        // время в фоне видимое могло целиком уехать в другую вкладку, и
+        // «активных нет» без попытки долить страницу было бы неправдой.
+        if (!totalFailure && currentState.visible.isEmpty()) drain()
     }
 
     /**
@@ -207,6 +216,14 @@ class ActivityViewModel @Inject constructor(
 
         loadMoreJob?.cancel()
         loadJob?.cancel()
+        // Отменённые job'ы могли держать `isLoadingMore` / `isRefreshing`
+        // поднятыми (кнопка «показать ещё» или pull-to-refresh были в полёте
+        // одновременно с отметкой отказа) — их отмена обрывает выполнение на
+        // точке приостановки и до своего собственного `updateState`, который
+        // их бы снял, не доходит. Без сброса здесь флаг остаётся поднятым
+        // навсегда: спиннер крутится, а `loadMore()` / pull-to-refresh больше
+        // не стартуют (`if (... || state.isLoadingMore) return`).
+        updateState { copy(isLoadingMore = false, isRefreshing = false, loadMoreFailure = null) }
         loadJob = viewModelScope.launch {
             val loaded = currentState.items.dataOrNull().orEmpty()
             val pages = failedSources.associateWith { source -> currentState.nextPages[source] ?: 0 }
@@ -215,7 +232,11 @@ class ActivityViewModel @Inject constructor(
                 copy(
                     items = ScreenState.Content(appended(loaded, feed.items)),
                     sourceFailures = sourceFailures - failedSources + feed.failures,
-                    nextPages = nextPages + feed.nextPages,
+                    // Источник, вылечившийся до последней страницы, не попадает
+                    // в `feed.nextPages` — старую запись из `nextPages` нужно
+                    // убрать явно, иначе курсор держит его в `hasMore` вечно, и
+                    // «показать ещё» уходит в пустоту (дедуп съедает ответ).
+                    nextPages = nextPages - (failedSources - feed.failures.keys) + feed.nextPages,
                     loadedPages = loadedPages + pages.mapValues { (source, page) ->
                         if (source in feed.failures) page else page + 1
                     },
