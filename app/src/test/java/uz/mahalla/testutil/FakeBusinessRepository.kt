@@ -56,6 +56,8 @@ class FakeBusinessRepository : BusinessRepository {
     var menuResult: ApiResult<BusinessMenu> = ApiResult.Success(BusinessMenu())
     var toggleStopListResult: ApiResult<Boolean>? = null
     var createItemResult: ApiResult<BusinessMenu>? = null
+    var updateItemResult: ApiResult<BusinessMenu>? = null
+    var deleteItemResult: ApiResult<BusinessMenu>? = null
 
     val accessRequests = mutableListOf<String>()
     val dashboardRequests = mutableListOf<String>()
@@ -68,6 +70,8 @@ class FakeBusinessRepository : BusinessRepository {
     val statusUpdateCategories = mutableListOf<PlaceCategory>()
     val toggledItems = mutableListOf<Pair<String, Boolean>>()
     val createdItems = mutableListOf<NewMenuItemForm>()
+    val updatedItems = mutableListOf<NewMenuItemForm>()
+    val deletedItemIds = mutableListOf<String>()
 
     /** Талоны, из которых `act` берёт исходный: без них исход не собрать. */
     val knownEntries = mutableMapOf<String, QueueEntry>()
@@ -152,6 +156,19 @@ class FakeBusinessRepository : BusinessRepository {
     ): ApiResult<BusinessMenu> {
         createdItems += form
         return createItemResult ?: menuResult
+    }
+
+    override suspend fun updateItem(
+        placeId: String,
+        form: NewMenuItemForm,
+    ): ApiResult<BusinessMenu> {
+        updatedItems += form
+        return updateItemResult ?: menuResult
+    }
+
+    override suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu> {
+        deletedItemIds += itemId
+        return deleteItemResult ?: menuResult
     }
 
     companion object {

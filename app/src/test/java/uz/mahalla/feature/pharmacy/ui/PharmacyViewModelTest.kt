@@ -436,6 +436,241 @@ class PharmacyViewModelTest {
             assertTrue(repository.stockRequests.isEmpty())
         }
 
+    @Test
+    fun `a customer never sees the product editor or the delete action`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = false)
+            runCurrent()
+
+            viewModel.onEvent(PharmacyEvent.EditProductClicked(product("p-1")))
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+
+            assertNull(viewModel.state.value.editForm)
+            assertNull(viewModel.state.value.deleteConfirmation)
+        }
+
+    @Test
+    fun `editing preselects the product's own fields, without stock or description`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(
+                    items = listOf(
+                        PharmacyProduct(
+                            id = "p-1",
+                            name = "Paratsetamol",
+                            manufacturer = "Uzpharm",
+                            dosageForm = "tabletka",
+                            strength = "500 mg",
+                            priceSum = 12_000,
+                            stockQuantity = 340,
+                            requiresPrescription = true,
+                        ),
+                    ),
+                ),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+
+            viewModel.onEvent(
+                PharmacyEvent.EditProductClicked(
+                    viewModel.state.value.products.items().single(),
+                ),
+            )
+
+            val draft = viewModel.state.value.editForm?.draft
+            assertEquals("p-1", viewModel.state.value.editForm?.productId)
+            assertEquals("Paratsetamol", draft?.name)
+            assertEquals("Uzpharm", draft?.manufacturer)
+            assertEquals("tabletka", draft?.dosageForm)
+            assertEquals("500 mg", draft?.strength)
+            assertEquals("12000", draft?.priceText)
+            assertTrue(draft?.requiresPrescription ?: false)
+            // Остаток и описание не предзаполняются — своя форма и невидимое поле.
+            assertEquals("", draft?.stockText)
+            assertEquals("", draft?.description)
+        }
+
+    @Test
+    fun `a product update patches the list in place, not a full reload`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.EditProductClicked(product("p-1")))
+            repository.updateResult = { productId, draft ->
+                ApiResult.Success(
+                    PharmacyProduct(id = productId, name = draft.name, priceSum = 45_000),
+                )
+            }
+            repository.requests.clear()
+
+            viewModel.onEvent(PharmacyEvent.EditNameChanged("Osh"))
+            viewModel.onEvent(PharmacyEvent.EditPriceChanged("45000"))
+            viewModel.onEvent(PharmacyEvent.EditSubmitted)
+            runCurrent()
+
+            val sent = repository.updateRequests.single()
+            assertEquals("p-1-place", sent.first)
+            assertEquals("p-1", sent.second)
+            assertEquals("Osh", sent.third.name)
+            assertNull(viewModel.state.value.editForm)
+            assertEquals(
+                listOf(45_000L),
+                viewModel.state.value.products.items().map { it.priceSum },
+            )
+            // Правка на месте, список не перечитывался.
+            assertTrue(repository.requests.isEmpty())
+        }
+
+    @Test
+    fun `an invalid edit shows field errors instead of calling the server`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.EditProductClicked(product("p-1")))
+            viewModel.onEvent(PharmacyEvent.EditNameChanged(""))
+
+            viewModel.onEvent(PharmacyEvent.EditSubmitted)
+
+            assertTrue(viewModel.state.value.editForm?.submitAttempted == true)
+            assertTrue(repository.updateRequests.isEmpty())
+        }
+
+    /** Чужое заведение — 403 показывается в форме, а не роняет экран (issue #288). */
+    @Test
+    fun `a forbidden edit keeps the form open with the server message`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            repository.updateResult = { _, _ -> ApiResult.Failure(ApiError.Forbidden) }
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.EditProductClicked(product("p-1")))
+
+            viewModel.onEvent(PharmacyEvent.EditSubmitted)
+            runCurrent()
+
+            val form = viewModel.state.value.editForm
+            assertEquals(ApiError.Forbidden, form?.failure?.error)
+            assertFalse(form?.submitting ?: true)
+        }
+
+    @Test
+    fun `deleting asks for confirmation before touching the server`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+
+            assertEquals("p-1", viewModel.state.value.deleteConfirmation?.id)
+            assertTrue(repository.deleteRequests.isEmpty())
+        }
+
+    @Test
+    fun `confirming delete removes exactly that product from the list`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"), product("p-2"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+
+            viewModel.onEvent(PharmacyEvent.DeleteConfirmed)
+            runCurrent()
+
+            assertEquals(listOf("p-1-place" to "p-1"), repository.deleteRequests)
+            assertNull(viewModel.state.value.deleteConfirmation)
+            assertTrue(viewModel.state.value.deletingProductIds.isEmpty())
+            assertEquals(listOf("p-2"), viewModel.state.value.products.items().map { it.id })
+        }
+
+    /**
+     * Удаление не открывает модальную форму, и список остаётся кликабельным —
+     * два товара можно отправить на удаление почти одновременно. Первый не
+     * должен разблокироваться раньше своего ответа только потому, что второй
+     * тоже начал удаляться (issue #288).
+     */
+    @Test
+    fun `deleting two products at once tracks each one independently`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"), product("p-2"))),
+            )
+            val gateA = CompletableDeferred<Unit>()
+            repository.deleteGates["p-1"] = gateA
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+            viewModel.onEvent(PharmacyEvent.DeleteConfirmed)
+            runCurrent()
+            // p-1 в полёте — его строка занята, а p-2 всё ещё можно удалить.
+            assertEquals(setOf("p-1"), viewModel.state.value.deletingProductIds)
+
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-2")))
+            viewModel.onEvent(PharmacyEvent.DeleteConfirmed)
+            runCurrent()
+            // p-2 ответил (гейта нет), но p-1 всё ещё ждёт — его отметка жива.
+            assertEquals(setOf("p-1"), viewModel.state.value.deletingProductIds)
+            assertEquals(listOf("p-1"), viewModel.state.value.products.items().map { it.id })
+
+            gateA.complete(Unit)
+            runCurrent()
+            assertTrue(viewModel.state.value.deletingProductIds.isEmpty())
+            assertTrue(viewModel.state.value.products.items().isEmpty())
+        }
+
+    @Test
+    fun `deleting the last product is an empty state, not an error`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+
+            viewModel.onEvent(PharmacyEvent.DeleteConfirmed)
+            runCurrent()
+
+            assertEquals(ScreenState.Empty, viewModel.state.value.products)
+        }
+
+    /** Позицию уже удалили — 404 показывается, а не роняет экран (issue #288). */
+    @Test
+    fun `a not-found delete shows the server message and keeps the product`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultPage = ApiResult.Success(
+                PharmacyProductPage(items = listOf(product("p-1"))),
+            )
+            repository.deleteResult = ApiResult.Failure(ApiError.NotFound)
+            val viewModel = viewModel(isOwner = true)
+            runCurrent()
+            viewModel.onEvent(PharmacyEvent.DeleteProductClicked(product("p-1")))
+
+            viewModel.onEvent(PharmacyEvent.DeleteConfirmed)
+            runCurrent()
+
+            val state = viewModel.state.value
+            assertEquals(ApiError.NotFound, state.deleteFailure?.error)
+            assertTrue(state.deletingProductIds.isEmpty())
+            assertEquals(listOf("p-1"), state.products.items().map { it.id })
+        }
+
     private fun ScreenState<List<PharmacyProduct>>.items(): List<PharmacyProduct> =
         (this as? ScreenState.Content)?.data.orEmpty()
 

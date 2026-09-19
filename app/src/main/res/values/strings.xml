@@ -1093,6 +1093,14 @@
     <string name="pharmacy_stock_edit_submit">Saqlash</string>
     <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
     <string name="pharmacy_stock_owner_count">Qoldiq: %1$d</string>
+    <!-- Правка и удаление товара (issue #288) -->
+    <string name="pharmacy_edit_product_action">Tovarni tahrirlash</string>
+    <string name="pharmacy_edit_product_title">Tovarni tahrirlash</string>
+    <string name="pharmacy_edit_product_submit">Saqlash</string>
+    <string name="pharmacy_delete_action">O\'chirish</string>
+    <string name="pharmacy_delete_title">Tovarni o\'chirish</string>
+    <string name="pharmacy_delete_message">%1$s butunlay o\'chiriladi, bu amalni ortga qaytarib bo\'lmaydi.</string>
+    <string name="pharmacy_delete_confirm">O\'chirish</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">O\'yin zonalari</string>
     <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>
@@ -1246,7 +1254,15 @@
     <string name="business_menu_stopped">%1$s stop-ro\'yxatga tushdi</string>
     <string name="business_menu_resumed">%1$s yana sotuvda</string>
     <string name="business_menu_created">%1$s qo\'shildi</string>
+    <string name="business_menu_updated">%1$s yangilandi</string>
+    <string name="business_menu_deleted">%1$s o\'chirildi</string>
     <string name="business_menu_add">Taom qo\'shish</string>
+    <string name="business_menu_edit_title">Taomni tahrirlash</string>
+    <string name="business_menu_edit_action">Tahrirlash</string>
+    <string name="business_menu_delete_action">O\'chirish</string>
+    <string name="business_menu_delete_title">Pozitsiyani o\'chirish</string>
+    <string name="business_menu_delete_message">%1$s butunlay o\'chiriladi, bu amalni ortga qaytarib bo\'lmaydi. Buyurtmalar tarixini saqlash kerak bo\'lsa, o\'chirish o\'rniga «Sotuvda» tugmasi bilan sotuvdan olib tashlang.</string>
+    <string name="business_menu_delete_confirm">O\'chirish</string>
     <string name="business_menu_save">Saqlash</string>
     <string name="business_menu_section">Bo\'lim</string>
     <string name="business_menu_field_name">Nomi</string>

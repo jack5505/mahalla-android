@@ -44,7 +44,7 @@ data class BusinessMenu(
 }
 
 /**
- * Форма новой позиции (задача 12.4).
+ * Форма позиции меню — новой или уже выставленной (задача 12.4).
  *
  * Цена хранится строкой, как её набрал человек: `Long` в поле ввода означал бы
  * молча съеденные символы, а «12о00» лучше показать ошибкой, чем превратить в
@@ -54,8 +54,13 @@ data class BusinessMenu(
  * `name`, `description`, `price`, `prepMinutes`, `isHalal`. Картинки среди них
  * нет: у `ItemResponse` ссылки на фото не существует в схеме вовсе (issue
  * #60), и поле загрузки обещало бы кухне то, чего сервер не примет.
+ *
+ * @param itemId правится существующая позиция; `null` — заводится новая. От
+ * этого зависит только метод запроса (`POST` / `PUT`) — поля формы те же, тот
+ * же приём, что у услуги мастера (`FreelancerServiceForm`, issue #71).
  */
 data class NewMenuItemForm(
+    val itemId: String? = null,
     val sectionId: String = "",
     val name: String = "",
     val priceText: String = "",
@@ -63,6 +68,8 @@ data class NewMenuItemForm(
     val prepMinutesText: String = "",
     val isHalal: Boolean = false,
 ) {
+
+    val isNew: Boolean get() = itemId == null
 
     fun trimmed(): NewMenuItemForm = copy(
         name = name.trim(),
@@ -77,6 +84,17 @@ data class NewMenuItemForm(
     fun prepMinutesOrNull(): Int? = prepMinutesText.trim().takeIf(String::isNotEmpty)?.toIntOrNull()
 
     companion object {
+        /** Уже выставленная позиция — та же форма, предзаполненная её полями. */
+        fun of(item: BusinessMenuItem, sectionId: String): NewMenuItemForm = NewMenuItemForm(
+            itemId = item.id,
+            sectionId = sectionId,
+            name = item.name,
+            priceText = item.priceSum.toString(),
+            description = item.description.orEmpty(),
+            prepMinutesText = item.prepMinutes?.toString().orEmpty(),
+            isHalal = item.isHalal,
+        )
+
         /** `@Size(max = 200)` у `CreateItemRequest.name`. */
         const val MAX_NAME_LENGTH = 200
 
