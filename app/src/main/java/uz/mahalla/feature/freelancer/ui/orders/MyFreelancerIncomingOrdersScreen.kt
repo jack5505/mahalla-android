@@ -44,7 +44,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.feature.booking.ui.InlineFailure
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus
 import uz.mahalla.ui.theme.LocalMahallaColors

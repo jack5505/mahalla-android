@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessMenuItem
@@ -47,6 +46,13 @@ class BusinessMenuViewModel @Inject constructor(
      */
     private var loadJob: Job? = null
 
+    /**
+     * Reload, отменённый или отложенный ради стоп-листа/сохранения (см.
+     * [preemptReload]), — не потерянный: он повторится сам, как только
+     * действие закончится ([replayReloadIfPending]), issue #272 (попытка 2).
+     */
+    private var reloadPending = false
+
     init {
         load()
     }
@@ -54,7 +60,7 @@ class BusinessMenuViewModel @Inject constructor(
     override fun onEvent(event: BusinessMenuEvent) {
         when (event) {
             BusinessMenuEvent.ScreenResumed ->
-                if (!currentState.menu.isLoading && !currentState.isRefreshing) {
+                onScreenResumed(isLoadInFlight = { loadJob?.isActive == true }) {
                     load(showLoading = false)
                 }
 
@@ -81,7 +87,32 @@ class BusinessMenuViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Стоп-лист/сохранение всегда важнее фонового reload, независимо от
+     * порядка: его ответ, если reload ещё летит, устарел по определению и
+     * откатил бы то, что действие вот-вот применит (нашло ревью, issue #272).
+     * Поэтому действие не ждёт reload, а обрывает его — а не наоборот.
+     */
+    private fun preemptReload() {
+        if (loadJob?.isActive == true) reloadPending = true
+        loadJob?.cancel()
+    }
+
+    private fun replayReloadIfPending() {
+        if (reloadPending) {
+            reloadPending = false
+            load(showLoading = false)
+        }
+    }
+
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+        if (currentState.isBusy) {
+            // Стоп-лист/сохранение в полёте — их ответ и должен победить.
+            // Reload не потерян: [replayReloadIfPending] перечитает меню, как
+            // только действие завершится.
+            reloadPending = true
+            return
+        }
         loadJob?.cancel()
         updateState {
             copy(
@@ -115,15 +146,18 @@ class BusinessMenuViewModel @Inject constructor(
      * перезагрузкой: меню длинное, и скролл к нужной позиции терять нельзя.
      */
     private fun toggleStopList(itemId: String) {
-        val state = currentState
-        if (state.isBusy) return
+        if (currentState.isBusy) return
         val item = itemOrNull(itemId) ?: return
 
+        preemptReload()
         updateState { copy(pendingItemId = itemId, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.toggleStopList(itemId, item.isAvailable)) {
-                is ApiResult.Failure -> updateState {
-                    copy(pendingItemId = null, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(pendingItemId = null, actionFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 is ApiResult.Success -> {
@@ -139,6 +173,7 @@ class BusinessMenuViewModel @Inject constructor(
                             stopped = !result.data,
                         ),
                     )
+                    replayReloadIfPending()
                 }
             }
         }
@@ -200,7 +235,7 @@ class BusinessMenuViewModel @Inject constructor(
 
     private fun save() {
         val state = currentState
-        if (state.isSaving) return
+        if (state.isBusy) return
         val form = state.form.trimmed()
         val errors = NewMenuItemValidator.validate(form)
         if (errors.isNotEmpty()) {
@@ -208,11 +243,15 @@ class BusinessMenuViewModel @Inject constructor(
             return
         }
 
+        preemptReload()
         updateState { copy(isSaving = true, formErrors = emptyList(), formFailure = null) }
         viewModelScope.launch {
             when (val result = repository.createItem(placeId, form)) {
-                is ApiResult.Failure -> updateState {
-                    copy(isSaving = false, formFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(isSaving = false, formFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 is ApiResult.Success -> {
@@ -222,9 +261,19 @@ class BusinessMenuViewModel @Inject constructor(
                             isSaving = false,
                             isFormVisible = false,
                             form = NewMenuItemForm(),
+                            // Pull-to-refresh мог быть в полёте, когда его
+                            // обрывал preemptReload() — снятое тут состояние
+                            // никогда бы иначе не сбросилось: без reloadPending
+                            // ниже replayReloadIfPending() его не сделает
+                            // (нашло ревью, issue #272, попытка 3).
+                            isRefreshing = false,
                         )
                     }
                     emitEffect(BusinessMenuEffect.ItemCreated(form.name))
+                    // Успех уже привёз меню целиком (`createItem` перечитывает
+                    // его — см. заметку в шапке файла): повторный reload задал
+                    // бы тот же запрос второй раз, а не привёз что-то новое.
+                    reloadPending = false
                 }
             }
         }

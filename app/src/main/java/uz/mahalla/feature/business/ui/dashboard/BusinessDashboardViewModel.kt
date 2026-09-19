@@ -49,16 +49,24 @@ class BusinessDashboardViewModel @Inject constructor(
      */
     private var loadJob: Job? = null
 
+    /** Отдельный повтор метрик (см. [retryMetrics]) — тоже гоняется с [load]. */
+    private var metricsJob: Job? = null
+
+    /**
+     * Reload, отменённый или отложенный ради «паузы» (см. [preemptReload]),
+     * — не потерянный: он повторится сам, как только действие закончится
+     * ([replayReloadIfPending]), issue #272 (попытка 2).
+     */
+    private var reloadPending = false
+
     init {
         load()
     }
 
     override fun onEvent(event: BusinessDashboardEvent) {
         when (event) {
-            // Пока идёт загрузка, перезапрашивать нечего: ответ приедет на уже
-            // сменившееся состояние.
             BusinessDashboardEvent.ScreenResumed ->
-                if (!currentState.access.isLoading && !currentState.isRefreshing) {
+                onScreenResumed(isLoadInFlight = { loadJob?.isActive == true }) {
                     load(showLoading = false)
                 }
 
@@ -70,8 +78,36 @@ class BusinessDashboardViewModel @Inject constructor(
         }
     }
 
-    private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+    /**
+     * «Пауза» всегда важнее фонового reload, независимо от порядка: его
+     * ответ, если reload ещё летит, устарел по определению и откатил бы уже
+     * применённый флаг (нашло ревью, issue #272). Поэтому «пауза» не ждёт
+     * reload, а обрывает его — а не наоборот; заодно избавляет «паузу» от
+     * лишнего ожидания на всё время запроса аналитики, которую reload тянет
+     * вместе с правами (тот же нашедшийся побочный эффект).
+     */
+    private fun preemptReload() {
+        if (loadJob?.isActive == true) reloadPending = true
         loadJob?.cancel()
+    }
+
+    private fun replayReloadIfPending() {
+        if (reloadPending) {
+            reloadPending = false
+            load(showLoading = false)
+        }
+    }
+
+    private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+        if (currentState.pauseInProgress) {
+            // «Пауза» в полёте — её ответ и должен победить. Reload не
+            // потерян: [replayReloadIfPending] перечитает права и метрики,
+            // как только «пауза» завершится.
+            reloadPending = true
+            return
+        }
+        loadJob?.cancel()
+        metricsJob?.cancel()
         updateState {
             copy(
                 access = if (showLoading) ScreenState.Loading else access,
@@ -117,10 +153,18 @@ class BusinessDashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Скелетон ставится и тогда, когда фоновый `load()` уже в полёте: его
+     * `fetchMetrics()` и так привезёт результат, но нажатие «повторить» не
+     * должно выглядеть так, будто оно ничего не сделало (нашло ревью, issue
+     * #272, попытка 3) — второй параллельный запрос при этом не запускается.
+     */
     private fun retryMetrics() {
         if (currentState.metrics.isLoading) return
         updateState { copy(metrics = ScreenState.Loading) }
-        viewModelScope.launch { fetchMetrics() }
+        if (loadJob?.isActive == true) return
+        metricsJob?.cancel()
+        metricsJob = viewModelScope.launch { fetchMetrics() }
     }
 
     /**
@@ -158,29 +202,42 @@ class BusinessDashboardViewModel @Inject constructor(
      * «Пауза». Ручка бэкенда — переключатель, поэтому желаемое состояние не
      * отправляется: известное приложению уходит только затем, чтобы понять
      * исход, если сервер промолчит о новом значении.
+     *
+     * Если фоновый reload уже в полёте, [preemptReload] его обрывает: более
+     * старый ответ не может откатить только что применённый флаг (нашло
+     * ревью, issue #272).
      */
     private fun togglePause() {
         val access = accessOrNull() ?: return
         if (!access.canPause || currentState.pauseInProgress) return
 
+        preemptReload()
         updateState { copy(pauseInProgress = true, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.togglePause(access.placeId, access.isAvailable)) {
-                is ApiResult.Failure -> updateState {
-                    copy(pauseInProgress = false, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(pauseInProgress = false, actionFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 // Права перечитываются заново: пока шёл запрос, `load()` мог
                 // привезти свежее заведение, и снимок, взятый до нажатия,
                 // откатил бы вместе с флагом и роль, и статус модерации
                 // (нашло ревью).
-                is ApiResult.Success -> updateState {
-                    copy(
-                        access = (this.access as? ScreenState.Content)
-                            ?.let { ScreenState.Content(it.data.copy(isAvailable = result.data)) }
-                            ?: this.access,
-                        pauseInProgress = false,
-                    )
+                is ApiResult.Success -> {
+                    updateState {
+                        copy(
+                            access = (this.access as? ScreenState.Content)
+                                ?.let {
+                                    ScreenState.Content(it.data.copy(isAvailable = result.data))
+                                }
+                                ?: this.access,
+                            pauseInProgress = false,
+                        )
+                    }
+                    replayReloadIfPending()
                 }
             }
         }

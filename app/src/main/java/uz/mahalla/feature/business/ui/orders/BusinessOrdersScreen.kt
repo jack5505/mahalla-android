@@ -9,13 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ReceiptLong
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -36,7 +33,9 @@ import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.EmptyState
 import uz.mahalla.core.ui.components.FilterChipUi
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
+import uz.mahalla.core.ui.components.LoadMoreAuto
 import uz.mahalla.core.ui.components.MahallaBadge
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
@@ -54,12 +53,12 @@ import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderLine
 import uz.mahalla.feature.business.domain.BusinessOrderStatusFlow
-import uz.mahalla.feature.business.ui.BusinessInlineFailure
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 import java.time.Instant
 
 /**
@@ -159,7 +158,7 @@ fun BusinessOrdersContentScreen(
                 verticalArrangement = Arrangement.spacedBy(Spacing.gap),
             ) {
                 state.actionFailure?.let { failure ->
-                    item(key = "action-failure") { BusinessInlineFailure(failure = failure) }
+                    item(key = "action-failure") { InlineFailure(failure = failure) }
                 }
                 orderItems(state = state, onEvent = onEvent)
             }
@@ -183,7 +182,7 @@ private fun LazyListScope.orderItems(
         }
 
         is ScreenState.Error -> item(key = "error") {
-            BusinessInlineFailure(
+            InlineFailure(
                 failure = orders.failure,
                 onRetry = { onEvent(BusinessOrdersEvent.Retry) },
             )
@@ -200,10 +199,11 @@ private fun LazyListScope.orderItems(
             }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
-                    LoadMoreItem(
-                        state = state,
+                    LoadMoreAuto(
                         itemCount = orders.data.size,
-                        onEvent = onEvent,
+                        isLoading = state.isLoadingMore,
+                        failure = state.loadMoreFailure,
+                        onLoadMore = { onEvent(BusinessOrdersEvent.LoadMore) },
                     )
                 }
             }
@@ -293,7 +293,7 @@ private fun BusinessOrderCard(
             )
             Text(
                 text = MoneyFormatter.withCurrency(order.totalSum, currency),
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium.merge(TabularNums),
                 color = MaterialTheme.colorScheme.onSurface,
             )
         }
@@ -350,42 +350,9 @@ private fun OrderLineRow(
         )
         Text(
             text = MoneyFormatter.withCurrency(line.totalPriceSum, currency),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
             color = colors.fgMuted,
         )
-    }
-}
-
-/**
- * Хвост списка: догрузка по достижению конца. Провал показывает кнопку с
- * причиной — автотриггер по `itemCount` больше не сработает, список ведь не
- * вырос (то же решение, что в «моих заведениях», issue #94).
- */
-@Composable
-private fun LoadMoreItem(
-    state: BusinessOrdersState,
-    itemCount: Int,
-    onEvent: (BusinessOrdersEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val failure = state.loadMoreFailure
-    if (failure != null) {
-        BusinessInlineFailure(
-            failure = failure,
-            onRetry = { onEvent(BusinessOrdersEvent.LoadMore) },
-            modifier = modifier,
-        )
-        return
-    }
-
-    LaunchedEffect(itemCount) { onEvent(BusinessOrdersEvent.LoadMore) }
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(Spacing.gap),
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(LOAD_MORE_INDICATOR))
     }
 }
 
@@ -450,8 +417,6 @@ private fun PaymentMethod.labelRes(): Int = when (this) {
     PaymentMethod.Wallet -> R.string.checkout_payment_wallet
     PaymentMethod.Cash -> R.string.checkout_payment_cash
 }
-
-private val LOAD_MORE_INDICATOR = 24.dp
 
 @ThemeLanguagePreviews
 @Composable

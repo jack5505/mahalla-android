@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.ui.orders
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -239,14 +240,131 @@ class BusinessOrdersViewModelTest {
         assertFalse(state.isLoadingMore)
     }
 
+    /** Первый resume — открытие экрана, `init` уже загрузил первую страницу. */
     @Test
-    fun `returning to the screen re-reads the first page`() = runTest {
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
 
+        assertEquals(listOf(null to 0), repository.orderRequests)
+    }
+
+    @Test
+    fun `returning to the screen re-reads the first page`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // настоящий возврат
+
         assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
+    }
+
+    /**
+     * Пока смена статуса не ответила, полный reload не стартует: иначе более
+     * старая страница могла бы прийти позже и откатить только что применённый
+     * статус (нашло ревью, issue #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while a status change is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.updateOrderGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertEquals("o-1", viewModel.state.value.pendingOrderId)
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed)
+        viewModel.onEvent(BusinessOrdersEvent.Refreshed)
+
+        assertEquals(listOf(null to 0), repository.orderRequests)
+
+        gate.complete(Unit)
+        assertNull(viewModel.state.value.pendingOrderId)
+    }
+
+    /**
+     * Симметричная гонка, вторая попытка: смена статуса не ждёт ещё не
+     * завершившийся reload — она его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только статус ответит, и
+     * привозит уже свежий список (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего кнопки оставались
+     * нажимаемыми, но молча ничего не делали).
+     */
+    @Test
+    fun `a status change cancels a reload in flight and the reload replays after it`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.ordersGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessOrdersEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+
+        // Смена статуса не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(listOf("o-1" to OrderStatus.Confirmed), repository.statusUpdates)
+        assertEquals(
+            OrderStatus.Confirmed,
+            (viewModel.state.value.orders as ScreenState.Content).data.single().status,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённый
+        // статус — а не откатывает его устаревшим снимком.
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Confirmed)))
+        gate.complete(Unit)
+
+        assertEquals(listOf(null to 0, null to 0, null to 0), repository.orderRequests)
+        assertEquals(
+            OrderStatus.Confirmed,
+            (viewModel.state.value.orders as ScreenState.Content).data.single().status,
+        )
+    }
+
+    /**
+     * Второй обход того же инварианта: чипсы фильтра не блокируются кнопкой,
+     * но переключение вкладки во время ещё не ответившей смены статуса не
+     * должно уходить на сервер немедленно — иначе достигается та же гонка
+     * (нажал «Готово» → тут же переключил вкладку), которую PR закрывает
+     * (нашло ревью, issue #272, попытка 2).
+     */
+    @Test
+    fun `changing the tab while a status change is in flight waits its turn`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.updateOrderGate = gate
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+        assertEquals("o-1", viewModel.state.value.pendingOrderId)
+
+        viewModel.onEvent(BusinessOrdersEvent.FilterSelected(BusinessOrderFilter.Ready))
+        // Вкладка переключилась визуально, но запрос за ней не ушёл — раньше
+        // это было дырой в инварианте.
+        assertEquals(listOf(null to 0), repository.orderRequests)
+        assertEquals(BusinessOrderFilter.Ready, viewModel.state.value.filter)
+        // Список старой вкладки не остаётся на экране под новым заголовком:
+        // скелетон ставится сразу, а не только когда запрос наконец уйдёт
+        // (нашло ревью, issue #272, попытка 3).
+        assertTrue(viewModel.state.value.orders is ScreenState.Loading)
+
+        gate.complete(Unit)
+
+        // Статус ответил — отложенный reload доехал уже за новую вкладку.
+        assertEquals(listOf(null to 0, "READY" to 0), repository.orderRequests)
     }
 
     @Test

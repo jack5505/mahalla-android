@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
-import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueActionRules
@@ -43,6 +42,13 @@ class BusinessQueueViewModel @Inject constructor(
      */
     private var loadJob: Job? = null
 
+    /**
+     * Reload, отменённый или отложенный ради действия над талоном (см.
+     * [preemptReload]), — не потерянный: он повторится сам, как только
+     * действие закончится ([replayReloadIfPending]), issue #272 (попытка 2).
+     */
+    private var reloadPending = false
+
     init {
         load()
     }
@@ -50,7 +56,7 @@ class BusinessQueueViewModel @Inject constructor(
     override fun onEvent(event: BusinessQueueEvent) {
         when (event) {
             BusinessQueueEvent.ScreenResumed ->
-                if (!currentState.entries.isLoading && !currentState.isRefreshing) {
+                onScreenResumed(isLoadInFlight = { loadJob?.isActive == true }) {
                     load(showLoading = false)
                 }
 
@@ -61,7 +67,32 @@ class BusinessQueueViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Действие над талоном всегда важнее фонового reload, независимо от
+     * порядка: его ответ, если reload ещё летит, устарел по определению и
+     * откатил бы то, что действие вот-вот применит (нашло ревью, issue #272).
+     * Поэтому действие не ждёт reload, а обрывает его — а не наоборот.
+     */
+    private fun preemptReload() {
+        if (loadJob?.isActive == true) reloadPending = true
+        loadJob?.cancel()
+    }
+
+    private fun replayReloadIfPending() {
+        if (reloadPending) {
+            reloadPending = false
+            load(showLoading = false)
+        }
+    }
+
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
+        if (currentState.isBusy) {
+            // Действие над талоном в полёте — его ответ и должен победить.
+            // Reload не потерян: [replayReloadIfPending] перечитает очередь,
+            // как только действие завершится.
+            reloadPending = true
+            return
+        }
         loadJob?.cancel()
         updateState {
             copy(
@@ -110,18 +141,25 @@ class BusinessQueueViewModel @Inject constructor(
      * работы с очередью. Позиции соседей при этом сервер пересчитал, и они
      * доедут на ближайшем обновлении — показать чужую позицию на секунду
      * устаревшей безопаснее, чем дёргать список на каждое нажатие.
+     *
+     * Если фоновый reload уже в полёте, [preemptReload] его обрывает: более
+     * старый ответ не может откатить то, что вот-вот применит действие
+     * (нашло ревью, issue #272).
      */
     private fun act(ticketId: String, action: QueueAction) {
-        val state = currentState
-        if (state.isBusy) return
+        if (currentState.isBusy) return
         val entry = entryOrNull(ticketId) ?: return
         if (!QueueActionRules.isAllowed(entry.status, action)) return
 
+        preemptReload()
         updateState { copy(pendingTicketId = ticketId, actionFailure = null) }
         viewModelScope.launch {
             when (val result = repository.act(placeId, ticketId, action)) {
-                is ApiResult.Failure -> updateState {
-                    copy(pendingTicketId = null, actionFailure = result.failure)
+                is ApiResult.Failure -> {
+                    updateState {
+                        copy(pendingTicketId = null, actionFailure = result.failure)
+                    }
+                    replayReloadIfPending()
                 }
 
                 is ApiResult.Success -> {
@@ -132,6 +170,7 @@ class BusinessQueueViewModel @Inject constructor(
                         )
                     }
                     emitEffect(BusinessQueueEffect.ActionDone(action, entry.userName))
+                    replayReloadIfPending()
                 }
             }
         }

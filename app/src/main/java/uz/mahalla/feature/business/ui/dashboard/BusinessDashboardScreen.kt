@@ -32,6 +32,7 @@ import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaListItem
@@ -47,12 +48,12 @@ import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessMetric
 import uz.mahalla.feature.business.domain.BusinessMetricKind
 import uz.mahalla.feature.business.domain.BusinessSection
-import uz.mahalla.feature.business.ui.BusinessInlineFailure
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
+import uz.mahalla.ui.theme.TabularNums
 
 /**
  * Бизнес-панель заведения (задача 12.1): метрики дня, «пауза» и вход в
@@ -147,7 +148,7 @@ private fun LazyListScope.dashboardItems(
         }
 
         is ScreenState.Error -> item(key = "access-error") {
-            BusinessInlineFailure(
+            InlineFailure(
                 failure = access.failure,
                 onRetry = { onEvent(BusinessDashboardEvent.Retry) },
             )
@@ -196,7 +197,7 @@ private fun LazyListScope.accessItems(
     }
 
     state.actionFailure?.let { failure ->
-        item(key = "action-failure") { BusinessInlineFailure(failure = failure) }
+        item(key = "action-failure") { InlineFailure(failure = failure) }
     }
 
     if (access.sections.isNotEmpty()) {
@@ -247,7 +248,7 @@ private fun LazyListScope.metricItems(
 
         // Отказ аналитики не прячет разделы: они грузятся другой ручкой.
         is ScreenState.Error -> item(key = "metrics-error") {
-            BusinessInlineFailure(
+            InlineFailure(
                 failure = metrics.failure,
                 onRetry = { onEvent(BusinessDashboardEvent.RetryMetrics) },
             )
@@ -294,7 +295,7 @@ private fun MetricRow(metric: BusinessMetric, modifier: Modifier = Modifier) {
 
                 BusinessMetricKind.Count -> MoneyFormatter.amount(metric.value)
             },
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleMedium.merge(TabularNums),
             color = MaterialTheme.colorScheme.onSurface,
         )
     }

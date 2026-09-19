@@ -182,12 +182,24 @@ class BusinessQueueViewModelTest {
         )
     }
 
+    /** Первый resume — открытие экрана, `init` уже загрузил очередь. */
+    @Test
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+
+        assertEquals(listOf(PLACE), repository.queueRequests)
+    }
+
     @Test
     fun `returning to the screen re-reads the queue`() = runTest {
         val repository = FakeBusinessRepository()
         val viewModel = viewModel(repository)
 
-        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // настоящий возврат
 
         assertEquals(listOf(PLACE, PLACE), repository.queueRequests)
     }
@@ -230,6 +242,74 @@ class BusinessQueueViewModelTest {
         // Запрет снимается вместе с запросом: следующее действие проходит.
         viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-2", QueueAction.Decline))
         assertEquals(2, repository.actions.size)
+    }
+
+    /**
+     * Пока действие над талоном не ответило, полный reload не стартует: иначе
+     * более старая очередь могла бы прийти позже и откатить только что
+     * применённое действие (нашло ревью, issue #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while an action is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.actGate = gate
+
+        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+        assertEquals("t-1", viewModel.state.value.pendingTicketId)
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed)
+        viewModel.onEvent(BusinessQueueEvent.Refreshed)
+
+        assertEquals(listOf(PLACE), repository.queueRequests)
+
+        gate.complete(Unit)
+        assertNull(viewModel.state.value.pendingTicketId)
+    }
+
+    /**
+     * Симметричная гонка, вторая попытка: действие над талоном не ждёт ещё не
+     * завершившийся reload — оно его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только действие ответит, и
+     * привозит уже свежий список (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего кнопки оставались
+     * нажимаемыми, но молча ничего не делали).
+     */
+    @Test
+    fun `an action cancels a reload in flight and the reload replays after it`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.queueGate = gate
+
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessQueueEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(listOf(PLACE, PLACE), repository.queueRequests)
+
+        viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
+
+        // Действие не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(1, repository.actions.size)
+        assertEquals(
+            WalkInStatus.InChair,
+            (viewModel.state.value.entries as ScreenState.Content).data.single().status,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённое
+        // действие — а не откатывает его устаревшим снимком.
+        repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.InChair)))
+        gate.complete(Unit)
+
+        assertEquals(listOf(PLACE, PLACE, PLACE), repository.queueRequests)
+        assertEquals(
+            WalkInStatus.InChair,
+            (viewModel.state.value.entries as ScreenState.Content).data.single().status,
+        )
     }
 
     @Test

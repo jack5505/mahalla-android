@@ -52,7 +52,7 @@ import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.domain.BarberService
-import uz.mahalla.feature.booking.ui.InlineFailure
+import uz.mahalla.core.ui.components.InlineFailure
 import uz.mahalla.feature.freelancer.domain.Freelancer
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderDraft

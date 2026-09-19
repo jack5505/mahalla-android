@@ -1,11 +1,13 @@
 package uz.mahalla.feature.business.ui.menu
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -236,6 +238,145 @@ class BusinessMenuViewModelTest {
 
         assertFalse(viewModel.state.value.isFormVisible)
         assertEquals(NewMenuItemForm(), viewModel.state.value.form)
+    }
+
+    /** Первый resume — открытие экрана, `init` уже загрузил меню. */
+    @Test
+    fun `the first resume after opening does not duplicate the initial load`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed)
+
+        assertEquals(listOf(FakeBusinessRepository.PLACE_ID), repository.menuRequests)
+    }
+
+    @Test
+    fun `returning to the screen re-reads the menu`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // настоящий возврат
+
+        assertEquals(
+            listOf(FakeBusinessRepository.PLACE_ID, FakeBusinessRepository.PLACE_ID),
+            repository.menuRequests,
+        )
+    }
+
+    /**
+     * Пока стоп-лист не ответил, полный reload не стартует: иначе более
+     * старое меню могло бы прийти позже и откатить только что применённое
+     * переключение (нашло ревью, issue #272).
+     */
+    @Test
+    fun `screen resumed and refresh do not reload while the stop list is in flight`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val gate = CompletableDeferred<Unit>()
+        val viewModel = viewModel(repository)
+        repository.toggleStopListGate = gate
+
+        viewModel.onEvent(BusinessMenuEvent.StopListToggled("i-1"))
+        assertEquals("i-1", viewModel.state.value.pendingItemId)
+
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed)
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed)
+        viewModel.onEvent(BusinessMenuEvent.Refreshed)
+
+        assertEquals(listOf(FakeBusinessRepository.PLACE_ID), repository.menuRequests)
+
+        gate.complete(Unit)
+        assertNull(viewModel.state.value.pendingItemId)
+    }
+
+    /**
+     * Симметричная гонка, вторая попытка: стоп-лист не ждёт ещё не
+     * завершившийся reload — он его обрывает и уходит на сервер сразу,
+     * потому что ответ reload'а в этот момент уже устарел по определению.
+     * Обрыв не теряется: reload повторяется, как только стоп-лист ответит, и
+     * привозит уже свежее меню (нашло ревью, issue #272, попытка 2 — первая
+     * версия блокировала действие вместо reload, из-за чего переключатель
+     * оставался нажимаемым, но молча ничего не делал).
+     */
+    @Test
+    fun `the stop list cancels a reload in flight and the reload replays after it`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.menuGate = gate
+
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // открытие — пропускается
+        viewModel.onEvent(BusinessMenuEvent.ScreenResumed) // reload, завис на gate
+        assertEquals(
+            listOf(FakeBusinessRepository.PLACE_ID, FakeBusinessRepository.PLACE_ID),
+            repository.menuRequests,
+        )
+
+        viewModel.onEvent(BusinessMenuEvent.StopListToggled("i-1"))
+
+        // Стоп-лист не ждёт зависший reload — уходит на сервер немедленно.
+        assertEquals(listOf("i-1" to true), repository.toggledItems)
+        assertTrue(
+            (viewModel.state.value.menu as ScreenState.Content).data.item("i-1")!!.isStopped,
+        )
+
+        // К моменту, когда reload повторится, сервер уже отдаёт применённый
+        // стоп-лист — а не откатывает его устаревшим снимком.
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = false)))
+        gate.complete(Unit)
+
+        assertEquals(
+            listOf(
+                FakeBusinessRepository.PLACE_ID,
+                FakeBusinessRepository.PLACE_ID,
+                FakeBusinessRepository.PLACE_ID,
+            ),
+            repository.menuRequests,
+        )
+        assertTrue(
+            (viewModel.state.value.menu as ScreenState.Content).data.item("i-1")!!.isStopped,
+        )
+    }
+
+    /**
+     * `createItem()` не переигрывает reload после себя (он уже привёз меню
+     * целиком), а значит и не проходит через сброс `isRefreshing` в начале
+     * [BusinessMenuViewModel.load]. Если pull-to-refresh был в полёте и его
+     * оборвал `preemptReload()`, индикатор обязан сброситься самим `save()` —
+     * иначе крутился бы до следующей загрузки (нашло ревью, issue #272,
+     * попытка 3).
+     */
+    @Test
+    fun `saving an item resets a refresh indicator stuck by a cancelled reload`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.menuGate = gate
+
+        viewModel.onEvent(BusinessMenuEvent.Refreshed) // pull-to-refresh, завис на gate
+        assertTrue(viewModel.state.value.isRefreshing)
+
+        viewModel.onEvent(BusinessMenuEvent.AddItemClicked)
+        viewModel.onEvent(BusinessMenuEvent.NameChanged("Osh"))
+        viewModel.onEvent(BusinessMenuEvent.PriceChanged("32000"))
+        repository.createItemResult = ApiResult.Success(
+            menu(item("i-1", available = true), item("i-2", available = true)),
+        )
+
+        viewModel.onEvent(BusinessMenuEvent.SaveClicked)
+
+        assertFalse(viewModel.state.value.isRefreshing)
+        assertEquals(2, (viewModel.state.value.menu as ScreenState.Content).data.sections
+            .single().items.size)
+        // Reload не повторяется — createItem() уже привёз то же самое.
+        assertEquals(
+            listOf(FakeBusinessRepository.PLACE_ID, FakeBusinessRepository.PLACE_ID),
+            repository.menuRequests,
+        )
     }
 
     private fun viewModel(repository: FakeBusinessRepository) = BusinessMenuViewModel(
