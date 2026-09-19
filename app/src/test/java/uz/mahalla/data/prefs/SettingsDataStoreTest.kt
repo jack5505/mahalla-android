@@ -20,6 +20,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.core.locale.AppLanguage
+import uz.mahalla.testutil.FakeSessionCipher
 import java.io.File
 import java.io.IOException
 
@@ -89,7 +90,7 @@ class SettingsDataStoreTest {
 
     @Test
     fun `session round trips and is fully cleared`() = runTest {
-        val sessionStore = DataStoreSessionStore(newDataStore())
+        val sessionStore = DataStoreSessionStore(newDataStore(), FakeSessionCipher())
         assertNull(sessionStore.current())
 
         sessionStore.save(Session("access-1", "refresh-1", expiresAtEpochSeconds = 4_600))
@@ -123,7 +124,7 @@ class SettingsDataStoreTest {
 
     @Test
     fun `unreadable session reads as no session`() = runTest {
-        assertNull(DataStoreSessionStore(FailingDataStore()).current())
+        assertNull(DataStoreSessionStore(FailingDataStore(), FakeSessionCipher()).current())
     }
 
     @Test
