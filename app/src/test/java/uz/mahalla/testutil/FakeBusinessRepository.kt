@@ -63,7 +63,9 @@ class FakeBusinessRepository : BusinessRepository {
     val actions = mutableListOf<Triple<String, String, QueueAction>>()
     val paused = mutableListOf<Pair<String, Boolean>>()
     val orderRequests = mutableListOf<Pair<String?, Int>>()
+    val orderCategoryRequests = mutableListOf<PlaceCategory>()
     val statusUpdates = mutableListOf<Pair<String, OrderStatus>>()
+    val statusUpdateCategories = mutableListOf<PlaceCategory>()
     val toggledItems = mutableListOf<Pair<String, Boolean>>()
     val createdItems = mutableListOf<NewMenuItemForm>()
 
@@ -119,8 +121,10 @@ class FakeBusinessRepository : BusinessRepository {
         status: String?,
         page: Int,
         size: Int,
+        category: PlaceCategory,
     ): ApiResult<BusinessOrderPage> {
         orderRequests += status to page
+        orderCategoryRequests += category
         return orderPages[status to page] ?: defaultOrderPage
     }
 
@@ -128,8 +132,10 @@ class FakeBusinessRepository : BusinessRepository {
         placeId: String,
         orderId: String,
         status: OrderStatus,
+        category: PlaceCategory,
     ): ApiResult<BusinessOrder> {
         statusUpdates += orderId to status
+        statusUpdateCategories += category
         return updateOrderResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
     }
 

@@ -58,13 +58,28 @@ sealed interface BusinessDashboardEvent : UiEvent {
 
 sealed interface BusinessDashboardEffect : UiEffect {
     data class OpenQueue(val placeId: String, val placeName: String) : BusinessDashboardEffect
-    data class OpenOrders(val placeId: String, val placeName: String) : BusinessDashboardEffect
+
+    /**
+     * @param category `PlaceCategory.apiValue` — заказы одежды и еды живут на
+     * разных ручках (issue #187), и экран заказов должен знать, какую звать.
+     */
+    data class OpenOrders(
+        val placeId: String,
+        val placeName: String,
+        val category: String,
+    ) : BusinessDashboardEffect
+
     data class OpenMenu(val placeId: String, val placeName: String) : BusinessDashboardEffect
 }
 
 /** Куда ведёт раздел. Отдельно от [BusinessSection] — домен про экраны не знает. */
 internal fun BusinessSection.effect(access: BusinessAccess): BusinessDashboardEffect = when (this) {
     BusinessSection.Queue -> BusinessDashboardEffect.OpenQueue(access.placeId, access.placeName)
-    BusinessSection.Orders -> BusinessDashboardEffect.OpenOrders(access.placeId, access.placeName)
+    BusinessSection.Orders -> BusinessDashboardEffect.OpenOrders(
+        access.placeId,
+        access.placeName,
+        access.category.apiValue,
+    )
+
     BusinessSection.Menu -> BusinessDashboardEffect.OpenMenu(access.placeId, access.placeName)
 }

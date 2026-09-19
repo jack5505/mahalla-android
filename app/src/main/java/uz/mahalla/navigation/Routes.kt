@@ -679,11 +679,20 @@ data class BusinessQueueRoute(
     val placeName: String = "",
 )
 
-/** Входящие заказы (задача 12.3). */
+/**
+ * Входящие заказы (задача 12.3).
+ *
+ * @param category `PlaceCategory.apiValue` заведения (`FOOD`/`FASHION`) —
+ * решает, какую ручку звать: `food/places/{id}/orders` или
+ * `fashion/stores/{id}/orders` (issue #187). Экран открывается только с
+ * дашборда, где категория уже известна из `places/my`, поэтому поле
+ * обязательное, как и `placeId`.
+ */
 @Serializable
 data class BusinessOrdersRoute(
     val placeId: String,
     val placeName: String = "",
+    val category: String,
 )
 
 /** Меню и стоп-лист (задача 12.4). */
@@ -700,10 +709,14 @@ data class BusinessMenuRoute(
  * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
  * проверяет `RoutesSerializationTest`.
  *
- * Один объект на четыре маршрута, а не четыре одинаковых: поля у них те же, и
+ * Один объект на четыре маршрута, а не четыре одинаковых: поля у них те же
+ * (кроме [CATEGORY] — он только у [BusinessOrdersRoute], issue #187), и
  * разойтись они могут только по ошибке.
  */
 object BusinessArgs {
     const val PLACE_ID = "placeId"
     const val PLACE_NAME = "placeName"
+
+    /** Только у [BusinessOrdersRoute] — см. его KDoc. */
+    const val CATEGORY = "category"
 }

@@ -64,7 +64,7 @@ import uz.mahalla.ui.theme.Spacing
 @Composable
 fun BusinessDashboardScreen(
     onOpenQueue: (String, String) -> Unit,
-    onOpenOrders: (String, String) -> Unit,
+    onOpenOrders: (String, String, String) -> Unit,
     onOpenMenu: (String, String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -81,7 +81,7 @@ fun BusinessDashboardScreen(
             when (effect) {
                 is BusinessDashboardEffect.OpenQueue -> onOpenQueue(effect.placeId, effect.placeName)
                 is BusinessDashboardEffect.OpenOrders ->
-                    onOpenOrders(effect.placeId, effect.placeName)
+                    onOpenOrders(effect.placeId, effect.placeName, effect.category)
 
                 is BusinessDashboardEffect.OpenMenu -> onOpenMenu(effect.placeId, effect.placeName)
             }

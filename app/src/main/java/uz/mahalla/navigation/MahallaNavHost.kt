@@ -483,8 +483,8 @@ fun MahallaNavHost(
                 onOpenQueue = { placeId, placeName ->
                     navController.navigate(BusinessQueueRoute(placeId, placeName))
                 },
-                onOpenOrders = { placeId, placeName ->
-                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
+                onOpenOrders = { placeId, placeName, category ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName, category))
                 },
                 onOpenMenu = { placeId, placeName ->
                     navController.navigate(BusinessMenuRoute(placeId, placeName))
