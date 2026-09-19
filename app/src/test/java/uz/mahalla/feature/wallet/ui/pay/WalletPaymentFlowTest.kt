@@ -18,6 +18,7 @@ import uz.mahalla.data.security.PaymentConfirmationMethod
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletPaymentRejection
 import uz.mahalla.feature.wallet.domain.WalletStatus
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakePaymentConfirmationPolicy
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeWalletRepository
@@ -37,6 +38,7 @@ class WalletPaymentFlowTest {
     )
     private val pinStorage = FakePinStorage(initialPin = PIN)
     private val policy = FakePaymentConfirmationPolicy(PaymentConfirmationMethod.Pin)
+    private val biometricCipher = FakeBiometricCipher()
 
     /** Ключи всех попыток отправки — по ним видно и повтор, и второй платёж. */
     private val sentKeys = mutableListOf<String>()
@@ -220,9 +222,23 @@ class WalletPaymentFlowTest {
         val flow = flow()
         flow.start(amountSum = 84_000)
 
-        flow.biometricConfirmed()
+        flow.biometricConfirmed(FakeBiometricCipher.fakeCryptoObject())
 
         assertEquals(1, sentKeys.size)
+    }
+
+    @Test
+    fun `a crypto operation that fails falls back to the pin`() = runTest {
+        // Ключ не смог расшифровать маркер (issue #318) — успешный колбэк
+        // промпта сам по себе оплату не подтверждает.
+        policy.method = PaymentConfirmationMethod.Biometric
+        val flow = flow(biometricCipher = FakeBiometricCipher(verificationSucceeds = false))
+        flow.start(amountSum = 84_000)
+
+        flow.biometricConfirmed(FakeBiometricCipher.fakeCryptoObject())
+
+        assertEquals(PaymentConfirmationMethod.Pin, flow.state.value?.method)
+        assertEquals(emptyList<String>(), sentKeys)
     }
 
     @Test
@@ -269,10 +285,13 @@ class WalletPaymentFlowTest {
         assertTrue(sentKeys[0] != sentKeys[1])
     }
 
-    private fun TestScope.flow(): WalletPaymentFlow<String> = WalletPaymentFlow(
+    private fun TestScope.flow(
+        biometricCipher: FakeBiometricCipher = this@WalletPaymentFlowTest.biometricCipher,
+    ): WalletPaymentFlow<String> = WalletPaymentFlow(
         walletRepository = walletRepository,
         pinStorage = pinStorage,
         confirmationPolicy = policy,
+        biometricCipher = biometricCipher,
         // Немедленная отправка: шаги оплаты — цепочка корутин, и ждать их
         // руками в каждом тесте значило бы проверять диспетчер, а не оплату.
         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),

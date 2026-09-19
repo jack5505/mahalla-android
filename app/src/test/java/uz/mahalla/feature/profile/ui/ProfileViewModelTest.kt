@@ -36,6 +36,7 @@ import uz.mahalla.feature.notifications.push.NotificationChannels
 import uz.mahalla.feature.profile.domain.DeviceSession
 import uz.mahalla.testutil.FakeAuthRepository
 import uz.mahalla.testutil.FakeBiometricAvailability
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakeHttpInspector
 import uz.mahalla.testutil.FakeMediaRepository
 import uz.mahalla.testutil.FakePreferencesDataStore
@@ -582,7 +583,7 @@ class ProfileViewModelTest {
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
 
-        assertEquals(ProfileEffect.ShowBiometricPrompt, viewModel.effects.first())
+        assertTrue(viewModel.effects.first() is ProfileEffect.ShowBiometricPrompt)
         // Флаг пишется только после подтверждения: закрытый диалог не должен
         // оставить «биометрия включена».
         assertFalse(settings.current().biometricEnabled)
@@ -594,20 +595,22 @@ class ProfileViewModelTest {
         val viewModel = viewModel(settings = settings)
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
-        viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded)
+        viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         assertTrue(settings.current().biometricEnabled)
     }
 
     @Test
-    fun `disabling biometrics writes the flag without a prompt`() = runTest {
+    fun `disabling biometrics writes the flag without a prompt and clears the key`() = runTest {
         val settings = SettingsDataStore(FakePreferencesDataStore())
         settings.setBiometricEnabled(true)
-        val viewModel = viewModel(settings = settings)
+        val cipher = FakeBiometricCipher()
+        val viewModel = viewModel(settings = settings, biometricCipher = cipher)
 
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = false))
 
         assertFalse(settings.current().biometricEnabled)
+        assertTrue(cipher.cleared)
     }
 
     @Test
@@ -623,6 +626,23 @@ class ProfileViewModelTest {
         viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
 
         assertFalse(viewModel.state.value.biometricPromptFailed)
+    }
+
+    @Test
+    fun `a crypto operation that fails does not turn biometrics on`() = runTest {
+        // Датчик отработал, но ключ не смог зашифровать маркер (issue #318)
+        // — успешный колбэк промпта сам по себе ничего не доказывает.
+        val settings = SettingsDataStore(FakePreferencesDataStore())
+        val viewModel = viewModel(
+            settings = settings,
+            biometricCipher = FakeBiometricCipher(enrollmentSucceeds = false),
+        )
+
+        viewModel.onEvent(ProfileEvent.BiometricToggled(enabled = true))
+        viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+
+        assertTrue(viewModel.state.value.biometricPromptFailed)
+        assertFalse(settings.current().biometricEnabled)
     }
 
     /**
@@ -665,6 +685,7 @@ class ProfileViewModelTest {
         media: FakeMediaRepository = FakeMediaRepository(),
         profile: FakeProfileRepository = FakeProfileRepository(profileStore),
         biometrics: FakeBiometricAvailability = FakeBiometricAvailability(),
+        biometricCipher: FakeBiometricCipher = FakeBiometricCipher(),
     ) = ProfileViewModel(
         settingsDataStore = settings,
         localeManager = RecreatingLocaleManager,
@@ -675,6 +696,7 @@ class ProfileViewModelTest {
         mediaRepository = media,
         profileRepository = profile,
         biometricAvailability = biometrics,
+        biometricCipher = biometricCipher,
         notificationChannels = NotificationChannels(
             context = ApplicationProvider.getApplicationContext(),
             settings = settings,

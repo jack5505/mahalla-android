@@ -11,6 +11,7 @@ import org.junit.Rule
 import org.junit.Test
 import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.data.security.BiometricStatus
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import java.io.IOException
@@ -27,8 +28,8 @@ class BiometricViewModelTest {
 
     private val onboardingRepository = FakeOnboardingRepository()
 
-    private fun viewModel(status: BiometricStatus) =
-        BiometricViewModel(onboardingRepository, FakeBiometricAvailability(status))
+    private fun viewModel(status: BiometricStatus, cipher: FakeBiometricCipher = FakeBiometricCipher()) =
+        BiometricViewModel(onboardingRepository, FakeBiometricAvailability(status), cipher)
 
     @Test
     fun `availability is read at start`() {
@@ -45,7 +46,7 @@ class BiometricViewModelTest {
         // back stack жива), и статус обязан перечитаться — иначе кнопка
         // «Включить» останется выключенной навсегда.
         val availability = FakeBiometricAvailability(BiometricStatus.NotEnrolled)
-        val viewModel = BiometricViewModel(onboardingRepository, availability)
+        val viewModel = BiometricViewModel(onboardingRepository, availability, FakeBiometricCipher())
         assertFalse(viewModel.state.value.canEnable)
 
         availability.status = BiometricStatus.Available
@@ -78,7 +79,7 @@ class BiometricViewModelTest {
 
         viewModel.onEvent(BiometricEvent.Enable)
 
-        assertEquals(BiometricEffect.ShowPrompt, viewModel.effects.first())
+        assertTrue(viewModel.effects.first() is BiometricEffect.ShowPrompt)
         // Ключевое: до подтверждения биометрия не считается включённой.
         assertTrue(onboardingRepository.biometricWrites.isEmpty())
     }
@@ -102,11 +103,42 @@ class BiometricViewModelTest {
     ) {
         val viewModel = viewModel(BiometricStatus.Available)
 
-        viewModel.onEvent(BiometricEvent.PromptSucceeded)
+        viewModel.onEvent(BiometricEvent.PromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
         advanceUntilIdle()
 
         assertEquals(listOf(true), onboardingRepository.biometricWrites)
         assertTrue(onboardingRepository.current.biometricEnabled)
+    }
+
+    @Test
+    fun `a crypto operation that fails does not turn the flag on`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Датчик отработал, но ключ не смог расшифровать маркер (issue #318)
+        // — успешный колбэк промпта сам по себе ничего не доказывает.
+        val cipher = FakeBiometricCipher(enrollmentSucceeds = false)
+        val viewModel = viewModel(BiometricStatus.Available, cipher)
+
+        viewModel.onEvent(BiometricEvent.PromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.promptFailed)
+        assertTrue(onboardingRepository.biometricWrites.isEmpty())
+    }
+
+    @Test
+    fun `enable does nothing when the keystore cannot prepare a crypto object`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val cipher = FakeBiometricCipher(enrollmentSucceeds = false)
+        val viewModel = viewModel(BiometricStatus.Available, cipher)
+
+        viewModel.onEvent(BiometricEvent.Enable)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.promptFailed)
+        assertFalse(viewModel.state.value.busy)
+        assertTrue(onboardingRepository.biometricWrites.isEmpty())
     }
 
     @Test

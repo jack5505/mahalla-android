@@ -166,7 +166,7 @@ fun ProfileScreen(
                 is ProfileEffect.OpenHttpInspector -> context.startActivity(effect.intent)
                 ProfileEffect.LoggedOut -> onLoggedOut()
 
-                ProfileEffect.ShowBiometricPrompt -> {
+                is ProfileEffect.ShowBiometricPrompt -> {
                     val activity = context.findFragmentActivity()
                     if (activity == null) {
                         // Без FragmentActivity (превью, тесты) промпт показать
@@ -178,7 +178,8 @@ fun ProfileScreen(
                             title = promptTitle,
                             subtitle = promptSubtitle,
                             negativeLabel = promptNegative,
-                            onSuccess = { viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded) },
+                            cryptoObject = effect.cryptoObject,
+                            onSuccess = { viewModel.onEvent(ProfileEvent.BiometricPromptSucceeded(it)) },
                             onCancelled = { viewModel.onEvent(ProfileEvent.BiometricPromptCancelled) },
                             onFailed = { viewModel.onEvent(ProfileEvent.BiometricPromptFailed) },
                         )
