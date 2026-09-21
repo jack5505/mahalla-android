@@ -1085,6 +1085,14 @@
     <string name="pharmacy_stock_edit_submit">Сохранить</string>
     <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
     <string name="pharmacy_stock_owner_count">Остаток: %1$d</string>
+    <!-- Правка и удаление товара (issue #288) -->
+    <string name="pharmacy_edit_product_action">Редактировать товар</string>
+    <string name="pharmacy_edit_product_title">Редактировать товар</string>
+    <string name="pharmacy_edit_product_submit">Сохранить</string>
+    <string name="pharmacy_delete_action">Удалить</string>
+    <string name="pharmacy_delete_title">Удалить товар</string>
+    <string name="pharmacy_delete_message">%1$s будет удалено безвозвратно. Это действие нельзя отменить.</string>
+    <string name="pharmacy_delete_confirm">Удалить</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">Игровые зоны</string>
     <string name="gaming_zones_empty_title">Зон пока нет</string>
@@ -1237,7 +1245,15 @@
     <string name="business_menu_stopped">%1$s — в стоп-листе</string>
     <string name="business_menu_resumed">%1$s снова в продаже</string>
     <string name="business_menu_created">%1$s добавлено</string>
+    <string name="business_menu_updated">%1$s обновлено</string>
+    <string name="business_menu_deleted">%1$s удалено</string>
     <string name="business_menu_add">Добавить позицию</string>
+    <string name="business_menu_edit_title">Редактировать позицию</string>
+    <string name="business_menu_edit_action">Редактировать</string>
+    <string name="business_menu_delete_action">Удалить</string>
+    <string name="business_menu_delete_title">Удалить позицию</string>
+    <string name="business_menu_delete_message">%1$s будет удалено безвозвратно. Если по позиции есть история заказов, вместо удаления снимите её с продажи переключателем «В продаже».</string>
+    <string name="business_menu_delete_confirm">Удалить</string>
     <string name="business_menu_save">Сохранить</string>
     <string name="business_menu_section">Раздел</string>
     <string name="business_menu_field_name">Название</string>
