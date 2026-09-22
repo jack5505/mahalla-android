@@ -13,6 +13,8 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.feature.fashion.domain.NewFashionProductDraft
+import uz.mahalla.feature.fashion.domain.NewFashionVariantDraft
 import uz.mahalla.feature.fashion.domain.ProductGender
 import uz.mahalla.feature.fashion.domain.ProductVariant
 
@@ -221,6 +223,138 @@ class FashionRepositoryTest {
 
         assertEquals(ApiError.NotFound, failure.error)
         assertEquals("Mahsulot topilmadi: p-1", failure.serverMessage)
+    }
+
+    @Test
+    fun `a new product is sent with price converted from som to tiyin`() = runTest {
+        server.enqueue(envelope("""{"id":"p-1","storeId":"$STORE","name":"Oq ko'ylak"}"""))
+
+        val draft = NewFashionProductDraft(
+            name = "Oq ko'ylak",
+            brand = "Mahalla",
+            gender = ProductGender.Unisex,
+            categoryId = "c-1",
+            priceText = "320000",
+        )
+        val result = repository().createProduct(STORE, draft)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/fashion/stores/$STORE/products", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, """"name":"Oq ko'ylak"""" in body)
+        assertTrue(body, """"brand":"Mahalla"""" in body)
+        assertTrue(body, """"gender":"UNISEX"""" in body)
+        assertTrue(body, """"categoryId":"c-1"""" in body)
+        // 320 000 сум — 32 000 000 тийинов (issue #149).
+        assertTrue(body, """"basePrice":32000000""" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `empty optional fields of a new product are absent, not null`() = runTest {
+        server.enqueue(envelope("""{"id":"p-1","storeId":"$STORE","name":"A"}"""))
+
+        repository().createProduct(STORE, NewFashionProductDraft(name = "A", priceText = "0"))
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "brand" in body)
+        assertFalse(body, "gender" in body)
+        assertFalse(body, "categoryId" in body)
+        assertFalse(body, "null" in body)
+    }
+
+    @Test
+    fun `an invalid product draft never reaches the network`() = runTest {
+        val result = repository().createProduct(STORE, NewFashionProductDraft(priceText = "1000"))
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewFashionProductDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a blank store id never reaches the network either`() = runTest {
+        val draft = NewFashionProductDraft(name = "A", priceText = "0")
+        val result = repository().createProduct("", draft)
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewFashionProductDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a new variant is sent with price converted from som to tiyin`() = runTest {
+        server.enqueue(envelope("""{"id":"v-1","colorName":"Oq","size":"M"}"""))
+
+        val draft = NewFashionVariantDraft(
+            colorName = "Oq",
+            colorHex = "#FFFFFF",
+            size = "M",
+            sku = "SKU-1",
+            priceText = "240000",
+            stockText = "10",
+        )
+        val result = repository().createVariant("p-1", draft)
+
+        val request = server.takeRequest()
+        assertEquals("POST", request.method)
+        assertEquals("/fashion/products/p-1/variants", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, """"colorName":"Oq"""" in body)
+        assertTrue(body, """"colorHex":"#FFFFFF"""" in body)
+        assertTrue(body, """"size":"M"""" in body)
+        assertTrue(body, """"sku":"SKU-1"""" in body)
+        // 240 000 сум — 24 000 000 тийинов (issue #149).
+        assertTrue(body, """"price":24000000""" in body)
+        assertTrue(body, """"stockQuantity":10""" in body)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `empty optional fields of a new variant are absent, not null`() = runTest {
+        server.enqueue(envelope("""{"id":"v-1","colorName":"Oq","size":"M"}"""))
+
+        repository().createVariant(
+            "p-1",
+            NewFashionVariantDraft(colorName = "Oq", size = "M", priceText = "0"),
+        )
+
+        val body = server.takeRequest().body.readUtf8()
+        assertFalse(body, "colorHex" in body)
+        assertFalse(body, "sku" in body)
+        assertFalse(body, "stockQuantity" in body)
+        assertFalse(body, "null" in body)
+    }
+
+    @Test
+    fun `an invalid variant draft never reaches the network`() = runTest {
+        val result = repository().createVariant(
+            "p-1",
+            NewFashionVariantDraft(colorName = "Oq", priceText = "1000"),
+        )
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewFashionVariantDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a blank product id never reaches the network either`() = runTest {
+        val draft = NewFashionVariantDraft(colorName = "Oq", size = "M", priceText = "0")
+        val result = repository().createVariant("", draft)
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewFashionVariantDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
     }
 
     private fun repository() = DefaultFashionRepository(api = fashionApi(server))

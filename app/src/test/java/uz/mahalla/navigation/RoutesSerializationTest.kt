@@ -483,13 +483,15 @@ class RoutesSerializationTest {
     @Test
     fun `fashion routes carry the arguments their view models read`() {
         val catalog = serializer<FashionCatalogRoute>().descriptor
-        assertEquals(2, catalog.elementsCount)
+        assertEquals(3, catalog.elementsCount)
         assertEquals(FashionArgs.PLACE_ID, catalog.getElementName(0))
         assertEquals(FashionArgs.PLACE_NAME, catalog.getElementName(1))
+        assertEquals(FashionArgs.IS_OWNER, catalog.getElementName(2))
 
         val product = serializer<FashionProductRoute>().descriptor
-        assertEquals(1, product.elementsCount)
+        assertEquals(2, product.elementsCount)
         assertEquals(FashionArgs.PRODUCT_ID, product.getElementName(0))
+        assertEquals(FashionArgs.IS_OWNER, product.getElementName(1))
 
         // Оформление идёт по одному магазину: серверная корзина общая, а
         // `PlaceOrderRequest` принимает ровно один `placeId`.

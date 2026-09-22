@@ -909,6 +909,22 @@
     <string name="fashion_catalog_empty_title">Bu yerda hozircha tovar yo\'q</string>
     <string name="fashion_catalog_empty_description">Do\'kon vitrinani hali to\'ldirmagan. Keyinroq kirib ko\'ring.</string>
 
+    <string name="fashion_add_product">Tovar qo\'shish</string>
+    <string name="fashion_new_product_title">Yangi tovar</string>
+    <string name="fashion_field_name">Nomi</string>
+    <string name="fashion_field_name_invalid">Nomini kiriting</string>
+    <string name="fashion_field_price">Narxi, so\'m</string>
+    <string name="fashion_field_price_invalid">Narxni kiriting</string>
+    <string name="fashion_field_brand">Brend</string>
+    <string name="fashion_field_description">Tavsif</string>
+    <string name="fashion_field_gender">Kimga mo\'ljallangan</string>
+    <string name="fashion_field_category">Kategoriya</string>
+    <string name="fashion_gender_male">Erkaklar</string>
+    <string name="fashion_gender_female">Ayollar</string>
+    <string name="fashion_gender_unisex">Unisex</string>
+    <string name="fashion_gender_kids">Bolalar</string>
+    <string name="fashion_create_submit">Qo\'shish</string>
+
     <string name="fashion_product_title">Tovar</string>
     <string name="fashion_product_unnamed">Nomi ko\'rsatilmagan tovar</string>
     <string name="fashion_product_unavailable">Tovar topilmadi</string>
@@ -925,6 +941,17 @@
     <string name="fashion_add_to_cart">Savatga qo\'shish</string>
     <string name="fashion_variant_out_of_stock">Tanlangan o\'lcham qolmagan. Boshqa o\'lcham yoki rangni tanlang.</string>
     <string name="fashion_open_cart">Savatni ochish</string>
+
+    <string name="fashion_add_variant">Variant qo\'shish</string>
+    <string name="fashion_new_variant_title">Yangi variant</string>
+    <string name="fashion_field_color_name">Rang nomi</string>
+    <string name="fashion_field_color_name_invalid">Rang nomini kiriting</string>
+    <string name="fashion_field_color_hex">Rang kodi (ixtiyoriy)</string>
+    <string name="fashion_field_size">O\'lcham</string>
+    <string name="fashion_field_size_invalid">O\'lchamni kiriting</string>
+    <string name="fashion_field_sku">SKU (ixtiyoriy)</string>
+    <string name="fashion_field_stock">Qoldiq (ixtiyoriy)</string>
+    <string name="fashion_field_stock_invalid">Butun son kiriting</string>
 
     <string name="fashion_cart_title">Savat</string>
     <string name="fashion_cart_empty_title">Savat bo\'sh</string>

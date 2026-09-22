@@ -903,6 +903,22 @@
     <string name="fashion_catalog_empty_title">Здесь пока нет товаров</string>
     <string name="fashion_catalog_empty_description">Магазин ещё не наполнил витрину. Загляните позже.</string>
 
+    <string name="fashion_add_product">Добавить товар</string>
+    <string name="fashion_new_product_title">Новый товар</string>
+    <string name="fashion_field_name">Название</string>
+    <string name="fashion_field_name_invalid">Введите название</string>
+    <string name="fashion_field_price">Цена, сум</string>
+    <string name="fashion_field_price_invalid">Введите цену</string>
+    <string name="fashion_field_brand">Бренд</string>
+    <string name="fashion_field_description">Описание</string>
+    <string name="fashion_field_gender">Кому предназначено</string>
+    <string name="fashion_field_category">Категория</string>
+    <string name="fashion_gender_male">Мужчинам</string>
+    <string name="fashion_gender_female">Женщинам</string>
+    <string name="fashion_gender_unisex">Унисекс</string>
+    <string name="fashion_gender_kids">Детям</string>
+    <string name="fashion_create_submit">Добавить</string>
+
     <string name="fashion_product_title">Товар</string>
     <string name="fashion_product_unnamed">Товар без названия</string>
     <string name="fashion_product_unavailable">Товар не найден</string>
@@ -919,6 +935,17 @@
     <string name="fashion_add_to_cart">В корзину</string>
     <string name="fashion_variant_out_of_stock">Выбранного размера нет в наличии. Выберите другой размер или цвет.</string>
     <string name="fashion_open_cart">Открыть корзину</string>
+
+    <string name="fashion_add_variant">Добавить вариант</string>
+    <string name="fashion_new_variant_title">Новый вариант</string>
+    <string name="fashion_field_color_name">Название цвета</string>
+    <string name="fashion_field_color_name_invalid">Введите название цвета</string>
+    <string name="fashion_field_color_hex">Код цвета (необязательно)</string>
+    <string name="fashion_field_size">Размер</string>
+    <string name="fashion_field_size_invalid">Введите размер</string>
+    <string name="fashion_field_sku">Артикул (необязательно)</string>
+    <string name="fashion_field_stock">Остаток (необязательно)</string>
+    <string name="fashion_field_stock_invalid">Введите целое число</string>
 
     <string name="fashion_cart_title">Корзина</string>
     <string name="fashion_cart_empty_title">Корзина пуста</string>

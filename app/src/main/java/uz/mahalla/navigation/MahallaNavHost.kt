@@ -472,6 +472,11 @@ fun MahallaNavHost(
                 onManageProducts = { placeId, placeName ->
                     navController.navigate(PharmacyRoute(placeId, placeName, isOwner = true))
                 },
+                // Витрина магазина одежды в режиме владельца (issue #280) —
+                // та же логика, что и у аптеки выше.
+                onManageFashionProducts = { placeId, placeName ->
+                    navController.navigate(FashionCatalogRoute(placeId, placeName, isOwner = true))
+                },
             )
         }
 
@@ -876,8 +881,10 @@ fun MahallaNavHost(
         // «мои заказы».
         composable<FashionCatalogRoute> {
             FashionCatalogScreen(
-                onProductClick = { productId ->
-                    navController.navigate(FashionProductRoute(productId))
+                // `isOwner` едет вместе с товаром на карточку (issue #280):
+                // там же живёт форма нового варианта.
+                onProductClick = { productId, isOwner ->
+                    navController.navigate(FashionProductRoute(productId, isOwner = isOwner))
                 },
                 onCartClick = { navController.navigate(FashionCartRoute) },
                 onBack = { navController.navigateUp() },

@@ -2,6 +2,7 @@ package uz.mahalla.feature.fashion.data
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import uz.mahalla.core.format.Money
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -13,6 +14,8 @@ import uz.mahalla.feature.fashion.domain.FashionCartRules
 import uz.mahalla.feature.fashion.domain.FashionCatalogPage
 import uz.mahalla.feature.fashion.domain.FashionCategory
 import uz.mahalla.feature.fashion.domain.FashionProductDetail
+import uz.mahalla.feature.fashion.domain.NewFashionProductDraft
+import uz.mahalla.feature.fashion.domain.NewFashionVariantDraft
 
 /**
  * Каталог одежды (issue #108): категории, витрина магазина, карточка товара.
@@ -32,6 +35,16 @@ interface FashionRepository {
     ): ApiResult<FashionCatalogPage>
 
     suspend fun product(productId: String): ApiResult<FashionProductDetail>
+
+    /**
+     * Новый товар магазина (issue #280, продолжение #252). Владелец правит
+     * своё заведение — доступ проверяет бэкенд, клиент только не даёт
+     * заведомо невалидному черновику уйти в сеть.
+     */
+    suspend fun createProduct(storeId: String, draft: NewFashionProductDraft): ApiResult<Unit>
+
+    /** Новый вариант товара — размер/цвет (issue #280). */
+    suspend fun createVariant(productId: String, draft: NewFashionVariantDraft): ApiResult<Unit>
 
     companion object {
         const val PAGE_SIZE = 20
@@ -74,6 +87,62 @@ class DefaultFashionRepository @Inject constructor(
             is ApiResult.Success -> result.data.toDomain()
                 ?.let { ApiResult.Success(it) }
                 ?: ApiResult.Failure(ApiError.Serialization)
+        }
+    }
+
+    /**
+     * Черновик уже проверен формой (`canSubmit`), но повторная проверка тут
+     * — не подстраховка от опечатки, а защита от вызова репозитория в обход
+     * экрана (как и у [uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository]).
+     */
+    override suspend fun createProduct(
+        storeId: String,
+        draft: NewFashionProductDraft,
+    ): ApiResult<Unit> {
+        val price = draft.priceSum
+        if (storeId.isBlank() || !draft.canSubmit || price == null) {
+            return ApiResult.Failure(ApiError.Business(NewFashionProductDraft.INVALID_CODE))
+        }
+
+        return apiCall {
+            api.createProduct(
+                storeId = storeId,
+                body = CreateFashionProductRequest(
+                    name = draft.name.trim(),
+                    description = draft.description.trim().takeIf(String::isNotEmpty),
+                    brand = draft.brand.trim().takeIf(String::isNotEmpty),
+                    material = draft.material.trim().takeIf(String::isNotEmpty),
+                    careInstructions = draft.careInstructions.trim().takeIf(String::isNotEmpty),
+                    sizeGuide = draft.sizeGuide.trim().takeIf(String::isNotEmpty),
+                    gender = draft.gender?.apiValue?.takeIf(String::isNotEmpty),
+                    categoryId = draft.categoryId?.takeIf(String::isNotBlank),
+                    basePrice = Money.somToTiyin(price),
+                ),
+            ).ensureSuccess()
+        }
+    }
+
+    override suspend fun createVariant(
+        productId: String,
+        draft: NewFashionVariantDraft,
+    ): ApiResult<Unit> {
+        val price = draft.priceSum
+        if (productId.isBlank() || !draft.canSubmit || price == null) {
+            return ApiResult.Failure(ApiError.Business(NewFashionVariantDraft.INVALID_CODE))
+        }
+
+        return apiCall {
+            api.createVariant(
+                productId = productId,
+                body = CreateFashionVariantRequest(
+                    colorName = draft.colorName.trim(),
+                    colorHex = draft.colorHex.trim().takeIf(String::isNotEmpty),
+                    size = draft.size.trim(),
+                    sku = draft.sku.trim().takeIf(String::isNotEmpty),
+                    price = Money.somToTiyin(price),
+                    stockQuantity = draft.stockQuantity,
+                ),
+            ).ensureSuccess()
         }
     }
 }
