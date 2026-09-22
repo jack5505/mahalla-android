@@ -79,6 +79,22 @@ class TokenAuthenticator @Inject constructor(
      */
     private var lastAmbiguousRefreshFailureAt: Instant? = null
 
+    /**
+     * Обнулить счётчик неоднозначных провалов refresh. Сессию пишут и стирают
+     * ещё в нескольких местах мимо этого класса — `AuthRepository.signIn()`
+     * (а значит и повторный вход после `logout()`/`clearLocalIdentity()`).
+     * Без сброса застрявший на 1–2 счёт из прежней сессии добивает себя до
+     * порога первым же неоднозначным ответом в новой и стирает её мгновенно —
+     * тот же цикл «вход → платный SMS → моментальный выход», от которого
+     * защищает issue #138 (issue #309).
+     */
+    fun reset() {
+        synchronized(this) {
+            consecutiveAmbiguousRefreshFailures = 0
+            lastAmbiguousRefreshFailureAt = null
+        }
+    }
+
     override fun authenticate(route: Route?, response: Response): Request? {
         if (attemptCount(response) >= MAX_ATTEMPTS) return null
 
@@ -126,8 +142,7 @@ class TokenAuthenticator @Inject constructor(
                     // Та же причина, что и у сброса ниже: следующий вход пишет
                     // сессию мимо этого класса, и застрявший счётчик убил бы
                     // её на первом же неоднозначном ответе (issue #198).
-                    consecutiveAmbiguousRefreshFailures = 0
-                    lastAmbiguousRefreshFailureAt = null
+                    reset()
                     return@synchronized null
                 }
                 // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать
@@ -168,8 +183,7 @@ class TokenAuthenticator @Inject constructor(
                             // `TokenAuthenticator`, так что без явного сброса
                             // первый же неоднозначный ответ в новой сессии сразу
                             // добивает счёт до порога и стирает её мгновенно.
-                            consecutiveAmbiguousRefreshFailures = 0
-                            lastAmbiguousRefreshFailureAt = null
+                            reset()
                         }
                     }
                     return@synchronized null
@@ -178,8 +192,7 @@ class TokenAuthenticator @Inject constructor(
                 // не двигаем: он не про эти причины, они уже разобраны выше.
                 return@synchronized null
             }
-            consecutiveAmbiguousRefreshFailures = 0
-            lastAmbiguousRefreshFailureAt = null
+            reset()
 
             runBlocking {
                 sessionStore.save(
