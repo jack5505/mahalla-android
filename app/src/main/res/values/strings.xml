@@ -1211,6 +1211,24 @@
     <string name="business_section_orders_description">Qabul qilish va holatini o\'zgartirish</string>
     <string name="business_section_menu">Menyu</string>
     <string name="business_section_menu_description">Taomlar va stop-ro\'yxat</string>
+    <string name="business_section_earnings">Daromad</string>
+    <string name="business_section_earnings_description">Balans, tarix va pul yechish</string>
+
+    <!-- Заработок (issue #290): баланс бизнес-кошелька, история, вывод -->
+    <string name="business_earnings_available">Yechish mumkin</string>
+    <string name="business_earnings_history_empty">Hozircha tushum yo\'q.</string>
+    <string name="business_earnings_payout">Pul yechish</string>
+    <string name="business_earnings_payout_sent">Ariza yuborildi</string>
+    <string name="business_earnings_payout_status_pending">Ko\'rib chiqilmoqda</string>
+    <string name="business_earnings_payout_status_approved">Tasdiqlandi</string>
+    <string name="business_earnings_payout_status_completed">Yechib berildi</string>
+    <string name="business_earnings_payout_status_rejected">Rad etildi</string>
+    <string name="business_earnings_payout_title">Pul yechish arizasi</string>
+    <string name="business_earnings_payout_amount">Summa</string>
+    <string name="business_earnings_payout_card">Karta raqami</string>
+    <string name="business_earnings_payout_error_amount">Summani kiriting.</string>
+    <string name="business_earnings_payout_error_card">Karta raqami 16 ta raqamdan iborat bo\'lishi kerak.</string>
+    <string name="business_earnings_payout_submit">Yuborish</string>
 
     <string name="business_queue_next_title">Navbatdagi</string>
     <string name="business_queue_call_next">Keyingisini chaqirish</string>

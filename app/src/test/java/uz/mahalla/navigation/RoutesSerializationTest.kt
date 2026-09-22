@@ -537,6 +537,7 @@ class RoutesSerializationTest {
             serializer<BusinessRoute>().descriptor,
             serializer<BusinessQueueRoute>().descriptor,
             serializer<BusinessMenuRoute>().descriptor,
+            serializer<BusinessEarningsRoute>().descriptor,
         ).forEach { descriptor ->
             assertEquals(
                 expected,
@@ -564,17 +565,24 @@ class RoutesSerializationTest {
 
         val menu = BusinessMenuRoute(placeId = "p-1")
         assertEquals(menu, json.decodeFromString<BusinessMenuRoute>(json.encodeToString(menu)))
+
+        val earnings = BusinessEarningsRoute(placeId = "p-1")
+        assertEquals(
+            earnings,
+            json.decodeFromString<BusinessEarningsRoute>(json.encodeToString(earnings)),
+        )
     }
 
     @Test
     fun `business routes are distinguishable from each other`() {
-        // Поля у всех четырёх почти одинаковые, а экраны разные: перепутанный
+        // Поля у всех пяти почти одинаковые, а экраны разные: перепутанный
         // `composable<…>` привёл бы к меню вместо очереди.
         val names = listOf(
             serializer<BusinessRoute>().descriptor.serialName,
             serializer<BusinessQueueRoute>().descriptor.serialName,
             serializer<BusinessOrdersRoute>().descriptor.serialName,
             serializer<BusinessMenuRoute>().descriptor.serialName,
+            serializer<BusinessEarningsRoute>().descriptor.serialName,
         )
 
         assertEquals(names.size, names.toSet().size)

@@ -715,13 +715,24 @@ data class BusinessMenuRoute(
 )
 
 /**
- * Имена аргументов всех четырёх маршрутов панели — ViewModel читают их из
+ * Заработок: баланс бизнес-кошелька, история начислений и заявка на вывод
+ * (issue #290). `placeId` — только вход в панель, сам кошелёк общий для всех
+ * заведений владельца ([BusinessSection.Earnings]).
+ */
+@Serializable
+data class BusinessEarningsRoute(
+    val placeId: String,
+    val placeName: String = "",
+)
+
+/**
+ * Имена аргументов всех пяти маршрутов панели — ViewModel читают их из
  * `SavedStateHandle` напрямую, как [MyAppointmentsArgs]: `toRoute()` разбирает
  * маршрут через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
  * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
  * проверяет `RoutesSerializationTest`.
  *
- * Один объект на четыре маршрута, а не четыре одинаковых: поля у них те же
+ * Один объект на пять маршрутов, а не пять одинаковых: поля у них те же
  * (кроме [CATEGORY] — он только у [BusinessOrdersRoute], issue #187), и
  * разойтись они могут только по ошибке.
  */

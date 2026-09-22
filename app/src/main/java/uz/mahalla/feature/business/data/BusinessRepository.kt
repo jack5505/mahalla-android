@@ -1,6 +1,8 @@
 package uz.mahalla.feature.business.data
 
 import uz.mahalla.core.format.Money
+import uz.mahalla.core.format.parseServerInstant
+import uz.mahalla.core.format.tiyinToSom
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -14,13 +16,25 @@ import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderPage
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.NewMenuItemValidator
+import uz.mahalla.feature.business.domain.Payout
+import uz.mahalla.feature.business.domain.PayoutStatus
+import uz.mahalla.feature.business.domain.PayoutValidator
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
+import uz.mahalla.feature.business.domain.maskCardNumber
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.fashion.data.FashionApi
 import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.role.data.ProviderRepository
+import uz.mahalla.feature.wallet.data.PayoutCreateRequest
+import uz.mahalla.feature.wallet.data.PayoutDto
+import uz.mahalla.feature.wallet.data.TransactionPageDto
+import uz.mahalla.feature.wallet.data.WalletApi
+import uz.mahalla.feature.wallet.data.WalletDto
+import uz.mahalla.feature.wallet.data.toDomain
+import uz.mahalla.feature.wallet.domain.Wallet
+import uz.mahalla.feature.wallet.domain.WalletTransactionPage
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -120,6 +134,34 @@ interface BusinessRepository {
     /** Удаление позиции меню (issue #288, задача 12.4 бэкенда — #221). */
     suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu>
 
+    /**
+     * Баланс бизнес-кошелька (issue #290, бэкенд jack5505/mahalla#223).
+     * `GET wallet/business` — та же схема `WalletResponse`, что у личного
+     * кошелька, поэтому и домен тот же: [Wallet].
+     */
+    suspend fun earningsWallet(): ApiResult<Wallet>
+
+    /**
+     * История начислений (issue #290). Отдельной ручки для бизнес-кошелька у
+     * бэкенда нет — отдаёт та же `GET wallet/transactions`, что и у личного
+     * кошелька (`docs/API-CONTRACT.md`): комиссия и разворот при возврате
+     * видны как обычные записи истории, своего разбора под них не нужно.
+     */
+    suspend fun earningsHistory(
+        page: Int = 0,
+        size: Int = PAGE_SIZE,
+    ): ApiResult<WalletTransactionPage>
+
+    /**
+     * Заявка на вывод.
+     *
+     * Сумма и номер карты проверяются здесь только тем, что подтверждено
+     * схемой (`amount > 0`, `cardNumber` — 16 цифр): ни минимума вывода, ни
+     * комиссии контракт не называет, и придумывать их на клиенте нельзя
+     * (issue #290).
+     */
+    suspend fun requestPayout(amountSum: Long, cardNumber: String): ApiResult<Payout>
+
     companion object {
         /** Код отказа, когда заведения нет среди «моих». */
         const val NO_ACCESS_CODE = BusinessAccess.NO_ACCESS_CODE
@@ -147,6 +189,7 @@ interface BusinessRepository {
 class DefaultBusinessRepository @Inject constructor(
     private val api: BusinessApi,
     private val fashionApi: FashionApi,
+    private val walletApi: WalletApi,
     private val providerRepository: ProviderRepository,
 ) : BusinessRepository {
 
@@ -399,7 +442,51 @@ class DefaultBusinessRepository @Inject constructor(
         }
     }
 
+    override suspend fun earningsWallet(): ApiResult<Wallet> =
+        apiCall { walletApi.businessWallet().payload() }.map(WalletDto::toDomain)
+
+    override suspend fun earningsHistory(page: Int, size: Int): ApiResult<WalletTransactionPage> =
+        apiCall {
+            walletApi.transactions(page = page.coerceAtLeast(0), size = size).payload()
+        }.map(TransactionPageDto::toDomain)
+
+    /**
+     * Незаполненная или технически невалидная форма в сеть не уходит — то же
+     * правило, что у [createItem]: 400 сказал бы то же самое, но платой были
+     * бы запрос и молчание шторки на время его выполнения.
+     */
+    override suspend fun requestPayout(amountSum: Long, cardNumber: String): ApiResult<Payout> {
+        val digits = cardNumber.filter(Char::isDigit)
+        if (amountSum <= 0 || digits.length != PayoutValidator.CARD_DIGITS) {
+            return ApiResult.Failure(ApiError.Business(BusinessRepository.INVALID_FORM_CODE))
+        }
+        return apiCall {
+            walletApi.requestPayout(
+                PayoutCreateRequest(amount = Money.somToTiyin(amountSum), cardNumber = digits),
+            ).payload()
+        }.map { it.toDomain(submittedAmountSum = amountSum) }
+    }
+
     private companion object {
         const val STATUS_KEY = "status"
     }
 }
+
+/**
+ * Суммы приходят в тийинах, как и везде в кошельке (issue #149). Полный номер
+ * карты сервер отдаёт обратно тем же полем, что принял, — на экран доезжает
+ * только маска ([maskCardNumber]).
+ *
+ * @param submittedAmountSum сумма, которую отправил сам запрос. `amount` в
+ * `PayoutResponse` объявлен необязательным — молчание сервера не повод
+ * показать «0 so'm» вместо суммы, которую человек только что отправил: это
+ * та же подмена, из-за которой в этой задаче вообще нельзя было делать
+ * заглушку («0 сум заработано» хуже отсутствия экрана).
+ */
+internal fun PayoutDto.toDomain(submittedAmountSum: Long): Payout = Payout(
+    id = id.orEmpty(),
+    amountSum = amount?.tiyinToSom()?.coerceAtLeast(0) ?: submittedAmountSum,
+    cardMasked = maskCardNumber(cardNumber),
+    status = PayoutStatus.fromServer(status),
+    createdAt = parseServerInstant(createdAt),
+)
