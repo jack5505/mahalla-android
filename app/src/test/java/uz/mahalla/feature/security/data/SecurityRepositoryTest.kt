@@ -4,6 +4,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
@@ -15,7 +18,11 @@ import org.junit.Before
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.data.network.SessionExpiry
+import uz.mahalla.data.network.TokenAuthenticator
+import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.SessionApi
 import uz.mahalla.data.network.pin.PinApi
 import uz.mahalla.data.prefs.Session
@@ -26,6 +33,7 @@ import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.io.IOException
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
@@ -302,6 +310,61 @@ class SecurityRepositoryTest {
     }
 
     @Test
+    fun `resume resets the ambiguous refresh counter`() = runTest {
+        // Счётчик неоднозначных провалов refresh (issue #198) — состояние
+        // `TokenAuthenticator`, а `resumeSession()` пишет продолженную сессию
+        // мимо него. Без явного сброса счёт из-до блокировки (два
+        // прощённых, порог не достигнут) пережил бы разблокировку, и первый
+        // же неоднозначный ответ добил бы его до порога и стёр только что
+        // продолженную сессию (issue #363).
+        val movableClock = MovableClock(NOW)
+        val auth = tokenAuthenticator(movableClock)
+        val repository = repository(tokenAuthenticator = auth)
+
+        val staleRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer old-access")
+            .build()
+
+        // Два прощённых неоднозначных провала подряд до блокировки — порог
+        // (3) ещё не достигнут, счётчик на 2.
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(staleRequest)))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(staleRequest)))
+
+        // Разблокировка продолжает сессию свежей парой токенов.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(
+            envelope(
+                """{"tokens":{"accessToken":"new-access","refreshToken":"new-refresh",
+                   "accessExpiresIn":900},"sessionId":"s-2"}""",
+            ),
+        )
+        val result = repository.resumeSession("222222")
+        assertTrue(result is ApiResult.Success)
+        assertEquals("new-access", sessionStore.current()?.accessToken)
+
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        // Один неоднозначный ответ после разблокировки: не сброшен счётчик —
+        // это третий подряд, и продолженная сессия гибнет; сброшен — снова
+        // прощаем.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(newRequest)))
+        assertEquals(
+            "счётчик сброшен разблокировкой — сессия жива",
+            "new-access",
+            sessionStore.current()?.accessToken,
+        )
+    }
+
+    @Test
     fun `refused resume leaves the local copy alone`() = runTest {
         server.enqueue(failure("PIN_INVALID", "PIN-kod noto'g'ri"))
 
@@ -331,7 +394,10 @@ class SecurityRepositoryTest {
         assertNull((result as ApiResult.Failure).failure.serverMessage)
     }
 
-    private fun repository(pinStorage: FakePinStorage = this.pinStorage): DefaultSecurityRepository {
+    private fun repository(
+        pinStorage: FakePinStorage = this.pinStorage,
+        tokenAuthenticator: TokenAuthenticator = tokenAuthenticator(),
+    ): DefaultSecurityRepository {
         val retrofit = NetworkFactory.retrofit(
             server.url("/").toString(),
             NetworkFactory.clientBuilder().build(),
@@ -346,6 +412,23 @@ class SecurityRepositoryTest {
             deviceInfoProvider = FakeDeviceInfoProvider(),
             locationProvider = FakeRequestLocationProvider(),
             clock = Clock.fixed(NOW, ZoneOffset.UTC),
+            tokenAuthenticator = tokenAuthenticator,
+        )
+    }
+
+    private fun tokenAuthenticator(clock: Clock = Clock.fixed(NOW, ZoneOffset.UTC)): TokenAuthenticator {
+        val retrofit = NetworkFactory.retrofit(
+            server.url("/").toString(),
+            NetworkFactory.clientBuilder().build(),
+            NetworkFactory.converterFactory(NetworkFactory.json()),
+        )
+        return TokenAuthenticator(
+            sessionStore = sessionStore,
+            sessionExpiry = SessionExpiry(),
+            authApi = retrofit.create(AuthApi::class.java),
+            deviceInfoProvider = FakeDeviceInfoProvider(),
+            locationProvider = FakeRequestLocationProvider(),
+            clock = clock,
         )
     }
 
@@ -358,6 +441,32 @@ class SecurityRepositoryTest {
         .setResponseCode(200)
         .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
         .setBody("""{"success":false,"error":{"code":"$code","message":"$message"}}""")
+
+    /** Ответ, у которого нет причины, названной сервером (issue #198). */
+    private fun ambiguousRefreshResponse(): MockResponse = MockResponse()
+        .setResponseCode(200)
+        .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+        .setBody("""{"success":true,"data":{""")
+
+    /** Ответ собирается вручную для прямого вызова `TokenAuthenticator.authenticate`. */
+    private fun unauthorized(request: Request): Response = Response.Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .code(401)
+        .message("Unauthorized")
+        .build()
+
+    /** Часы, которые можно подвинуть: счётчик неоднозначных провалов refresh
+     * (issue #301) различает соседние ответы по интервалу между ними. */
+    private class MovableClock(private var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId): Clock = this
+
+        fun advanceBy(duration: Duration) {
+            now = now.plus(duration)
+        }
+    }
 
     private companion object {
         val NOW: Instant = Instant.parse("2026-09-04T12:00:00Z")
