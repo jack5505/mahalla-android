@@ -73,26 +73,28 @@ interface FashionApi {
      * `sizeGuide`, `gender`, `categoryId`, `basePrice`), а не угаданы по
      * другой вертикали. Не проверено живым запросом — нужен Bearer владельца
      * заведения, `CONTRACT_REFRESH_TOKEN` в песочнице не задан; риск —
-     * `docs/API-CONTRACT.md`.
+     * `docs/API-CONTRACT.md`. Ответ не разбирается дальше `success`
+     * (`ensureSuccess`, не `payload`) — точная схема тела `POST`-ответа не
+     * подтверждена, а список/карточка перечитываются отдельным `GET`.
      */
     @POST("fashion/stores/{storeId}/products")
     suspend fun createProduct(
         @Path("storeId") storeId: String,
         @Body body: CreateFashionProductRequest,
-    ): ApiResponse<ProductDetailDto>
+    ): ApiResponse<JsonElement>
 
     /**
      * Новый вариант товара — размер/цвет (issue #280). Тело —
      * `VariantCreateRequest`, поля выведены по аналогии с уже подтверждёнными
      * полями [VariantDto] (`colorName`, `colorHex`, `size`, `sku`, `price`,
      * `stockQuantity`). Не проверено живым запросом — та же причина, что и у
-     * [createProduct].
+     * [createProduct], включая `ensureSuccess` вместо `payload`.
      */
     @POST("fashion/products/{id}/variants")
     suspend fun createVariant(
         @Path("id") productId: String,
         @Body body: CreateFashionVariantRequest,
-    ): ApiResponse<VariantDto>
+    ): ApiResponse<JsonElement>
 
     /** Корзина на сервере: один список на все магазины. */
     @GET("fashion/cart")

@@ -6,7 +6,6 @@ import uz.mahalla.core.format.Money
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
-import uz.mahalla.core.result.map
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.fashion.domain.FashionCart
@@ -119,8 +118,8 @@ class DefaultFashionRepository @Inject constructor(
                     categoryId = draft.categoryId?.takeIf(String::isNotBlank),
                     basePrice = Money.somToTiyin(price),
                 ),
-            ).payload()
-        }.map {}
+            ).ensureSuccess()
+        }
     }
 
     override suspend fun createVariant(
@@ -143,8 +142,8 @@ class DefaultFashionRepository @Inject constructor(
                     price = Money.somToTiyin(price),
                     stockQuantity = draft.stockQuantity,
                 ),
-            ).payload()
-        }.map {}
+            ).ensureSuccess()
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.data
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonElement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -24,7 +25,6 @@ import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
 import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
 import uz.mahalla.feature.fashion.data.OrderPageDto
 import uz.mahalla.feature.fashion.data.ProductDetailDto
-import uz.mahalla.feature.fashion.data.VariantDto
 import uz.mahalla.feature.food.data.CreatedOrderDto
 import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
@@ -797,12 +797,12 @@ private class RecordingFashionApi : FashionApi {
     override suspend fun createProduct(
         storeId: String,
         body: CreateFashionProductRequest,
-    ): ApiResponse<ProductDetailDto> = error("not used by BusinessRepositoryTest")
+    ): ApiResponse<JsonElement> = error("not used by BusinessRepositoryTest")
 
     override suspend fun createVariant(
         productId: String,
         body: CreateFashionVariantRequest,
-    ): ApiResponse<VariantDto> = error("not used by BusinessRepositoryTest")
+    ): ApiResponse<JsonElement> = error("not used by BusinessRepositoryTest")
 
     override suspend fun cart(): ApiResponse<List<CartItemDto>> =
         error("not used by BusinessRepositoryTest")

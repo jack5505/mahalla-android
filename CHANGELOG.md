@@ -3297,3 +3297,30 @@ Issue #236 завели, когда #158, #161 и #173 были ещё откр�
 `CONTRACT_REFRESH_TOKEN` появится в песочнице (см. issue #294 — там та же
 судьба у акции). `docs/UI-INVENTORY.md` в этой задаче не пересчитывался: обе
 формы — не новые экраны, а действия на уже существующих.
+
+---
+
+## issue #280 — доводка первого круга авто-ревью PR #306
+
+Авто-ревью нашло расхождение между кодом и собственным описанием PR: текст
+выше обещал «успех проверяется по коду ответа», а `FashionRepository.createProduct`/
+`createVariant` на деле разбирали тело `POST`-ответа в `ProductDetailDto`/
+`VariantDto` через `.payload()`. У ручек, не сверенных живым запросом, это
+двойной риск — `payload()` падает и при `success: false`, и при успешном
+ответе без `data` (`ApiResponseVoid`), и при несовпадении схемы тела; клиенту
+для `ApiResult<Unit>` ничего из разобранного DTO не нужно.
+
+Исправлено по образцу `BusinessRepository`/`BusinessApi` (issue #288,
+`toggleItem`/`deleteItem`): `FashionApi.createProduct()`/`createVariant()`
+теперь отдают `ApiResponse<JsonElement>`, `FashionRepository` проверяет ответ
+`ensureSuccess()`, а не `payload()`. Тесты (`FashionRepositoryTest`) не
+менялись — они и раньше смотрели только на тело запроса. Заодно
+`docs/API-CONTRACT.md` дополнен явной строкой про это для обеих ручек.
+
+Остальные пункты ревью (else-ветка `MyPlacesViewModel.manageProducts()`,
+`MAX_NAME_LENGTH` у `NewFashionProductDraft`, `verticalScroll` формы,
+мёртвая ветка `ProductGender.Unknown`, счётчик в `docs/UI-INVENTORY.md`) —
+не блокеры по формулировке самого ревью, оставлены как есть.
+
+**Проверено.** `./gradlew testDebugUnitTest` и `./gradlew assembleDebug` —
+зелёные.
