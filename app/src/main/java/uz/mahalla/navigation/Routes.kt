@@ -110,7 +110,7 @@ data object GeoRoute
 data object DiscoveryRoute
 
 @Serializable
-data object OrdersRoute
+data object ActivitiesRoute
 
 @Serializable
 data object WalletRoute
