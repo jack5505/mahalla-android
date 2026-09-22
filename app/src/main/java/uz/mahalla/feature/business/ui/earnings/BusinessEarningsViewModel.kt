@@ -1,6 +1,5 @@
 package uz.mahalla.feature.business.ui.earnings
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -15,7 +14,6 @@ import uz.mahalla.feature.business.domain.PayoutDraft
 import uz.mahalla.feature.business.domain.PayoutValidator
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
-import uz.mahalla.navigation.BusinessArgs
 import javax.inject.Inject
 
 /**
@@ -31,11 +29,8 @@ import javax.inject.Inject
 @HiltViewModel
 class BusinessEarningsViewModel @Inject constructor(
     private val repository: BusinessRepository,
-    savedStateHandle: SavedStateHandle,
 ) : MviViewModel<BusinessEarningsState, BusinessEarningsEvent, BusinessEarningsEffect>(
-    BusinessEarningsState(
-        placeName = savedStateHandle.get<String>(BusinessArgs.PLACE_NAME).orEmpty(),
-    ),
+    BusinessEarningsState(),
 ) {
 
     private var loadJob: Job? = null

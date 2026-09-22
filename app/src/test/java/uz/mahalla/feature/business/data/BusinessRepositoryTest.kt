@@ -10,7 +10,6 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.business.domain.NewMenuItemForm
-import uz.mahalla.feature.business.domain.Payout
 import uz.mahalla.feature.business.domain.PayoutStatus
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -673,6 +672,18 @@ class BusinessRepositoryTest {
     fun `a payout response without an amount falls back to the submitted sum`() = runTest {
         val wallet = RecordingWalletApi()
         wallet.payoutResponse = PayoutDto(id = "p-1", amount = null, status = "PENDING")
+
+        val result = repository(walletApi = wallet)
+            .requestPayout(amountSum = 100_000, cardNumber = "4400123456789012")
+
+        assertEquals(100_000L, (result as ApiResult.Success).data.amountSum)
+    }
+
+    /** `amount = 0` — то же молчание сервера, что и `null` (нашло ревью). */
+    @Test
+    fun `a payout response with a zero amount falls back to the submitted sum`() = runTest {
+        val wallet = RecordingWalletApi()
+        wallet.payoutResponse = PayoutDto(id = "p-1", amount = 0, status = "PENDING")
 
         val result = repository(walletApi = wallet)
             .requestPayout(amountSum = 100_000, cardNumber = "4400123456789012")

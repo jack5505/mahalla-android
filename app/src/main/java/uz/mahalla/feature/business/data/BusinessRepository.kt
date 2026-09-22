@@ -485,7 +485,7 @@ class DefaultBusinessRepository @Inject constructor(
  */
 internal fun PayoutDto.toDomain(submittedAmountSum: Long): Payout = Payout(
     id = id.orEmpty(),
-    amountSum = amount?.tiyinToSom()?.coerceAtLeast(0) ?: submittedAmountSum,
+    amountSum = amount?.takeIf { it > 0 }?.tiyinToSom() ?: submittedAmountSum,
     cardMasked = maskCardNumber(cardNumber),
     status = PayoutStatus.fromServer(status),
     createdAt = parseServerInstant(createdAt),

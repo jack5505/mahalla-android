@@ -1,6 +1,5 @@
 package uz.mahalla.feature.business.ui.earnings
 
-import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -22,7 +21,6 @@ import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
-import uz.mahalla.navigation.BusinessArgs
 import uz.mahalla.testutil.FakeBusinessRepository
 import uz.mahalla.testutil.MainDispatcherRule
 
@@ -278,12 +276,6 @@ class BusinessEarningsViewModelTest {
 
     private fun viewModel(repository: FakeBusinessRepository) = BusinessEarningsViewModel(
         repository = repository,
-        savedStateHandle = SavedStateHandle(
-            mapOf(
-                BusinessArgs.PLACE_ID to FakeBusinessRepository.PLACE_ID,
-                BusinessArgs.PLACE_NAME to "Osh Markazi",
-            ),
-        ),
     )
 
     private fun transaction(

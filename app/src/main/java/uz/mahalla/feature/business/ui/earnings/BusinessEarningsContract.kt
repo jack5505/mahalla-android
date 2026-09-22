@@ -21,7 +21,6 @@ import uz.mahalla.feature.wallet.domain.WalletTransaction
  * прятать баланс, который уже приехал.
  */
 data class BusinessEarningsState(
-    val placeName: String = "",
     val wallet: ScreenState<Wallet> = ScreenState.Loading,
     val transactions: ScreenState<List<WalletTransaction>> = ScreenState.Loading,
     val hasMore: Boolean = false,

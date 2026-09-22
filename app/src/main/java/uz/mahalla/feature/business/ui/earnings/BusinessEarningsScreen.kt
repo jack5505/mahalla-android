@@ -56,6 +56,7 @@ import uz.mahalla.feature.business.domain.PayoutStatus
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
+import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.ui.theme.FocusDisplayBalance
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -256,6 +257,14 @@ private fun BalanceCard(
                 label = stringResource(R.string.wallet_held),
                 value = MoneyFormatter.withCurrency(wallet.heldSum, currency),
             )
+        }
+        if (wallet.status == WalletStatus.Blocked) {
+            Box(modifier = Modifier.padding(top = Spacing.item)) {
+                MahallaBadge(
+                    text = stringResource(R.string.wallet_status_blocked),
+                    tone = MahallaTone.Error,
+                )
+            }
         }
         if (canRequestPayout) {
             MahallaDivider(modifier = Modifier.padding(top = Spacing.card))
@@ -521,7 +530,6 @@ private fun BusinessEarningsScreenPreview() {
     PreviewSurface(modifier = Modifier.fillMaxSize()) {
         BusinessEarningsContentScreen(
             state = BusinessEarningsState(
-                placeName = "Osh Markazi",
                 wallet = ScreenState.Content(
                     Wallet(
                         balanceSum = 2_450_000,
