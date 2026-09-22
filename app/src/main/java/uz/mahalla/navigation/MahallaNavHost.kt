@@ -13,6 +13,7 @@ import androidx.navigation.toRoute
 import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
+import uz.mahalla.feature.booking.ui.appointment.AppointmentScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
 import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
@@ -20,6 +21,7 @@ import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
 import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
 import uz.mahalla.feature.cinema.ui.movie.MovieScreen
 import uz.mahalla.feature.cinema.ui.poster.CinemaScreen
+import uz.mahalla.feature.cinema.ui.ticket.TicketScreen
 import uz.mahalla.feature.cinema.ui.tickets.MyTicketsScreen
 import uz.mahalla.feature.discovery.ui.home.DiscoveryHomeScreen
 import uz.mahalla.feature.fashion.ui.cart.FashionCartScreen
@@ -62,6 +64,8 @@ import uz.mahalla.feature.role.ui.ProviderFormScreen
 import uz.mahalla.feature.role.ui.RoleScreen
 import uz.mahalla.feature.role.ui.places.MyPlacesScreen
 import uz.mahalla.feature.role.ui.staff.PlaceStaffScreen
+import uz.mahalla.feature.security.ui.SecurityScreen
+import uz.mahalla.feature.security.ui.pin.ChangePinScreen
 import uz.mahalla.feature.social.ui.saved.SavedPlacesScreen
 import uz.mahalla.feature.subscription.ui.SubscriptionScreen
 import uz.mahalla.feature.update.ui.AppUpdateScreen
@@ -251,13 +255,19 @@ fun MahallaNavHost(
                     },
                 )
             }
-            composable<OrdersRoute> {
+            composable<ActivitiesRoute> {
                 // «Мои активности» (issue #73): один список из всех вертикалей.
                 ActivityScreen(
                     // Из списка — на статус заказа, тот же экран, что после
                     // оформления. Возврат «назад» ведёт обратно в список.
                     onFoodOrderClick = { orderId ->
                         navController.navigate(OrderStatusRoute(orderId))
+                    },
+                    // Карточки билета и записи (issue #183) — «назад» ведёт
+                    // обратно в «мои активности».
+                    onTicketClick = { ticketId -> navController.navigate(TicketRoute(ticketId)) },
+                    onAppointmentClick = { appointmentId, vertical ->
+                        navController.navigate(AppointmentRoute(appointmentId, vertical))
                     },
                     // Пустое состояние ведёт на главную — это переключение
                     // таба, а не переход вглубь: `navigateToTab` не растит
@@ -297,6 +307,8 @@ fun MahallaNavHost(
                     onOpenMyPlaces = { navController.navigate(MyPlacesRoute) },
                     // «Мои брони» игровых зон (issue #98).
                     onOpenGamingBookings = { navController.navigate(GamingBookingsRoute) },
+                    // Безопасность (issue #102): смена PIN и биометрия.
+                    onOpenSecurity = { navController.navigate(SecurityRoute) },
                     // «Мои записи» (issue #97): своего таба у брони нет.
                     onOpenMyAppointments = { navController.navigate(MyAppointmentsRoute()) },
                     // «Мои билеты» (issue #106): своего таба у кино нет.
@@ -419,6 +431,18 @@ fun MahallaNavHost(
             )
         }
 
+        // Безопасность (issue #102) — вне обоих графов: строка из профиля.
+        composable<SecurityRoute> {
+            SecurityScreen(
+                onBack = { navController.navigateUp() },
+                onChangePin = { navController.navigate(ChangePinRoute) },
+            )
+        }
+
+        composable<ChangePinRoute> {
+            ChangePinScreen(onBack = { navController.navigateUp() })
+        }
+
         // «Мои заведения» (issue #94) — вне обоих графов, как центр
         // уведомлений: открывается строкой из профиля, возврат ведёт туда же.
         composable<MyPlacesRoute> {
@@ -464,8 +488,8 @@ fun MahallaNavHost(
                 onOpenQueue = { placeId, placeName ->
                     navController.navigate(BusinessQueueRoute(placeId, placeName))
                 },
-                onOpenOrders = { placeId, placeName ->
-                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
+                onOpenOrders = { placeId, placeName, category ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName, category))
                 },
                 onOpenMenu = { placeId, placeName ->
                     navController.navigate(BusinessMenuRoute(placeId, placeName))
@@ -653,6 +677,12 @@ fun MahallaNavHost(
             MyTicketsScreen(onBack = { navController.navigateUp() })
         }
 
+        // Карточка билета (issue #183): вход — «мои активности», у экрана
+        // нет своих переходов дальше.
+        composable<TicketRoute> {
+            TicketScreen(onBack = { navController.navigateUp() })
+        }
+
         // Вертикаль «Больницы» (эпик #11, issue #99): к врачу записываются с
         // карточки места, а следят за записью в «моих записях к врачу».
         composable<DoctorBookingRoute> {
@@ -731,6 +761,13 @@ fun MahallaNavHost(
                 },
                 onBack = { navController.navigateUp() },
             )
+        }
+
+        // Карточка записи (issue #183): вход — «мои активности», у экрана нет
+        // своих переходов дальше — ни отмены, ни переноса, они остались в
+        // списке.
+        composable<AppointmentRoute> {
+            AppointmentScreen(onBack = { navController.navigateUp() })
         }
 
         // Вертикаль «Мастера» (issue #107): каталог фрилансеров → профиль с

@@ -21,6 +21,8 @@ import uz.mahalla.data.prefs.SessionStore
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,6 +53,31 @@ class TokenAuthenticator @Inject constructor(
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
 ) : Authenticator {
+
+    /**
+     * Подряд идущие провалы refresh, из которых не ясно, жив ли токен — не
+     * явный отказ (401) и не сетевой сбой (issue #198). Читается и пишется
+     * только внутри `synchronized(this)` в [authenticate].
+     *
+     * Живёт в памяти и не переживает перезапуск процесса: подменённый ответ
+     * чужого прокси (issue #138) конечен и с новым процессом не связан, а вот
+     * сломанный контракт ломается заново на каждом запуске, так что досчитает
+     * и без сохранения на диск.
+     */
+    private var consecutiveAmbiguousRefreshFailures = 0
+
+    /**
+     * Момент последнего засчитанного [isAmbiguousContractFailure]. Несколько
+     * экранов, разом упёршихся в 401 на холодном старте, берут лок по
+     * очереди и каждый делает свой собственный refresh — если чужой прокси
+     * (issue #138) в этот момент подменяет ответ, все они получат одно и то
+     * же тело почти одновременно. Это один инцидент прокси, а не
+     * [MAX_AMBIGUOUS_REFRESH_FAILURES] разных провалов контракта подряд, и
+     * счётчик не должен путать одно с другим (issue #301) — поэтому ответ
+     * считается только если он пришёл не раньше [MIN_AMBIGUOUS_REFRESH_GAP]
+     * после предыдущего засчитанного.
+     */
+    private var lastAmbiguousRefreshFailureAt: Instant? = null
 
     override fun authenticate(route: Route?, response: Response): Request? {
         if (attemptCount(response) >= MAX_ATTEMPTS) return null
@@ -96,6 +123,11 @@ class TokenAuthenticator @Inject constructor(
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
                     sessionExpiry.notifyExpired()
+                    // Та же причина, что и у сброса ниже: следующий вход пишет
+                    // сессию мимо этого класса, и застрявший счётчик убил бы
+                    // её на первом же неоднозначном ответе (issue #198).
+                    consecutiveAmbiguousRefreshFailures = 0
+                    lastAmbiguousRefreshFailureAt = null
                     return@synchronized null
                 }
                 // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать
@@ -109,8 +141,45 @@ class TokenAuthenticator @Inject constructor(
                     response.close()
                     throw cause
                 }
+                if (refresh.isAmbiguousContractFailure()) {
+                    val now = clock.instant()
+                    val previous = lastAmbiguousRefreshFailureAt
+                    // Ответы почти одновременно — это один и тот же
+                    // всплеск параллельных 401, а не отдельные обращения к
+                    // контракту, и второй, и третий такой ответ подряд не
+                    // добавляют новой информации (issue #301).
+                    val isSeparateFailure = previous == null ||
+                        Duration.between(previous, now) >= MIN_AMBIGUOUS_REFRESH_GAP
+                    if (isSeparateFailure) {
+                        consecutiveAmbiguousRefreshFailures++
+                        lastAmbiguousRefreshFailureAt = now
+                        if (consecutiveAmbiguousRefreshFailures >= MAX_AMBIGUOUS_REFRESH_FAILURES) {
+                            // Один такой ответ — скорее подменённый ответ чужого
+                            // прокси (см. `rejectsSession`), но столько подряд —
+                            // уже не он: прокси на одном и том же теле не
+                            // зацикливается, а сломанный контракт — да. Без этого
+                            // сессия жива вечно, а сервер её токены не понимает
+                            // (issue #198).
+                            runBlocking { sessionStore.clear() }
+                            sessionExpiry.notifyExpired()
+                            // Сессия мертва — считать дальше нечего. Не обнулить
+                            // здесь значило бы, что счётчик переживает вход
+                            // заново: сессию пишет `SessionStore.save` мимо
+                            // `TokenAuthenticator`, так что без явного сброса
+                            // первый же неоднозначный ответ в новой сессии сразу
+                            // добивает счёт до порога и стирает её мгновенно.
+                            consecutiveAmbiguousRefreshFailures = 0
+                            lastAmbiguousRefreshFailureAt = null
+                        }
+                    }
+                    return@synchronized null
+                }
+                // Осмысленный отказ сервера (403/400/404/429/5xx) — счётчик
+                // не двигаем: он не про эти причины, они уже разобраны выше.
                 return@synchronized null
             }
+            consecutiveAmbiguousRefreshFailures = 0
+            lastAmbiguousRefreshFailureAt = null
 
             runBlocking {
                 sessionStore.save(
@@ -152,7 +221,9 @@ class TokenAuthenticator @Inject constructor(
      *  - 429, 5xx, обрыв, таймаут — «спросить не удалось»;
      *  - 2xx без токенов, `success: false` при 2xx или неразбираемое тело —
      *    подменённый ответ (вокзальный Wi-Fi) или сломанный контракт, но не
-     *    отказ: бэкенд так на refresh не отвечает.
+     *    отказ: бэкенд так на refresh не отвечает. Единичный такой ответ
+     *    сессию не трогает; счётчик подряд идущих — [isAmbiguousContractFailure]
+     *    (issue #198).
      *
      * Ошибиться в сторону «стереть» дорого: выход на экран входа стоит
      * человеку платного SMS и всей регистрации заново (issue #138).
@@ -167,6 +238,23 @@ class TokenAuthenticator @Inject constructor(
             ApiError.NoConnection -> IOException(REFRESH_FAILED)
             else -> null
         }
+
+    /**
+     * Ответ, у которого нет причины, названной сервером: тело не разобралось,
+     * `success: false` при 2xx или 2xx вовсе без пары токенов (см. разбор в
+     * [rejectsSession]). Вызывается только когда `accessToken`/`refreshToken`
+     * уже проверены на `null` — поэтому успешный разбор здесь и означает
+     * «токенов в нём не было».
+     *
+     * Ровно эти три причины ломались за месяц четырежды (`data.tokens`
+     * переезжал, менялась схема) — в отличие от 403/400/404/429/5xx, у
+     * которых причина в самом запросе или в бэкенде, а не в контракте
+     * (issue #198).
+     */
+    private fun ApiResult<*>.isAmbiguousContractFailure(): Boolean = when (this) {
+        is ApiResult.Success<*> -> true
+        is ApiResult.Failure -> error == ApiError.Serialization || error is ApiError.Business
+    }
 
     private fun Request.withBearer(token: String): Request = newBuilder()
         .header(HEADER_AUTHORIZATION, AuthInterceptor.bearer(token))
@@ -190,6 +278,52 @@ class TokenAuthenticator @Inject constructor(
     companion object {
         /** Один исходный запрос + один повтор после refresh. */
         const val MAX_ATTEMPTS = 2
+
+        /**
+         * После скольких подряд идущих [isAmbiguousContractFailure] считать
+         * сессию мёртвой (issue #198). Один такой ответ прощаем — это может
+         * быть чужой прокси; но прокси не отвечает одно и то же на каждый
+         * повторный refresh, а сломанный контракт — да, поэтому несколько
+         * подряд уже не совпадение.
+         *
+         * «Подряд» — это без удачного refresh между ними, а не в фиксированный
+         * промежуток времени: refresh случается только по 401, так что при
+         * долгоживущем процессе три редких (например, раз в неделю) глюка
+         * чужого прокси тоже сложатся в срабатывание. Счётчик обнуляется либо
+         * удачным refresh, либо смертью сессии — на общее время жизни сессии
+         * не завязан. Единственное время, которое учитывается, — расстояние
+         * между *соседними* ответами, [MIN_AMBIGUOUS_REFRESH_GAP]: оно отсеивает
+         * не «редкие через неделю», а «несколько почти в один момент» — ровно
+         * то, что и не должно объединяться (issue #301).
+         */
+        const val MAX_AMBIGUOUS_REFRESH_FAILURES = 3
+
+        /**
+         * Минимальный промежуток между двумя ответами, которые засчитываются
+         * как *разные* [isAmbiguousContractFailure] в [MAX_AMBIGUOUS_REFRESH_FAILURES]
+         * (issue #301). Несколько экранов, упёршихся в 401 почти одновременно
+         * (например, на холодном старте), по очереди берут лок и делают свой
+         * refresh — если в этот момент ответ подменяет чужой прокси
+         * (issue #138), он может отдать одно и то же тело на все эти близкие
+         * по времени запросы. Такой всплеск укладывается в секунды: ответ на
+         * `auth/refresh` не зависает, зависшие уходят через `networkFailure`
+         * и счётчик не трогают. Настоящие независимые провалы контракта
+         * так близко друг к другу не садятся — между ними должен пройти хотя
+         * бы один обычный запрос с истёкшим токеном.
+         *
+         * Отсчёт идёт от предыдущего *засчитанного* ответа, а весь всплеск
+         * серийный (общий `synchronized`), так что при N участниках всплеска
+         * запас на каждую пару соседей — это `MIN_AMBIGUOUS_REFRESH_GAP` минус
+         * время одного refresh, а не минус время всего всплеска. Больше запаса
+         * (секунды, не миллисекунды) не помешает: единственная цена ошибки в
+         * другую сторону — на один прощённый неоднозначный ответ дольше между
+         * *настоящими* поломками контракта, а до них счётчик и так копится
+         * без ограничения по времени жизни сессии. Полностью снять этот риск
+         * может только вариант 2 из issue #301 (не более одного живого refresh
+         * даже после провала) — отдельная переработка `synchronized`-блока, не
+         * входит в эту задачу.
+         */
+        val MIN_AMBIGUOUS_REFRESH_GAP: Duration = Duration.ofSeconds(10)
 
         private const val HTTP_UNAUTHORIZED = 401
 

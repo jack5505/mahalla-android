@@ -201,6 +201,10 @@ class DefaultFreelancerRepository @Inject constructor(
      *
      * Ответ без `id` отказом **не** считается — заказ создан, а увидеть его
      * можно в «моих заказах» (см. [toCreated]).
+     *
+     * `scheduledAt` уходит местным ташкентским временем — [freelancerRequestTime]
+     * (issue #205, по прецеденту #144): та же трактовка, что читает
+     * [FreelancerOrderDto.toDomain], менять их можно только вместе.
      */
     override suspend fun order(
         freelancerId: String,
@@ -224,8 +228,9 @@ class DefaultFreelancerRepository @Inject constructor(
                 freelancerId = freelancerId,
                 body = CreateFreelancerOrderRequest(
                     serviceId = serviceId,
-                    // ISO-8601 с зоной: `Instant.toString()` даёт ровно его.
-                    scheduledAt = scheduledAt?.toString(),
+                    // Местное ташкентское время слота, не UTC-момент
+                    // (issue #205) — см. freelancerRequestTime.
+                    scheduledAt = scheduledAt?.let(::freelancerRequestTime),
                     address = draft.addressOrNull(),
                     comment = draft.commentOrNull(),
                 ),

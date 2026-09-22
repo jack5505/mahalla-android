@@ -1,6 +1,5 @@
 package uz.mahalla.feature.place.ui
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
@@ -95,6 +94,7 @@ import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.ScreenStateHost
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.components.SkeletonBox
+import uz.mahalla.core.ui.startActivitySafely
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.text.fullLabelRes
 import uz.mahalla.core.ui.userMessage
@@ -1313,18 +1313,6 @@ private fun PlaceAction.icon(): ImageVector = when (this) {
     PlaceAction.Route -> Icons.Outlined.Directions
 }
 
-
-/**
- * Набирать номер и строить маршрут умеют не все устройства (и не все
- * оболочки). Отсутствие приложения-обработчика — не повод падать.
- */
-private fun android.content.Context.startActivitySafely(intent: Intent) {
-    try {
-        startActivity(intent)
-    } catch (notFound: ActivityNotFoundException) {
-        // Обработчика нет — молча ничего не делаем, экран остаётся на месте.
-    }
-}
 
 private val HOUR_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 private val GALLERY_HEIGHT = 120.dp

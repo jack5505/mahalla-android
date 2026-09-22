@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.state.dataOrNull
@@ -13,6 +14,7 @@ import uz.mahalla.feature.activity.domain.ActivityFeed
 import uz.mahalla.feature.activity.domain.ActivityMerge
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import javax.inject.Inject
 
 /**
@@ -54,7 +56,11 @@ class ActivityViewModel @Inject constructor(
             // уже на экране, и заменять его скелетоном значит забрать у
             // человека то, что он читает, из-за раздела, который его,
             // возможно, вообще не интересует.
-            ActivityEvent.Retry -> load(showLoading = currentState.items !is ScreenState.Content)
+            ActivityEvent.Retry -> if (currentState.items is ScreenState.Content) {
+                retryFailedSources()
+            } else {
+                load(showLoading = true)
+            }
             ActivityEvent.LoadMore -> loadMore()
 
             // Переключение вкладки сети не касается — кроме одного случая:
@@ -84,8 +90,160 @@ class ActivityViewModel @Inject constructor(
      */
     private fun onScreenResumed() = onScreenResumed(
         isLoadInFlight = { loadJob?.isActive == true },
-        load = { load(showLoading = false) },
+        load = { resumeLoad() },
     )
+
+    /**
+     * Настоящий возврат на экран (issue #213): перечитывает ровно те страницы,
+     * что уже набраны кнопкой «показать ещё» — список не растёт и не
+     * схлопывается молча, только освежается. `load()` сюда не годится: она
+     * всегда перечитывает только [ActivityFeed.FIRST_PAGES], а три нажатия
+     * «показать ещё» перед уходом с таба откатились бы к первой странице.
+     */
+    private fun resumeLoad() {
+        // Пустой курсор — это `ScreenState.Error`: не ответил вообще никто, и
+        // [replay] не знает, сколько страниц спрашивать (там и было бы ноль).
+        // Тут нужен не повтор старого, а честная полная загрузка — ровно то,
+        // что раньше давал возврат на экран, и терять эту возможность
+        // восстановиться нельзя.
+        if (currentState.loadedPages.isEmpty()) {
+            load(showLoading = false)
+            return
+        }
+        loadMoreJob?.cancel()
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch { replay() }
+    }
+
+    /**
+     * Проход за проходом перечитывает [ActivityState.loadedPages] страниц
+     * каждого источника — так же, как они когда-то были набраны. Источник без
+     * ответа в прошлый раз (`loadedPages == 0`) всё равно спрашивается с
+     * нулевой страницы: возврат на экран — честный шанс на успех, а не повод
+     * держать отметку об отказе вечно.
+     *
+     * Источник останавливается сам, как только: он отказал (остаётся в
+     * курсоре на той же странице, как при обычной догрузке); у него
+     * кончились страницы раньше, чем ожидалось (что-то удалили за время в
+     * фоне — не повод выдумывать страницы, которых больше нет); или он дошёл
+     * до количества страниц, что были показаны — тогда курсор берётся из
+     * последнего ответа, и дальше источник докладывается обычной кнопкой.
+     */
+    private suspend fun replay() {
+        val target = currentState.loadedPages
+        // Тот же потолок, что и у `drain()`, и по той же причине: без него
+        // источник, который человек дотянул до полусотни страниц кнопкой
+        // «показать ещё» за много сессий, реплеился бы на каждый возврат на
+        // экран той же полусотней запросов — а `drain()` на пустой вкладке и
+        // сам может довести `loadedPages` ровно до потолка.
+        var remaining = target.mapValues { (_, loaded) -> loaded.coerceIn(1, MAX_DRAIN_PAGES) }
+        var level = 0
+        var items = emptyList<Activity>()
+        val failures = mutableMapOf<ActivitySource, ApiFailure>()
+        val nextPages = mutableMapOf<ActivitySource, Int>()
+        val loadedPages = mutableMapOf<ActivitySource, Int>()
+
+        while (remaining.isNotEmpty()) {
+            val pages = remaining.keys.associateWith { level }
+            val feed = repository.feed(pages = pages)
+            items = appended(items, feed.items)
+
+            pages.keys.forEach { source ->
+                if (source in feed.failures) {
+                    failures[source] = feed.failures.getValue(source)
+                    nextPages[source] = level
+                    loadedPages[source] = level
+                    remaining = remaining - source
+                } else {
+                    loadedPages[source] = level + 1
+                    val hasMore = source in feed.nextPages
+                    val reachedTarget = level + 1 >= remaining.getValue(source)
+                    when {
+                        !hasMore -> remaining = remaining - source
+                        reachedTarget -> {
+                            nextPages[source] = feed.nextPages.getValue(source)
+                            remaining = remaining - source
+                        }
+                    }
+                }
+            }
+            level++
+        }
+
+        // Не ответил вообще никто — тот же самый смысл, что и в `load()`
+        // (`ActivityFeed.isTotalFailure`), только собранный по нескольким
+        // проходам с разных страниц: источник попадает в [failures] только
+        // если у него не было ни одного успешного ответа за весь [replay], а
+        // значит совпадение размеров означает, что все пять отказали. Без
+        // этой проверки видимый список стёрся бы в пустой `Content` с пятью
+        // отметками об одном и том же 401 вместо одного экрана ошибки.
+        val totalFailure = items.isEmpty() && failures.size == target.size
+        updateState {
+            copy(
+                items = when {
+                    totalFailure -> ScreenState.Error(failures.values.first())
+                    items.isEmpty() && nextPages.isEmpty() -> ScreenState.Empty
+                    else -> ScreenState.Content(items)
+                },
+                sourceFailures = if (totalFailure) emptyMap() else failures,
+                nextPages = if (totalFailure) emptyMap() else nextPages,
+                loadedPages = if (totalFailure) emptyMap() else loadedPages,
+                isLoadingMore = false,
+                loadMoreFailure = null,
+            )
+        }
+        // Та же догрузка пустой вкладки, что и в `load()` (issue #143): за
+        // время в фоне видимое могло целиком уехать в другую вкладку, и
+        // «активных нет» без попытки долить страницу было бы неправдой.
+        if (!totalFailure && currentState.visible.isEmpty()) drain()
+    }
+
+    /**
+     * «Повторить» у отметки частичного отказа (issue #213, находка ревью
+     * PR #215). Спрашивает только отказавшие источники, и только с их
+     * страницы — `load()` перечитала бы [ActivityFeed.FIRST_PAGES] у всех
+     * пяти и откатила бы курсор источников, которые ни в чём не виноваты.
+     *
+     * Страница берётся из [ActivityState.nextPages]: у отказа из первой
+     * загрузки (`load()`) там всегда пусто — она у каждого источника одна на
+     * все пять, нулевая, — а у отказа во время [replay] (тоже частичного:
+     * полный там уходит в `ScreenState.Error` и сюда не попадает) там уже
+     * стоит страница, на которой источник остановился.
+     */
+    private fun retryFailedSources() {
+        val failedSources = currentState.sourceFailures.keys
+        if (failedSources.isEmpty()) return
+
+        loadMoreJob?.cancel()
+        loadJob?.cancel()
+        // Отменённые job'ы могли держать `isLoadingMore` / `isRefreshing`
+        // поднятыми (кнопка «показать ещё» или pull-to-refresh были в полёте
+        // одновременно с отметкой отказа) — их отмена обрывает выполнение на
+        // точке приостановки и до своего собственного `updateState`, который
+        // их бы снял, не доходит. Без сброса здесь флаг остаётся поднятым
+        // навсегда: спиннер крутится, а `loadMore()` / pull-to-refresh больше
+        // не стартуют (`if (... || state.isLoadingMore) return`).
+        updateState { copy(isLoadingMore = false, isRefreshing = false, loadMoreFailure = null) }
+        loadJob = viewModelScope.launch {
+            val loaded = currentState.items.dataOrNull().orEmpty()
+            val pages = failedSources.associateWith { source -> currentState.nextPages[source] ?: 0 }
+            val feed = repository.feed(pages = pages)
+            updateState {
+                copy(
+                    items = ScreenState.Content(appended(loaded, feed.items)),
+                    sourceFailures = sourceFailures - failedSources + feed.failures,
+                    // Источник, вылечившийся до последней страницы, не попадает
+                    // в `feed.nextPages` — старую запись из `nextPages` нужно
+                    // убрать явно, иначе курсор держит его в `hasMore` вечно, и
+                    // «показать ещё» уходит в пустоту (дедуп съедает ответ).
+                    nextPages = nextPages - (failedSources - feed.failures.keys) + feed.nextPages,
+                    loadedPages = loadedPages + pages.mapValues { (source, page) ->
+                        if (source in feed.failures) page else page + 1
+                    },
+                )
+            }
+        }
+    }
 
     private fun load(showLoading: Boolean = true, refreshing: Boolean = false) {
         loadMoreJob?.cancel()
@@ -130,6 +288,15 @@ class ActivityViewModel @Inject constructor(
                     // шесть сообщений об одном и том же 401.
                     sourceFailures = if (feed.isTotalFailure) emptyMap() else feed.failures,
                     nextPages = feed.nextPages,
+                    // Возврату на экран (issue #213) нужно знать, сколько
+                    // страниц каждого источника показано, чтобы потом
+                    // перечитать столько же, а не откатить список к первой.
+                    // Отказавший источник — ноль: он ничего не показал.
+                    loadedPages = if (feed.isTotalFailure) {
+                        emptyMap()
+                    } else {
+                        feed.requested.associateWith { source -> if (source in feed.failures) 0 else 1 }
+                    },
                     isRefreshing = false,
                 )
             }
@@ -269,6 +436,11 @@ class ActivityViewModel @Inject constructor(
                 // и «не загрузился» про него было бы неправдой.
                 loadMoreFailure = feed.failures.values.firstOrNull(),
                 nextPages = feed.nextPages + retryPages,
+                // Отказавшая страница курсор не сдвинула (см. [retryPages]) —
+                // значит и счётчик для возврата на экран (issue #213) ей
+                // считать не за что.
+                loadedPages = loadedPages + pages.keys.filterNot { it in feed.failures }
+                    .associateWith { source -> (loadedPages[source] ?: 0) + 1 },
             )
         }
     }
@@ -282,15 +454,25 @@ class ActivityViewModel @Inject constructor(
         ActivityMerge.append(current, next)
 
     /**
-     * Переход по строке. Цель разбирает [ActivityTarget]: у брони, записи и
-     * билета экрана ещё нет, поэтому эффекта нет вовсе — такая строка и не
-     * кликабельна.
+     * Переход по строке. Цель разбирает [ActivityTarget]: у брони экрана ещё
+     * нет, поэтому эффекта нет вовсе — такая строка и не кликабельна.
      */
     private fun open(key: String) {
         val activity = currentState.items.dataOrNull()?.firstOrNull { it.key == key } ?: return
         when (val target = activity.target) {
             is ActivityTarget.FoodOrder ->
                 emitEffect(ActivityEffect.OpenFoodOrder(target.orderId))
+
+            is ActivityTarget.CinemaTicket ->
+                emitEffect(ActivityEffect.OpenTicket(target.ticketId))
+
+            is ActivityTarget.MasterAppointment -> emitEffect(
+                ActivityEffect.OpenAppointment(target.appointmentId, AppointmentVertical.Barber.name),
+            )
+
+            is ActivityTarget.DoctorAppointment -> emitEffect(
+                ActivityEffect.OpenAppointment(target.appointmentId, AppointmentVertical.Doctor.name),
+            )
 
             ActivityTarget.None -> Unit
         }

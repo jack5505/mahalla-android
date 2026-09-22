@@ -2,6 +2,7 @@ package uz.mahalla.feature.cinema.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -267,5 +268,46 @@ class CinemaTest {
         val TODAY: LocalDate = LocalDate.of(2026, 9, 4)
         const val PLACE = "11111111-1111-1111-1111-111111111111"
         const val MOVIE = "22222222-2222-2222-2222-222222222222"
+    }
+}
+
+/**
+ * Проверка ссылки на трейлер (issue #183) — то же правило, что у ссылки на
+ * бота, магазин и форму оплаты: сервер не заслуживает безусловного доверия к
+ * схеме intent'а, который он присылает.
+ */
+class TrailerLinkTest {
+
+    @Test
+    fun `https on any host passes`() {
+        assertEquals(
+            "https://youtube.com/watch?v=dune",
+            TrailerLink.sanitize("https://youtube.com/watch?v=dune"),
+        )
+        assertEquals(
+            "https://cdn.mahalla.uz/trailer.mp4",
+            TrailerLink.sanitize(" https://cdn.mahalla.uz/trailer.mp4 "),
+        )
+    }
+
+    @Test
+    fun `foreign schemes and cleartext are rejected`() {
+        assertNull(TrailerLink.sanitize("http://youtube.com/watch?v=dune"))
+        assertNull(TrailerLink.sanitize("mahalla://place/1"))
+        assertNull(TrailerLink.sanitize("intent://evil#Intent;end"))
+        assertNull(TrailerLink.sanitize("market://details?id=uz.mahalla"))
+        assertNull(TrailerLink.sanitize("javascript:alert(1)"))
+        // Сервер не присылает эту схему (см. KDoc TrailerLink), а если бы
+        // прислал — YouTube и так открывает свои https-ссылки как App Link.
+        assertNull(TrailerLink.sanitize("vnd.youtube:dune"))
+    }
+
+    @Test
+    fun `link without a host or with spaces inside is rejected`() {
+        assertNull(TrailerLink.sanitize("https://"))
+        assertNull(TrailerLink.sanitize("https:///trailer"))
+        assertNull(TrailerLink.sanitize("https://you tube.com/watch"))
+        assertNull(TrailerLink.sanitize(null))
+        assertNull(TrailerLink.sanitize("   "))
     }
 }

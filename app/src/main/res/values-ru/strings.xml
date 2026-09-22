@@ -135,12 +135,17 @@
     <string name="wallet_held">Заморожено</string>
     <string name="wallet_bonus">Бонусы</string>
     <string name="wallet_status_blocked">Кошелёк заблокирован</string>
-    <string name="wallet_history_title">История операций</string>
     <string name="wallet_history_empty">Операций пока нет.</string>
     <string name="wallet_transaction_default_title">Операция</string>
     <string name="wallet_transaction_pending">В обработке</string>
     <string name="wallet_transaction_failed">Не прошла</string>
     <string name="wallet_transaction_bonus">Бонус</string>
+    <string name="wallet_tab_transactions">Операции</string>
+    <string name="wallet_tab_payments">Платежи</string>
+    <string name="wallet_payments_empty">Платежей пока нет.</string>
+    <string name="wallet_payment_default_title">Платёж</string>
+    <string name="wallet_payment_status_cancelled">Отменён</string>
+    <string name="wallet_payment_status_refunded">Возвращён</string>
     <string name="wallet_top_up">Пополнить</string>
     <string name="wallet_top_up_title">Пополнение кошелька</string>
     <string name="wallet_top_up_amount">Сумма</string>
@@ -763,6 +768,40 @@
     <string name="my_doctor_appointments_empty_description">Записаться можно с карточки больницы — кнопкой «Записаться к врачу».</string>
     <string name="my_doctor_appointments_unnamed">Врач не указан</string>
 
+    <!-- Замок приложения и настройки безопасности (issue #102) -->
+    <string name="app_lock_title">Вход в приложение</string>
+    <string name="app_lock_subtitle">Введите PIN-код, чтобы продолжить.</string>
+    <string name="app_lock_biometric">Войти по отпечатку</string>
+    <string name="app_lock_prompt_title">Открыть приложение</string>
+    <string name="app_lock_prompt_subtitle">Подтвердите вход в Mahalla</string>
+    <string name="app_lock_prompt_negative">Ввести PIN-код</string>
+
+    <string name="security_title">Безопасность</string>
+    <string name="security_profile_subtitle">PIN-код, биометрия и замок приложения</string>
+    <string name="security_pin_section">PIN-код</string>
+    <string name="security_change_pin">Сменить PIN-код</string>
+    <string name="security_pin_set">PIN-код установлен</string>
+    <string name="security_pin_not_set">PIN-код не установлен</string>
+    <string name="security_biometric">Вход по отпечатку</string>
+    <string name="security_biometric_description">Открывать замок приложения отпечатком вместо PIN-кода</string>
+    <string name="security_biometric_prompt_title">Подтвердите изменение</string>
+    <string name="security_biometric_prompt_subtitle">Включение входа по отпечатку</string>
+    <string name="security_confirm_pin_title">Введите PIN-код</string>
+    <string name="security_confirm_pin_enable">Чтобы включить вход по отпечатку, нужен PIN-код.</string>
+    <string name="security_confirm_pin_disable">Чтобы выключить вход по отпечатку, нужен PIN-код.</string>
+    <string name="security_lock_on">Замок включён</string>
+    <string name="security_lock_off">Замок выключен</string>
+    <string name="security_lock_on_description">После долгого пребывания в фоне приложение спросит PIN-код или отпечаток.</string>
+    <string name="security_lock_off_description">Чтобы замок работал, войдите в аккаунт и установите PIN-код.</string>
+
+    <string name="change_pin_current_title">Введите текущий PIN-код</string>
+    <string name="change_pin_new_title">Придумайте новый PIN-код</string>
+    <string name="change_pin_confirm_title">Повторите новый PIN-код</string>
+    <string name="change_pin_subtitle">PIN-код состоит из шести цифр.</string>
+    <string name="change_pin_error_same">Новый PIN-код должен отличаться от текущего</string>
+    <string name="change_pin_restart">Начать заново</string>
+    <string name="change_pin_done_title">PIN-код изменён</string>
+    <string name="change_pin_done_message">Теперь вход в приложение — по новому коду. Старый больше не работает.</string>
     <!-- Вертикаль «Мастера» (issue #107) -->
     <string name="freelancers_title">Мастера</string>
     <string name="freelancers_home_subtitle">Сантехник, электрик, мастер — вызвать и заказать услугу</string>
@@ -1008,6 +1047,7 @@
     <string name="cinema_empty_title">Афиша пуста</string>
     <string name="cinema_empty_description">Кинотеатр ещё не завёл фильмов. Загляните позже.</string>
     <string name="cinema_movie_unnamed">Название не указано</string>
+    <string name="cinema_movie_trailer">Смотреть трейлер</string>
     <string name="cinema_sessions_title">Сеансы</string>
     <string name="cinema_sessions_empty_title">На этот день сеансов нет</string>
     <string name="cinema_sessions_empty_description">Выберите другой день: в афише ближайшие две недели.</string>
@@ -1072,6 +1112,14 @@
     <string name="pharmacy_stock_edit_submit">Сохранить</string>
     <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
     <string name="pharmacy_stock_owner_count">Остаток: %1$d</string>
+    <!-- Правка и удаление товара (issue #288) -->
+    <string name="pharmacy_edit_product_action">Редактировать товар</string>
+    <string name="pharmacy_edit_product_title">Редактировать товар</string>
+    <string name="pharmacy_edit_product_submit">Сохранить</string>
+    <string name="pharmacy_delete_action">Удалить</string>
+    <string name="pharmacy_delete_title">Удалить товар</string>
+    <string name="pharmacy_delete_message">%1$s будет удалено безвозвратно. Это действие нельзя отменить.</string>
+    <string name="pharmacy_delete_confirm">Удалить</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">Игровые зоны</string>
     <string name="gaming_zones_empty_title">Зон пока нет</string>
@@ -1224,7 +1272,15 @@
     <string name="business_menu_stopped">%1$s — в стоп-листе</string>
     <string name="business_menu_resumed">%1$s снова в продаже</string>
     <string name="business_menu_created">%1$s добавлено</string>
+    <string name="business_menu_updated">%1$s обновлено</string>
+    <string name="business_menu_deleted">%1$s удалено</string>
     <string name="business_menu_add">Добавить позицию</string>
+    <string name="business_menu_edit_title">Редактировать позицию</string>
+    <string name="business_menu_edit_action">Редактировать</string>
+    <string name="business_menu_delete_action">Удалить</string>
+    <string name="business_menu_delete_title">Удалить позицию</string>
+    <string name="business_menu_delete_message">%1$s будет удалено безвозвратно. Если по позиции есть история заказов, вместо удаления снимите её с продажи переключателем «В продаже».</string>
+    <string name="business_menu_delete_confirm">Удалить</string>
     <string name="business_menu_save">Сохранить</string>
     <string name="business_menu_section">Раздел</string>
     <string name="business_menu_field_name">Название</string>

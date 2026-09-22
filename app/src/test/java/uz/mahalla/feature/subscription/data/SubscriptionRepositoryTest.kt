@@ -368,7 +368,9 @@ class SubscriptionRepositoryTest {
         // ручки нет, поэтому отбирает клиент.
         assertEquals(listOf("pay-1", "pay-3"), page.items.map { it.id })
         val paid = page.items.first()
-        // Пары `amountSom` у платежей нет — сумма читается как тийины.
+        // `amount` — тийины, как все целые денежные поля контракта (issue #149):
+        // 4 900 000 тийинов → 49 000 сум. Отсутствие пары `amountSom` здесь ни
+        // при чём — выводить единицу из пары перестали вместе с `WalletAmounts`.
         assertEquals(49_000, paid.amountSum)
         assertEquals(ChargeStatus.Paid, paid.status)
         assertEquals(ChargeProvider.Payme, paid.provider)

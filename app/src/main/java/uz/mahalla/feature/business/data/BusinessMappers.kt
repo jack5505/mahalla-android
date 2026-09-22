@@ -9,6 +9,9 @@ import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderLine
 import uz.mahalla.feature.business.domain.BusinessOrderPage
 import uz.mahalla.feature.business.domain.QueueEntry
+import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
@@ -82,17 +85,68 @@ private fun BusinessOrderItemDto.toDomain(): BusinessOrderLine? {
 }
 
 /** См. `BusinessOrderPage.hasMore` — правило подсчёта живёт там. */
-internal fun BusinessOrderPageDto.toDomain(): BusinessOrderPage {
-    val pageIndex = page ?: 0
-    val pages = totalPages
-    return BusinessOrderPage(
-        items = content.mapNotNull(BusinessOrderDto::toDomain),
-        hasMore = when {
-            last != null -> !last
-            pages != null -> pageIndex + 1 < pages
-            else -> false
-        },
+internal fun BusinessOrderPageDto.toDomain(): BusinessOrderPage = BusinessOrderPage(
+    items = content.mapNotNull(BusinessOrderDto::toDomain),
+    hasMore = hasMorePages(last = last, page = page, totalPages = totalPages),
+)
+
+/**
+ * Заказы «Одежды» (issue #187): `fashion/stores/{id}/orders`, схема
+ * `FashionOrderResponse`. Статус, способ получения и оплаты — те же
+ * перечисления, что и у «Еды» (сверено живым `/v3/api-docs` 2026-09-19),
+ * второй набор под вертикаль заводить не пришлось.
+ */
+internal fun FashionStoreOrderDto.toDomain(): BusinessOrder? {
+    val orderId = id?.takeIf { it.isNotBlank() } ?: return null
+    return BusinessOrder(
+        id = orderId,
+        number = orderNumber?.trim()?.takeIf(String::isNotEmpty),
+        status = OrderStatus.fromApi(status),
+        method = DeliveryMethod.fromApi(fulfillment),
+        payment = PaymentMethod.fromApi(paymentMethod),
+        itemsSum = itemsAmount.toSomOrZero(),
+        deliverySum = deliveryAmount.toSomOrZero(),
+        discountSum = discountAmount.toSomOrZero(),
+        totalSum = totalAmount.toSomOrZero(),
+        address = deliveryAddress?.trim()?.takeIf(String::isNotEmpty),
+        lines = items.mapNotNull(FashionStoreOrderItemDto::toDomain),
+        createdAt = parseServerInstant(createdAt),
     )
+}
+
+/**
+ * Строка по варианту, а не по позиции меню: у `FashionOrderItemResponse` нет
+ * `itemId`/`itemName` «Еды», только `variantId` и разложенные цвет/размер.
+ * Имя строки собирается из товара, цвета и размера — заводить под них
+ * отдельные поля в [BusinessOrderLine] значило бы разойтись с «Едой» ради
+ * данных, нужных только на одном экране.
+ */
+private fun FashionStoreOrderItemDto.toDomain(): BusinessOrderLine? {
+    val title = productName?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val count = quantity?.coerceAtLeast(0) ?: 0
+    return BusinessOrderLine(
+        itemId = variantId.orEmpty(),
+        name = listOfNotNull(
+            title,
+            colorName?.trim()?.takeIf(String::isNotEmpty),
+            size?.trim()?.takeIf(String::isNotEmpty),
+        ).joinToString(", "),
+        quantity = count,
+        unitPriceSum = unitPrice.toSomOrZero(),
+        totalPriceSum = totalPrice?.tiyinToSom()?.coerceAtLeast(0)
+            ?: (unitPrice.orZero() * count).tiyinToSom().coerceAtLeast(0),
+    )
+}
+
+internal fun FashionStoreOrderPageDto.toDomain(): BusinessOrderPage = BusinessOrderPage(
+    items = content.mapNotNull(FashionStoreOrderDto::toDomain),
+    hasMore = hasMorePages(last = last, page = page, totalPages = totalPages),
+)
+
+private fun hasMorePages(last: Boolean?, page: Int?, totalPages: Int?): Boolean = when {
+    last != null -> !last
+    totalPages != null -> (page ?: 0) + 1 < totalPages
+    else -> false
 }
 
 /**

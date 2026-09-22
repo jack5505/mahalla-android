@@ -197,6 +197,30 @@ class FashionCheckoutViewModelTest {
     }
 
     @Test
+    fun `a missing store argument offers nothing to submit either`() = runTest {
+        // `savedStateHandle[FashionArgs.STORE_ID] ?: ""` (issue #228, п. 5):
+        // корзина всё равно набрана по реальным `storeId`, пустой id ни с
+        // одним из них не совпадёт — `store()` не отдаст ни одной строки, и
+        // до `orderRepository.create` дело не дойдёт.
+        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
+        val viewModel = FashionCheckoutViewModel(
+            cartRepository = cartRepository,
+            orderRepository = orderRepository,
+            walletRepository = walletRepository,
+            roleRepository = roleRepository,
+            promotionsRepository = promotionsRepository,
+            analytics = analytics,
+            savedStateHandle = SavedStateHandle(),
+        )
+
+        assertTrue(viewModel.state.value.isEmpty)
+        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+
+        assertTrue(orderRepository.created.isEmpty())
+        assertEquals(emptyList<Any>(), analytics.events)
+    }
+
+    @Test
     fun `a failed cart read offers a retry`() = runTest {
         cartRepository.cartResult = ApiResult.Failure(ApiError.Unauthorized)
         val viewModel = viewModel()

@@ -1,9 +1,9 @@
 package uz.mahalla.testutil
 
 import uz.mahalla.core.analytics.AnalyticsEvent
+import uz.mahalla.core.analytics.AnalyticsRepository
 import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.result.ApiResult
-import uz.mahalla.data.network.analytics.AnalyticsRepository
 import java.util.Collections
 
 /**
@@ -33,8 +33,16 @@ class FakeAnalyticsRepository : AnalyticsRepository {
     /** Что бросить вместо ответа: трекер обязан выжить и после исключения. */
     var crash: Throwable? = null
 
+    /**
+     * Вызывается сразу после записи события — тесту на настоящей области
+     * (`Dispatchers.IO`) нужен сигнал о доставке, а не опрос [events] по
+     * стенным часам (issue #228, п. 3).
+     */
+    var onTrack: (() -> Unit)? = null
+
     override suspend fun track(event: AnalyticsEvent): ApiResult<Unit> {
         events += event
+        onTrack?.invoke()
         crash?.let { throw it }
         return result
     }

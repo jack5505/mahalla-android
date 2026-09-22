@@ -122,7 +122,11 @@ internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
         // Название услуги — единственное человекочитаемое поле в ответе, и
         // оно же самое полезное: «Soch olish» говорит больше, чем «Запись».
         note = serviceName?.takeIf { it.isNotBlank() },
-        target = ActivityTarget.None,
+        target = if (source == ActivitySource.DoctorAppointments) {
+            ActivityTarget.DoctorAppointment(appointmentId)
+        } else {
+            ActivityTarget.MasterAppointment(appointmentId)
+        },
         placeId = placeId?.takeIf { it.isNotBlank() },
     )
 }
@@ -165,6 +169,6 @@ internal fun CinemaTicketDto.toActivity(): Activity? {
         amount = price.tiyinToSom(),
         // Место в зале: то, что человек ищет в билете в первую очередь.
         note = seatNumber?.takeIf { it.isNotBlank() },
-        target = ActivityTarget.None,
+        target = ActivityTarget.CinemaTicket(ticketId),
     )
 }

@@ -188,9 +188,14 @@ interface FreelancerApi {
  * Пустые поля уходят **отсутствующими**, а не `null`: в `Json` проекта
  * `explicitNulls = false`.
  *
- * [scheduledAt] — ISO-8601 с зоной (`2026-09-06T10:30:00Z`). Живым запросом
- * форму не подтвердить: `401` приходит **до** валидации тела (проверено и на
- * пустом теле, и на заполненном).
+ * [scheduledAt] — зоне-менее ISO-8601 в **местном ташкентском** времени
+ * (`2026-09-06T10:30:00`), не `Instant.toString()` с `Z` — то же решение, что
+ * у `startTime` брони игровой зоны (issue #144), применённое сюда в issue
+ * #205: собирает и разбирает [uz.mahalla.feature.freelancer.data.freelancerRequestTime]
+ * пара с [uz.mahalla.core.format.parseServerSlotInstant]. Живым запросом форму
+ * не подтвердить: `401` приходит **до** валидации тела (проверено и на пустом
+ * теле, и на заполненном) — тип поля на бэкенде остаётся неподтверждённым, см.
+ * `docs/API-CONTRACT.md`.
  */
 @Serializable
 data class CreateFreelancerOrderRequest(
@@ -249,8 +254,12 @@ data class FreelancerPageDto(
  * и `serviceTitle`, которых у заказа еды быть не может. Поэтому поля прочитаны
  * как есть.
  *
- * Даты разбирает `parseServerInstant`: Jackson отдаёт `LocalDateTime` без
- * зоны, и иначе время было бы пустым у всех (issue #53).
+ * Даты разбираются по-разному (issue #205, по прецеденту #144): [createdAt] —
+ * отметка сервера, `parseServerInstant`, зоне-менее строка = UTC; [scheduledAt]
+ * — время слота, которое выбрал человек, `parseServerSlotInstant`, зоне-менее
+ * строка = Asia/Tashkent. Путать их нельзя, разница пять часов. Jackson
+ * отдаёт `LocalDateTime` без зоны, и без этого разбора время было бы пустым у
+ * всех (issue #53).
  */
 @Serializable
 data class FreelancerOrderDto(
