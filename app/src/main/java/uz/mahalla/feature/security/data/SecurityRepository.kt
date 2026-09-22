@@ -9,6 +9,7 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.CheckSessionRequest
 import uz.mahalla.data.network.auth.PinResumeRequest
 import uz.mahalla.data.network.auth.SessionApi
@@ -80,6 +81,7 @@ class DefaultSecurityRepository @Inject constructor(
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
+    private val tokenAuthenticator: TokenAuthenticator,
 ) : SecurityRepository {
 
     override suspend fun pinStatus(): ApiResult<ServerPinStatus> {
@@ -242,6 +244,13 @@ class DefaultSecurityRepository @Inject constructor(
                                 ?: sessionStore.current()?.sessionId,
                         ),
                     )
+                    // Счётчик неоднозначных провалов refresh (issue #198) живёт
+                    // в `TokenAuthenticator`, а сессию сюда пишет этот класс —
+                    // мимо него. Без сброса счёт, накопленный до блокировки
+                    // (1–2, порог не достигнут), пережил бы разблокировку, и
+                    // первый же неоднозначный ответ в продолженной сессии
+                    // добил бы его до порога мгновенно (issue #363).
+                    tokenAuthenticator.reset()
                 }
                 // Сервер принял код — значит он и есть аккаунтный PIN, и
                 // локальная копия обязана его знать: следующая разблокировка

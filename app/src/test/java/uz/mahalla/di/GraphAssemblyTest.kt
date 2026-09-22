@@ -664,6 +664,7 @@ class GraphAssemblyTest {
         val sessionApi = SecurityDataModule.provideSessionApi(retrofit)
         val dataStore = sharedDataStore(context)
         val settings = SettingsDataStore(dataStore)
+        val sessionStore = DataStoreSessionStore(dataStore)
 
         assertNotNull(pinApi)
         assertNotNull(sessionApi)
@@ -674,12 +675,26 @@ class GraphAssemblyTest {
             DefaultSecurityRepository(
                 pinApi = pinApi,
                 sessionApi = sessionApi,
-                sessionStore = DataStoreSessionStore(dataStore),
+                sessionStore = sessionStore,
                 onboardingRepository = DataStoreOnboardingRepository(settings),
                 pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
                 deviceInfoProvider = FakeDeviceInfoProvider(),
                 locationProvider = FakeRequestLocationProvider(),
                 clock = AppModule.provideClock(),
+                tokenAuthenticator = TokenAuthenticator(
+                    sessionStore = sessionStore,
+                    sessionExpiry = SessionExpiry(),
+                    authApi = NetworkModule.provideAuthApi(
+                        NetworkModule.provideRefreshRetrofit(
+                            refreshClient(),
+                            NetworkModule.provideConverterFactory(NetworkModule.provideJson()),
+                            NetworkModule.provideBaseUrl(),
+                        ),
+                    ),
+                    deviceInfoProvider = FakeDeviceInfoProvider(),
+                    locationProvider = FakeRequestLocationProvider(),
+                    clock = AppModule.provideClock(),
+                ),
             ),
         )
     }
