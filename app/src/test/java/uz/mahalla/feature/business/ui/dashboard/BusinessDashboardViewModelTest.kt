@@ -137,17 +137,17 @@ class BusinessDashboardViewModelTest {
         viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Orders))
 
         assertEquals(
-            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi", "FOOD"),
+            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi"),
             viewModel.effects.first(),
         )
     }
 
     /**
-     * «Одежда» тоже открывает заказы (issue #187), но эффект несёт её
-     * категорию — иначе экран заказов позвал бы ручку еды за чужой магазин.
+     * «Одежда» тоже открывает заказы (issue #187) — единая лента (issue #289)
+     * не спрашивает категорию заведения, ручка одна на все вертикали.
      */
     @Test
-    fun `a fashion store opens the orders section with its own category`() = runTest {
+    fun `a fashion store opens the orders section too`() = runTest {
         val repository = FakeBusinessRepository()
         repository.accessResult = ApiResult.Success(access(category = PlaceCategory.Fashion))
         val viewModel = viewModel(repository)
@@ -155,7 +155,37 @@ class BusinessDashboardViewModelTest {
         viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Orders))
 
         assertEquals(
-            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi", "FASHION"),
+            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi"),
+            viewModel.effects.first(),
+        )
+    }
+
+    /** Барбершоп — журнал (issue #289), вертикаль решает `AppointmentVertical.Barber`. */
+    @Test
+    fun `a barbershop opens the journal section with the barber vertical`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.accessResult = ApiResult.Success(access(category = PlaceCategory.Master))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Journal))
+
+        assertEquals(
+            BusinessDashboardEffect.OpenJournal(PLACE, "Osh Markazi", "Barber"),
+            viewModel.effects.first(),
+        )
+    }
+
+    /** Клиника — журнал с вертикалью `Doctor` (issue #289). */
+    @Test
+    fun `a hospital opens the journal section with the doctor vertical`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.accessResult = ApiResult.Success(access(category = PlaceCategory.Hospital))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Journal))
+
+        assertEquals(
+            BusinessDashboardEffect.OpenJournal(PLACE, "Osh Markazi", "Doctor"),
             viewModel.effects.first(),
         )
     }

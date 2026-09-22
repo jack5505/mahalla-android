@@ -13,6 +13,9 @@ import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
+import uz.mahalla.feature.booking.data.AppointmentDto
+import uz.mahalla.feature.booking.data.AppointmentPageDto
+import uz.mahalla.feature.fashion.data.OrderPageDto
 
 /**
  * Бизнес-панель заведения (эпик #16): метрики, очередь, входящие заказы, меню.
@@ -105,16 +108,27 @@ interface BusinessApi {
     ): ApiResponse<QueueEntryDto>
 
     /**
-     * Входящие заказы (задача 12.3). `status` необязателен — без него приходят
-     * все.
+     * Единая лента входящих (задача 12.3, issue #289) — заменяет разрозненные
+     * списки по вертикалям (`food/places/{id}/orders`,
+     * `fashion/stores/{id}/orders`, issue #187). Путь и параметры сняты живым
+     * `/v3/api-docs` **2026-09-22** (`place-order-controller`, `placeOrders`):
+     * `vertical` — `FOOD`/`CLOTHING`/`PHARMACY`/`CINEMA`/`GAMING`, `status` —
+     * то же перечисление `OrderStatus`, что и у «Еды»/«Одежды». Оба
+     * необязательны, `null` — параметр не отправляется вовсе.
+     *
+     * Ответ — та же `PageResponseOrderView`, что у клиентского `orders`
+     * (issue #73, `OrderPageDto`/`OrderViewDto` в `FashionApi.kt`/`FoodApi.kt`)
+     * — схема общая для всех вертикалей, второй DTO под неё заводить не
+     * пришлось.
      */
-    @GET("food/places/{placeId}/orders")
-    suspend fun orders(
+    @GET("places/{placeId}/orders")
+    suspend fun placeOrders(
         @Path("placeId") placeId: String,
+        @Query("vertical") vertical: String?,
         @Query("status") status: String?,
         @Query("page") page: Int,
         @Query("size") size: Int,
-    ): ApiResponse<BusinessOrderPageDto>
+    ): ApiResponse<OrderPageDto>
 
     /**
      * Сменить статус заказа.
@@ -188,6 +202,73 @@ interface BusinessApi {
      */
     @DELETE("food/items/{itemId}")
     suspend fun deleteItem(@Path("itemId") itemId: String): ApiResponse<JsonElement>
+
+    /**
+     * Журнал записей барбершопа на день (issue #289). Путь и параметры сняты
+     * живым `/v3/api-docs` **2026-09-22** (`appointment-controller`,
+     * `placeJournal_1`): `date` — `yyyy-MM-dd`, `status` — то же перечисление
+     * `AppointmentStatus`, что и у «моих записей» (`PENDING`, `CONFIRMED`,
+     * `CANCELLED`, `COMPLETED`, `NO_SHOW`). Оба необязательны.
+     *
+     * Ответ — та же `PageResponseAppointmentBookingResponse`, что у
+     * `appointments/my` (`AppointmentPageDto`/`AppointmentDto`, `BookingApi.kt`)
+     * — второй DTO под панель заводить не пришлось.
+     */
+    @GET("appointments/places/{placeId}")
+    suspend fun barberJournal(
+        @Path("placeId") placeId: String,
+        @Query("date") date: String?,
+        @Query("status") status: String?,
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+    ): ApiResponse<AppointmentPageDto>
+
+    /**
+     * Сменить статус записи барбершопа (issue #289). Тело — `Map<String,
+     * String>` с ключом `status`: тот же вывод, что у [updateOrderStatus] —
+     * своей схемы у ручки нет, а операция совпадает с соседними вертикалями.
+     */
+    @PUT("appointments/{id}/status")
+    suspend fun updateAppointmentStatus(
+        @Path("id") appointmentId: String,
+        @Body body: Map<String, String>,
+    ): ApiResponse<AppointmentDto>
+
+    /**
+     * Журнал записей клиники на день (issue #289), с фильтром по врачу. Путь
+     * и параметры сняты живым `/v3/api-docs` **2026-09-22**
+     * (`hospital-controller`, `placeJournal`): `doctorId`/`date`/`status`
+     * необязательны, `status` — `PENDING`/`CONFIRMED`/`COMPLETED`/`CANCELLED`
+     * (без `NO_SHOW` — у больничной схемы его нет).
+     *
+     * Ответ — `PageResponseHospitalAppointmentResponse`, тот же
+     * `AppointmentPageDto`, что у [barberJournal] и у `hospitals/appointments/
+     * my` (`HospitalApi.kt`): общих полей хватает, `complaint` разбирается тем
+     * же [AppointmentDto].
+     */
+    @GET("hospitals/places/{placeId}/appointments")
+    suspend fun clinicJournal(
+        @Path("placeId") placeId: String,
+        @Query("doctorId") doctorId: String?,
+        @Query("date") date: String?,
+        @Query("status") status: String?,
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+    ): ApiResponse<AppointmentPageDto>
+
+    /**
+     * Сменить статус записи клиники (issue #289). `placeId` — тот же вывод,
+     * что у [uz.mahalla.feature.fashion.data.FashionApi.updateStoreOrderStatus]:
+     * в `/v3/api-docs` он не значится среди параметров операции (тот же класс
+     * дефекта схемы), но путь его требует буквально. Тело — `Map<String,
+     * String>` с ключом `status`.
+     */
+    @PUT("hospitals/places/{placeId}/appointments/{id}/status")
+    suspend fun updateClinicAppointmentStatus(
+        @Path("placeId") placeId: String,
+        @Path("id") appointmentId: String,
+        @Body body: Map<String, String>,
+    ): ApiResponse<AppointmentDto>
 }
 
 /**
@@ -213,18 +294,6 @@ data class QueueEntryDto(
     @SerialName("estimatedWaitMinutes") val estimatedWaitMinutes: Int? = null,
     @SerialName("serviceStartedAt") val serviceStartedAt: String? = null,
     @SerialName("createdAt") val createdAt: String? = null,
-)
-
-/** `PageResponseFoodOrderResponse`. */
-@Serializable
-data class BusinessOrderPageDto(
-    @SerialName("content") val content: List<BusinessOrderDto> = emptyList(),
-    @SerialName("page") val page: Int? = null,
-    @SerialName("size") val size: Int? = null,
-    @SerialName("totalElements") val totalElements: Long? = null,
-    @SerialName("totalPages") val totalPages: Int? = null,
-    @SerialName("first") val first: Boolean? = null,
-    @SerialName("last") val last: Boolean? = null,
 )
 
 /**

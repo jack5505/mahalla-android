@@ -58,6 +58,76 @@ class BusinessOrdersViewModelTest {
     }
 
     /**
+     * Критерий готовности issue #289: единая лента отдаёт заказы всех
+     * вертикалей сразу — вертикаль каждого заказа приезжает в самом ответе, а
+     * не решается заранее по заведению.
+     */
+    @Test
+    fun `the feed shows orders of every vertical at once`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(
+            listOf(
+                order("o-1", OrderStatus.Created, vertical = PlaceCategory.Food),
+                order("o-2", OrderStatus.Created, vertical = PlaceCategory.Fashion),
+                order("o-3", OrderStatus.Created, vertical = PlaceCategory.Cinema),
+            ),
+        )
+
+        val orders = (viewModel(repository).state.value.orders as ScreenState.Content).data
+
+        assertEquals(
+            listOf(PlaceCategory.Food, PlaceCategory.Fashion, PlaceCategory.Cinema),
+            orders.map(BusinessOrder::vertical),
+        )
+    }
+
+    /** Первая загрузка не сужает по вертикали — фильтр по умолчанию «все». */
+    @Test
+    fun `the first page is loaded without a vertical filter`() = runTest {
+        val repository = FakeBusinessRepository()
+
+        viewModel(repository)
+
+        assertEquals(listOf(null), repository.orderVerticalRequests)
+    }
+
+    @Test
+    fun `choosing a vertical asks the server with that vertical`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessOrdersEvent.VerticalFilterSelected(PlaceCategory.Fashion))
+
+        assertEquals(listOf(null, PlaceCategory.Fashion), repository.orderVerticalRequests)
+        assertEquals(PlaceCategory.Fashion, viewModel.state.value.verticalFilter)
+    }
+
+    @Test
+    fun `selecting the current vertical does not repeat the request`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessOrdersEvent.VerticalFilterSelected(null))
+
+        assertEquals(listOf(null), repository.orderVerticalRequests)
+    }
+
+    /**
+     * Критерий готовности issue #289: посторонний placeId даёт 403 и
+     * понятную ошибку — единая лента показывает её как обычный отказ сети, а
+     * не молча пустой список.
+     */
+    @Test
+    fun `a foreign place id surfaces the forbidden error`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+
+        val state = viewModel(repository).state.value
+
+        assertEquals(ApiError.Forbidden, (state.orders as ScreenState.Error).failure.error)
+    }
+
+    /**
      * Смена вкладки — новый запрос, а не локальная фильтрация: ручка
      * пагинирована, и нужные заказы могут лежать на второй странице.
      */
@@ -250,35 +320,40 @@ class BusinessOrdersViewModelTest {
         assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
     }
 
-    /** Категория заведения решает ручку панели (еда vs одежда, issue #187). */
+    /**
+     * Вертикаль для смены статуса берётся у заказа ([BusinessOrder.vertical]),
+     * а не у заведения (issue #289): единая лента может показать заказы
+     * разных вертикалей одним списком.
+     */
     @Test
-    fun `missing category defaults to food`() = runTest {
+    fun `a status change is sent for the order's own vertical`() = runTest {
         val repository = FakeBusinessRepository()
-
-        viewModel(repository)
-
-        assertEquals(listOf(PlaceCategory.Food), repository.orderCategoryRequests)
-    }
-
-    @Test
-    fun `orders are requested for the category the screen was opened with`() = runTest {
-        val repository = FakeBusinessRepository()
-
-        viewModel(repository, category = PlaceCategory.Fashion)
-
-        assertEquals(listOf(PlaceCategory.Fashion), repository.orderCategoryRequests)
-    }
-
-    @Test
-    fun `a status change is sent for the category the screen was opened with`() = runTest {
-        val repository = FakeBusinessRepository()
-        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
-        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
-        val viewModel = viewModel(repository, category = PlaceCategory.Fashion)
+        repository.defaultOrderPage =
+            page(listOf(order("o-1", OrderStatus.Created, vertical = PlaceCategory.Fashion)))
+        repository.updateOrderResult =
+            ApiResult.Success(order("o-1", OrderStatus.Confirmed, vertical = PlaceCategory.Fashion))
+        val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
 
         assertEquals(listOf(PlaceCategory.Fashion), repository.statusUpdateCategories)
+    }
+
+    /**
+     * Аптека, кино и игровая зона у бэкенда меняют статус своими путями, не
+     * общей `.../orders/{id}/status` — заказ этих вертикалей отклоняется ещё
+     * на клиенте, до запроса (issue #289).
+     */
+    @Test
+    fun `a status change is refused for a vertical without the status handle`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage =
+            page(listOf(order("o-1", OrderStatus.Created, vertical = PlaceCategory.Cinema)))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+
+        assertTrue(repository.statusUpdates.isEmpty())
     }
 
     @Test
@@ -295,17 +370,13 @@ class BusinessOrdersViewModelTest {
         assertEquals(2, viewModel(repository).state.value.newCount)
     }
 
-    private fun viewModel(
-        repository: FakeBusinessRepository,
-        category: PlaceCategory? = null,
-    ) = BusinessOrdersViewModel(
+    private fun viewModel(repository: FakeBusinessRepository) = BusinessOrdersViewModel(
         repository = repository,
         savedStateHandle = SavedStateHandle(
-            buildMap {
-                put(BusinessArgs.PLACE_ID, FakeBusinessRepository.PLACE_ID)
-                put(BusinessArgs.PLACE_NAME, "Osh Markazi")
-                category?.let { put(BusinessArgs.CATEGORY, it.apiValue) }
-            },
+            mapOf(
+                BusinessArgs.PLACE_ID to FakeBusinessRepository.PLACE_ID,
+                BusinessArgs.PLACE_NAME to "Osh Markazi",
+            ),
         ),
     )
 
@@ -316,6 +387,7 @@ class BusinessOrdersViewModelTest {
         id: String,
         status: OrderStatus,
         method: DeliveryMethod = DeliveryMethod.Pickup,
+        vertical: PlaceCategory = PlaceCategory.Food,
     ) = BusinessOrder(
         id = id,
         number = "F-$id",
@@ -323,5 +395,6 @@ class BusinessOrdersViewModelTest {
         method = method,
         payment = PaymentMethod.Cash,
         totalSum = 32_000,
+        vertical = vertical,
     )
 }

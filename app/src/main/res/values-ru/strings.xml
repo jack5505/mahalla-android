@@ -1175,6 +1175,8 @@
     <string name="business_section_orders_description">Принять и менять статус</string>
     <string name="business_section_menu">Меню</string>
     <string name="business_section_menu_description">Позиции и стоп-лист</string>
+    <string name="business_section_journal">Записи</string>
+    <string name="business_section_journal_description">Расписание дня и смена статуса</string>
 
     <string name="business_queue_next_title">Следующий</string>
     <string name="business_queue_call_next">Вызвать следующего</string>
@@ -1232,6 +1234,27 @@
     <string name="business_orders_action_deliver">Передан курьеру</string>
     <string name="business_orders_action_complete">Выдан</string>
     <string name="business_orders_action_cancel">Отклонить</string>
+    <string name="business_orders_vertical_all">Все вертикали</string>
+
+    <string name="business_journal_empty_title">Записей нет</string>
+    <string name="business_journal_empty_description">На этот день никто не записан.</string>
+    <string name="business_journal_prev_day">Предыдущий день</string>
+    <string name="business_journal_next_day">Следующий день</string>
+    <string name="business_journal_doctor_all">Все врачи</string>
+    <string name="business_journal_no_service">Услуга не указана</string>
+    <string name="business_journal_status_changed">Статус: %1$s</string>
+    <string name="business_journal_status_pending">Ждёт подтверждения</string>
+    <string name="business_journal_status_confirmed">Подтверждена</string>
+    <string name="business_journal_status_completed">Завершена</string>
+    <string name="business_journal_status_cancelled">Отменена</string>
+    <string name="business_journal_status_no_show">Не пришёл</string>
+    <string name="business_journal_status_unknown">Статус неизвестен</string>
+    <string name="business_journal_action_confirm">Подтвердить</string>
+    <string name="business_journal_action_complete">Завершить</string>
+    <string name="business_journal_action_no_show">Не пришёл</string>
+    <string name="business_journal_action_cancel">Отменить</string>
+    <string name="business_journal_price">Цена: %1$s</string>
+    <string name="business_journal_complaint">Жалоба: %1$s</string>
 
     <string name="business_menu_empty_title">Меню пусто</string>
     <string name="business_menu_empty_description">Добавьте первую позицию.</string>

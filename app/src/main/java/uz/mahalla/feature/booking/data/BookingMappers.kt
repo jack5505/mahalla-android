@@ -80,6 +80,7 @@ private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
     startTime = parseServerLocalTime(startTime),
     endTime = parseServerLocalTime(endTime),
     status = AppointmentStatus.fromApi(status),
+    complaint = complaint?.trim()?.takeIf(String::isNotEmpty),
     createdAt = parseServerInstant(createdAt),
 )
 

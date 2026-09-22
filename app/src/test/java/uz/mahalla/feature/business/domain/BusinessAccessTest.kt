@@ -20,10 +20,10 @@ import uz.mahalla.feature.role.domain.PlaceStaffRole
 class BusinessAccessTest {
 
     @Test
-    fun `a barbershop has a queue and no food sections`() {
+    fun `a barbershop has a queue and a journal, but no food sections`() {
         val access = access(category = PlaceCategory.Master)
 
-        assertEquals(listOf(BusinessSection.Queue), access.sections)
+        assertEquals(listOf(BusinessSection.Queue, BusinessSection.Journal), access.sections)
     }
 
     @Test
@@ -31,6 +31,14 @@ class BusinessAccessTest {
         val access = access(category = PlaceCategory.Food)
 
         assertEquals(listOf(BusinessSection.Orders, BusinessSection.Menu), access.sections)
+    }
+
+    /** Журнал записей на день (issue #289) — единственный раздел у клиники. */
+    @Test
+    fun `a hospital has only a journal`() {
+        val access = access(category = PlaceCategory.Hospital)
+
+        assertEquals(listOf(BusinessSection.Journal), access.sections)
     }
 
     @Test
@@ -120,7 +128,7 @@ class BusinessAccessTest {
         assertEquals("Barber Studio", access.placeName)
         assertEquals(PlaceStaffRole.Manager, access.role)
         assertTrue(access.isAvailable)
-        assertEquals(listOf(BusinessSection.Queue), access.sections)
+        assertEquals(listOf(BusinessSection.Queue, BusinessSection.Journal), access.sections)
     }
 
     private fun access(

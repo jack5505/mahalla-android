@@ -7,6 +7,12 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
 import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
+import uz.mahalla.feature.booking.data.AppointmentPageDto
+import uz.mahalla.feature.booking.data.toDomain
+import uz.mahalla.feature.booking.domain.Appointment
+import uz.mahalla.feature.booking.domain.AppointmentPage
+import uz.mahalla.feature.booking.domain.AppointmentStatus
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessMenu
@@ -16,11 +22,15 @@ import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.NewMenuItemValidator
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
+import uz.mahalla.feature.business.domain.orderVerticalApiValue
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.fashion.data.FashionApi
-import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
+import uz.mahalla.feature.fashion.data.OrderPageDto
 import uz.mahalla.feature.food.domain.OrderStatus
+import uz.mahalla.feature.hospital.data.HospitalRepository
+import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.role.data.ProviderRepository
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -75,27 +85,71 @@ interface BusinessRepository {
     suspend fun togglePause(placeId: String, current: Boolean): ApiResult<Boolean>
 
     /**
-     * Входящие заказы (задача 12.3).
+     * Единая лента входящих (задача 12.3, issue #289): `GET places/{placeId}/
+     * orders`, одна ручка на все вертикали вместо разрозненных списков
+     * (issue #187).
      *
-     * @param category решает ручку: `FASHION` — `fashion/stores/{id}/orders`,
-     * всё остальное — `food/places/{id}/orders` (issue #187). По умолчанию
-     * «Еда» — единственная вертикаль, у которой были заказы до issue #187.
+     * @param vertical фильтр по вертикали; `null` — заказы всех вертикалей
+     * разом, так же, как и с [status].
      */
     suspend fun orders(
         placeId: String,
         status: String? = null,
         page: Int = 0,
         size: Int = PAGE_SIZE,
-        category: PlaceCategory = PlaceCategory.Food,
+        vertical: PlaceCategory? = null,
     ): ApiResult<BusinessOrderPage>
 
-    /** Сменить статус заказа (задача 12.3). См. [orders] про [category]. */
+    /**
+     * Сменить статус заказа (задача 12.3): переиспользует те же ручки, что и
+     * #187 — `food/places/{id}/orders/{id}/status` /
+     * `fashion/stores/{id}/orders/{id}/status`, — единая лента (issue #289)
+     * читает заказы, но не меняет их статус общей ручкой (её у бэкенда нет).
+     *
+     * @param category вертикаль **конкретного заказа** ([BusinessOrder.vertical]
+     * из строки списка), а не заведения: в единой ленте это одно и то же для
+     * настоящих заведений, но вызывающий обязан передать то, что показал
+     * список, а не догадку.
+     */
     suspend fun updateOrderStatus(
         placeId: String,
         orderId: String,
         status: OrderStatus,
         category: PlaceCategory = PlaceCategory.Food,
     ): ApiResult<BusinessOrder>
+
+    /**
+     * Журнал записей на день (issue #289): барбершоп —
+     * `GET appointments/places/{id}`, клиника —
+     * `GET hospitals/places/{id}/appointments`.
+     *
+     * @param doctorId фильтр по врачу — только у [AppointmentVertical.Doctor],
+     * барбершоп его игнорирует (в барберском журнале мастеров не разводят).
+     */
+    suspend fun journal(
+        placeId: String,
+        vertical: AppointmentVertical,
+        date: LocalDate,
+        doctorId: String? = null,
+        status: AppointmentStatus? = null,
+        page: Int = 0,
+        size: Int = PAGE_SIZE,
+    ): ApiResult<AppointmentPage>
+
+    /** Сменить статус записи журнала. См. [journal] про [vertical]. */
+    suspend fun updateAppointmentStatus(
+        placeId: String,
+        appointmentId: String,
+        vertical: AppointmentVertical,
+        status: AppointmentStatus,
+    ): ApiResult<Appointment>
+
+    /**
+     * Врачи заведения — фильтр журнала клиники (issue #289). Делегирует
+     * [HospitalRepository]: своей ручки у панели нет, а вторую реализацию той
+     * же `GET hospitals/places/{id}/doctors` заводить незачем.
+     */
+    suspend fun doctors(placeId: String): ApiResult<List<Doctor>>
 
     /** Меню со стоп-листом (задача 12.4). */
     suspend fun menu(placeId: String): ApiResult<BusinessMenu>
@@ -148,6 +202,7 @@ class DefaultBusinessRepository @Inject constructor(
     private val api: BusinessApi,
     private val fashionApi: FashionApi,
     private val providerRepository: ProviderRepository,
+    private val hospitalRepository: HospitalRepository,
 ) : BusinessRepository {
 
     /**
@@ -223,26 +278,16 @@ class DefaultBusinessRepository @Inject constructor(
         status: String?,
         page: Int,
         size: Int,
-        category: PlaceCategory,
-    ): ApiResult<BusinessOrderPage> = when (category) {
-        PlaceCategory.Fashion -> apiCall {
-            fashionApi.storeOrders(
-                storeId = placeId,
-                status = status?.takeIf(String::isNotBlank),
-                page = page.coerceAtLeast(0),
-                size = size,
-            ).payload()
-        }.map(FashionStoreOrderPageDto::toDomain)
-
-        else -> apiCall {
-            api.orders(
-                placeId = placeId,
-                status = status?.takeIf(String::isNotBlank),
-                page = page.coerceAtLeast(0),
-                size = size,
-            ).payload()
-        }.map(BusinessOrderPageDto::toDomain)
-    }
+        vertical: PlaceCategory?,
+    ): ApiResult<BusinessOrderPage> = apiCall {
+        api.placeOrders(
+            placeId = placeId,
+            vertical = vertical?.orderVerticalApiValue(),
+            status = status?.takeIf(String::isNotBlank),
+            page = page.coerceAtLeast(0),
+            size = size,
+        ).payload()
+    }.map(OrderPageDto::toDomain)
 
     /**
      * Ключ тела — `status`: имя выведено из настоящих схем той же операции у
@@ -271,7 +316,7 @@ class DefaultBusinessRepository @Inject constructor(
                 ).payload()
                 // Как и у талона: ответ без `id` — это удачная смена статуса,
                 // а не потерянный заказ.
-                dto.toDomain() ?: dto.copy(id = orderId).toDomain()
+                dto.toDomain(category) ?: dto.copy(id = orderId).toDomain(category)
                     ?: error("fashion order response without status for $orderId")
             }
 
@@ -281,11 +326,88 @@ class DefaultBusinessRepository @Inject constructor(
                     orderId = orderId,
                     body = mapOf(STATUS_KEY to status.apiValue),
                 ).payload()
-                dto.toDomain() ?: dto.copy(id = orderId).toDomain()
+                dto.toDomain(category) ?: dto.copy(id = orderId).toDomain(category)
                     ?: error("order response without status for $orderId")
             }
         }
     }
+
+    /**
+     * Клиника дотягивает имя врача тем же [HospitalRepository.withDoctorNames],
+     * что и «мои записи»: `HospitalAppointmentResponse` называет только
+     * `doctorId` (issue #219), а без имени журнал был бы списком одинаковых
+     * заглушек. Барбершоп имя услуги уже получает в ответе — дотягивать
+     * нечего.
+     */
+    override suspend fun journal(
+        placeId: String,
+        vertical: AppointmentVertical,
+        date: LocalDate,
+        doctorId: String?,
+        status: AppointmentStatus?,
+        page: Int,
+        size: Int,
+    ): ApiResult<AppointmentPage> = when (vertical) {
+        AppointmentVertical.Barber -> apiCall {
+            api.barberJournal(
+                placeId = placeId,
+                date = date.toString(),
+                status = status?.apiValueOrNull(),
+                page = page.coerceAtLeast(0),
+                size = size,
+            ).payload()
+        }.map(AppointmentPageDto::toDomain)
+
+        AppointmentVertical.Doctor -> apiCall {
+            val dto = api.clinicJournal(
+                placeId = placeId,
+                doctorId = doctorId?.takeIf(String::isNotBlank),
+                date = date.toString(),
+                status = status?.apiValueOrNull(),
+                page = page.coerceAtLeast(0),
+                size = size,
+            ).payload()
+            dto.copy(content = hospitalRepository.withDoctorNames(dto.content))
+        }.map(AppointmentPageDto::toDomain)
+    }
+
+    /**
+     * Ключ тела — `status`, тот же вывод, что у [updateOrderStatus]: своей
+     * схемы у ручки нет, а операция совпадает с соседними.
+     *
+     * Ответ без `id` — не отказ, тем же приёмом, что и у заказа: действие
+     * сервер выполнил, а идентификатор мы и так знаем ([AppointmentDto.toDomain]
+     * с запрошенным `id` из `BookingMappers.kt`).
+     */
+    override suspend fun updateAppointmentStatus(
+        placeId: String,
+        appointmentId: String,
+        vertical: AppointmentVertical,
+        status: AppointmentStatus,
+    ): ApiResult<Appointment> {
+        if (status == AppointmentStatus.Unknown) {
+            return ApiResult.Failure(ApiError.Business(BusinessRepository.INVALID_FORM_CODE))
+        }
+        return when (vertical) {
+            AppointmentVertical.Barber -> apiCall {
+                api.updateAppointmentStatus(
+                    appointmentId = appointmentId,
+                    body = mapOf(STATUS_KEY to status.apiValue),
+                ).payload().toDomain(appointmentId)
+            }
+
+            AppointmentVertical.Doctor -> apiCall {
+                api.updateClinicAppointmentStatus(
+                    placeId = placeId,
+                    appointmentId = appointmentId,
+                    body = mapOf(STATUS_KEY to status.apiValue),
+                ).payload().toDomain(appointmentId)
+            }
+        }
+    }
+
+    override suspend fun doctors(placeId: String): ApiResult<List<Doctor>> =
+        hospitalRepository.doctors(placeId)
 
     override suspend fun menu(placeId: String): ApiResult<BusinessMenu> =
         apiCall { api.menu(placeId).payload() }.map(List<MenuSectionDto>::toDomain)
@@ -403,3 +525,6 @@ class DefaultBusinessRepository @Inject constructor(
         const val STATUS_KEY = "status"
     }
 }
+
+/** `Unknown.apiValue` — пустая строка приложения, не значение бэкенда: в query её отправлять незачем. */
+private fun AppointmentStatus.apiValueOrNull(): String? = apiValue.takeIf(String::isNotEmpty)

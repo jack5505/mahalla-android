@@ -50,6 +50,7 @@ import uz.mahalla.core.ui.components.rememberSnackbarController
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.business.domain.BUSINESS_ORDER_VERTICALS
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderLine
@@ -147,6 +148,20 @@ fun BusinessOrdersContentScreen(
                 BusinessOrderFilter.entries.firstOrNull { it.name == id }?.let { filter ->
                     onEvent(BusinessOrdersEvent.FilterSelected(filter))
                 }
+            },
+        )
+        // Второй, независимый фильтр — по вертикали (issue #289): единая лента
+        // отдаёт заказы всех вертикалей разом, и без него список смешивал бы
+        // «Еду» и «Одежду» одного заведения без способа их развести.
+        MahallaFilterRow(
+            items = listOf(FilterChipUi(id = VERTICAL_ALL_ID, label = stringResource(R.string.business_orders_vertical_all))) +
+                BUSINESS_ORDER_VERTICALS.map { vertical ->
+                    FilterChipUi(id = vertical.name, label = stringResource(vertical.labelRes))
+                },
+            selectedId = state.verticalFilter?.name ?: VERTICAL_ALL_ID,
+            onSelect = { id ->
+                val vertical = BUSINESS_ORDER_VERTICALS.firstOrNull { it.name == id }
+                onEvent(BusinessOrdersEvent.VerticalFilterSelected(vertical))
             },
         )
         MahallaPullToRefresh(
@@ -298,7 +313,14 @@ private fun BusinessOrderCard(
             )
         }
 
-        val next = BusinessOrderStatusFlow.nextStatuses(order.status, order.method)
+        // Аптека, кино и игровая зона у бэкенда меняют статус своими путями
+        // (`cancel`, `complete`), не общей `.../orders/{id}/status` — кнопок
+        // здесь для них нет вовсе (issue #289).
+        val next = if (BusinessOrderStatusFlow.canChangeStatus(order.vertical)) {
+            BusinessOrderStatusFlow.nextStatuses(order.status, order.method)
+        } else {
+            emptyList()
+        }
         if (next.isNotEmpty()) {
             Row(
                 modifier = Modifier
@@ -452,6 +474,9 @@ private fun PaymentMethod.labelRes(): Int = when (this) {
 }
 
 private val LOAD_MORE_INDICATOR = 24.dp
+
+/** `PlaceCategory` не заводит значение «все» — id фильтра свой, вне enum'а. */
+private const val VERTICAL_ALL_ID = "ALL"
 
 @ThemeLanguagePreviews
 @Composable

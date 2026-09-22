@@ -976,16 +976,21 @@ Bearer. Тела под токеном не проверены — секрет�
 | PUT | `walkin/{id}/decline?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
 | PUT | `walkin/{id}/start?placeId=` | ✅ путь есть (`401`), тела нет |
 | PUT | `walkin/{id}/complete?placeId=` | ✅ путь есть (`401`), тела нет |
-| GET | `food/places/{placeId}/orders` | ✅ путь есть (`401`) |
+| GET | `places/{placeId}/orders` | ✅ путь есть (`401`), схема — см. ниже (issue #289) |
 | PUT | `food/places/{placeId}/orders/{orderId}/status` | ✅ путь есть (`401`), тело ⚠️ |
 | GET | `food/places/{placeId}/menu` | ✅ (та же ручка, что у витрины) |
 | PUT | `food/items/{itemId}/toggle` | ✅ путь есть (`401`) |
 | POST | `food/places/{placeId}/items` | ✅ путь есть (`401`) |
 | PUT | `food/items/{itemId}` | ⚠️ путь **не проверен вовсе**, см. ниже |
 | DELETE | `food/items/{itemId}` | ⚠️ путь **не проверен вовсе**, см. ниже |
+| GET | `appointments/places/{placeId}` | ✅ путь и схема сверены — см. ниже (issue #289) |
+| PUT | `appointments/{id}/status` | ✅ путь есть (`401`), тело ⚠️ |
+| GET | `hospitals/places/{placeId}/appointments` | ✅ путь и схема сверены — см. ниже (issue #289) |
+| PUT | `hospitals/places/{placeId}/appointments/{id}/status` | ✅ путь есть (`401`), тело ⚠️ |
 
-Плюс две уже описанные ручки, которые панель переиспользует: `GET places/my`
-(права, см. ниже) и `PUT places/{id}/availability` («пауза»).
+Плюс три уже описанные ручки, которые панель переиспользует: `GET places/my`
+(права, см. ниже), `PUT places/{id}/availability` («пауза») и
+`GET hospitals/places/{placeId}/doctors` (фильтр журнала клиники, см. `HospitalApi`).
 
 **Дашборд отдаёт словарь без схемы.** `ApiResponseMapStringLong` —
 `additionalProperties: integer(int64)`, ни одного объявленного ключа. Клиент
@@ -1010,6 +1015,52 @@ Bearer. Тела под токеном не проверены — секрет�
 - `PUT walkin/{id}/decline` — `Map<String, String>`, по всей видимости причина
   отказа. Тоже пустой объект: поле, текст которого сервер молча выбросит,
   обещало бы человеку разговор, которого не будет.
+
+**Единая лента и журналы записей — issue #289, jack5505/mahalla#222.**
+`/v3/api-docs` **2026-09-22** снова отвечает анонимно (см. риск ниже), и
+пути с параметрами и схемами ответа сверены живым запросом, не только
+`401`-пробой:
+
+- `GET places/{placeId}/orders` (`place-order-controller`, `operationId:
+  placeOrders`) — заменяет разрозненные списки `food/places/{id}/orders` и
+  `fashion/stores/{id}/orders` из issue #187 (обе ручки убраны из клиента
+  вместе с этим PR, у бэкенда они, видимо, остались — панель их больше не
+  зовёт). Параметры: `vertical` (`FOOD`/`CLOTHING`/`PHARMACY`/`CINEMA`/
+  `GAMING`, как в `OrderView.vertical` клиентского `GET orders`, issue #73),
+  `status` (тот же `OrderStatus`, что у «Еды»), `page`/`size` — все
+  необязательные. Ответ — `PageResponseOrderView`, та же схема, что у
+  клиентского списка (`OrderPageDto`/`OrderViewDto`, `FashionApi.kt`/
+  `FoodApi.kt`) — второй DTO не заводился.
+- **Смену статуса единая лента не даёт.** У бэкенда для неё нет общей ручки
+  — только по вертикали: `food/.../status` и `fashion/.../status`
+  переиспользованы как есть (issue #187), для «Аптеки», «Кино» и «Игровой
+  зоны» такой ручки нет вовсе (`BusinessOrderStatusFlow.canChangeStatus`),
+  и приложение не пытается её звать.
+- `GET appointments/places/{placeId}` (`appointment-controller`,
+  `operationId: placeJournal_1`) — журнал барбершопа. Параметры: `date`
+  (`yyyy-MM-dd`), `status` (`PENDING`/`CONFIRMED`/`CANCELLED`/`COMPLETED`/
+  `NO_SHOW` — тот же `AppointmentStatus`, что у «моих записей», issue #97),
+  `page`/`size`, все необязательные. Ответ —
+  `PageResponseAppointmentBookingResponse`, тот же `AppointmentPageDto`/
+  `AppointmentDto`, что у `appointments/my` (`BookingApi.kt`).
+- `PUT appointments/{id}/status` — `Map<String, String>`, ключ **`status`**
+  тем же выводом, что и у заказа: соседняя операция того же контроллера.
+- `GET hospitals/places/{placeId}/appointments` (`hospital-controller`,
+  `operationId: placeJournal`) — журнал клиники, с фильтром `doctorId`
+  вдобавок к `date`/`status`/`page`/`size` (статусы — без `NO_SHOW`: у
+  `HospitalAppointmentResponse` его нет). Ответ —
+  `PageResponseHospitalAppointmentResponse`, тем же `AppointmentPageDto`.
+- `PUT hospitals/places/{placeId}/appointments/{id}/status` — `Map<String,
+  String>`, `placeId` в параметрах операции `/v3/api-docs` не значится (тот
+  же дефект схемы, что у `fashion/stores/{id}/orders/{id}/status`), но путь
+  требует его буквально.
+- **Ни одна из четырёх схем не называет человека.** `OrderView` и
+  `AppointmentBookingResponse`/`HospitalAppointmentResponse` дают только
+  `userId` (`uuid`), имени или телефона клиента нет ни в одной. Панель
+  показывает состав/услугу/время/сумму — то, что есть, — а не выдуманное имя.
+  `HospitalAppointmentResponse` к тому же не называет врача (`doctorId` без
+  имени, issue #219) — клиника дотягивает его тем же
+  `HospitalRepository.withDoctorNames`, что и «мои записи».
 
 **Расписания работы у бэкенда нет вовсе.** `UpdateRequest` заведения
 (`PUT places/{id}`) принимает `name`, `description`, `address`, `lat`, `lng`,
@@ -1037,13 +1088,15 @@ Bearer. Тела под токеном не проверены — секрет�
 продажи» ли `DELETE` вместо удаления записи (стоп-лист у бэкенда уже есть
 отдельной ручкой — `toggle`).
 
-**Само появление `401` на `/v3/api-docs` — риск для `contract/paths.sh`.**
-Скрипт снимает список путей стенда анонимным `curl` без токена; если схема
-теперь всегда требует Bearer, `contract/paths.sh` перестанет находить
-выдуманные ручки не по конкретной вертикали, а вовсе — вернёт код 2
-(«схему получить не удалось») на каждом прогоне `contract-check.yml`.
-Стоит отдельным issue: не блокер этой задачи, но проверить раньше, чем
-доверять зелёному `contract-check.yml`.
+**`/v3/api-docs` то отвечает анонимно, то требует Bearer — не закономерность,
+а перебои стенда.** На момент issue #288 (2026-09-19) была `401` даже с
+гео-заголовками, на момент issue #289 (2026-09-22) — снова `200` без токена,
+как и на 2026-09-09. Раз это не однонаправленный переход, `contract/paths.sh`
+может как обычно найти выдуманные ручки, так и вернуть код 2 («схему
+получить не удалось») — оба исхода нормальны сами по себе, а не сигнал, что
+что-то сломано именно в этом PR. Отдельная задача уже заведена — issue #358
+(«/v3/api-docs требует Bearer»), туда и смотреть, если `contract-check.yml`
+покраснеет кодом 2 не разово.
 ## SocialApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы

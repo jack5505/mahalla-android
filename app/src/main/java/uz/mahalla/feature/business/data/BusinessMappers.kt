@@ -9,9 +9,12 @@ import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderLine
 import uz.mahalla.feature.business.domain.BusinessOrderPage
 import uz.mahalla.feature.business.domain.QueueEntry
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
 import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
-import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
+import uz.mahalla.feature.fashion.data.OrderPageDto
+import uz.mahalla.feature.food.data.OrderItemViewDto
+import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
@@ -42,7 +45,12 @@ internal fun QueueEntryDto.toDomain(): QueueEntry? {
     )
 }
 
-internal fun BusinessOrderDto.toDomain(): BusinessOrder? {
+/**
+ * @param vertical чей это заказ — ответ статус-ручки своей вертикали не
+ * называет (`FoodOrderResponse` её не знает вовсе), поэтому её передаёт
+ * вызывающий: `DefaultBusinessRepository` уже знает, в какую ветку он попал.
+ */
+internal fun BusinessOrderDto.toDomain(vertical: PlaceCategory = PlaceCategory.Food): BusinessOrder? {
     val orderId = id?.takeIf { it.isNotBlank() } ?: return null
     return BusinessOrder(
         id = orderId,
@@ -59,6 +67,7 @@ internal fun BusinessOrderDto.toDomain(): BusinessOrder? {
         address = deliveryAddress?.trim()?.takeIf(String::isNotEmpty),
         lines = items.mapNotNull(BusinessOrderItemDto::toDomain),
         createdAt = parseServerInstant(createdAt),
+        vertical = vertical,
     )
 }
 
@@ -84,19 +93,17 @@ private fun BusinessOrderItemDto.toDomain(): BusinessOrderLine? {
     )
 }
 
-/** См. `BusinessOrderPage.hasMore` — правило подсчёта живёт там. */
-internal fun BusinessOrderPageDto.toDomain(): BusinessOrderPage = BusinessOrderPage(
-    items = content.mapNotNull(BusinessOrderDto::toDomain),
-    hasMore = hasMorePages(last = last, page = page, totalPages = totalPages),
-)
-
 /**
- * Заказы «Одежды» (issue #187): `fashion/stores/{id}/orders`, схема
- * `FashionOrderResponse`. Статус, способ получения и оплаты — те же
- * перечисления, что и у «Еды» (сверено живым `/v3/api-docs` 2026-09-19),
- * второй набор под вертикаль заводить не пришлось.
+ * Заказы «Одежды» (issue #187): статус смены `fashion/stores/{id}/orders/
+ * {orderId}/status`, схема `FashionOrderResponse`. Статус, способ получения и
+ * оплаты — те же перечисления, что и у «Еды» (сверено живым `/v3/api-docs`
+ * 2026-09-19), второй набор под вертикаль заводить не пришлось.
+ *
+ * @param vertical см. [BusinessOrderDto.toDomain] — тот же приём.
  */
-internal fun FashionStoreOrderDto.toDomain(): BusinessOrder? {
+internal fun FashionStoreOrderDto.toDomain(
+    vertical: PlaceCategory = PlaceCategory.Fashion,
+): BusinessOrder? {
     val orderId = id?.takeIf { it.isNotBlank() } ?: return null
     return BusinessOrder(
         id = orderId,
@@ -111,6 +118,7 @@ internal fun FashionStoreOrderDto.toDomain(): BusinessOrder? {
         address = deliveryAddress?.trim()?.takeIf(String::isNotEmpty),
         lines = items.mapNotNull(FashionStoreOrderItemDto::toDomain),
         createdAt = parseServerInstant(createdAt),
+        vertical = vertical,
     )
 }
 
@@ -138,8 +146,53 @@ private fun FashionStoreOrderItemDto.toDomain(): BusinessOrderLine? {
     )
 }
 
-internal fun FashionStoreOrderPageDto.toDomain(): BusinessOrderPage = BusinessOrderPage(
-    items = content.mapNotNull(FashionStoreOrderDto::toDomain),
+/**
+ * Единая лента (issue #289): `GET places/{placeId}/orders`, схема
+ * `OrderView` — общая для всех вертикалей, `vertical` называет саму
+ * вертикаль, и её не нужно передавать снаружи, в отличие от
+ * [BusinessOrderDto.toDomain]/[FashionStoreOrderDto.toDomain], где ответ
+ * статус-ручки о своей вертикали молчит.
+ */
+internal fun OrderViewDto.toDomain(): BusinessOrder? {
+    val orderId = id?.takeIf { it.isNotBlank() } ?: return null
+    return BusinessOrder(
+        id = orderId,
+        number = orderNumber?.trim()?.takeIf(String::isNotEmpty),
+        status = OrderStatus.fromApi(status),
+        method = DeliveryMethod.fromApi(fulfillment),
+        payment = PaymentMethod.fromApi(paymentMethod),
+        itemsSum = itemsAmount.toSomOrZero(),
+        deliverySum = deliveryAmount.toSomOrZero(),
+        discountSum = discountAmount.toSomOrZero(),
+        totalSum = totalAmount.toSomOrZero(),
+        address = deliveryAddress?.trim()?.takeIf(String::isNotEmpty),
+        lines = items.mapNotNull(OrderItemViewDto::toDomain),
+        createdAt = parseServerInstant(createdAt),
+        // Незнакомая или пропавшая вертикаль — `Other`: доменное правило
+        // [uz.mahalla.feature.business.domain.BusinessOrderStatusFlow.canChangeStatus]
+        // уже прячет кнопки смены статуса у всего, что не «Еда»/«Одежда», и
+        // `Other` в их число не входит по построению.
+        vertical = PlaceCategory.fromApi(vertical),
+    )
+}
+
+/** Строка единой ленты — то же правило мягкого разбора, что у [BusinessOrderItemDto.toDomain]. */
+private fun OrderItemViewDto.toDomain(): BusinessOrderLine? {
+    val title = itemName?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val count = quantity?.coerceAtLeast(0) ?: 0
+    return BusinessOrderLine(
+        itemId = itemId.orEmpty(),
+        name = title,
+        quantity = count,
+        unitPriceSum = unitPrice.toSomOrZero(),
+        totalPriceSum = totalPrice?.tiyinToSom()?.coerceAtLeast(0)
+            ?: (unitPrice.orZero() * count).tiyinToSom().coerceAtLeast(0),
+    )
+}
+
+/** См. `BusinessOrderPage.hasMore` — правило подсчёта живёт там. */
+internal fun OrderPageDto.toDomain(): BusinessOrderPage = BusinessOrderPage(
+    items = content.mapNotNull(OrderViewDto::toDomain),
     hasMore = hasMorePages(last = last, page = page, totalPages = totalPages),
 )
 
