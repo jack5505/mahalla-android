@@ -3,6 +3,10 @@ package uz.mahalla.testutil
 import kotlinx.coroutines.CompletableDeferred
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.feature.booking.domain.Appointment
+import uz.mahalla.feature.booking.domain.AppointmentPage
+import uz.mahalla.feature.booking.domain.AppointmentStatus
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessDashboard
@@ -14,8 +18,10 @@ import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.OrderStatus
+import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
+import java.time.LocalDate
 
 /**
  * Бизнес-панель в памяти (эпик #16): экраны проверяются без MockWebServer.
@@ -65,13 +71,23 @@ class FakeBusinessRepository : BusinessRepository {
     val actions = mutableListOf<Triple<String, String, QueueAction>>()
     val paused = mutableListOf<Pair<String, Boolean>>()
     val orderRequests = mutableListOf<Pair<String?, Int>>()
-    val orderCategoryRequests = mutableListOf<PlaceCategory>()
+    val orderVerticalRequests = mutableListOf<PlaceCategory?>()
     val statusUpdates = mutableListOf<Pair<String, OrderStatus>>()
     val statusUpdateCategories = mutableListOf<PlaceCategory>()
     val toggledItems = mutableListOf<Pair<String, Boolean>>()
     val createdItems = mutableListOf<NewMenuItemForm>()
     val updatedItems = mutableListOf<NewMenuItemForm>()
     val deletedItemIds = mutableListOf<String>()
+
+    val journalPages: MutableMap<Pair<LocalDate, Int>, ApiResult<AppointmentPage>> = mutableMapOf()
+    var defaultJournalPage: ApiResult<AppointmentPage> = ApiResult.Success(AppointmentPage())
+    val journalRequests = mutableListOf<JournalRequest>()
+
+    var updateAppointmentResult: ApiResult<Appointment>? = null
+    val appointmentStatusUpdates = mutableListOf<Pair<String, AppointmentStatus>>()
+    val appointmentStatusUpdateVerticals = mutableListOf<AppointmentVertical>()
+
+    var doctorsResult: ApiResult<List<Doctor>> = ApiResult.Success(emptyList())
 
     /** Талоны, из которых `act` берёт исходный: без них исход не собрать. */
     val knownEntries = mutableMapOf<String, QueueEntry>()
@@ -125,10 +141,10 @@ class FakeBusinessRepository : BusinessRepository {
         status: String?,
         page: Int,
         size: Int,
-        category: PlaceCategory,
+        vertical: PlaceCategory?,
     ): ApiResult<BusinessOrderPage> {
         orderRequests += status to page
-        orderCategoryRequests += category
+        orderVerticalRequests += vertical
         return orderPages[status to page] ?: defaultOrderPage
     }
 
@@ -142,6 +158,32 @@ class FakeBusinessRepository : BusinessRepository {
         statusUpdateCategories += category
         return updateOrderResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
     }
+
+    override suspend fun journal(
+        placeId: String,
+        vertical: AppointmentVertical,
+        date: LocalDate,
+        doctorId: String?,
+        status: AppointmentStatus?,
+        page: Int,
+        size: Int,
+    ): ApiResult<AppointmentPage> {
+        journalRequests += JournalRequest(vertical, date, doctorId, status, page)
+        return journalPages[date to page] ?: defaultJournalPage
+    }
+
+    override suspend fun updateAppointmentStatus(
+        placeId: String,
+        appointmentId: String,
+        vertical: AppointmentVertical,
+        status: AppointmentStatus,
+    ): ApiResult<Appointment> {
+        appointmentStatusUpdates += appointmentId to status
+        appointmentStatusUpdateVerticals += vertical
+        return updateAppointmentResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
+    }
+
+    override suspend fun doctors(placeId: String): ApiResult<List<Doctor>> = doctorsResult
 
     override suspend fun menu(placeId: String): ApiResult<BusinessMenu> = menuResult
 
@@ -183,3 +225,12 @@ private fun QueueAction.expectedStatus() = when (this) {
     QueueAction.Start -> uz.mahalla.feature.queue.domain.WalkInStatus.InChair
     QueueAction.Complete -> uz.mahalla.feature.queue.domain.WalkInStatus.Completed
 }
+
+/** Что ушло в запрос журнала (issue #289) — на что тест может сослаться целиком. */
+data class JournalRequest(
+    val vertical: AppointmentVertical,
+    val date: LocalDate,
+    val doctorId: String?,
+    val status: AppointmentStatus?,
+    val page: Int,
+)

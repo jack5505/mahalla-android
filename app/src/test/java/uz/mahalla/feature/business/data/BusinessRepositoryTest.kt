@@ -8,6 +8,10 @@ import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.ApiResponse
+import uz.mahalla.feature.booking.data.AppointmentDto
+import uz.mahalla.feature.booking.data.AppointmentPageDto
+import uz.mahalla.feature.booking.domain.AppointmentStatus
+import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -18,20 +22,22 @@ import uz.mahalla.feature.fashion.data.FashionApi
 import uz.mahalla.feature.fashion.data.FashionCategoryDto
 import uz.mahalla.feature.fashion.data.FashionPlaceOrderRequestDto
 import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
-import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
-import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
 import uz.mahalla.feature.fashion.data.OrderPageDto
 import uz.mahalla.feature.fashion.data.ProductDetailDto
 import uz.mahalla.feature.food.data.CreatedOrderDto
+import uz.mahalla.feature.food.data.OrderItemViewDto
 import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
+import uz.mahalla.feature.hospital.domain.Doctor
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
+import uz.mahalla.testutil.FakeHospitalRepository
 import uz.mahalla.testutil.FakeProviderRepository
+import java.time.LocalDate
 
 /**
  * Репозиторий бизнес-панели (эпик #16).
@@ -192,20 +198,22 @@ class BusinessRepositoryTest {
         assertEquals(listOf(12L, 5_000L), dashboard.metrics.map { it.value })
     }
 
+    /** Единая лента (issue #289): `GET places/{placeId}/orders`, схема `OrderView`. */
     @Test
-    fun `an order is mapped with its lines and totals`() = runTest {
+    fun `an order is mapped with its lines, totals and vertical`() = runTest {
         val api = RecordingBusinessApi()
-        api.ordersResponse = BusinessOrderPageDto(
+        api.placeOrdersResponse = OrderPageDto(
             content = listOf(
-                BusinessOrderDto(
+                OrderViewDto(
                     id = "o-1",
                     orderNumber = "F-42",
+                    vertical = "CLOTHING",
                     status = "READY",
                     fulfillment = "DELIVERY",
                     paymentMethod = "CASH",
                     totalAmount = 84_000,
                     items = listOf(
-                        BusinessOrderItemDto(
+                        OrderItemViewDto(
                             itemId = "i-1",
                             itemName = "Osh",
                             quantity = 2,
@@ -224,9 +232,24 @@ class BusinessRepositoryTest {
         val order = page.items.single()
         assertEquals(OrderStatus.ReadyForPickup, order.status)
         assertEquals(DeliveryMethod.Delivery, order.method)
+        // `CLOTHING` — так вертикаль называется в заказе, а не «FASHION»
+        // каталога (см. `PlaceCategory.Fashion` KDoc).
+        assertEquals(PlaceCategory.Fashion, order.vertical)
         // unitPrice=32_000 тийин × 2 = 64_000 тийин → 640 сум (issue #149).
         assertEquals(640L, order.lines.single().totalPriceSum)
         assertEquals(false, page.hasMore)
+    }
+
+    /** `vertical`/`status` уходят в query единой ленты как есть, `null` — не отправляется вовсе. */
+    @Test
+    fun `the vertical and status filters reach the unified feed`() = runTest {
+        val api = RecordingBusinessApi()
+
+        repository(api = api).orders("p-1", status = "READY", vertical = PlaceCategory.Cinema)
+
+        assertEquals("p-1", api.placeOrdersRequest?.placeId)
+        assertEquals("CINEMA", api.placeOrdersRequest?.vertical)
+        assertEquals("READY", api.placeOrdersRequest?.status)
     }
 
     /** Позиция без `id` в списке — дубликат ключа в `LazyColumn`. */
@@ -533,44 +556,6 @@ class BusinessRepositoryTest {
         assertEquals(WalkInStatus.Declined, (result as ApiResult.Success).data.status)
     }
 
-    /** Заказы «Одежды» идут в `fashion/stores/{id}/orders`, а не в `food/...` (issue #187). */
-    @Test
-    fun `a fashion place asks the fashion api for its orders`() = runTest {
-        val fashionApi = RecordingFashionApi()
-        fashionApi.storeOrdersResponse = FashionStoreOrderPageDto(
-            content = listOf(
-                FashionStoreOrderDto(
-                    id = "o-1",
-                    orderNumber = "C-1",
-                    status = "READY",
-                    fulfillment = "DELIVERY",
-                    paymentMethod = "CASH",
-                    totalAmount = 84_000,
-                    items = listOf(
-                        FashionStoreOrderItemDto(
-                            variantId = "v-1",
-                            productName = "Koylak",
-                            colorName = "Ko'k",
-                            size = "M",
-                            quantity = 1,
-                            unitPrice = 84_000,
-                        ),
-                    ),
-                ),
-            ),
-        )
-
-        val page = (
-            repository(fashionApi = fashionApi)
-                .orders("store-1", category = PlaceCategory.Fashion) as ApiResult.Success
-            ).data
-
-        assertEquals("store-1", fashionApi.storeOrdersRequest?.first)
-        val order = page.items.single()
-        assertEquals(OrderStatus.ReadyForPickup, order.status)
-        assertEquals("Koylak, Ko'k, M", order.lines.single().name)
-    }
-
     /** Смена статуса «Одежды» тоже уходит на `fashion/stores/{id}/orders/{orderId}/status`. */
     @Test
     fun `a fashion status change sends the status under the key named status`() = runTest {
@@ -602,14 +587,146 @@ class BusinessRepositoryTest {
         assertEquals(1, entries.single().queuePosition)
     }
 
+    /** Барбершоп читает `GET appointments/places/{id}` (issue #289). */
+    @Test
+    fun `the barber journal asks the generic appointments endpoint`() = runTest {
+        val api = RecordingBusinessApi()
+        api.barberJournalResponse = AppointmentPageDto(
+            content = listOf(AppointmentDto(id = "a-1", status = "PENDING", serviceName = "Soch olish")),
+        )
+
+        val page = (
+            repository(api = api).journal(
+                placeId = "p-1",
+                vertical = AppointmentVertical.Barber,
+                date = LocalDate.of(2026, 9, 22),
+                status = AppointmentStatus.Pending,
+            ) as ApiResult.Success
+            ).data
+
+        assertEquals(Triple("p-1", "2026-09-22", "PENDING"), api.barberJournalRequest)
+        assertEquals("Soch olish", page.items.single().serviceName)
+    }
+
+    /** Клиника читает `GET hospitals/places/{id}/appointments`, с фильтром по врачу (issue #289). */
+    @Test
+    fun `the clinic journal asks the hospital endpoint with the doctor filter`() = runTest {
+        val api = RecordingBusinessApi()
+        val hospitalRepository = FakeHospitalRepository()
+
+        repository(api = api, hospitalRepository = hospitalRepository).journal(
+            placeId = "p-1",
+            vertical = AppointmentVertical.Doctor,
+            date = LocalDate.of(2026, 9, 22),
+            doctorId = "d-1",
+            status = AppointmentStatus.Confirmed,
+        )
+
+        assertEquals(listOf("p-1", "d-1", "2026-09-22", "CONFIRMED"), api.clinicJournalRequest)
+    }
+
+    /**
+     * `HospitalAppointmentResponse` не называет врача — только `doctorId`
+     * (issue #219); клиника дотягивает имя тем же [uz.mahalla.feature.hospital.data.HospitalRepository.withDoctorNames],
+     * что и «мои записи» (issue #289).
+     */
+    @Test
+    fun `the clinic journal fills in doctor names`() = runTest {
+        val api = RecordingBusinessApi()
+        api.clinicJournalResponse = AppointmentPageDto(
+            content = listOf(AppointmentDto(id = "a-1", doctorId = "d-1", status = "PENDING")),
+        )
+        val hospitalRepository = FakeHospitalRepository()
+        hospitalRepository.withDoctorNamesResult = { items ->
+            items.map { it.copy(serviceName = "Dr. Karimova") }
+        }
+
+        val page = (
+            repository(api = api, hospitalRepository = hospitalRepository).journal(
+                placeId = "p-1",
+                vertical = AppointmentVertical.Doctor,
+                date = LocalDate.of(2026, 9, 22),
+            ) as ApiResult.Success
+            ).data
+
+        assertEquals("Dr. Karimova", page.items.single().serviceName)
+    }
+
+    @Test
+    fun `a barber appointment status change sends the status under the key named status`() = runTest {
+        val api = RecordingBusinessApi()
+        api.appointmentResponse = AppointmentDto(id = "a-1", status = "CONFIRMED")
+
+        val result = repository(api = api).updateAppointmentStatus(
+            placeId = "p-1",
+            appointmentId = "a-1",
+            vertical = AppointmentVertical.Barber,
+            status = AppointmentStatus.Confirmed,
+        )
+
+        assertEquals(mapOf("status" to "CONFIRMED"), api.appointmentStatusBody)
+        assertEquals(AppointmentStatus.Confirmed, (result as ApiResult.Success).data.status)
+    }
+
+    @Test
+    fun `a clinic appointment status change goes to the place-scoped path`() = runTest {
+        val api = RecordingBusinessApi()
+        api.appointmentResponse = AppointmentDto(id = "a-1", status = "CANCELLED")
+
+        val result = repository(api = api).updateAppointmentStatus(
+            placeId = "p-1",
+            appointmentId = "a-1",
+            vertical = AppointmentVertical.Doctor,
+            status = AppointmentStatus.Cancelled,
+        )
+
+        assertEquals(mapOf("status" to "CANCELLED"), api.clinicAppointmentStatusBody)
+        assertEquals(AppointmentStatus.Cancelled, (result as ApiResult.Success).data.status)
+    }
+
+    /** `"UNKNOWN"` — значение приложения, а не бэкенда: в сеть оно не уходит. */
+    @Test
+    fun `an unknown appointment status is not sent to the server`() = runTest {
+        val api = RecordingBusinessApi()
+
+        val result = repository(api = api).updateAppointmentStatus(
+            placeId = "p-1",
+            appointmentId = "a-1",
+            vertical = AppointmentVertical.Barber,
+            status = AppointmentStatus.Unknown,
+        )
+
+        assertNull(api.appointmentStatusBody)
+        assertEquals(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    /** Доктора клиники — делегат `HospitalRepository`, своей ручки у панели нет (issue #289). */
+    @Test
+    fun `the doctor filter delegates to the hospital repository`() = runTest {
+        val hospitalRepository = FakeHospitalRepository()
+        hospitalRepository.doctorsResult = ApiResult.Success(listOf(Doctor(id = "d-1", name = "Dr. Karimova")))
+
+        val doctors = (
+            repository(hospitalRepository = hospitalRepository).doctors("p-1") as ApiResult.Success
+            ).data
+
+        assertEquals(listOf("p-1"), hospitalRepository.requestedDoctors)
+        assertEquals("Dr. Karimova", doctors.single().name)
+    }
+
     private fun repository(
         provider: FakeProviderRepository = FakeProviderRepository(),
         api: BusinessApi = RecordingBusinessApi(),
         fashionApi: FashionApi = FakeFashionApi(),
+        hospitalRepository: FakeHospitalRepository = FakeHospitalRepository(),
     ): BusinessRepository = DefaultBusinessRepository(
         api = api,
         fashionApi = fashionApi,
         providerRepository = provider,
+        hospitalRepository = hospitalRepository,
     )
 
     private fun place(id: String) = MyPlace(
@@ -677,10 +794,13 @@ private class RecordingBusinessApi : BusinessApi {
     var dashboardResponse: Map<String, Long?> = emptyMap()
     var queueResponse: List<QueueEntryDto> = emptyList()
     var queueEntryResponse: QueueEntryDto = QueueEntryDto(id = "t-1", status = "WAITING")
-    var ordersResponse: BusinessOrderPageDto = BusinessOrderPageDto()
+    var placeOrdersResponse: OrderPageDto = OrderPageDto()
     var orderResponse: BusinessOrderDto = BusinessOrderDto(id = "o-1", status = "NEW")
     var menuResponse: List<MenuSectionDto> = emptyList()
     var itemResponse: MenuItemDto = MenuItemDto(id = "i-1")
+    var barberJournalResponse: AppointmentPageDto = AppointmentPageDto()
+    var clinicJournalResponse: AppointmentPageDto = AppointmentPageDto()
+    var appointmentResponse: AppointmentDto = AppointmentDto(id = "a-1", status = "PENDING")
 
     var acceptBody: Map<String, Int>? = null
     var declineBody: Map<String, String>? = null
@@ -689,6 +809,15 @@ private class RecordingBusinessApi : BusinessApi {
     var updatedItem: UpdateMenuItemRequest? = null
     var updatedItemId: String? = null
     var deletedItemId: String? = null
+
+    /** Что ушло в `GET places/{placeId}/orders` — на что тест может сослаться целиком. */
+    data class PlaceOrdersRequest(val placeId: String, val vertical: String?, val status: String?)
+
+    var placeOrdersRequest: PlaceOrdersRequest? = null
+    var barberJournalRequest: Triple<String, String?, String?>? = null
+    var clinicJournalRequest: List<String?>? = null
+    var appointmentStatusBody: Map<String, String>? = null
+    var clinicAppointmentStatusBody: Map<String, String>? = null
 
     override suspend fun dashboard(placeId: String) = ApiResponse(data = dashboardResponse)
 
@@ -718,12 +847,16 @@ private class RecordingBusinessApi : BusinessApi {
     override suspend fun complete(ticketId: String, placeId: String) =
         ApiResponse(data = queueEntryResponse)
 
-    override suspend fun orders(
+    override suspend fun placeOrders(
         placeId: String,
+        vertical: String?,
         status: String?,
         page: Int,
         size: Int,
-    ) = ApiResponse(data = ordersResponse)
+    ): ApiResponse<OrderPageDto> {
+        placeOrdersRequest = PlaceOrdersRequest(placeId, vertical, status)
+        return ApiResponse(data = placeOrdersResponse)
+    }
 
     override suspend fun updateOrderStatus(
         placeId: String,
@@ -762,20 +895,57 @@ private class RecordingBusinessApi : BusinessApi {
         deletedItemId = itemId
         return ApiResponse(success = true)
     }
+
+    override suspend fun barberJournal(
+        placeId: String,
+        date: String?,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<AppointmentPageDto> {
+        barberJournalRequest = Triple(placeId, date, status)
+        return ApiResponse(data = barberJournalResponse)
+    }
+
+    override suspend fun updateAppointmentStatus(
+        appointmentId: String,
+        body: Map<String, String>,
+    ): ApiResponse<AppointmentDto> {
+        appointmentStatusBody = body
+        return ApiResponse(data = appointmentResponse)
+    }
+
+    override suspend fun clinicJournal(
+        placeId: String,
+        doctorId: String?,
+        date: String?,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<AppointmentPageDto> {
+        clinicJournalRequest = listOf(placeId, doctorId, date, status)
+        return ApiResponse(data = clinicJournalResponse)
+    }
+
+    override suspend fun updateClinicAppointmentStatus(
+        placeId: String,
+        appointmentId: String,
+        body: Map<String, String>,
+    ): ApiResponse<AppointmentDto> {
+        clinicAppointmentStatusBody = body
+        return ApiResponse(data = appointmentResponse)
+    }
 }
 
 /**
- * `FashionApi` в памяти для двух ручек `storeOrders`/`updateStoreOrderStatus`
- * (issue #187) — остальные `DefaultBusinessRepository` не зовёт вовсе, и
- * тестами здесь не нужны.
+ * `FashionApi` в памяти для `updateStoreOrderStatus` (issue #187) —
+ * остальные `DefaultBusinessRepository` не зовёт вовсе, и тестами здесь не
+ * нужны.
  */
 private class RecordingFashionApi : FashionApi {
 
-    var storeOrdersResponse: FashionStoreOrderPageDto = FashionStoreOrderPageDto()
     var updateOrderResponse: FashionStoreOrderDto = FashionStoreOrderDto(id = "o-1", status = "NEW")
 
-    /** `storeId` вместе со статусом, чтобы проверить, что путь получает верный магазин. */
-    var storeOrdersRequest: Pair<String, String?>? = null
     var updateStatusBody: Map<String, String>? = null
 
     override suspend fun categories(): ApiResponse<List<FashionCategoryDto>> =
@@ -824,16 +994,6 @@ private class RecordingFashionApi : FashionApi {
         orderId: String,
     ): ApiResponse<kotlinx.serialization.json.JsonElement> =
         error("not used by BusinessRepositoryTest")
-
-    override suspend fun storeOrders(
-        storeId: String,
-        status: String?,
-        page: Int,
-        size: Int,
-    ): ApiResponse<FashionStoreOrderPageDto> {
-        storeOrdersRequest = storeId to status
-        return ApiResponse(data = storeOrdersResponse)
-    }
 
     override suspend fun updateStoreOrderStatus(
         storeId: String,

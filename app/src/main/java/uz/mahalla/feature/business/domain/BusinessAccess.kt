@@ -21,6 +21,14 @@ enum class BusinessSection {
 
     /** Меню, стоп-лист, новые позиции. */
     Menu,
+
+    /**
+     * Журнал записей на день (issue #289) — барбершоп и клиника. Отдельно от
+     * [Queue]: та же живая очередь у барбершопа — это талоны без записи на
+     * время (`walkin`-ручки), а журнал — уже забронированные слоты
+     * (`appointments`/`hospitals appointments`), другая сущность на бэкенде.
+     */
+    Journal,
 }
 
 /**
@@ -88,10 +96,14 @@ data class BusinessAccess(
 
             PlaceCategory.Fashion -> listOf(BusinessSection.Orders)
 
-            PlaceCategory.Master -> listOf(BusinessSection.Queue)
+            // Живая очередь (талоны без записи) и журнал (записи на время,
+            // issue #289) — две разные сущности бэкенда, см. [BusinessSection.Journal].
+            PlaceCategory.Master -> listOf(BusinessSection.Queue, BusinessSection.Journal)
 
-            PlaceCategory.Pharmacy, PlaceCategory.Hospital, PlaceCategory.Cinema,
-            PlaceCategory.Playground, PlaceCategory.Other,
+            PlaceCategory.Hospital -> listOf(BusinessSection.Journal)
+
+            PlaceCategory.Pharmacy, PlaceCategory.Cinema, PlaceCategory.Playground,
+            PlaceCategory.Other,
             -> emptyList()
         }
 

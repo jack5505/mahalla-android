@@ -184,6 +184,12 @@ data class ServiceDto(
  * `LocalTime` объектом `{hour, minute, second, nano}`, а Jackson с
  * `JavaTimeModule` отдаёт строку `"14:30:00"`. Ошибка в типе уронила бы разбор
  * **всей** записи. Разбирает оба вида `parseServerLocalTime`.
+ *
+ * [complaint] — только больничная схема (`HospitalAppointmentResponse`), у
+ * брони его нет никогда. До issue #289 не был объявлен: экран «мои записи»
+ * его не показывает (человек и так знает свою жалобу), но журналу заведения
+ * (бизнес-панель, `GET hospitals/places/{id}/appointments`) он — единственное,
+ * что говорит врачу, зачем пациент идёт.
  */
 @Serializable
 data class AppointmentDto(
@@ -200,6 +206,7 @@ data class AppointmentDto(
     @SerialName("endTime") val endTime: JsonElement? = null,
     @SerialName("doctorId") val doctorId: String? = null,
     @SerialName("status") val status: String? = null,
+    @SerialName("complaint") val complaint: String? = null,
     /** ISO-8601; Jackson отдаёт и без зоны — разбирает `parseServerInstant`. */
     @SerialName("createdAt") val createdAt: String? = null,
 )

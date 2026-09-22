@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 
@@ -125,5 +126,18 @@ class BusinessOrderStatusFlowTest {
         assertEquals(null, BusinessOrderFilter.All.apiValue)
         assertEquals("NEW", BusinessOrderFilter.New.apiValue)
         assertEquals("READY", BusinessOrderFilter.Ready.apiValue)
+    }
+
+    /**
+     * Единая лента (issue #289) может показать заказы аптеки, кино и игровой
+     * зоны — у бэкенда для них нет общей `.../orders/{id}/status`.
+     */
+    @Test
+    fun `only food and fashion can change status`() {
+        assertTrue(BusinessOrderStatusFlow.canChangeStatus(PlaceCategory.Food))
+        assertTrue(BusinessOrderStatusFlow.canChangeStatus(PlaceCategory.Fashion))
+        assertFalse(BusinessOrderStatusFlow.canChangeStatus(PlaceCategory.Pharmacy))
+        assertFalse(BusinessOrderStatusFlow.canChangeStatus(PlaceCategory.Cinema))
+        assertFalse(BusinessOrderStatusFlow.canChangeStatus(PlaceCategory.Playground))
     }
 }

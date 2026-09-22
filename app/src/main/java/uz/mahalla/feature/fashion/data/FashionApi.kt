@@ -124,23 +124,6 @@ interface FashionApi {
     suspend fun cancelOrder(@Path("orderId") orderId: String): ApiResponse<JsonElement>
 
     /**
-     * Входящие заказы магазина (бизнес-панель, issue #187). Путь и схема
-     * сняты живым `/v3/api-docs` **2026-09-19** (`storeOrders` в
-     * `fashion-controller`): `status` — то же перечисление `OrderStatus`, что
-     * и у «Еды» (`NEW`, `ACCEPTED`, `PREPARING`, `READY`, `IN_DELIVERY`,
-     * `DELIVERED`, `CANCELLED`, `REFUNDED`, см.
-     * `uz.mahalla.feature.food.domain.OrderStatus`) — заводить второе
-     * перечисление под ту же вертикаль не пришлось.
-     */
-    @GET("fashion/stores/{storeId}/orders")
-    suspend fun storeOrders(
-        @Path("storeId") storeId: String,
-        @Query("status") status: String?,
-        @Query("page") page: Int,
-        @Query("size") size: Int,
-    ): ApiResponse<FashionStoreOrderPageDto>
-
-    /**
      * Сменить статус заказа.
      *
      * Тело — `Map<String, String>`; ключ **`status`** — тот же вывод, что и у
@@ -299,18 +282,6 @@ data class FashionPlaceOrderRequestDto(
 @Serializable
 data class OrderPageDto(
     @SerialName("content") val content: List<OrderViewDto> = emptyList(),
-    @SerialName("page") val page: Int? = null,
-    @SerialName("size") val size: Int? = null,
-    @SerialName("totalElements") val totalElements: Long? = null,
-    @SerialName("totalPages") val totalPages: Int? = null,
-    @SerialName("first") val first: Boolean? = null,
-    @SerialName("last") val last: Boolean? = null,
-)
-
-/** `PageResponseFashionOrderResponse` — страница заказов магазина (issue #187). */
-@Serializable
-data class FashionStoreOrderPageDto(
-    @SerialName("content") val content: List<FashionStoreOrderDto> = emptyList(),
     @SerialName("page") val page: Int? = null,
     @SerialName("size") val size: Int? = null,
     @SerialName("totalElements") val totalElements: Long? = null,

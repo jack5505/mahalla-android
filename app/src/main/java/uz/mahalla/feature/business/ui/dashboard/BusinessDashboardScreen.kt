@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.People
@@ -64,8 +65,9 @@ import uz.mahalla.ui.theme.Spacing
 @Composable
 fun BusinessDashboardScreen(
     onOpenQueue: (String, String) -> Unit,
-    onOpenOrders: (String, String, String) -> Unit,
+    onOpenOrders: (String, String) -> Unit,
     onOpenMenu: (String, String) -> Unit,
+    onOpenJournal: (String, String, String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BusinessDashboardViewModel = hiltViewModel(),
@@ -80,10 +82,10 @@ fun BusinessDashboardScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is BusinessDashboardEffect.OpenQueue -> onOpenQueue(effect.placeId, effect.placeName)
-                is BusinessDashboardEffect.OpenOrders ->
-                    onOpenOrders(effect.placeId, effect.placeName, effect.category)
-
+                is BusinessDashboardEffect.OpenOrders -> onOpenOrders(effect.placeId, effect.placeName)
                 is BusinessDashboardEffect.OpenMenu -> onOpenMenu(effect.placeId, effect.placeName)
+                is BusinessDashboardEffect.OpenJournal ->
+                    onOpenJournal(effect.placeId, effect.placeName, effect.vertical)
             }
         }
     }
@@ -325,6 +327,7 @@ private fun BusinessSection.labelRes(): Int = when (this) {
     BusinessSection.Queue -> R.string.business_section_queue
     BusinessSection.Orders -> R.string.business_section_orders
     BusinessSection.Menu -> R.string.business_section_menu
+    BusinessSection.Journal -> R.string.business_section_journal
 }
 
 @StringRes
@@ -332,12 +335,14 @@ private fun BusinessSection.descriptionRes(): Int = when (this) {
     BusinessSection.Queue -> R.string.business_section_queue_description
     BusinessSection.Orders -> R.string.business_section_orders_description
     BusinessSection.Menu -> R.string.business_section_menu_description
+    BusinessSection.Journal -> R.string.business_section_journal_description
 }
 
 private fun BusinessSection.icon(): ImageVector = when (this) {
     BusinessSection.Queue -> Icons.Outlined.People
     BusinessSection.Orders -> Icons.Outlined.ReceiptLong
     BusinessSection.Menu -> Icons.Outlined.MenuBook
+    BusinessSection.Journal -> Icons.Outlined.CalendarMonth
 }
 
 @ThemeLanguagePreviews

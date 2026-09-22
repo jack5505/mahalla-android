@@ -8,20 +8,25 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderStatusFlow
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.OrderStatus
 
 /**
- * Состояние входящих заказов (задача 12.3).
+ * Состояние единой ленты входящих (задача 12.3, issue #289).
  *
- * @param filter выбранная вкладка. Смена вкладки — новый запрос, а не
- * локальная фильтрация: `GET food/places/{id}/orders` принимает `status` и
+ * @param filter выбранная вкладка статуса. Смена вкладки — новый запрос, а не
+ * локальная фильтрация: `GET places/{id}/orders` принимает `status` и
  * пагинирован, и отфильтровать страницу на клиенте значило бы показать «пусто»
  * там, где нужные заказы просто лежат на второй странице.
+ * @param verticalFilter второй, независимый фильтр — по вертикали
+ * ([uz.mahalla.feature.business.domain.BUSINESS_ORDER_VERTICALS]); `null` —
+ * заказы всех вертикалей разом.
  * @param pendingOrderId заказ, по которому идёт смена статуса.
  */
 data class BusinessOrdersState(
     val placeName: String = "",
     val filter: BusinessOrderFilter = BusinessOrderFilter.All,
+    val verticalFilter: PlaceCategory? = null,
     val orders: ScreenState<List<BusinessOrder>> = ScreenState.Loading,
     val isRefreshing: Boolean = false,
     val hasMore: Boolean = false,
@@ -51,6 +56,7 @@ sealed interface BusinessOrdersEvent : UiEvent {
     data object Retry : BusinessOrdersEvent
     data object LoadMore : BusinessOrdersEvent
     data class FilterSelected(val filter: BusinessOrderFilter) : BusinessOrdersEvent
+    data class VerticalFilterSelected(val vertical: PlaceCategory?) : BusinessOrdersEvent
 
     data class StatusSelected(val orderId: String, val status: OrderStatus) : BusinessOrdersEvent
 }

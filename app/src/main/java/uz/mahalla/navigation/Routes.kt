@@ -680,19 +680,17 @@ data class BusinessQueueRoute(
 )
 
 /**
- * Входящие заказы (задача 12.3).
+ * Единая лента входящих заказов (задача 12.3, issue #289).
  *
- * @param category `PlaceCategory.apiValue` заведения (`FOOD`/`FASHION`) —
- * решает, какую ручку звать: `food/places/{id}/orders` или
- * `fashion/stores/{id}/orders` (issue #187). Экран открывается только с
- * дашборда, где категория уже известна из `places/my`, поэтому поле
- * обязательное, как и `placeId`.
+ * Категории заведения маршрут больше не несёт: `GET places/{placeId}/orders`
+ * отдаёт заказы всех вертикалей разом, а вертикаль каждого заказа приезжает в
+ * самом ответе (issue #187 отправляла её сюда, когда ручка ещё была разной
+ * для еды и одежды).
  */
 @Serializable
 data class BusinessOrdersRoute(
     val placeId: String,
     val placeName: String = "",
-    val category: String,
 )
 
 /** Меню и стоп-лист (задача 12.4). */
@@ -703,20 +701,36 @@ data class BusinessMenuRoute(
 )
 
 /**
- * Имена аргументов всех четырёх маршрутов панели — ViewModel читают их из
+ * Журнал записей на день (issue #289) — барбершоп и клиника.
+ *
+ * @param vertical [uz.mahalla.feature.booking.domain.AppointmentVertical.name] —
+ * решает, какую ручку звать: `appointments/places/{id}` или
+ * `hospitals/places/{id}/appointments`. Экран открывается только с
+ * дашборда, где категория уже известна из `places/my`, поэтому поле
+ * обязательное, как и `placeId`.
+ */
+@Serializable
+data class BusinessJournalRoute(
+    val placeId: String,
+    val placeName: String = "",
+    val vertical: String,
+)
+
+/**
+ * Имена аргументов всех пяти маршрутов панели — ViewModel читают их из
  * `SavedStateHandle` напрямую, как [MyAppointmentsArgs]: `toRoute()` разбирает
  * маршрут через настоящий `Bundle`, а в JVM-тестах android.jar заглушен и все
  * аргументы молча читаются как `null`. Совпадение имён с полями маршрутов
  * проверяет `RoutesSerializationTest`.
  *
- * Один объект на четыре маршрута, а не четыре одинаковых: поля у них те же
- * (кроме [CATEGORY] — он только у [BusinessOrdersRoute], issue #187), и
- * разойтись они могут только по ошибке.
+ * Один объект на пять маршрутов, а не пять одинаковых: поля у них те же
+ * (кроме [VERTICAL] — он только у [BusinessJournalRoute]), и разойтись они
+ * могут только по ошибке.
  */
 object BusinessArgs {
     const val PLACE_ID = "placeId"
     const val PLACE_NAME = "placeName"
 
-    /** Только у [BusinessOrdersRoute] — см. его KDoc. */
-    const val CATEGORY = "category"
+    /** Только у [BusinessJournalRoute] — см. его KDoc. */
+    const val VERTICAL = "vertical"
 }

@@ -89,6 +89,8 @@ enum class AppointmentVertical {
  * врача в [serviceName] (схема этого поля вовсе не знает), поэтому имя
  * дотягивается отдельным запросом по этому id —
  * [uz.mahalla.feature.hospital.data.DefaultHospitalRepository] (issue #219).
+ * @param complaint жалоба — только у записи к врачу (issue #289): экран
+ * «мои записи» её не показывает, а журналу заведения она нужна.
  */
 data class Appointment(
     val id: String,
@@ -101,6 +103,7 @@ data class Appointment(
     val startTime: LocalTime? = null,
     val endTime: LocalTime? = null,
     val status: AppointmentStatus = AppointmentStatus.Unknown,
+    val complaint: String? = null,
     val createdAt: Instant? = null,
 ) {
 

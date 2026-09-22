@@ -20,7 +20,8 @@ import uz.mahalla.navigation.BusinessArgs
 import javax.inject.Inject
 
 /**
- * Входящие заказы (задача 12.3): принять, отклонить, двигать по статусам.
+ * Единая лента входящих (задача 12.3, issue #289): принять, отклонить,
+ * двигать по статусам заказы всех вертикалей заведения сразу.
  *
  * Список перечитывается на каждом возврате: заказ приходит на кухню сам, без
  * участия приложения, — и показанный десять минут назад список пуст ровно
@@ -37,15 +38,6 @@ class BusinessOrdersViewModel @Inject constructor(
 ) {
 
     private val placeId: String = savedStateHandle.get<String>(BusinessArgs.PLACE_ID).orEmpty()
-
-    /**
-     * `FASHION` зовёт `fashion/stores/{id}/orders`, всё остальное (в т. ч.
-     * пропавшее значение — экран открывается только с дашборда, где категория
-     * уже известна) — `food/places/{id}/orders` (issue #187).
-     */
-    private val category: PlaceCategory =
-        PlaceCategory.fromApi(savedStateHandle.get<String>(BusinessArgs.CATEGORY))
-            .takeIf { it == PlaceCategory.Fashion } ?: PlaceCategory.Food
 
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
@@ -66,6 +58,7 @@ class BusinessOrdersViewModel @Inject constructor(
             BusinessOrdersEvent.Retry -> load()
             BusinessOrdersEvent.LoadMore -> loadMore()
             is BusinessOrdersEvent.FilterSelected -> selectFilter(event.filter)
+            is BusinessOrdersEvent.VerticalFilterSelected -> selectVerticalFilter(event.vertical)
             is BusinessOrdersEvent.StatusSelected -> updateStatus(event.orderId, event.status)
         }
     }
@@ -77,6 +70,13 @@ class BusinessOrdersViewModel @Inject constructor(
     private fun selectFilter(filter: BusinessOrderFilter) {
         if (filter == currentState.filter) return
         updateState { copy(filter = filter) }
+        load()
+    }
+
+    /** Тот же приём, что у [selectFilter] — второй, независимый фильтр. */
+    private fun selectVerticalFilter(vertical: PlaceCategory?) {
+        if (vertical == currentState.verticalFilter) return
+        updateState { copy(verticalFilter = vertical) }
         load()
     }
 
@@ -99,16 +99,17 @@ class BusinessOrdersViewModel @Inject constructor(
             )
         }
         val filter = currentState.filter
+        val vertical = currentState.verticalFilter
         loadJob = viewModelScope.launch {
             val result = repository.orders(
                 placeId = placeId,
                 status = filter.apiValue,
                 page = 0,
-                category = category,
+                vertical = vertical,
             )
             // Пока шёл запрос, вкладку могли переключить — ответ на прежний
             // фильтр перезаписал бы её список чужими заказами.
-            if (currentState.filter != filter) return@launch
+            if (currentState.filter != filter || currentState.verticalFilter != vertical) return@launch
             applyPage(result)
             if (refreshing) updateState { copy(isRefreshing = false) }
         }
@@ -146,15 +147,16 @@ class BusinessOrdersViewModel @Inject constructor(
 
         val nextPage = loadedPage + 1
         val filter = state.filter
+        val vertical = state.verticalFilter
         updateState { copy(isLoadingMore = true, loadMoreFailure = null) }
         loadMoreJob = viewModelScope.launch {
             val result = repository.orders(
                 placeId = placeId,
                 status = filter.apiValue,
                 page = nextPage,
-                category = category,
+                vertical = vertical,
             )
-            if (currentState.filter != filter) return@launch
+            if (currentState.filter != filter || currentState.verticalFilter != vertical) return@launch
             when (result) {
                 is ApiResult.Failure -> updateState {
                     copy(isLoadingMore = false, loadMoreFailure = result.failure)
@@ -207,11 +209,20 @@ class BusinessOrdersViewModel @Inject constructor(
      * выпадает из фильтра**: строка, исчезнувшая ровно в момент нажатия,
      * читается как «нажал не туда». Из выборки он уйдёт при следующем
      * обновлении — то есть тогда, когда это уже не выглядит потерей.
+     *
+     * Вертикаль для смены статуса берётся у **самого заказа**
+     * ([BusinessOrder.vertical]), а не у заведения: единая лента (issue #289)
+     * может в принципе показать заказы разных вертикалей одним списком, и
+     * ручка меняется по строке. Экран и так не рисует кнопки там, где
+     * [BusinessOrderStatusFlow.canChangeStatus] отвечает «нет», но событие
+     * может прийти на устаревший рендер — проверка здесь та же страховка, что
+     * и у перехода статуса.
      */
     private fun updateStatus(orderId: String, status: OrderStatus) {
         val state = currentState
         if (state.isBusy) return
         val order = orderOrNull(orderId) ?: return
+        if (!BusinessOrderStatusFlow.canChangeStatus(order.vertical)) return
         if (!BusinessOrderStatusFlow.isAllowed(order.status, status, order.method)) return
 
         updateState { copy(pendingOrderId = orderId, actionFailure = null) }
@@ -220,7 +231,7 @@ class BusinessOrdersViewModel @Inject constructor(
                 placeId = placeId,
                 orderId = orderId,
                 status = status,
-                category = category,
+                category = order.vertical,
             )
             when (result) {
                 is ApiResult.Failure -> updateState {

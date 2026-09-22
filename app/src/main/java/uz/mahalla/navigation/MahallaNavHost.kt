@@ -16,6 +16,7 @@ import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointment.AppointmentScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
+import uz.mahalla.feature.business.ui.journal.BusinessJournalScreen
 import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
 import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
 import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
@@ -483,11 +484,14 @@ fun MahallaNavHost(
                 onOpenQueue = { placeId, placeName ->
                     navController.navigate(BusinessQueueRoute(placeId, placeName))
                 },
-                onOpenOrders = { placeId, placeName, category ->
-                    navController.navigate(BusinessOrdersRoute(placeId, placeName, category))
+                onOpenOrders = { placeId, placeName ->
+                    navController.navigate(BusinessOrdersRoute(placeId, placeName))
                 },
                 onOpenMenu = { placeId, placeName ->
                     navController.navigate(BusinessMenuRoute(placeId, placeName))
+                },
+                onOpenJournal = { placeId, placeName, vertical ->
+                    navController.navigate(BusinessJournalRoute(placeId, placeName, vertical))
                 },
                 onBack = { navController.navigateUp() },
             )
@@ -503,6 +507,10 @@ fun MahallaNavHost(
 
         composable<BusinessMenuRoute> {
             BusinessMenuScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessJournalRoute> {
+            BusinessJournalScreen(onBack = { navController.navigateUp() })
         }
 
         // «Сотрудники» заведения (issue #189) — открывается со своей карточки

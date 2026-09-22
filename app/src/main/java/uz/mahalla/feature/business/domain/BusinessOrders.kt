@@ -1,5 +1,6 @@
 package uz.mahalla.feature.business.domain
 
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
@@ -26,6 +27,10 @@ data class BusinessOrderLine(
  * своё.
  *
  * @param number номер для человека («F-2026-0042»): его называют по телефону.
+ * @param vertical чей это заказ (issue #289). У единой ленты
+ * (`GET places/{placeId}/orders`) один запрос отдаёт заказы всех вертикалей
+ * сразу, и по этому полю экран решает, можно ли вообще менять статус —
+ * см. [BusinessOrderStatusFlow.canChangeStatus].
  */
 data class BusinessOrder(
     val id: String,
@@ -40,7 +45,39 @@ data class BusinessOrder(
     val address: String? = null,
     val lines: List<BusinessOrderLine> = emptyList(),
     val createdAt: Instant? = null,
+    val vertical: PlaceCategory = PlaceCategory.Food,
 )
+
+/**
+ * `vertical` заказа бэкенд называет не так, как каталог: `CLOTHING`, а не
+ * `FASHION` (см. `PlaceCategory.Fashion` KDoc), `GAMING` — как в каталоге.
+ * [PlaceCategory.fromApi] эти написания уже понимает через алиасы (разбор
+ * ответа), а в обратную сторону — фильтр запроса — нужна своя таблица: у
+ * [PlaceCategory.apiValue] так, как их называет каталог, а не заказы.
+ *
+ * Единственный источник правды о том, у каких вертикалей вообще бывают
+ * заказы в единой ленте (issue #289) — [BUSINESS_ORDER_VERTICALS] выведен из
+ * тех же ключей, а не собран отдельным списком: разошедшиеся копии одного и
+ * того же перечня — грабли сами по себе.
+ */
+private val ORDER_VERTICAL_API_VALUES: Map<PlaceCategory, String> = mapOf(
+    PlaceCategory.Food to "FOOD",
+    PlaceCategory.Fashion to "CLOTHING",
+    PlaceCategory.Pharmacy to "PHARMACY",
+    PlaceCategory.Cinema to "CINEMA",
+    PlaceCategory.Playground to "GAMING",
+)
+
+/** Что уходит в query-параметр `vertical`; `null` — параметр не отправляется. */
+fun PlaceCategory.orderVerticalApiValue(): String? = ORDER_VERTICAL_API_VALUES[this]
+
+/**
+ * Вертикали, у которых бывают заказы в единой ленте (issue #289) —
+ * `OrderView.vertical` бэкенда: `FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`,
+ * `GAMING`. Мастер и больница сюда не входят: у записи на приём заказов не
+ * бывает вовсе, это другая сущность — см. журнал (`BusinessJournal.kt`).
+ */
+val BUSINESS_ORDER_VERTICALS: List<PlaceCategory> = ORDER_VERTICAL_API_VALUES.keys.toList()
 
 /**
  * Страница входящих заказов.
@@ -115,15 +152,36 @@ object BusinessOrderStatusFlow {
      * дашборде и именно ради них экран перечитывается на возврате.
      */
     fun isNew(status: OrderStatus): Boolean = status == OrderStatus.Created
+
+    /**
+     * Есть ли у заведения ручка, которая вообще меняет статус этого заказа
+     * (issue #289). Единая лента показывает заказы всех вертикалей, а
+     * `PUT .../orders/{id}/status` существует только у «Еды» и «Одежды» —
+     * `food/places/{id}/orders/{id}/status` и
+     * `fashion/stores/{id}/orders/{id}/status` (issue #187). У аптеки, кино и
+     * игровой зоны такой ручки у бэкенда нет вовсе: аптека заказов не
+     * принимает, а билет и бронь снимаются своими путями (`cancel`,
+     * `complete`), не общей сменой статуса. Кнопки поэтому не рисуются —
+     * предложить их значило бы получить `404`/`405` там, где приложение могло
+     * знать заранее.
+     */
+    fun canChangeStatus(vertical: PlaceCategory): Boolean =
+        vertical == PlaceCategory.Food || vertical == PlaceCategory.Fashion
 }
 
 /**
- * Фильтр списка входящих заказов.
+ * Фильтр списка входящих заказов по статусу.
  *
- * `GET food/places/{placeId}/orders` принимает `status` — одно значение, не
- * список. Поэтому фильтр здесь ровно такой же: одна вкладка — один запрос, а
- * «все» — запрос без параметра. Собирать «активные» из четырёх запросов
- * клиентом значило бы четыре раза пагинировать и склеивать страницы вручную.
+ * `GET places/{placeId}/orders` (issue #289) принимает `status` — одно
+ * значение, не список. Поэтому фильтр здесь ровно такой же: одна вкладка —
+ * один запрос, а «все» — запрос без параметра. Собирать «активные» из
+ * четырёх запросов клиентом значило бы четыре раза пагинировать и склеивать
+ * страницы вручную.
+ *
+ * Второй, независимый фильтр — по вертикали ([BUSINESS_ORDER_VERTICALS]), он
+ * не enum, а обычный `PlaceCategory?`: значений пять, и заводить под них
+ * второе перечисление ради единственного метода [orderVerticalApiValue]
+ * незачем.
  */
 enum class BusinessOrderFilter(val status: OrderStatus?) {
     All(null),
