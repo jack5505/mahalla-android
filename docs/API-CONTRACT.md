@@ -119,6 +119,17 @@ query у `GET promotions/check` (`orderAmount`) и `GET food/delivery-fee`
 | Записи к врачу | `HospitalApi.myAppointments` | `GET hospitals/appointments/my` |
 | Билеты в кино | `CinemaApi.myTickets` | `GET cinema/tickets/my` |
 
+**`GET orders` — единственный из пяти без `/my`, и под токеном не проверен ни
+один путь** (issue #148): анонимно все пять отвечают `401`, то есть проверено
+только их существование. Харнесс подготовлен — `contract/orders.sh` снимает
+страницу без `vertical` (форма ответа, должны приезжать заказы разных
+вертикалей одним списком) и `orders/{orderId}` по первому же id (issue #9 —
+общая ручка одного заказа отдаёт `OrderView`, а не что-то ещё). Разбор
+фикстур — `OrdersContractTest`. Скоуп по пользователю («чужие заказы не
+приходят») этой пробой не закрыть: нужен второй живой аккаунт, а
+`CONTRACT_REFRESH_TOKEN` на стенде один — этот пункт остаётся ручным
+(`needs-human`).
+
 ---
 
 ## AnalyticsApi ⚠️ частично
@@ -489,6 +500,9 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 приезжают заказы одной вертикали (одежда), без него — **всех**
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
+
+Под токеном не проверен (issue #148) — харнесс `contract/orders.sh` готов,
+запуска с живым `CONTRACT_REFRESH_TOKEN` ещё не было.
 
 **`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
 2026-09-10, issue #167; исправлено в issue #221). У пути свой
@@ -1208,12 +1222,19 @@ DTO→домен, но в интерфейсе не показан: задача
 ```bash
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/booking.sh
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/security.sh
+CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/orders.sh
 ```
 
 `security.sh` — **только читающая**: `pin/change` сменил бы PIN живого
 аккаунта, а неверный код у `pin/change` и `pin/biometric` тратит серверную
 попытку и может залочить аккаунт. Такое дёргать автоматически нельзя, цена
 ошибки — человек, запертый вне приложения (ADR 0013).
+
+`.github/workflows/contract-check.yml` пока даёт выбрать только `booking` в
+выпадающем списке `vertical` — `orders` туда не добавлен: у агента нет прав
+править файлы в `.github/workflows/` (GitHub App). Через workflow `orders.sh`
+не запустить, пока кто-то не допишет `options` руками; напрямую (команда
+выше) — можно уже сейчас.
 
 Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
 в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает
