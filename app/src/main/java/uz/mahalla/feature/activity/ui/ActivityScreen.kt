@@ -47,6 +47,7 @@ import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.activity.domain.ActivityTimeKind
 import uz.mahalla.ui.theme.Spacing
 import java.time.Instant
 
@@ -351,6 +352,7 @@ private fun ActivityScreenPreview() {
                             kind = ActivityKind.GamingBooking,
                             status = ActivityStatus.Confirmed,
                             occurredAt = Instant.parse("2026-09-05T13:00:00Z"),
+                            timeKind = ActivityTimeKind.Event,
                             amount = 60_000,
                         ),
                         Activity(
@@ -359,6 +361,7 @@ private fun ActivityScreenPreview() {
                             kind = ActivityKind.MasterAppointment,
                             status = ActivityStatus.Placed,
                             occurredAt = Instant.parse("2026-09-06T05:30:00Z"),
+                            timeKind = ActivityTimeKind.Event,
                             amount = 45_000,
                             note = "Soch olish",
                         ),

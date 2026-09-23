@@ -11,6 +11,7 @@ import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.activity.domain.ActivityTimeKind
 import uz.mahalla.feature.booking.data.AppointmentDto
 import uz.mahalla.feature.cinema.data.CinemaTicketDto
 import uz.mahalla.feature.food.data.OrderViewDto
@@ -92,6 +93,7 @@ internal fun GamingBookingDto.toActivity(): Activity? {
         kind = ActivityKind.GamingBooking,
         status = ActivityStatus.ofBooking(status),
         occurredAt = parseServerSlotInstant(startTime),
+        timeKind = ActivityTimeKind.Event,
         amount = totalPrice.tiyinToSom(),
         // Длительность — единственное, что бэкенд сообщает о брони словами.
         // Подпись («2 ч») собирает экран: строка с числом должна быть
@@ -108,6 +110,7 @@ internal fun GamingBookingDto.toActivity(): Activity? {
  */
 internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
     val appointmentId = id?.takeIf { it.isNotBlank() } ?: return null
+    val eventAt = appointmentAt()
     return Activity(
         id = appointmentId,
         source = source,
@@ -117,7 +120,11 @@ internal fun AppointmentDto.toActivity(source: ActivitySource): Activity? {
             ActivityKind.MasterAppointment
         },
         status = ActivityStatus.ofAppointment(status),
-        occurredAt = appointmentAt() ?: parseServerInstant(createdAt),
+        occurredAt = eventAt ?: parseServerInstant(createdAt),
+        // Дата записи известна — сортируем как будущее событие; неизвестна
+        // (`apptDate` не разобрался) — откатываемся на время создания, и
+        // тогда это прошлое, как у заказа (issue #174).
+        timeKind = if (eventAt != null) ActivityTimeKind.Event else ActivityTimeKind.Recorded,
         amount = price.tiyinToSom(),
         // Название услуги — единственное человекочитаемое поле в ответе, и
         // оно же самое полезное: «Soch olish» говорит больше, чем «Запись».
