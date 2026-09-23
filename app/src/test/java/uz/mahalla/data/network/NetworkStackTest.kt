@@ -669,6 +669,85 @@ class NetworkStackTest {
     }
 
     @Test
+    fun `the same endpoint rejecting a fresh token repeatedly does not end the session`() =
+        runTest {
+            // Одна ручка, путающая 401 и 403 (роль, подписка, бизнес-панель) —
+            // не отказ токена целиком, сколько бы раз её ни дёрнули (issue #197).
+            sessionStore.save(Session("stale", "refresh-1"))
+            val auth = authenticator()
+            val path = requestTo("/business/orders")
+
+            repeat(5) {
+                assertNull(
+                    auth.authenticate(
+                        route = null,
+                        response = unauthorized(path, prior = unauthorized(path)),
+                    ),
+                )
+            }
+
+            assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+            assertEquals(0, expiryEvents.size)
+        }
+
+    @Test
+    fun `two different endpoints rejecting a fresh token together end the session`() = runTest {
+        // Оба отказа делят один и тот же свежий токен без своего успешного
+        // refresh между ними — как у параллельных запросов, упёршихся в
+        // общий только что обновлённый токен. Одна ручка простилась бы, а
+        // сразу две разные подряд — уже отказ токена целиком (issue #197).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val pathA = requestTo("/business/orders")
+        val pathB = requestTo("/wallet/topup")
+
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(pathA, prior = unauthorized(pathA))),
+        )
+        assertEquals("одна ручка ещё прощена", Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(pathB, prior = unauthorized(pathB))),
+        )
+
+        assertNull("вторая другая ручка подряд — сессия кончена", sessionStore.current())
+        assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `a rejection is forgotten after its own successful refresh happens`() = runTest {
+        // Между двумя ручками случился СВОЙ удачный refresh — набор путей
+        // сбрасывается, и вторая ручка не складывается с первой: утренняя
+        // бизнес-панель без подписки и вечерняя платная ручка не должны
+        // порвать здоровую сессию (issue #197).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val pathA = requestTo("/business/orders")
+
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(pathA, prior = unauthorized(pathA))),
+        )
+        assertEquals(0, expiryEvents.size)
+
+        // Обычный удачный refresh где-то ещё в приложении между отказами.
+        server.enqueue(jsonResponse(REFRESHED_TOKENS_BODY))
+        auth.authenticate(route = null, response = unauthorized(staleRequest()))
+
+        val pathB = requestTo("/wallet/topup", token = "fresh")
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(pathB, prior = unauthorized(pathB))),
+        )
+
+        assertEquals(
+            "второй путь не сложился с первым — между ними был удачный refresh",
+            0,
+            expiryEvents.size,
+        )
+        assertTrue("сессия жива", sessionStore.current() != null)
+    }
+
+    @Test
     fun `broken json is reported as a serialization error`() = runTest {
         server.enqueue(jsonResponse("""{"id": "p-1", "name": """))
 
@@ -760,6 +839,11 @@ class NetworkStackTest {
     private fun staleRequest(): Request = Request.Builder()
         .url(server.url("/places/p-1"))
         .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer stale")
+        .build()
+
+    private fun requestTo(path: String, token: String = "stale"): Request = Request.Builder()
+        .url(server.url(path))
+        .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer $token")
         .build()
 
     private fun jsonResponse(body: String): MockResponse = MockResponse()
