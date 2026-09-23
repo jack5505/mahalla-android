@@ -297,9 +297,12 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `an empty source with no data is still just empty`() = runTest {
+    fun `an empty source with no data still flags the failure`() = runTest {
         // Один источник промолчал ошибкой, остальные ответили пустыми: это не
-        // полный отказ, поэтому пустое состояние плюс отметка раздела.
+        // полный отказ (кто-то же ответил), поэтому `items` — `Empty`, а не
+        // `Error`. Но `sourceFailures` не должна опустеть вместе с ним —
+        // экран (issue #177) решает по ней, можно ли звать в каталог
+        // человека, у которого просто не прогрузился его же раздел.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
             failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),

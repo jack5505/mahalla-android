@@ -1315,6 +1315,9 @@
     <string name="activity_empty_active_description">Barcha buyurtma va bandlovlaringiz tugagan. Ular «Tarix» bo\'limida.</string>
     <string name="activity_empty_history_title">Tarix bo\'sh</string>
     <string name="activity_empty_history_description">Tugagan buyurtma va bandlovlar shu yerga tushadi.</string>
+    <!-- Пусто, но часть источников отказала (issue #177): каталог не предлагаем. -->
+    <string name="activity_empty_partial_title">Ba\'zi bo\'limlar yuklanmadi</string>
+    <string name="activity_empty_partial_description">Bu yerda ko\'ringan bo\'lishi mumkin edi. Qayta urinib ko\'ring.</string>
     <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
     <string name="action_load_more">Ko\'proq ko\'rsatish</string>
     <!-- Частичный отказ: раздел не загрузился, остальной список показан -->

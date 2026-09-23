@@ -155,14 +155,27 @@ private fun LazyListScope.activityItems(
         }
 
         // Ничего не заказывали вовсе — пустое состояние с действием, а не
-        // голое «ничего не найдено» (требование T7).
+        // голое «ничего не найдено» (требование T7). Но если список пуст
+        // потому, что часть источников отказала (issue #177), звать в
+        // каталог человека, у которого просто не прогрузились его же заказы,
+        // нельзя — это то же враньё, что и полный `Error` с «вы ещё ничего не
+        // заказывали», только в менее очевидной форме.
         is ScreenState.Empty -> item(key = "empty") {
-            EmptyState(
-                title = stringResource(R.string.activity_empty_title),
-                description = stringResource(R.string.activity_empty_description),
-                actionLabel = stringResource(R.string.activity_empty_action),
-                onAction = { onEvent(ActivityEvent.DiscoveryRequested) },
-            )
+            if (state.sourceFailures.isEmpty()) {
+                EmptyState(
+                    title = stringResource(R.string.activity_empty_title),
+                    description = stringResource(R.string.activity_empty_description),
+                    actionLabel = stringResource(R.string.activity_empty_action),
+                    onAction = { onEvent(ActivityEvent.DiscoveryRequested) },
+                )
+            } else {
+                EmptyState(
+                    title = stringResource(R.string.activity_empty_partial_title),
+                    description = stringResource(R.string.activity_empty_partial_description),
+                    actionLabel = stringResource(R.string.action_retry),
+                    onAction = { onEvent(ActivityEvent.Retry) },
+                )
+            }
         }
 
         // Полный отказ: не ответил ни один источник. Частичный сюда не
