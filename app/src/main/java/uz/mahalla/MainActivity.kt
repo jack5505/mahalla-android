@@ -13,6 +13,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -57,8 +58,10 @@ class MainActivity : FragmentActivity() {
      *
      * Activity объявлена `singleTop`, поэтому нажатие на пуш при запущенном
      * приложении не создаёт вторую Activity, а приносит новый `Intent` сюда.
-     * Первый `Intent` разбирает сам `NavHost` при построении графа, а этот —
-     * разбирать некому: композиция уже собрана.
+     * Первый `Intent` разбирает сам `NavHost` при построении графа (либо —
+     * если старт был за гейтом, issue #160 — `MahallaApp.DeferredDeepLinkEffect`
+     * тем же `handleDeepLink`, как только гейт пройден), а этот — разбирать
+     * некому: композиция уже собрана.
      */
     private var navController: NavHostController? = null
 
@@ -79,6 +82,19 @@ class MainActivity : FragmentActivity() {
             // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
             // сбрасывал бы back stack (см. RootViewModel).
             val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
+            // Стартовый пункт — гейт (issue #160): `NavHost.setGraph` разбирает
+            // `activity.intent` сам сразу после построения графа, и ссылка из
+            // пуша вытеснила бы `BackendUrlRoute`/`UpdateRoute` раньше, чем
+            // человек до них дошёл. `remember` без ключей — единственный раз за
+            // жизнь композиции, ровно на первой эмиссии `Ready`: `needsBackendUrl`
+            // и `showUpdate` дальше не меняются (см. `RootViewModel.start`).
+            val pendingDeepLink = remember {
+                val gated = ready.needsBackendUrl || ready.showUpdate
+                val hasDeepLink = intent.data != null
+                (if (gated && hasDeepLink) Intent(intent) else null).also {
+                    if (gated) intent.data = null
+                }
+            }
             val locked by viewModel.locked.collectAsStateWithLifecycle()
             val controller = rememberNavController()
             // Ссылка держится только пока композиция жива: разобрать deep link
@@ -109,6 +125,7 @@ class MainActivity : FragmentActivity() {
                     // Сессия может умереть на любом экране (issue #138):
                     // уводить на вход умеет только корень.
                     sessionExpired = viewModel.sessionExpired,
+                    pendingDeepLink = pendingDeepLink,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
                     // иначе пользователь получит второй платный SMS-код.
                     onboardingStartDestination = if (ready.resumeOnboardingAtPin) {
