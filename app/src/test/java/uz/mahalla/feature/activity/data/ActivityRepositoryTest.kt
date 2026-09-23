@@ -21,6 +21,7 @@ import uz.mahalla.feature.activity.domain.ActivityMerge
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.activity.domain.ActivityTimeKind
 import uz.mahalla.feature.booking.data.BookingApi
 import uz.mahalla.feature.cinema.data.CinemaApi
 import uz.mahalla.feature.discovery.data.CatalogApi
@@ -110,6 +111,10 @@ class ActivityRepositoryTest {
         assertEquals("F-2026-0042", order.note)
         // Jackson на бэкенде отдаёт дату без зоны — иначе она пуста у всех.
         assertEquals(Instant.parse("2026-09-04T08:10:00Z"), order.occurredAt)
+        // `occurredAt` заказа — это `createdAt`, прошлое, не будущее событие
+        // (issue #174): вкладка «Активные» не должна ранжировать его как
+        // бронь или запись.
+        assertEquals(ActivityTimeKind.Recorded, order.timeKind)
         assertEquals(ActivityTarget.FoodOrder("o-1"), order.target)
         assertTrue(feed.failures.isEmpty())
         assertFalse(feed.hasMore)
@@ -160,6 +165,8 @@ class ActivityRepositoryTest {
         // Ташкенте, то есть 08:00 UTC. Читать его как UTC значило бы показать
         // бронь на 18:00 (issue #144).
         assertEquals(Instant.parse("2026-09-05T08:00:00Z"), booking.occurredAt)
+        // Время слота — будущее событие (issue #174), не отметка о создании.
+        assertEquals(ActivityTimeKind.Event, booking.timeKind)
     }
 
     @Test
@@ -245,6 +252,8 @@ class ActivityRepositoryTest {
         // 09:30 в Ташкенте — это 04:30 UTC. Разворачивать местную дату в UTC
         // значило бы показать запись на пять часов позже.
         assertEquals(Instant.parse("2026-09-10T04:30:00Z"), appointment.occurredAt)
+        // Дата записи известна — это будущее событие (issue #174).
+        assertEquals(ActivityTimeKind.Event, appointment.timeKind)
         // Карточка записи (issue #183) — строка кликабельна.
         assertEquals(ActivityTarget.MasterAppointment("a-1"), appointment.target)
     }
@@ -317,7 +326,11 @@ class ActivityRepositoryTest {
                "startTime":{"hour":31,"minute":99},"status":"CONFIRMED"}],"last":true}""",
         )
 
-        assertNull(repository().feed().items.single().occurredAt)
+        val appointment = repository().feed().items.single()
+        assertNull(appointment.occurredAt)
+        // Дата не разобралась — это откат на `createdAt`, а не событие
+        // (issue #174), даже если и его в ответе не было.
+        assertEquals(ActivityTimeKind.Recorded, appointment.timeKind)
     }
 
     @Test
@@ -444,6 +457,9 @@ class ActivityRepositoryTest {
         assertEquals(ActivityStatus.Confirmed, ticket.status)
         assertEquals("D-12", ticket.note)
         assertEquals(35_000L, ticket.amount)
+        // Времени сеанса в ответе нет — сортируем по покупке, прошлому
+        // (issue #174), не по несуществующему будущему сеансу.
+        assertEquals(ActivityTimeKind.Recorded, ticket.timeKind)
         // Карточка билета (issue #183) — строка кликабельна.
         assertEquals(ActivityTarget.CinemaTicket("t-1"), ticket.target)
     }
