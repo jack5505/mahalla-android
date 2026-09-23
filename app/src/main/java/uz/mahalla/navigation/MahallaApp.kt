@@ -1,10 +1,14 @@
 package uz.mahalla.navigation
 
+import android.content.Intent
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination
@@ -30,6 +34,11 @@ import uz.mahalla.core.ui.snackbar.SnackbarMessage
  *
  * @param sessionExpired сессия умерла, пока приложение работало (issue #138):
  * повод увести человека на вход с любого экрана.
+ * @param pendingDeepLink ссылка, которую `NavHost` не должен разобрать сам
+ * (issue #160): стартовый пункт — гейт (`BackendUrlRoute`/`UpdateRoute`), и
+ * `MainActivity` уже забрала ссылку из `activity.intent`, чтобы автоматический
+ * разбор в `NavHost.setGraph` не вытеснил гейт. Разбирается здесь же, как
+ * только гейт пройден.
  */
 @Composable
 fun MahallaApp(
@@ -41,6 +50,7 @@ fun MahallaApp(
     afterUpdate: Any = OnboardingGraph,
     backendUrlOverrideEnabled: Boolean = false,
     sessionExpired: Flow<Unit> = emptyFlow(),
+    pendingDeepLink: Intent? = null,
     navController: NavHostController = rememberNavController(),
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
@@ -48,6 +58,8 @@ fun MahallaApp(
     val selectedItem = BottomNavItem.entries.firstOrNull { it.matches(currentDestination) }
     val snackbarController = rememberSnackbarController()
     val expiredMessage = stringResource(R.string.error_unauthorized)
+
+    DeferredDeepLinkEffect(navController = navController, pendingDeepLink = pendingDeepLink)
 
     SessionExpiryEffect(navController = navController, sessionExpired = sessionExpired) {
         // Экран входа, возникший сам собой, читается как сброс приложения,
@@ -135,6 +147,41 @@ internal fun SessionExpiryEffect(
         }
     }
 }
+
+/**
+ * Отложенный deep link (issue #160).
+ *
+ * Пока стартовый пункт — гейт (`BackendUrlRoute`/`UpdateRoute`), `NavHost` не
+ * получает исходный `intent`: его разбор через `popUpTo(graph){inclusive}`
+ * вытеснил бы гейт, и обязательное обновление или ненастроенный адрес бэкенда
+ * можно было бы обойти нажатием на пуш. `MainActivity` забирает ссылку заранее
+ * и передаёт её сюда; как только текущее назначение перестаёт быть гейтом
+ * (человек прошёл его), она разбирается тем же `handleDeepLink`, что и
+ * `onNewIntent`.
+ *
+ * `consumed` нужен, чтобы не повторять разбор на каждой смене назначения
+ * после гейта — иначе, например, уход на нижний таб с главной снова навёл бы
+ * на ссылку из уже открытого один раз пуша.
+ */
+@Composable
+internal fun DeferredDeepLinkEffect(
+    navController: NavHostController,
+    pendingDeepLink: Intent?,
+) {
+    if (pendingDeepLink == null) return
+    var consumed by remember { mutableStateOf(false) }
+    if (consumed) return
+    val currentEntry by navController.currentBackStackEntryAsState()
+    LaunchedEffect(currentEntry) {
+        val destination = currentEntry?.destination ?: return@LaunchedEffect
+        if (destination.isGate()) return@LaunchedEffect
+        consumed = true
+        navController.handleDeepLink(pendingDeepLink)
+    }
+}
+
+private fun NavDestination.isGate(): Boolean =
+    hasRoute(BackendUrlRoute::class) || hasRoute(UpdateRoute::class)
 
 /**
  * Таб считается выбранным, если маршрут есть в иерархии текущего назначения:
