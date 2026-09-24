@@ -308,15 +308,24 @@ class GraphAssemblyTest {
         )
         val dataStore = sharedDataStore(context)
 
+        val sessionStore = DataStoreSessionStore(dataStore)
         val repository = DefaultAuthRepository(
             authApi = authApi,
-            sessionStore = DataStoreSessionStore(dataStore),
+            sessionStore = sessionStore,
             userProfileStore = DataStoreUserProfileStore(dataStore),
             formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
             clock = AppModule.provideClock(),
+            tokenAuthenticator = TokenAuthenticator(
+                sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
+                authApi = authApi,
+                deviceInfoProvider = deviceInfoProvider(context),
+                locationProvider = locationProvider(context),
+                clock = AppModule.provideClock(),
+            ),
         )
 
         assertNotNull(repository)
@@ -426,7 +435,7 @@ class GraphAssemblyTest {
         assertNotNull(
             DefaultProviderRepository(
                 api = api,
-                locationSource = AndroidLocationSource(context),
+                locationSource = AndroidLocationSource(context, AppModule.provideClock()),
                 // «Мои заведения» (issue #94): переключатель доступности
                 // отправляет координаты устройства той же лестницей, что и
                 // запросы авторизации.
@@ -770,7 +779,7 @@ class GraphAssemblyTest {
     private fun languageHeaderInterceptor() = LanguageHeaderInterceptor()
 
     private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
-        locationSource = AndroidLocationSource(context),
+        locationSource = AndroidLocationSource(context, AppModule.provideClock()),
         settings = SettingsDataStore(sharedDataStore(context)),
     )
 

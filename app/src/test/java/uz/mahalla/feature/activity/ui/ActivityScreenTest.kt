@@ -9,6 +9,7 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
@@ -55,6 +56,8 @@ class ActivityScreenTest {
 
     private val loadMore: String get() = compose.activity.getString(R.string.action_load_more)
     private val retry: String get() = compose.activity.getString(R.string.action_retry)
+    private val discoveryAction: String get() = compose.activity.getString(R.string.activity_empty_action)
+    private val partialTitle: String get() = compose.activity.getString(R.string.activity_empty_partial_title)
 
     @Test
     fun `the tail does not ask for pages by itself`() {
@@ -161,6 +164,49 @@ class ActivityScreenTest {
         compose.onNodeWithText(retry).performClick()
 
         assertEquals(listOf(ActivityEvent.LoadMore), events)
+    }
+
+    @Test
+    fun `a real empty screen offers discovery, not retry`() {
+        // Никто не отказал — «вы ещё ничего не заказывали» правда, и кнопка
+        // должна вести в каталог, а не предлагать повторить (issue #177).
+        setContent(mutableStateOf(ActivityState(items = ScreenState.Empty)))
+
+        compose.onNodeWithText(discoveryAction).assertExists()
+        compose.onNodeWithText(retry).assertDoesNotExist()
+
+        compose.onNodeWithText(discoveryAction).performClick()
+
+        assertEquals(listOf(ActivityEvent.DiscoveryRequested), events)
+    }
+
+    @Test
+    fun `an empty screen with a failed source offers retry, not the catalog`() {
+        // Билеты в кино отказали, остальные четыре ответили пустыми
+        // страницами — список пуст, но не потому, что заказывать нечего
+        // (issue #177). Звать в каталог человека, у которого просто не
+        // прогрузились его же билеты, — то же враньё, что и полный `Error` с
+        // «вы ещё ничего не заказывали», только в менее очевидной форме.
+        setContent(
+            mutableStateOf(
+                ActivityState(
+                    items = ScreenState.Empty,
+                    sourceFailures = mapOf(
+                        ActivitySource.CinemaTickets to ApiFailure(ApiError.NoConnection),
+                    ),
+                ),
+            ),
+        )
+
+        compose.onNodeWithText(partialTitle).assertExists()
+        compose.onNodeWithText(discoveryAction).assertDoesNotExist()
+
+        // На экране две кнопки «Повторить»: у отметки сбойного раздела
+        // (composed первой, выше по списку) и у самого пустого состояния —
+        // обе шлют одно и то же событие, конкретный индекс не важен.
+        compose.onAllNodesWithText(retry)[0].performClick()
+
+        assertEquals(listOf(ActivityEvent.Retry), events)
     }
 
     private fun setContent(state: MutableState<ActivityState>) {

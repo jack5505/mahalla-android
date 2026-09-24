@@ -9,6 +9,7 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.PinLoginRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
@@ -117,6 +118,7 @@ class DefaultAuthRepository @Inject constructor(
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
+    private val tokenAuthenticator: TokenAuthenticator,
 ) : AuthRepository {
 
     override val isAuthorized: Flow<Boolean> = sessionStore.session.map { it != null }
@@ -383,6 +385,12 @@ class DefaultAuthRepository @Inject constructor(
         runCatchingCancellable { formOwnership.claimFor(user?.id) }
             .reportSwallowed("auth.claimForm")
         sessionStore.save(session)
+        // Счётчик неоднозначных провалов refresh (issue #198) живёт в
+        // `TokenAuthenticator`, а сессию сюда пишет этот класс — мимо него.
+        // Без сброса счёт из прежней сессии (1–2, порог не достигнут)
+        // переживал бы logout/смену номера и первый же неоднозначный ответ в
+        // новой сессии добивал бы его до порога мгновенно (issue #309).
+        tokenAuthenticator.reset()
         saveProfile(user)
     }
 

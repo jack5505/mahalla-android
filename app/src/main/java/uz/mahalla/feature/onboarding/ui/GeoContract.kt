@@ -21,11 +21,13 @@ data class GeoState(
     val busy: Boolean = false,
     /** Разрешение было запрошено и отклонено — объяснение больше не показываем. */
     val permissionDenied: Boolean = false,
+    /** «Больше не спрашивать»: системный диалог не покажется, дальше — только настройки. */
+    val permissionPermanentlyDenied: Boolean = false,
 ) : UiState
 
 sealed interface GeoEvent : UiEvent {
     data object AllowRequested : GeoEvent
-    data class PermissionResult(val granted: Boolean) : GeoEvent
+    data class PermissionResult(val granted: Boolean, val permanentlyDenied: Boolean = false) : GeoEvent
 
     /** «Выбрать город вручную» — без запроса разрешения. */
     data object ChooseCityRequested : GeoEvent

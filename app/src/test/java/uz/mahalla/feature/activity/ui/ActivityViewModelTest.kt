@@ -297,9 +297,12 @@ class ActivityViewModelTest {
     }
 
     @Test
-    fun `an empty source with no data is still just empty`() = runTest {
+    fun `an empty source with no data still flags the failure`() = runTest {
         // Один источник промолчал ошибкой, остальные ответили пустыми: это не
-        // полный отказ, поэтому пустое состояние плюс отметка раздела.
+        // полный отказ (кто-то же ответил), поэтому `items` — `Empty`, а не
+        // `Error`. Но `sourceFailures` не должна опустеть вместе с ним —
+        // экран (issue #177) решает по ней, можно ли звать в каталог
+        // человека, у которого просто не прогрузился его же раздел.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
             failures = mapOf(ActivitySource.CinemaTickets to ApiFailure(ApiError.Timeout)),
@@ -813,6 +816,38 @@ class ActivityViewModelTest {
 
         assertEquals(listOf("o-0", "o-1", "o-2"), viewModel.state.value.visible.map(Activity::id))
         assertTrue(viewModel.state.value.hasMore)
+    }
+
+    @Test
+    fun `a resume during an in-flight load more does not shorten the list`() = runTest {
+        // Issue #175: охрана `onScreenResumed` (см. `Mvi.kt`) смотрит только
+        // на `loadJob` — догрузка кнопкой «показать ещё» идёт в отдельном
+        // `loadMoreJob`, и резюм посреди неё эту охрану не видит. Список к
+        // этому моменту ещё не вырос (ответ страницы висит на `gate`), и
+        // `resumeLoad()` обязан реплеить ровно то, что уже показано, а не
+        // откатывать список к состоянию до нажатия «показать ещё».
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("o-1", ActivitySource.Orders)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // первый resume — открытие, не в счёт.
+
+        val gate = CompletableDeferred<Unit>()
+        repository.gate = gate
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        assertTrue(viewModel.state.value.isLoadingMore)
+        assertEquals(listOf("o-1"), viewModel.state.value.visible.map(Activity::id))
+
+        repository.gate = null
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // возврат посреди догрузки.
+
+        val state = viewModel.state.value
+        assertEquals(listOf("o-1"), state.visible.map(Activity::id))
+        assertFalse(state.isLoadingMore)
+
+        gate.complete(Unit)
     }
 
     @Test

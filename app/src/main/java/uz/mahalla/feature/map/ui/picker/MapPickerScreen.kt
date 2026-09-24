@@ -32,6 +32,8 @@ import uz.mahalla.R
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaTopBar
+import uz.mahalla.core.ui.permission.canRequestPermissionAgain
+import uz.mahalla.core.ui.permission.findActivity
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.feature.map.canvas.MapCanvas
@@ -41,6 +43,7 @@ import uz.mahalla.feature.map.data.MapKitInitializer
 import uz.mahalla.feature.map.domain.MapPoint
 import uz.mahalla.feature.map.ui.LOCATION_PERMISSIONS
 import uz.mahalla.feature.map.ui.LocationNotice
+import uz.mahalla.feature.map.ui.LocationNoticeBannerRow
 import uz.mahalla.feature.map.ui.MapBannerRow
 import uz.mahalla.feature.map.ui.MapBannerSurface
 import uz.mahalla.feature.map.ui.MapControls
@@ -73,7 +76,15 @@ fun MapPickerScreen(
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        viewModel.onEvent(MapPickerEvent.LocationPermissionResult(granted.values.any { it }))
+        val anyGranted = granted.values.any { it }
+        // shouldShowRequestPermissionRationale — только после того, как диалог
+        // уже был показан: до этого он тоже вернул бы false и не отличался бы
+        // от «Больше не спрашивать».
+        val permanentlyDenied = !anyGranted &&
+            context.findActivity()?.canRequestPermissionAgain(LOCATION_PERMISSIONS) == false
+        viewModel.onEvent(
+            MapPickerEvent.LocationPermissionResult(granted = anyGranted, permanentlyDenied = permanentlyDenied),
+        )
     }
 
     // Разрешение могли выдать в онбординге (3.6) или в настройках устройства,
@@ -149,10 +160,10 @@ fun MapPickerContent(
                         .align(Alignment.TopCenter)
                         .padding(Spacing.gutter),
                 ) {
-                    MapBannerRow(
-                        text = locationNoticeText(notice),
-                        actionLabel = stringResource(R.string.action_close),
-                        onAction = { onEvent(MapPickerEvent.NoticeDismissed) },
+                    LocationNoticeBannerRow(
+                        notice = notice,
+                        permanentlyDenied = state.locationPermissionPermanentlyDenied,
+                        onDismiss = { onEvent(MapPickerEvent.NoticeDismissed) },
                     )
                 }
             }

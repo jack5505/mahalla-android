@@ -75,7 +75,7 @@ gh issue list --state open   # 47 открытых issue
 
 | Вертикаль | Экраны | Ручки | Готово в |
 |---|---|---|---|
-| **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/delivery-fee`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг), доставка в корзине — #179 |
+| **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/delivery-fee`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг), доставка в корзине — #179; кнопка «Заказать» на карточке — #335 (до неё `ordering` не включался ни для одной категории, и первый заказ был недостижим) |
 | **Очередь** (walk-in) | талон, слежение, отмена | `walkin/send`, `walkin/{id}/cancel` | #96 |
 | **Бронь** (BARBER) | услуга → день → слот → подтверждение; «мои записи» с отменой и **переносом**; карточка одной записи (из «моих активностей») | `barber-services/places/{id}`, `.../slots`, `appointments`, `appointments/my`, `appointments/{id}`, `appointments/{id}/cancel` | #97, перенос — #11, карточка записи — #183 |
 | **Больницы** | врач → день → время → жалоба → подтверждение; «мои записи к врачу» (тот же экран, что у брони, с `vertical=Doctor`); карточка одной записи — тот же экран, что и у брони | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my`, `hospitals/appointments/{id}`, отмена — общая `appointments/{id}/cancel` (см. §4.1) | #99, карточка записи — #181, #183 |

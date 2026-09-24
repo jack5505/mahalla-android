@@ -107,14 +107,17 @@ fun YandexMapCanvas(
     DisposableEffect(lifecycleOwner, mapView) {
         // MapKit тратит батарею и трафик, пока карта видима: onStop обязателен,
         // иначе свёрнутое приложение продолжает тянуть тайлы.
+        var started = false
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
+                    started = true
                     MapKitFactory.getInstance().onStart()
                     mapView.onStart()
                 }
 
                 Lifecycle.Event.ON_STOP -> {
+                    started = false
                     mapView.onStop()
                     MapKitFactory.getInstance().onStop()
                 }
@@ -125,6 +128,13 @@ fun YandexMapCanvas(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            // Уход с экрана навигацией (Activity остаётся ON_START) не шлёт
+            // ON_STOP: без явного вызова здесь MapKit продолжал бы греть
+            // GPS и тайлы в фоне (issue #348).
+            if (started) {
+                mapView.onStop()
+                MapKitFactory.getInstance().onStop()
+            }
             controller.dispose()
         }
     }
