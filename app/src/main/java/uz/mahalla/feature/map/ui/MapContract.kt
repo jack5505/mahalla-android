@@ -38,6 +38,8 @@ data class MapState(
      * кнопке, после которого карта не двинулась, читается как поломка.
      */
     val locationNotice: LocationNotice? = null,
+    /** «Больше не спрашивать»: системный диалог не покажется, дальше — только настройки. */
+    val locationPermissionPermanentlyDenied: Boolean = false,
 ) : UiState {
 
     val selectedPlace: Place?
@@ -85,7 +87,7 @@ sealed interface MapEvent : UiEvent {
     data class LocationPermissionChecked(val granted: Boolean) : MapEvent
 
     /** Ответ системного диалога. */
-    data class LocationPermissionResult(val granted: Boolean) : MapEvent
+    data class LocationPermissionResult(val granted: Boolean, val permanentlyDenied: Boolean = false) : MapEvent
 
     data object NoticeDismissed : MapEvent
 

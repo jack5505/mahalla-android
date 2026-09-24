@@ -7,7 +7,6 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
 import uz.mahalla.data.location.DeviceLocation
@@ -94,14 +93,17 @@ class GeoHeaderInterceptorTest {
     }
 
     @Test
-    fun `a failing location source does not break the request`() {
-        // Без координат бэкенд ответит понятным 403; исключение из
-        // интерцептора превратилось бы в «сеть недоступна».
+    fun `a failing provider with no cache still sends the default city center`() {
+        // Пустой кэш вдобавок к упавшему провайдеру раньше отправлял запрос
+        // вовсе без заголовков — бэкенд отвечал 403 GEO_PERMISSION_REQUIRED
+        // (issue #348). Центр City.Default — тот же запасной путь, что и у
+        // самого RequestLocationProvider.
         provider.failure = IllegalStateException("DataStore недоступен")
 
         val request = call()
 
-        assertNull(request.getHeader(GeoHeaderInterceptor.HEADER_LATITUDE))
+        assertEquals("41.311081", request.getHeader(GeoHeaderInterceptor.HEADER_LATITUDE))
+        assertEquals("69.240562", request.getHeader(GeoHeaderInterceptor.HEADER_LONGITUDE))
     }
 
     @Test

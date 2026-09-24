@@ -73,12 +73,17 @@ class MapPickerViewModel @Inject constructor(
             MapPickerEvent.MyLocationClicked -> onMyLocationClicked()
 
             is MapPickerEvent.LocationPermissionChecked -> updateState {
-                copy(showUserLocation = event.granted)
+                copy(
+                    showUserLocation = event.granted,
+                    locationPermissionPermanentlyDenied = locationPermissionPermanentlyDenied && !event.granted,
+                )
             }
 
-            is MapPickerEvent.LocationPermissionResult -> onPermissionResult(event.granted)
+            is MapPickerEvent.LocationPermissionResult ->
+                onPermissionResult(event.granted, event.permanentlyDenied)
 
-            MapPickerEvent.NoticeDismissed -> updateState { copy(locationNotice = null) }
+            MapPickerEvent.NoticeDismissed ->
+                updateState { copy(locationNotice = null, locationPermissionPermanentlyDenied = false) }
 
             MapPickerEvent.ConfirmClicked -> currentState.point?.let { point ->
                 emitEffect(MapPickerEffect.Picked(point))
@@ -108,7 +113,7 @@ class MapPickerViewModel @Inject constructor(
     }
 
     private fun onMyLocationClicked() {
-        updateState { copy(locationNotice = null) }
+        updateState { copy(locationNotice = null, locationPermissionPermanentlyDenied = false) }
         if (currentState.showUserLocation) {
             locate()
         } else {
@@ -116,11 +121,12 @@ class MapPickerViewModel @Inject constructor(
         }
     }
 
-    private fun onPermissionResult(granted: Boolean) {
+    private fun onPermissionResult(granted: Boolean, permanentlyDenied: Boolean) {
         updateState {
             copy(
                 showUserLocation = granted,
                 locationNotice = if (granted) null else LocationNotice.PermissionDenied,
+                locationPermissionPermanentlyDenied = !granted && permanentlyDenied,
             )
         }
         if (granted) locate()
