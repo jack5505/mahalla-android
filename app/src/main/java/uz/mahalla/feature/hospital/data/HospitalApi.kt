@@ -78,10 +78,10 @@ interface HospitalApi {
     ): ApiResponse<AppointmentPageDto>
 
     /**
-     * Карточка записи к врачу (issue #181). `data` — `HospitalAppointmentResponse`,
-     * разбирается тем же [AppointmentDto], что и остальные ответы вертикали —
-     * `doctorId` и `complaint` из неё теряются (issue #219). Экран, который эту
-     * ручку показывает, — отдельная задача (#183); здесь ручка только объявлена.
+     * Карточка записи к врачу (issue #181, экран — issue #183).
+     * `data` — `HospitalAppointmentResponse`, разбирается тем же [AppointmentDto],
+     * что и остальные ответы вертикали — `doctorId` и `complaint` из неё
+     * теряются (issue #219).
      */
     @GET("hospitals/appointments/{id}")
     suspend fun appointment(@Path("id") appointmentId: String): ApiResponse<AppointmentDto>

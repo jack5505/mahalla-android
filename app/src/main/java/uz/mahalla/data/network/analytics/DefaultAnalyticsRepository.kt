@@ -1,6 +1,7 @@
 package uz.mahalla.data.network.analytics
 
 import uz.mahalla.core.analytics.AnalyticsEvent
+import uz.mahalla.core.analytics.AnalyticsRepository
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
@@ -9,23 +10,7 @@ import uz.mahalla.data.prefs.SessionStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Отправка событий продуктовой аналитики (issue #169).
- *
- * Метод suspend и возвращает [ApiResult], как любой другой репозиторий, — но
- * вызывать его из экрана напрямую не надо: для этого есть
- * `AnalyticsTracker`, который не держит корутину экрана. Здесь только запрос
- * и два условия, при которых его нет смысла делать.
- */
-interface AnalyticsRepository {
-
-    /**
-     * @return [ApiResult.Success] — сервер принял событие. Отказ вызывающий
-     * пишет в лог: показывать его человеку нечего, он про аналитику не просил.
-     */
-    suspend fun track(event: AnalyticsEvent): ApiResult<Unit>
-}
-
+/** Реализация [AnalyticsRepository] на основном Retrofit (issue #169). */
 @Singleton
 class DefaultAnalyticsRepository @Inject constructor(
     private val api: AnalyticsApi,

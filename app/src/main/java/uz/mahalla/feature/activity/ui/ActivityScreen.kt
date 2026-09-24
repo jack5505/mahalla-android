@@ -47,6 +47,7 @@ import uz.mahalla.feature.activity.domain.ActivityKind
 import uz.mahalla.feature.activity.domain.ActivitySource
 import uz.mahalla.feature.activity.domain.ActivityStatus
 import uz.mahalla.feature.activity.domain.ActivityTarget
+import uz.mahalla.feature.activity.domain.ActivityTimeKind
 import uz.mahalla.ui.theme.Spacing
 import java.time.Instant
 
@@ -62,6 +63,8 @@ import java.time.Instant
 @Composable
 fun ActivityScreen(
     onFoodOrderClick: (String) -> Unit,
+    onTicketClick: (String) -> Unit,
+    onAppointmentClick: (appointmentId: String, vertical: String) -> Unit,
     onDiscoveryClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ActivityViewModel = hiltViewModel(),
@@ -72,6 +75,9 @@ fun ActivityScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is ActivityEffect.OpenFoodOrder -> onFoodOrderClick(effect.orderId)
+                is ActivityEffect.OpenTicket -> onTicketClick(effect.ticketId)
+                is ActivityEffect.OpenAppointment ->
+                    onAppointmentClick(effect.appointmentId, effect.vertical)
                 ActivityEffect.OpenDiscovery -> onDiscoveryClick()
             }
         }
@@ -241,8 +247,8 @@ private fun ActivityRow(
         ),
         modifier = modifier,
         // Кликабельно только то, у чего есть куда вести: нажатие без
-        // последствий читается как сломанный экран. Пока это заказы «Еды» —
-        // у брони, записи и билета своих экранов ещё нет.
+        // последствий читается как сломанный экран. У брони игровых зон
+        // своего экрана пока нет (GamingBooking = ActivityTarget.None).
         onClick = onClick.takeIf { activity.isActionable },
     )
 }
@@ -346,6 +352,7 @@ private fun ActivityScreenPreview() {
                             kind = ActivityKind.GamingBooking,
                             status = ActivityStatus.Confirmed,
                             occurredAt = Instant.parse("2026-09-05T13:00:00Z"),
+                            timeKind = ActivityTimeKind.Event,
                             amount = 60_000,
                         ),
                         Activity(
@@ -354,6 +361,7 @@ private fun ActivityScreenPreview() {
                             kind = ActivityKind.MasterAppointment,
                             status = ActivityStatus.Placed,
                             occurredAt = Instant.parse("2026-09-06T05:30:00Z"),
+                            timeKind = ActivityTimeKind.Event,
                             amount = 45_000,
                             note = "Soch olish",
                         ),

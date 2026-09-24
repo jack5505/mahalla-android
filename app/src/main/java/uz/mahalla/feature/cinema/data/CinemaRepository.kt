@@ -35,6 +35,14 @@ interface CinemaRepository {
      */
     suspend fun movies(): ApiResult<List<Movie>>
 
+    /**
+     * Карточка фильма по id (issue #183) — читается напрямую, а не поиском по
+     * [movies]: список могло смести за то время, что человек шёл со сцены на
+     * карточку, а неизменное описание фильма перечитывать незачем на каждый
+     * pull-to-refresh расписания.
+     */
+    suspend fun movie(movieId: String): ApiResult<Movie>
+
     /** Расписание кинотеатра на один день. */
     suspend fun schedule(placeId: String, date: LocalDate): ApiResult<List<CinemaSession>>
 
@@ -43,6 +51,13 @@ interface CinemaRepository {
 
     /** Свои билеты, страницами. */
     suspend fun myTickets(page: Int = 0, size: Int = PAGE_SIZE): ApiResult<CinemaTicketPage>
+
+    /**
+     * Карточка билета по id (issue #183) — читается напрямую, а не снимком из
+     * списка: возврат меняет статус, а «мои активности» открывают билет по
+     * одному id, минуя список вовсе.
+     */
+    suspend fun ticket(ticketId: String): ApiResult<CinemaTicket>
 
     /** Вернуть билет. */
     suspend fun cancel(ticket: CinemaTicket): ApiResult<CinemaTicket>
@@ -63,6 +78,16 @@ class DefaultCinemaRepository @Inject constructor(
     override suspend fun movies(): ApiResult<List<Movie>> =
         apiCall { api.movies().payload() }
             .map { movies -> movies.mapNotNull(MovieDto::toDomain) }
+
+    /**
+     * Без `id` в ответе доверять нечему: запрошенный `movieId`, в отличие от
+     * записи ([BookingRepository.appointment]), в самом [Movie] не подставить —
+     * поле обязательное, а не выведенное из аргумента.
+     */
+    override suspend fun movie(movieId: String): ApiResult<Movie> =
+        apiCall { api.movie(movieId).payload() }.map { dto ->
+            dto.toDomain() ?: return ApiResult.Failure(ApiError.NotFound)
+        }
 
     override suspend fun schedule(
         placeId: String,
@@ -97,6 +122,16 @@ class DefaultCinemaRepository @Inject constructor(
     override suspend fun myTickets(page: Int, size: Int): ApiResult<CinemaTicketPage> =
         apiCall { api.myTickets(page = page.coerceAtLeast(0), size = size).payload() }
             .map(CinemaTicketPageDto::toDomain)
+
+    /**
+     * Без `id` в ответе доверять нечему — в отличие от только что купленного
+     * билета ([CinemaTicketDto.toBought]), запрошенный по id билет без него не
+     * подставить: карточка не знает, что показывать вместо кода.
+     */
+    override suspend fun ticket(ticketId: String): ApiResult<CinemaTicket> =
+        apiCall { api.ticket(ticketId).payload() }.map { dto ->
+            dto.toDomain() ?: return ApiResult.Failure(ApiError.NotFound)
+        }
 
     /**
      * Возврат. Ответ — тот же билет, но обязательным его разбор не считаем:

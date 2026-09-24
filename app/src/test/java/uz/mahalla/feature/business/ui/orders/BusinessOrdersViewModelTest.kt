@@ -17,6 +17,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderPage
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.food.domain.PaymentMethod
@@ -249,6 +250,37 @@ class BusinessOrdersViewModelTest {
         assertEquals(listOf(null to 0, null to 0), repository.orderRequests)
     }
 
+    /** Категория заведения решает ручку панели (еда vs одежда, issue #187). */
+    @Test
+    fun `missing category defaults to food`() = runTest {
+        val repository = FakeBusinessRepository()
+
+        viewModel(repository)
+
+        assertEquals(listOf(PlaceCategory.Food), repository.orderCategoryRequests)
+    }
+
+    @Test
+    fun `orders are requested for the category the screen was opened with`() = runTest {
+        val repository = FakeBusinessRepository()
+
+        viewModel(repository, category = PlaceCategory.Fashion)
+
+        assertEquals(listOf(PlaceCategory.Fashion), repository.orderCategoryRequests)
+    }
+
+    @Test
+    fun `a status change is sent for the category the screen was opened with`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
+        repository.updateOrderResult = ApiResult.Success(order("o-1", OrderStatus.Confirmed))
+        val viewModel = viewModel(repository, category = PlaceCategory.Fashion)
+
+        viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
+
+        assertEquals(listOf(PlaceCategory.Fashion), repository.statusUpdateCategories)
+    }
+
     @Test
     fun `the new count counts only the orders waiting for an answer`() = runTest {
         val repository = FakeBusinessRepository()
@@ -263,13 +295,17 @@ class BusinessOrdersViewModelTest {
         assertEquals(2, viewModel(repository).state.value.newCount)
     }
 
-    private fun viewModel(repository: FakeBusinessRepository) = BusinessOrdersViewModel(
+    private fun viewModel(
+        repository: FakeBusinessRepository,
+        category: PlaceCategory? = null,
+    ) = BusinessOrdersViewModel(
         repository = repository,
         savedStateHandle = SavedStateHandle(
-            mapOf(
-                BusinessArgs.PLACE_ID to FakeBusinessRepository.PLACE_ID,
-                BusinessArgs.PLACE_NAME to "Osh Markazi",
-            ),
+            buildMap {
+                put(BusinessArgs.PLACE_ID, FakeBusinessRepository.PLACE_ID)
+                put(BusinessArgs.PLACE_NAME, "Osh Markazi")
+                category?.let { put(BusinessArgs.CATEGORY, it.apiValue) }
+            },
         ),
     )
 

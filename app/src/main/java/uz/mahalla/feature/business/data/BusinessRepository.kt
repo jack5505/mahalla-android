@@ -16,6 +16,9 @@ import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.NewMenuItemValidator
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
+import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.fashion.data.FashionApi
+import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.role.data.ProviderRepository
 import javax.inject.Inject
@@ -71,19 +74,27 @@ interface BusinessRepository {
      */
     suspend fun togglePause(placeId: String, current: Boolean): ApiResult<Boolean>
 
-    /** Входящие заказы (задача 12.3). */
+    /**
+     * Входящие заказы (задача 12.3).
+     *
+     * @param category решает ручку: `FASHION` — `fashion/stores/{id}/orders`,
+     * всё остальное — `food/places/{id}/orders` (issue #187). По умолчанию
+     * «Еда» — единственная вертикаль, у которой были заказы до issue #187.
+     */
     suspend fun orders(
         placeId: String,
         status: String? = null,
         page: Int = 0,
         size: Int = PAGE_SIZE,
+        category: PlaceCategory = PlaceCategory.Food,
     ): ApiResult<BusinessOrderPage>
 
-    /** Сменить статус заказа (задача 12.3). */
+    /** Сменить статус заказа (задача 12.3). См. [orders] про [category]. */
     suspend fun updateOrderStatus(
         placeId: String,
         orderId: String,
         status: OrderStatus,
+        category: PlaceCategory = PlaceCategory.Food,
     ): ApiResult<BusinessOrder>
 
     /** Меню со стоп-листом (задача 12.4). */
@@ -102,6 +113,12 @@ interface BusinessRepository {
 
     /** Новая позиция меню (задача 12.4). */
     suspend fun createItem(placeId: String, form: NewMenuItemForm): ApiResult<BusinessMenu>
+
+    /** Правка позиции меню (issue #288, задача 12.4 бэкенда — #221). */
+    suspend fun updateItem(placeId: String, form: NewMenuItemForm): ApiResult<BusinessMenu>
+
+    /** Удаление позиции меню (issue #288, задача 12.4 бэкенда — #221). */
+    suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu>
 
     companion object {
         /** Код отказа, когда заведения нет среди «моих». */
@@ -129,6 +146,7 @@ interface BusinessRepository {
 @Singleton
 class DefaultBusinessRepository @Inject constructor(
     private val api: BusinessApi,
+    private val fashionApi: FashionApi,
     private val providerRepository: ProviderRepository,
 ) : BusinessRepository {
 
@@ -205,14 +223,26 @@ class DefaultBusinessRepository @Inject constructor(
         status: String?,
         page: Int,
         size: Int,
-    ): ApiResult<BusinessOrderPage> = apiCall {
-        api.orders(
-            placeId = placeId,
-            status = status?.takeIf(String::isNotBlank),
-            page = page.coerceAtLeast(0),
-            size = size,
-        ).payload()
-    }.map(BusinessOrderPageDto::toDomain)
+        category: PlaceCategory,
+    ): ApiResult<BusinessOrderPage> = when (category) {
+        PlaceCategory.Fashion -> apiCall {
+            fashionApi.storeOrders(
+                storeId = placeId,
+                status = status?.takeIf(String::isNotBlank),
+                page = page.coerceAtLeast(0),
+                size = size,
+            ).payload()
+        }.map(FashionStoreOrderPageDto::toDomain)
+
+        else -> apiCall {
+            api.orders(
+                placeId = placeId,
+                status = status?.takeIf(String::isNotBlank),
+                page = page.coerceAtLeast(0),
+                size = size,
+            ).payload()
+        }.map(BusinessOrderPageDto::toDomain)
+    }
 
     /**
      * Ключ тела — `status`: имя выведено из настоящих схем той же операции у
@@ -227,20 +257,33 @@ class DefaultBusinessRepository @Inject constructor(
         placeId: String,
         orderId: String,
         status: OrderStatus,
+        category: PlaceCategory,
     ): ApiResult<BusinessOrder> {
         if (status == OrderStatus.Unknown) {
             return ApiResult.Failure(ApiError.Business(BusinessRepository.INVALID_FORM_CODE))
         }
-        return apiCall {
-            val dto = api.updateOrderStatus(
-                placeId = placeId,
-                orderId = orderId,
-                body = mapOf(STATUS_KEY to status.apiValue),
-            ).payload()
-            // Как и у талона: ответ без `id` — это удачная смена статуса, а не
-            // потерянный заказ.
-            dto.toDomain() ?: dto.copy(id = orderId).toDomain()
-                ?: error("order response without status for $orderId")
+        return when (category) {
+            PlaceCategory.Fashion -> apiCall {
+                val dto = fashionApi.updateStoreOrderStatus(
+                    storeId = placeId,
+                    orderId = orderId,
+                    body = mapOf(STATUS_KEY to status.apiValue),
+                ).payload()
+                // Как и у талона: ответ без `id` — это удачная смена статуса,
+                // а не потерянный заказ.
+                dto.toDomain() ?: dto.copy(id = orderId).toDomain()
+                    ?: error("fashion order response without status for $orderId")
+            }
+
+            else -> apiCall {
+                val dto = api.updateOrderStatus(
+                    placeId = placeId,
+                    orderId = orderId,
+                    body = mapOf(STATUS_KEY to status.apiValue),
+                ).payload()
+                dto.toDomain() ?: dto.copy(id = orderId).toDomain()
+                    ?: error("order response without status for $orderId")
+            }
         }
     }
 
@@ -297,6 +340,61 @@ class DefaultBusinessRepository @Inject constructor(
         }
         return when (created) {
             is ApiResult.Failure -> created
+            is ApiResult.Success -> menu(placeId)
+        }
+    }
+
+    /**
+     * Правка позиции меню (issue #288). Тот же приём, что у [createItem]:
+     * форма проверяется на клиенте, а после успеха меню перечитывается
+     * целиком — ответ `ItemResponse` не говорит, остался ли раздел тем же,
+     * если бэкенд решил иначе.
+     */
+    override suspend fun updateItem(
+        placeId: String,
+        form: NewMenuItemForm,
+    ): ApiResult<BusinessMenu> {
+        val itemId = form.itemId ?: return ApiResult.Failure(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+        )
+        val trimmed = form.trimmed()
+        val errors = NewMenuItemValidator.validate(trimmed)
+        if (errors.isNotEmpty()) {
+            return ApiResult.Failure(ApiError.Business(BusinessRepository.INVALID_FORM_CODE))
+        }
+
+        val updated = apiCall {
+            api.updateItem(
+                itemId = itemId,
+                body = UpdateMenuItemRequest(
+                    menuId = trimmed.sectionId,
+                    name = trimmed.name,
+                    price = Money.somToTiyin(
+                        trimmed.priceOrNull() ?: NewMenuItemForm.MIN_PRICE_SUM,
+                    ),
+                    description = trimmed.description.takeIf(String::isNotEmpty),
+                    prepMinutes = trimmed.prepMinutesOrNull(),
+                    isHalal = trimmed.isHalal.takeIf { it },
+                ),
+            ).payload()
+        }
+        return when (updated) {
+            is ApiResult.Failure -> updated
+            is ApiResult.Success -> menu(placeId)
+        }
+    }
+
+    /**
+     * Удаление позиции меню (issue #288). `ensureSuccess`, а не `payload`: как
+     * и у [toggleStopList], ответ — `ApiResponseVoid`. Меню перечитывается у
+     * сервера, а не вычёркивается на месте: удаляет ли бэкенд строку или
+     * ставит стоп-лист, контракт не говорит (тот же приём, что у
+     * `deleteMyService`, issue #71).
+     */
+    override suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu> {
+        val deleted = apiCall { api.deleteItem(itemId).ensureSuccess() }
+        return when (deleted) {
+            is ApiResult.Failure -> deleted
             is ApiResult.Success -> menu(placeId)
         }
     }

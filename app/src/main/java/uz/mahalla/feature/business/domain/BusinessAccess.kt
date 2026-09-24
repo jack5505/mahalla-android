@@ -65,9 +65,13 @@ data class BusinessAccess(
      * Разделы, которые есть у **этого** заведения.
      *
      * Набор задаёт категория, а не роль: очередь живёт в
-     * `walkin/barber/dashboard`, заказы и меню — в `food/places/{id}/...`.
-     * Показать парикмахерской «входящие заказы» значило бы позвать ручку еды
-     * за чужое заведение и получить отказ вместо списка.
+     * `walkin/barber/dashboard`, заказы и меню — в `food/places/{id}/...`,
+     * заказы одежды — в `fashion/stores/{id}/orders` (issue #187). Показать
+     * парикмахерской «входящие заказы» значило бы позвать чужую ручку за
+     * чужое заведение и получить отказ вместо списка.
+     *
+     * У «Одежды» меню нет вовсе: витрина и товары — отдельная задача (#188,
+     * #280), здесь только заказы.
      *
      * Сотруднику ([PlaceStaffRole.Staff]) меню не редактируется: стоп-лист и
      * цены — решение владельца. [PlaceStaffRole.Unknown] считается владельцем:
@@ -82,10 +86,12 @@ data class BusinessAccess(
                 if (canManageMenu) add(BusinessSection.Menu)
             }
 
+            PlaceCategory.Fashion -> listOf(BusinessSection.Orders)
+
             PlaceCategory.Master -> listOf(BusinessSection.Queue)
 
             PlaceCategory.Pharmacy, PlaceCategory.Hospital, PlaceCategory.Cinema,
-            PlaceCategory.Playground, PlaceCategory.Fashion, PlaceCategory.Other,
+            PlaceCategory.Playground, PlaceCategory.Other,
             -> emptyList()
         }
 

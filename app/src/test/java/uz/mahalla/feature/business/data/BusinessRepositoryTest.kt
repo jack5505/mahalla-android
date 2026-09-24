@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.data
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonElement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -11,6 +12,21 @@ import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.fashion.data.AddToCartRequestDto
+import uz.mahalla.feature.fashion.data.CartItemDto
+import uz.mahalla.feature.fashion.data.CatalogDto
+import uz.mahalla.feature.fashion.data.CreateFashionProductRequest
+import uz.mahalla.feature.fashion.data.CreateFashionVariantRequest
+import uz.mahalla.feature.fashion.data.FashionApi
+import uz.mahalla.feature.fashion.data.FashionCategoryDto
+import uz.mahalla.feature.fashion.data.FashionPlaceOrderRequestDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
+import uz.mahalla.feature.fashion.data.FashionStoreOrderPageDto
+import uz.mahalla.feature.fashion.data.OrderPageDto
+import uz.mahalla.feature.fashion.data.ProductDetailDto
+import uz.mahalla.feature.food.data.CreatedOrderDto
+import uz.mahalla.feature.food.data.OrderViewDto
 import uz.mahalla.feature.food.domain.DeliveryMethod
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.queue.domain.WalkInStatus
@@ -392,6 +408,123 @@ class BusinessRepositoryTest {
         assertEquals(0, api.menuCalls)
     }
 
+    /** Правка без `itemId` — не форма правки, значит спрашивать сервер нечем (issue #288). */
+    @Test
+    fun `an update without an item id is refused before the request`() = runTest {
+        val api = RecordingBusinessApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(sectionId = "s-1", name = "Osh", priceText = "32000"),
+        )
+
+        assertNull(api.updatedItem)
+        assertEquals(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `an invalid update form is refused before the request`() = runTest {
+        val api = RecordingBusinessApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "", priceText = ""),
+        )
+
+        assertNull(api.updatedItem)
+        assertEquals(
+            ApiError.Business(BusinessRepository.INVALID_FORM_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a valid update goes to the item's own path with every field`() = runTest {
+        val api = RecordingBusinessApi()
+
+        repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(
+                itemId = "i-1",
+                sectionId = "s-1",
+                name = "  Osh  ",
+                priceText = "45000",
+                description = "  Palov  ",
+                prepMinutesText = "20",
+                isHalal = true,
+            ),
+        )
+
+        assertEquals("i-1", api.updatedItemId)
+        val sent = api.updatedItem!!
+        assertEquals("s-1", sent.menuId)
+        assertEquals("Osh", sent.name)
+        // Форма даёт сумы, бэкенд принимает тийины (issue #149): 45000 → 4_500_000.
+        assertEquals(4_500_000L, sent.price)
+        assertEquals("Palov", sent.description)
+        assertEquals(20, sent.prepMinutes)
+        assertEquals(true, sent.isHalal)
+    }
+
+    /** Ответ `ItemResponse` не говорит про соседние позиции — меню перечитывается целиком. */
+    @Test
+    fun `the menu is re-read after a successful update`() = runTest {
+        val api = RecordingBusinessApi()
+        api.menuResponse = listOf(
+            MenuSectionDto(
+                id = "s-1",
+                items = listOf(MenuItemDto(id = "i-1", name = "Osh", price = 45_000)),
+            ),
+        )
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "Osh", priceText = "45000"),
+        )
+
+        assertEquals(
+            listOf("i-1"),
+            (result as ApiResult.Success).data.sections.single().items.map { it.id },
+        )
+    }
+
+    @Test
+    fun `a refused update does not re-read the menu`() = runTest {
+        val api = FailingUpdateApi()
+
+        val result = repository(api = api).updateItem(
+            "p-1",
+            NewMenuItemForm(itemId = "i-1", sectionId = "s-1", name = "Osh", priceText = "45000"),
+        )
+
+        assertTrue(result is ApiResult.Failure)
+        assertEquals(0, api.menuCalls)
+    }
+
+    @Test
+    fun `a delete goes to the item's own path and the menu is re-read`() = runTest {
+        val api = RecordingBusinessApi()
+        api.menuResponse = listOf(MenuSectionDto(id = "s-1", items = emptyList()))
+
+        val result = repository(api = api).deleteItem("p-1", "i-1")
+
+        assertEquals("i-1", api.deletedItemId)
+        assertTrue((result as ApiResult.Success).data.sections.single().items.isEmpty())
+    }
+
+    @Test
+    fun `a refused delete does not re-read the menu`() = runTest {
+        val api = FailingDeleteApi()
+
+        val result = repository(api = api).deleteItem("p-1", "i-1")
+
+        assertTrue(result is ApiResult.Failure)
+        assertEquals(0, api.menuCalls)
+    }
+
     @Test
     fun `declining a ticket sends an empty body - the key name is unknown`() = runTest {
         val api = RecordingBusinessApi()
@@ -401,6 +534,61 @@ class BusinessRepositoryTest {
 
         assertEquals(emptyMap<String, String>(), api.declineBody)
         assertEquals(WalkInStatus.Declined, (result as ApiResult.Success).data.status)
+    }
+
+    /** Заказы «Одежды» идут в `fashion/stores/{id}/orders`, а не в `food/...` (issue #187). */
+    @Test
+    fun `a fashion place asks the fashion api for its orders`() = runTest {
+        val fashionApi = RecordingFashionApi()
+        fashionApi.storeOrdersResponse = FashionStoreOrderPageDto(
+            content = listOf(
+                FashionStoreOrderDto(
+                    id = "o-1",
+                    orderNumber = "C-1",
+                    status = "READY",
+                    fulfillment = "DELIVERY",
+                    paymentMethod = "CASH",
+                    totalAmount = 84_000,
+                    items = listOf(
+                        FashionStoreOrderItemDto(
+                            variantId = "v-1",
+                            productName = "Koylak",
+                            colorName = "Ko'k",
+                            size = "M",
+                            quantity = 1,
+                            unitPrice = 84_000,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val page = (
+            repository(fashionApi = fashionApi)
+                .orders("store-1", category = PlaceCategory.Fashion) as ApiResult.Success
+            ).data
+
+        assertEquals("store-1", fashionApi.storeOrdersRequest?.first)
+        val order = page.items.single()
+        assertEquals(OrderStatus.ReadyForPickup, order.status)
+        assertEquals("Koylak, Ko'k, M", order.lines.single().name)
+    }
+
+    /** Смена статуса «Одежды» тоже уходит на `fashion/stores/{id}/orders/{orderId}/status`. */
+    @Test
+    fun `a fashion status change sends the status under the key named status`() = runTest {
+        val fashionApi = RecordingFashionApi()
+        fashionApi.updateOrderResponse = FashionStoreOrderDto(id = "o-1", status = "ACCEPTED")
+
+        val result = repository(fashionApi = fashionApi).updateOrderStatus(
+            placeId = "store-1",
+            orderId = "o-1",
+            status = OrderStatus.Confirmed,
+            category = PlaceCategory.Fashion,
+        )
+
+        assertEquals(mapOf("status" to "ACCEPTED"), fashionApi.updateStatusBody)
+        assertEquals(OrderStatus.Confirmed, (result as ApiResult.Success).data.status)
     }
 
     @Test
@@ -420,7 +608,12 @@ class BusinessRepositoryTest {
     private fun repository(
         provider: FakeProviderRepository = FakeProviderRepository(),
         api: BusinessApi = RecordingBusinessApi(),
-    ) = DefaultBusinessRepository(api = api, providerRepository = provider)
+        fashionApi: FashionApi = FakeFashionApi(),
+    ): BusinessRepository = DefaultBusinessRepository(
+        api = api,
+        fashionApi = fashionApi,
+        providerRepository = provider,
+    )
 
     private fun place(id: String) = MyPlace(
         id = id,
@@ -447,6 +640,37 @@ private class FailingCreateApi : BusinessApi by RecordingBusinessApi() {
     ): ApiResponse<MenuItemDto> = ApiResponse(success = false, data = null)
 }
 
+/** Правка отказывает: меню после отказа перечитываться не должно (issue #288). */
+private class FailingUpdateApi : BusinessApi by RecordingBusinessApi() {
+
+    var menuCalls = 0
+
+    override suspend fun menu(placeId: String): ApiResponse<List<MenuSectionDto>> {
+        menuCalls++
+        return ApiResponse(data = emptyList())
+    }
+
+    override suspend fun updateItem(
+        itemId: String,
+        body: UpdateMenuItemRequest,
+    ): ApiResponse<MenuItemDto> = ApiResponse(success = false, data = null)
+}
+
+/** Удаление отказывает: меню после отказа перечитываться не должно (issue #288). */
+private class FailingDeleteApi : BusinessApi by RecordingBusinessApi() {
+
+    var menuCalls = 0
+
+    override suspend fun menu(placeId: String): ApiResponse<List<MenuSectionDto>> {
+        menuCalls++
+        return ApiResponse(data = emptyList())
+    }
+
+    override suspend fun deleteItem(
+        itemId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> = ApiResponse(success = false)
+}
+
 /**
  * API панели в памяти: MockWebServer тут не нужен — проверяются тела запросов
  * и разбор ответов, а не сам HTTP (он общий и покрыт в `data/network`).
@@ -465,6 +689,9 @@ private class RecordingBusinessApi : BusinessApi {
     var declineBody: Map<String, String>? = null
     var statusBody: Map<String, String>? = null
     var createdItem: CreateMenuItemRequest? = null
+    var updatedItem: UpdateMenuItemRequest? = null
+    var updatedItemId: String? = null
+    var deletedItemId: String? = null
 
     override suspend fun dashboard(placeId: String) = ApiResponse(data = dashboardResponse)
 
@@ -523,4 +750,113 @@ private class RecordingBusinessApi : BusinessApi {
         createdItem = body
         return ApiResponse(data = itemResponse)
     }
+
+    override suspend fun updateItem(
+        itemId: String,
+        body: UpdateMenuItemRequest,
+    ): ApiResponse<MenuItemDto> {
+        updatedItemId = itemId
+        updatedItem = body
+        return ApiResponse(data = itemResponse)
+    }
+
+    /** `ApiResponseVoid`: `data` пустая и при успехе, как у [toggleItem]. */
+    override suspend fun deleteItem(itemId: String): ApiResponse<kotlinx.serialization.json.JsonElement> {
+        deletedItemId = itemId
+        return ApiResponse(success = true)
+    }
 }
+
+/**
+ * `FashionApi` в памяти для двух ручек `storeOrders`/`updateStoreOrderStatus`
+ * (issue #187) — остальные `DefaultBusinessRepository` не зовёт вовсе, и
+ * тестами здесь не нужны.
+ */
+private class RecordingFashionApi : FashionApi {
+
+    var storeOrdersResponse: FashionStoreOrderPageDto = FashionStoreOrderPageDto()
+    var updateOrderResponse: FashionStoreOrderDto = FashionStoreOrderDto(id = "o-1", status = "NEW")
+
+    /** `storeId` вместе со статусом, чтобы проверить, что путь получает верный магазин. */
+    var storeOrdersRequest: Pair<String, String?>? = null
+    var updateStatusBody: Map<String, String>? = null
+
+    override suspend fun categories(): ApiResponse<List<FashionCategoryDto>> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun catalog(
+        storeId: String,
+        categoryId: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<CatalogDto> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun product(productId: String): ApiResponse<ProductDetailDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun createProduct(
+        storeId: String,
+        body: CreateFashionProductRequest,
+    ): ApiResponse<JsonElement> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun createVariant(
+        productId: String,
+        body: CreateFashionVariantRequest,
+    ): ApiResponse<JsonElement> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun cart(): ApiResponse<List<CartItemDto>> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun addToCart(body: AddToCartRequestDto): ApiResponse<CartItemDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun updateCartItem(
+        variantId: String,
+        quantity: Int,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun removeCartItem(
+        variantId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun createOrder(body: FashionPlaceOrderRequestDto): ApiResponse<CreatedOrderDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun myOrders(
+        vertical: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<OrderPageDto> = error("not used by BusinessRepositoryTest")
+
+    override suspend fun order(orderId: String): ApiResponse<OrderViewDto> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun cancelOrder(
+        orderId: String,
+    ): ApiResponse<kotlinx.serialization.json.JsonElement> =
+        error("not used by BusinessRepositoryTest")
+
+    override suspend fun storeOrders(
+        storeId: String,
+        status: String?,
+        page: Int,
+        size: Int,
+    ): ApiResponse<FashionStoreOrderPageDto> {
+        storeOrdersRequest = storeId to status
+        return ApiResponse(data = storeOrdersResponse)
+    }
+
+    override suspend fun updateStoreOrderStatus(
+        storeId: String,
+        orderId: String,
+        body: Map<String, String>,
+    ): ApiResponse<FashionStoreOrderDto> {
+        updateStatusBody = body
+        return ApiResponse(data = updateOrderResponse)
+    }
+}
+
+/** `FashionApi` по умолчанию для тестов, которым сама одежда не нужна. */
+private class FakeFashionApi : FashionApi by RecordingFashionApi()

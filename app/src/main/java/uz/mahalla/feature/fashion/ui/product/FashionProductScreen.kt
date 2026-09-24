@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,10 +31,12 @@ import uz.mahalla.R
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.MahallaBadge
+import uz.mahalla.core.ui.components.MahallaBottomSheet
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaFilterChip
+import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
@@ -119,6 +126,8 @@ fun FashionProductContent(
             }
         }
     }
+
+    state.createForm?.let { form -> NewFashionVariantSheet(form = form, onEvent = onEvent) }
 }
 
 @Composable
@@ -182,6 +191,17 @@ private fun ProductBody(
     } else {
         ColorsBlock(detail = detail, state = state, onEvent = onEvent)
         SizesBlock(detail = detail, state = state, onEvent = onEvent)
+    }
+
+    // Владелец/менеджер (issue #280) — под вариантами: новый размер/цвет
+    // относится к ним, а не к описанию товара ниже.
+    if (state.isOwner) {
+        MahallaButton(
+            text = stringResource(R.string.fashion_add_variant),
+            onClick = { onEvent(FashionProductEvent.AddVariantClicked) },
+            variant = MahallaButtonVariant.Secondary,
+            icon = Icons.Outlined.Add,
+        )
     }
 
     DetailsBlock(detail = detail)
@@ -284,6 +304,92 @@ private fun SizesBlock(
     }
 }
 
+/**
+ * Новый вариант — размер/цвет (issue #280). Ошибки полей показываются только
+ * после первой попытки сохранить, тот же приём, что у формы товара витрины.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewFashionVariantSheet(
+    form: NewFashionVariantFormState,
+    onEvent: (FashionProductEvent) -> Unit,
+) {
+    val draft = form.draft
+    val showErrors = form.submitAttempted
+    MahallaBottomSheet(
+        onDismiss = { onEvent(FashionProductEvent.CreateFormDismissed) },
+        title = stringResource(R.string.fashion_new_variant_title),
+    ) {
+        MahallaTextField(
+            value = draft.colorName,
+            onValueChange = { onEvent(FashionProductEvent.CreateColorNameChanged(it)) },
+            label = stringResource(R.string.fashion_field_color_name),
+            errorText = if (showErrors && !draft.isColorValid) {
+                stringResource(R.string.fashion_field_color_name_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.colorHex,
+            onValueChange = { onEvent(FashionProductEvent.CreateColorHexChanged(it)) },
+            label = stringResource(R.string.fashion_field_color_hex),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.size,
+            onValueChange = { onEvent(FashionProductEvent.CreateSizeChanged(it)) },
+            label = stringResource(R.string.fashion_field_size),
+            errorText = if (showErrors && !draft.isSizeValid) {
+                stringResource(R.string.fashion_field_size_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.sku,
+            onValueChange = { onEvent(FashionProductEvent.CreateSkuChanged(it)) },
+            label = stringResource(R.string.fashion_field_sku),
+            enabled = !form.submitting,
+        )
+        MahallaTextField(
+            value = draft.priceText,
+            onValueChange = { onEvent(FashionProductEvent.CreatePriceChanged(it)) },
+            label = stringResource(R.string.fashion_field_price),
+            errorText = if (showErrors && !draft.isPriceValid) {
+                stringResource(R.string.fashion_field_price_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        MahallaTextField(
+            value = draft.stockText,
+            onValueChange = { onEvent(FashionProductEvent.CreateStockChanged(it)) },
+            label = stringResource(R.string.fashion_field_stock),
+            errorText = if (showErrors && !draft.isStockValid) {
+                stringResource(R.string.fashion_field_stock_invalid)
+            } else {
+                null
+            },
+            enabled = !form.submitting,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        )
+        form.failure?.let { failure -> FashionFailure(failure = failure) }
+        MahallaButton(
+            text = stringResource(R.string.fashion_create_submit),
+            onClick = { onEvent(FashionProductEvent.CreateSubmitted) },
+            state = ButtonState(
+                enabled = !showErrors || draft.canSubmit,
+                loading = form.submitting,
+            ),
+        )
+    }
+}
+
 /** Состав, уход и размерная сетка — то, из-за чего вещь возвращают. */
 @Composable
 private fun DetailsBlock(detail: FashionProductDetail) {
@@ -341,5 +447,13 @@ private fun FashionProductPreview() {
             onEvent = {},
             onBack = {},
         )
+    }
+}
+
+@ThemeLanguagePreviews
+@Composable
+private fun FashionNewVariantSheetPreview() {
+    PreviewSurface(modifier = Modifier.fillMaxSize()) {
+        NewFashionVariantSheet(form = NewFashionVariantFormState(), onEvent = {})
     }
 }

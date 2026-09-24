@@ -65,6 +65,37 @@ interface FashionApi {
     @GET("fashion/products/{id}")
     suspend fun product(@Path("id") productId: String): ApiResponse<ProductDetailDto>
 
+    /**
+     * Новый товар магазина (issue #280, продолжение #252). Тело —
+     * `ProductCreateRequest`, поля выведены по аналогии с уже подтверждёнными
+     * полями [ProductDetailDto]/[ProductSummaryDto] того же контроллера
+     * (`name`, `description`, `brand`, `material`, `careInstructions`,
+     * `sizeGuide`, `gender`, `categoryId`, `basePrice`), а не угаданы по
+     * другой вертикали. Не проверено живым запросом — нужен Bearer владельца
+     * заведения, `CONTRACT_REFRESH_TOKEN` в песочнице не задан; риск —
+     * `docs/API-CONTRACT.md`. Ответ не разбирается дальше `success`
+     * (`ensureSuccess`, не `payload`) — точная схема тела `POST`-ответа не
+     * подтверждена, а список/карточка перечитываются отдельным `GET`.
+     */
+    @POST("fashion/stores/{storeId}/products")
+    suspend fun createProduct(
+        @Path("storeId") storeId: String,
+        @Body body: CreateFashionProductRequest,
+    ): ApiResponse<JsonElement>
+
+    /**
+     * Новый вариант товара — размер/цвет (issue #280). Тело —
+     * `VariantCreateRequest`, поля выведены по аналогии с уже подтверждёнными
+     * полями [VariantDto] (`colorName`, `colorHex`, `size`, `sku`, `price`,
+     * `stockQuantity`). Не проверено живым запросом — та же причина, что и у
+     * [createProduct], включая `ensureSuccess` вместо `payload`.
+     */
+    @POST("fashion/products/{id}/variants")
+    suspend fun createVariant(
+        @Path("id") productId: String,
+        @Body body: CreateFashionVariantRequest,
+    ): ApiResponse<JsonElement>
+
     /** Корзина на сервере: один список на все магазины. */
     @GET("fashion/cart")
     suspend fun cart(): ApiResponse<List<CartItemDto>>
@@ -122,6 +153,42 @@ interface FashionApi {
      */
     @POST("fashion/orders/{orderId}/cancel")
     suspend fun cancelOrder(@Path("orderId") orderId: String): ApiResponse<JsonElement>
+
+    /**
+     * Входящие заказы магазина (бизнес-панель, issue #187). Путь и схема
+     * сняты живым `/v3/api-docs` **2026-09-19** (`storeOrders` в
+     * `fashion-controller`): `status` — то же перечисление `OrderStatus`, что
+     * и у «Еды» (`NEW`, `ACCEPTED`, `PREPARING`, `READY`, `IN_DELIVERY`,
+     * `DELIVERED`, `CANCELLED`, `REFUNDED`, см.
+     * `uz.mahalla.feature.food.domain.OrderStatus`) — заводить второе
+     * перечисление под ту же вертикаль не пришлось.
+     */
+    @GET("fashion/stores/{storeId}/orders")
+    suspend fun storeOrders(
+        @Path("storeId") storeId: String,
+        @Query("status") status: String?,
+        @Query("page") page: Int,
+        @Query("size") size: Int,
+    ): ApiResponse<FashionStoreOrderPageDto>
+
+    /**
+     * Сменить статус заказа.
+     *
+     * Тело — `Map<String, String>`; ключ **`status`** — тот же вывод, что и у
+     * `BusinessApi.updateOrderStatus` («Еда»): своей схемы у ручки нет, а
+     * операция совпадает с соседними вертикалями бэкенда.
+     *
+     * `storeId` в параметрах операции у `/v3/api-docs` не значится — тот же
+     * класс дефекта схемы, что у трёх безымянных `Map`-тел `BusinessApi`, —
+     * но путь его требует буквально, и Retrofit обязан подставить значение,
+     * иначе URL уедет с `{storeId}` внутри.
+     */
+    @PUT("fashion/stores/{storeId}/orders/{orderId}/status")
+    suspend fun updateStoreOrderStatus(
+        @Path("storeId") storeId: String,
+        @Path("orderId") orderId: String,
+        @Body body: Map<String, String>,
+    ): ApiResponse<FashionStoreOrderDto>
 }
 
 @Serializable
@@ -210,6 +277,43 @@ data class VariantDto(
     @SerialName("available") val available: Boolean? = null,
 )
 
+/**
+ * `ProductCreateRequest` (issue #280). Обязательны только [name] и
+ * [basePrice] — остальное схема не ограничивает. Пустые необязательные поля
+ * не уходят вовсе (`explicitNulls = false`, issue #84).
+ *
+ * @param basePrice в тийинах, как и [ProductDetailDto.basePrice] (issue
+ * #149); черновик считает в сумах, перевод делает репозиторий.
+ */
+@Serializable
+data class CreateFashionProductRequest(
+    @SerialName("name") val name: String,
+    @SerialName("description") val description: String? = null,
+    @SerialName("brand") val brand: String? = null,
+    @SerialName("material") val material: String? = null,
+    @SerialName("careInstructions") val careInstructions: String? = null,
+    @SerialName("sizeGuide") val sizeGuide: String? = null,
+    @SerialName("gender") val gender: String? = null,
+    @SerialName("categoryId") val categoryId: String? = null,
+    @SerialName("basePrice") val basePrice: Long,
+)
+
+/**
+ * `VariantCreateRequest` (issue #280). Обязательны [colorName], [size] и
+ * [price] — вариант без них нечем отличить от соседнего и нечем продать.
+ *
+ * @param price в тийинах, как и [VariantDto.price] (issue #149).
+ */
+@Serializable
+data class CreateFashionVariantRequest(
+    @SerialName("colorName") val colorName: String,
+    @SerialName("colorHex") val colorHex: String? = null,
+    @SerialName("size") val size: String,
+    @SerialName("sku") val sku: String? = null,
+    @SerialName("price") val price: Long,
+    @SerialName("stockQuantity") val stockQuantity: Int? = null,
+)
+
 /** `CartItemResponse`. */
 @Serializable
 data class CartItemDto(
@@ -269,4 +373,54 @@ data class OrderPageDto(
     @SerialName("totalPages") val totalPages: Int? = null,
     @SerialName("first") val first: Boolean? = null,
     @SerialName("last") val last: Boolean? = null,
+)
+
+/** `PageResponseFashionOrderResponse` — страница заказов магазина (issue #187). */
+@Serializable
+data class FashionStoreOrderPageDto(
+    @SerialName("content") val content: List<FashionStoreOrderDto> = emptyList(),
+    @SerialName("page") val page: Int? = null,
+    @SerialName("size") val size: Int? = null,
+    @SerialName("totalElements") val totalElements: Long? = null,
+    @SerialName("totalPages") val totalPages: Int? = null,
+    @SerialName("first") val first: Boolean? = null,
+    @SerialName("last") val last: Boolean? = null,
+)
+
+/**
+ * `FashionOrderResponse` — заказ глазами магазина (issue #187). Полей меньше,
+ * чем у `FoodOrderResponse`: `staffId` нет вовсе. `placeName`/`placeLogoUrl`
+ * из схемы не разбираются — панели своё имя заведения уже известно.
+ */
+@Serializable
+data class FashionStoreOrderDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("storeId") val storeId: String? = null,
+    @SerialName("userId") val userId: String? = null,
+    @SerialName("orderNumber") val orderNumber: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("fulfillment") val fulfillment: String? = null,
+    @SerialName("paymentMethod") val paymentMethod: String? = null,
+    @SerialName("deliveryAddress") val deliveryAddress: String? = null,
+    @SerialName("itemsAmount") val itemsAmount: Long? = null,
+    @SerialName("deliveryAmount") val deliveryAmount: Long? = null,
+    @SerialName("discountAmount") val discountAmount: Long? = null,
+    @SerialName("totalAmount") val totalAmount: Long? = null,
+    @SerialName("items") val items: List<FashionStoreOrderItemDto> = emptyList(),
+    @SerialName("createdAt") val createdAt: String? = null,
+)
+
+/**
+ * `FashionOrderItemResponse`: строка по варианту, а не по позиции меню —
+ * `variantId`/`colorName`/`size` вместо `itemId`/`itemName` «Еды».
+ */
+@Serializable
+data class FashionStoreOrderItemDto(
+    @SerialName("variantId") val variantId: String? = null,
+    @SerialName("productName") val productName: String? = null,
+    @SerialName("colorName") val colorName: String? = null,
+    @SerialName("size") val size: String? = null,
+    @SerialName("quantity") val quantity: Int? = null,
+    @SerialName("unitPrice") val unitPrice: Long? = null,
+    @SerialName("totalPrice") val totalPrice: Long? = null,
 )

@@ -308,15 +308,24 @@ class GraphAssemblyTest {
         )
         val dataStore = sharedDataStore(context)
 
+        val sessionStore = DataStoreSessionStore(dataStore)
         val repository = DefaultAuthRepository(
             authApi = authApi,
-            sessionStore = DataStoreSessionStore(dataStore),
+            sessionStore = sessionStore,
             userProfileStore = DataStoreUserProfileStore(dataStore),
             formOwnership = SettingsDataStore(dataStore),
             pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
             deviceInfoProvider = deviceInfoProvider(context),
             locationProvider = locationProvider(context),
             clock = AppModule.provideClock(),
+            tokenAuthenticator = TokenAuthenticator(
+                sessionStore = sessionStore,
+                sessionExpiry = SessionExpiry(),
+                authApi = authApi,
+                deviceInfoProvider = deviceInfoProvider(context),
+                locationProvider = locationProvider(context),
+                clock = AppModule.provideClock(),
+            ),
         )
 
         assertNotNull(repository)

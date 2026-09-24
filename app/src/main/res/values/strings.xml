@@ -141,12 +141,17 @@
     <string name="wallet_held">Muzlatilgan</string>
     <string name="wallet_bonus">Bonuslar</string>
     <string name="wallet_status_blocked">Hamyon bloklangan</string>
-    <string name="wallet_history_title">Amallar tarixi</string>
     <string name="wallet_history_empty">Hozircha amallar yo\'q.</string>
     <string name="wallet_transaction_default_title">Amal</string>
     <string name="wallet_transaction_pending">Bajarilmoqda</string>
     <string name="wallet_transaction_failed">Bajarilmadi</string>
     <string name="wallet_transaction_bonus">Bonus</string>
+    <string name="wallet_tab_transactions">Amallar</string>
+    <string name="wallet_tab_payments">To\'lovlar</string>
+    <string name="wallet_payments_empty">Hozircha to\'lovlar yo\'q.</string>
+    <string name="wallet_payment_default_title">To\'lov</string>
+    <string name="wallet_payment_status_cancelled">Bekor qilindi</string>
+    <string name="wallet_payment_status_refunded">Pul qaytarildi</string>
     <string name="wallet_top_up">To\'ldirish</string>
     <string name="wallet_top_up_title">Hamyonni to\'ldirish</string>
     <string name="wallet_top_up_amount">Summa</string>
@@ -904,6 +909,22 @@
     <string name="fashion_catalog_empty_title">Bu yerda hozircha tovar yo\'q</string>
     <string name="fashion_catalog_empty_description">Do\'kon vitrinani hali to\'ldirmagan. Keyinroq kirib ko\'ring.</string>
 
+    <string name="fashion_add_product">Tovar qo\'shish</string>
+    <string name="fashion_new_product_title">Yangi tovar</string>
+    <string name="fashion_field_name">Nomi</string>
+    <string name="fashion_field_name_invalid">Nomini kiriting</string>
+    <string name="fashion_field_price">Narxi, so\'m</string>
+    <string name="fashion_field_price_invalid">Narxni kiriting</string>
+    <string name="fashion_field_brand">Brend</string>
+    <string name="fashion_field_description">Tavsif</string>
+    <string name="fashion_field_gender">Kimga mo\'ljallangan</string>
+    <string name="fashion_field_category">Kategoriya</string>
+    <string name="fashion_gender_male">Erkaklar</string>
+    <string name="fashion_gender_female">Ayollar</string>
+    <string name="fashion_gender_unisex">Unisex</string>
+    <string name="fashion_gender_kids">Bolalar</string>
+    <string name="fashion_create_submit">Qo\'shish</string>
+
     <string name="fashion_product_title">Tovar</string>
     <string name="fashion_product_unnamed">Nomi ko\'rsatilmagan tovar</string>
     <string name="fashion_product_unavailable">Tovar topilmadi</string>
@@ -920,6 +941,17 @@
     <string name="fashion_add_to_cart">Savatga qo\'shish</string>
     <string name="fashion_variant_out_of_stock">Tanlangan o\'lcham qolmagan. Boshqa o\'lcham yoki rangni tanlang.</string>
     <string name="fashion_open_cart">Savatni ochish</string>
+
+    <string name="fashion_add_variant">Variant qo\'shish</string>
+    <string name="fashion_new_variant_title">Yangi variant</string>
+    <string name="fashion_field_color_name">Rang nomi</string>
+    <string name="fashion_field_color_name_invalid">Rang nomini kiriting</string>
+    <string name="fashion_field_color_hex">Rang kodi (ixtiyoriy)</string>
+    <string name="fashion_field_size">O\'lcham</string>
+    <string name="fashion_field_size_invalid">O\'lchamni kiriting</string>
+    <string name="fashion_field_sku">SKU (ixtiyoriy)</string>
+    <string name="fashion_field_stock">Qoldiq (ixtiyoriy)</string>
+    <string name="fashion_field_stock_invalid">Butun son kiriting</string>
 
     <string name="fashion_cart_title">Savat</string>
     <string name="fashion_cart_empty_title">Savat bo\'sh</string>
@@ -1023,6 +1055,7 @@
     <string name="cinema_empty_title">Afisha bo\'sh</string>
     <string name="cinema_empty_description">Kinoteatr hali film kiritmagan. Keyinroq qarab ko\'ring.</string>
     <string name="cinema_movie_unnamed">Nomi ko\'rsatilmagan film</string>
+    <string name="cinema_movie_trailer">Treylerni ko\'rish</string>
     <string name="cinema_sessions_title">Seanslar</string>
     <string name="cinema_sessions_empty_title">Bu kunga seans yo\'q</string>
     <string name="cinema_sessions_empty_description">Boshqa kunni tanlang: afishada yaqin ikki hafta bor.</string>
@@ -1087,6 +1120,14 @@
     <string name="pharmacy_stock_edit_submit">Saqlash</string>
     <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
     <string name="pharmacy_stock_owner_count">Qoldiq: %1$d</string>
+    <!-- Правка и удаление товара (issue #288) -->
+    <string name="pharmacy_edit_product_action">Tovarni tahrirlash</string>
+    <string name="pharmacy_edit_product_title">Tovarni tahrirlash</string>
+    <string name="pharmacy_edit_product_submit">Saqlash</string>
+    <string name="pharmacy_delete_action">O\'chirish</string>
+    <string name="pharmacy_delete_title">Tovarni o\'chirish</string>
+    <string name="pharmacy_delete_message">%1$s butunlay o\'chiriladi, bu amalni ortga qaytarib bo\'lmaydi.</string>
+    <string name="pharmacy_delete_confirm">O\'chirish</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">O\'yin zonalari</string>
     <string name="gaming_zones_empty_title">Zonalar hali qo\'shilmagan</string>
@@ -1240,7 +1281,15 @@
     <string name="business_menu_stopped">%1$s stop-ro\'yxatga tushdi</string>
     <string name="business_menu_resumed">%1$s yana sotuvda</string>
     <string name="business_menu_created">%1$s qo\'shildi</string>
+    <string name="business_menu_updated">%1$s yangilandi</string>
+    <string name="business_menu_deleted">%1$s o\'chirildi</string>
     <string name="business_menu_add">Taom qo\'shish</string>
+    <string name="business_menu_edit_title">Taomni tahrirlash</string>
+    <string name="business_menu_edit_action">Tahrirlash</string>
+    <string name="business_menu_delete_action">O\'chirish</string>
+    <string name="business_menu_delete_title">Pozitsiyani o\'chirish</string>
+    <string name="business_menu_delete_message">%1$s butunlay o\'chiriladi, bu amalni ortga qaytarib bo\'lmaydi. Buyurtmalar tarixini saqlash kerak bo\'lsa, o\'chirish o\'rniga «Sotuvda» tugmasi bilan sotuvdan olib tashlang.</string>
+    <string name="business_menu_delete_confirm">O\'chirish</string>
     <string name="business_menu_save">Saqlash</string>
     <string name="business_menu_section">Bo\'lim</string>
     <string name="business_menu_field_name">Nomi</string>

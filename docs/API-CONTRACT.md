@@ -119,6 +119,17 @@ query у `GET promotions/check` (`orderAmount`) и `GET food/delivery-fee`
 | Записи к врачу | `HospitalApi.myAppointments` | `GET hospitals/appointments/my` |
 | Билеты в кино | `CinemaApi.myTickets` | `GET cinema/tickets/my` |
 
+**`GET orders` — единственный из пяти без `/my`, и под токеном не проверен ни
+один путь** (issue #148): анонимно все пять отвечают `401`, то есть проверено
+только их существование. Харнесс подготовлен — `contract/orders.sh` снимает
+страницу без `vertical` (форма ответа, должны приезжать заказы разных
+вертикалей одним списком) и `orders/{orderId}` по первому же id (issue #9 —
+общая ручка одного заказа отдаёт `OrderView`, а не что-то ещё). Разбор
+фикстур — `OrdersContractTest`. Скоуп по пользователю («чужие заказы не
+приходят») этой пробой не закрыть: нужен второй живой аккаунт, а
+`CONTRACT_REFRESH_TOKEN` на стенде один — этот пункт остаётся ручным
+(`needs-human`).
+
 ---
 
 ## AnalyticsApi ⚠️ частично
@@ -230,6 +241,7 @@ TrackEventRequest: {
 | GET | `barber-services/places/{placeId}/slots` | ✅ |
 | POST | `appointments` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `appointments/my` | ⚠️ не проверено — нужен токен |
+| GET | `appointments/{id}` | ✅ путь сверен по живому `/v3/api-docs` 2026-09-19 (`operationId: byId`, issue #183); ответ — нужен токен |
 | POST | `appointments/{id}/cancel` | ⚠️ не проверено — нужен токен |
 
 **Тело `POST appointments` сверено чтением** (2026-09-10, после развода
@@ -326,10 +338,15 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
   котором у человека две записи; клиент это окно закрывает как может, но
   честнее закрыть его на сервере.
 
-`GET appointments/{id}` приложение по-прежнему не использует (своего экрана у
-одной записи нет), `PUT appointments/{id}/status` бизнес-панель эпика #16 **не использует**: записи
-к мастеру она не ведёт — очередь в ней живая (`walkin`), а календарь записей
-остался вне панели (см. BusinessApi ниже).
+`GET appointments/{id}` теперь читает карточка записи (issue #183, экран один
+на обе вертикали — см. `HospitalApi` ниже). `PUT appointments/{id}/status`
+бизнес-панель эпика #16 **не использует**: записи к мастеру она не ведёт —
+очередь в ней живая (`walkin`), а календарь записей остался вне панели (см.
+BusinessApi ниже).
+
+`AppointmentBookingResponse` в живой схеме 2026-09-19 отдаёт ещё и
+`placeName`/`placeLogoUrl` — оба поля новые, `AppointmentDto` их пока не
+разбирает (см. разбор той же пары у `TicketResponse` в `CinemaApi` выше).
 
 `price` услуги и записи — в тийинах (см. «Общее для всех запросов»): стенд
 отдаёт за стрижку `5000000`, это 50 000 сум, и так их показывает экран
@@ -337,17 +354,38 @@ externalOrderId, errorMessage, createdAt, updatedAt}` устроена обоб�
 `app/src/test/resources/contract/booking/services.json`). За подравнивание
 бороды стенд отдаёт `3000000` — 30 000 сум.
 
-## CinemaApi ⚠️
+## CinemaApi ⚠️ частично
 
-`app/src/main/java/uz/mahalla/feature/cinema/data/CinemaApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/cinema/data/CinemaApi.kt` — пути сверены с живым `/v3/api-docs` 2026-09-19 (issue #183): все семь существуют и совпадают с объявленными. Тела и схемы `buy`/`schedule` по-прежнему НЕ СВЕРЕНЫ — писались по описанию задачи, проверить перед правкой.
 
-| Метод | Путь |
-|---|---|
-| GET | `cinema/movies` |
-| GET | `cinema/places/{placeId}/schedule` |
-| POST | `cinema/sessions/{sessionId}/buy` |
-| GET | `cinema/tickets/my` |
-| PUT | `cinema/tickets/{id}/cancel` |
+| Метод | Путь | |
+|---|---|---|
+| GET | `cinema/movies` | ⚠️ путь подтверждён, схема `Movie` не пересверена |
+| GET | `cinema/movies/{id}` | ✅ путь и схема (issue #183); требует Bearer |
+| GET | `cinema/places/{placeId}/schedule` | ⚠️ не пересверено |
+| POST | `cinema/sessions/{sessionId}/buy` | ⚠️ не пересверено |
+| GET | `cinema/tickets/my` | ⚠️ путь подтверждён, схема ответа сменилась на `TicketResponse` |
+| GET | `cinema/tickets/{id}` | ✅ путь и схема (issue #183); требует Bearer |
+| PUT | `cinema/tickets/{id}/cancel` | ⚠️ путь подтверждён |
+
+**Схема билета в `/v3/api-docs` теперь называется `TicketResponse`, а не
+`CinemaTicket`** (сверено 2026-09-19) — она отдаёт `{id, sessionId, placeId,
+userId, placeName, placeLogoUrl, seatNumber, qrCode, price, status,
+createdAt}`, то есть три новых поля (`placeId`, `placeName`, `placeLogoUrl`)
+против того, что разбирает `CinemaTicketDto` сейчас. Схема одна на все четыре
+пути (`buy`, `my`, `{id}`, `{id}/cancel`), поэтому `CinemaTicketDto` — по-прежнему
+один тип на всех четырёх, просто не читает три новых поля: расширять его —
+отдельная задача, не выдумывать здесь. Та же новая пара `placeName` +
+`placeLogoUrl` появилась и у `AppointmentBookingResponse`, и у
+`HospitalAppointmentResponse` (см. ниже) — если бэкенд стал называть заведение
+сам, `PlaceNameResolver` (issue #182) и подтягивание имени врача (issue #219)
+могут оказаться избыточными для этих трёх ответов. Не проверено и не сделано в
+этом PR — задача на отдельное issue.
+
+**`Movie`** отдаёт ровно то, что уже разбирает `MovieDto` (issue #183):
+`{id, placeId, title, titleUz, description, genre, durationMinutes,
+releaseDate, posterUrl, trailerUrl, isActive, rating}` — совпадение подтверждено
+чтением схемы, отдельная контрактная проба не заводилась.
 
 ## CatalogApi ✅
 
@@ -431,6 +469,30 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | GET | `orders` |
 | GET | `orders/{orderId}` |
 | POST | `fashion/orders/{orderId}/cancel` |
+| POST | `fashion/stores/{storeId}/products` |
+| POST | `fashion/products/{id}/variants` |
+| GET | `fashion/stores/{storeId}/orders` |
+| PUT | `fashion/stores/{storeId}/orders/{orderId}/status` |
+
+**`fashion/stores/{storeId}/orders` (`GET`) и `.../status` (`PUT`) — бизнес-панель,
+заказы «Одежды» (issue #187)**. Оба пути и тело сняты живым `/v3/api-docs`
+**2026-09-19**: `GET` отвечает `ApiResponsePageResponseFashionOrderResponse`,
+`status` — то же перечисление, что уже разбирает `OrderStatus` («Еда»,
+`NEW|ACCEPTED|PREPARING|READY|IN_DELIVERY|DELIVERED|CANCELLED|REFUNDED`) —
+заводить второе перечисление под вертикаль не пришлось. `fulfillment`
+(`PICKUP|DELIVERY|DINE_IN`) и `paymentMethod` (`CASH|WALLET`) — те же
+значения, что и у `FoodOrderResponse`. Строка заказа (`FashionOrderItemResponse`)
+устроена иначе: `variantId`/`colorName`/`size` вместо `itemId`/`itemName` —
+клиент собирает имя строки из трёх полей.
+
+`PUT .../status` принимает `Map<String, String>` без объявленной схемы — тот
+же класс дефекта, что у трёх безымянных тел `BusinessApi` («Еда»): ключ
+**`status`** выведен по тому же правилу (соседние ручки той же операции,
+`UpdateOrderStatusRequest`/`ModerateRequest`, называют его так же), не
+угадан. Отдельно: **у операции `PUT` springdoc не перечисляет `storeId` среди
+параметров**, хотя путь его требует буквально — тоже дефект документации, а
+не повод убрать `storeId` из Retrofit-интерфейса: без него URL остался бы с
+`{storeId}` внутри.
 
 `GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
 отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
@@ -438,6 +500,9 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 приезжают заказы одной вертикали (одежда), без него — **всех**
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
+
+Под токеном не проверен (issue #148) — харнесс `contract/orders.sh` готов,
+запуска с живым `CONTRACT_REFRESH_TOKEN` ещё не было.
 
 **`POST fashion/orders` шлёт свою схему** (расхождение найдено при сверке
 2026-09-10, issue #167; исправлено в issue #221). У пути свой
@@ -463,6 +528,21 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 эта. Схема `promoCode` в теле заказа взята из issue #180 (снята со стенда
 автором задачи) — независимо не перепроверялась: под Bearer `401` приходит
 до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан.
+
+**`POST fashion/stores/{storeId}/products` и `POST fashion/products/{id}/variants`
+(issue #280, продолжение #252) — НЕ СВЕРЕНЫ живым запросом**, поля выведены
+по аналогии с уже подтверждёнными полями того же контроллера: у товара —
+`ProductDetail`/`ProductSummary` (`name`, `description`, `brand`, `material`,
+`careInstructions`, `sizeGuide`, `gender`, `categoryId`, `basePrice`), у
+варианта — `VariantResponse` (`colorName`, `colorHex`, `size`, `sku`, `price`,
+`stockQuantity`). Обе ручки требуют Bearer владельца/менеджера заведения —
+`CONTRACT_REFRESH_TOKEN` в песочнице не задан, `401` приходит до валидации
+тела. Тела закреплены тестами (`FashionRepositoryTest`) до первой проверки
+под токеном; при расхождении смотреть сюда в первую очередь. Ответ читается
+как `ApiResponse<JsonElement>` и проверяется только по `success`
+(`ensureSuccess`, не `payload`) — точная схема тела `POST`-ответа не
+подтверждена, а список/карточка после создания перечитываются отдельным
+`GET`, так что разбирать ответ дальше не нужно.
 
 ## FoodApi ✅
 
@@ -629,7 +709,7 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 | GET | `hospitals/doctors/{id}/slots?date=` | ✅ путь; `data` — `ApiResponseListString` (issue #181) |
 | POST | `hospitals/appointments` | ✅ путь и `HospitalBookRequest`; ответ под токеном не проверен |
 | GET | `hospitals/appointments/my` | ✅ путь; ответ под токеном не проверен |
-| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181); разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали; экран, который эту ручку показывает, — отдельная задача (#183) |
+| GET | `hospitals/appointments/{id}` | ✅ путь объявлен (issue #181), карточка записи — issue #183; разбирается `AppointmentDto` брони — `doctorId` и `complaint` теряются, как и у остальных ответов вертикали |
 | POST | `hospitals/appointments/{id}/cancel` | ✅ путь; ответ под токеном не проверен |
 
 **Отмена переехала на свою ручку больниц** (issue #167). До 2026-09-09 её у
@@ -637,11 +717,13 @@ curl'ами по стенду 2026-09-04 (issue #98), тела под токен
 `POST appointments/{id}/cancel`. В схеме от 2026-09-09 своя отмена есть, и
 заодно рассосалась коллизия springdoc, из-за которой обе вертикали выглядели
 одной сущностью: у больниц теперь свои `HospitalBookRequest` и
-`HospitalAppointmentResponse` (`{id, doctorId, apptDate, startTime, complaint,
-status, createdAt}`), у брони — `AppointmentBookRequest` и
-`AppointmentBookingResponse` (`{id, placeId, userId, serviceId, serviceName,
-price, apptDate, startTime, endTime, status, createdAt}`). Записи разные —
-значит, общая ручка чужую отменить не может.
+`HospitalAppointmentResponse` (`{id, placeId, doctorId, userId, placeName,
+placeLogoUrl, apptDate, startTime, complaint, status, createdAt}`), у брони —
+`AppointmentBookRequest` и `AppointmentBookingResponse` (`{id, placeId, userId,
+serviceId, placeName, placeLogoUrl, serviceName, price, apptDate, startTime,
+endTime, status, createdAt}`). Записи разные — значит, общая ручка чужую
+отменить не может. `placeName`/`placeLogoUrl` — новая пара 2026-09-19, клиент
+её пока не разбирает (см. `CinemaApi` выше про ту же пару у `TicketResponse`).
 
 Живой пробой это не доказать: `401` приходит до маршрутизации, оба пути
 отвечают им одинаково (проверено `curl` 2026-09-10), а `CONTRACT_REFRESH_TOKEN`
@@ -817,6 +899,8 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 | GET | `pharmacy/places/{placeId}/products` |
 | POST | `pharmacy/places/{placeId}/products` |
 | PUT | `pharmacy/places/{placeId}/products/{id}/stock` |
+| PUT | `pharmacy/places/{placeId}/products/{id}` ⚠️ путь не сверен, см. ниже |
+| DELETE | `pharmacy/places/{placeId}/products/{id}` ⚠️ путь не сверен, см. ниже |
 
 **`POST products`** — тело `PharmacyCreateRequest`, имя в `/v3/api-docs`
 коллизией springdoc не перекрыто (встречается только в этом контроллере).
@@ -837,6 +921,22 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 узнает, и обновление молча не подействует, а не ответит ошибкой; при
 расхождении смотреть сюда в первую очередь и подтвердить настоящим curl'ом
 до релиза.
+
+**`PUT products/{id}` и `DELETE products/{id}`** (issue #288, задача 12.4
+бэкенда — jack5505/mahalla#221 — закрыта, но сама схема **не снята вовсе**:
+`/v3/api-docs` на момент написания стал отвечать `401` даже с гео-заголовками
+(раньше отдавался анонимно, см. `PharmacyApi`/`BusinessApi` выше — там он ещё
+снимался без токена), а `CONTRACT_REFRESH_TOKEN` в песочнице не задан. Пути и
+тело — **не подтверждённая гипотеза**, а не снятая схема: взяты по аналогии с
+уже слитым и точно таким же случаем — правкой/удалением услуги мастера
+(`PUT`/`DELETE freelancers/me/services/{id}`, issue #71, тот же приём —
+тело как у создания, список перечитывается или правится на месте после
+успеха). Тело `PUT` — `PharmacyCreateRequest` без `stockQuantity` (свой
+эндпоинт, `PUT .../stock`) и без `description` (`ProductResponse` его не
+возвращает вовсе — предзаполнить нечем, а отправка пустого значения молча
+стёрла бы то, что человек не видит). Первое, что проверить, когда появится
+`CONTRACT_REFRESH_TOKEN`: существуют ли эти пути вообще, и не «снимает с
+продажи» ли `DELETE` вместо удаления записи.
 
 ## SessionsApi ⚠️
 
@@ -912,6 +1012,8 @@ Bearer. Тела под токеном не проверены — секрет�
 | GET | `food/places/{placeId}/menu` | ✅ (та же ручка, что у витрины) |
 | PUT | `food/items/{itemId}/toggle` | ✅ путь есть (`401`) |
 | POST | `food/places/{placeId}/items` | ✅ путь есть (`401`) |
+| PUT | `food/items/{itemId}` | ⚠️ путь **не проверен вовсе**, см. ниже |
+| DELETE | `food/items/{itemId}` | ⚠️ путь **не проверен вовсе**, см. ниже |
 
 Плюс две уже описанные ручки, которые панель переиспользует: `GET places/my`
 (права, см. ниже) и `PUT places/{id}/availability` («пауза»).
@@ -951,6 +1053,28 @@ Bearer. Тела под токеном не проверены — секрет�
 с `Mine.role` (`OWNER` / `MANAGER` / `STAFF`). Фильтра по `id` у ручки нет,
 поэтому доступ ищется перелистыванием страниц (`BusinessRepository.access`,
 предел — 20 страниц).
+
+**`PUT food/items/{itemId}` и `DELETE food/items/{itemId}`** (issue #288,
+задача 12.4 бэкенда — jack5505/mahalla#221 — закрыта, но схему снять не
+удалось: `/v3/api-docs` на момент написания стал отвечать `401` даже с
+гео-заголовками, где раньше (2026-09-09, запись выше) отдавался анонимно для
+проверки самих путей, а `CONTRACT_REFRESH_TOKEN` в песочнице не задан — то
+есть под сомнением не только тело, но и сам путь. Оба взяты по аналогии с уже
+слитым и точно таким же случаем — правкой/удалением услуги мастера (`PUT`/
+`DELETE freelancers/me/services/{id}`, issue #71): тот же контроллер, что и у
+`createItem`/`toggleItem` (`food/items/...`), тело `PUT` — как у
+`CreateItemRequest`. **Первое, что проверить**, когда появится
+`CONTRACT_REFRESH_TOKEN`: существуют ли эти пути вообще, и не «снимает с
+продажи» ли `DELETE` вместо удаления записи (стоп-лист у бэкенда уже есть
+отдельной ручкой — `toggle`).
+
+**Само появление `401` на `/v3/api-docs` — риск для `contract/paths.sh`.**
+Скрипт снимает список путей стенда анонимным `curl` без токена; если схема
+теперь всегда требует Bearer, `contract/paths.sh` перестанет находить
+выдуманные ручки не по конкретной вертикали, а вовсе — вернёт код 2
+(«схему получить не удалось») на каждом прогоне `contract-check.yml`.
+Стоит отдельным issue: не блокер этой задачи, но проверить раньше, чем
+доверять зелёному `contract-check.yml`.
 ## SocialApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/social/data/SocialApi.kt` — пути и формы
@@ -1020,8 +1144,11 @@ DTO→домен, но в интерфейсе не показан: задача
 
 Что важно:
 
-- **Фильтра по назначению у ручки нет** — приезжают все платежи человека, и
-  списания за подписку (эпик 9.3) отбираются на клиенте по `purpose`.
+- **Фильтра по назначению у ручки нет** — приезжают все платежи человека.
+  Списания за подписку (эпик 9.3, `SubscriptionRepository.charges`)
+  отбираются на клиенте по `purpose`; вкладка «Платежи» в кошельке
+  (issue #184, `feature/wallet/data/PaymentsRepository`) показывает всё без
+  фильтра — та же ручка, два потребителя.
 - Отдаёт **сырую сущность** `PaymentTransaction` (`provider` из
   `PAYME|CLICK|UZUM|CASH`, `status` из `PENDING|PAID|FAILED|CANCELLED|REFUNDED`,
   `purpose`, `purposeId`, `errorMessage`). Пары `amountSom` у него нет, но она и
@@ -1064,6 +1191,12 @@ DTO→домен, но в интерфейсе не показан: задача
 из `GET wallet`, подтверждение PIN/биометрией и один запрос на одно
 подтверждение (`feature/wallet/ui/pay/WalletPaymentFlow`).
 
+**Вкладка «Платежи» (issue #184) — не отсюда.** `WalletApi.transactions`
+отдаёт движения по счёту (пополнение/списание, без провайдера и причины
+отказа); сами платежи PAYME/CLICK/UZUM со статусом и `errorMessage` берутся
+отдельной ручкой `GET payments/transactions` через `PaymentsRepository` — см.
+«PaymentsApi» выше.
+
 **Коды отказа кошелька не сверены.** `WalletPaymentGuard` узнаёт
 `INSUFFICIENT_FUNDS` / `INSUFFICIENT_BALANCE` / `WALLET_INSUFFICIENT_FUNDS` /
 `NOT_ENOUGH_FUNDS` / `NOT_ENOUGH_BALANCE` и `WALLET_BLOCKED` / `WALLET_FROZEN` /
@@ -1089,12 +1222,19 @@ DTO→домен, но в интерфейсе не показан: задача
 ```bash
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/booking.sh
 CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/security.sh
+CONTRACT_REFRESH_TOKEN=<refresh живого аккаунта> contract/orders.sh
 ```
 
 `security.sh` — **только читающая**: `pin/change` сменил бы PIN живого
 аккаунта, а неверный код у `pin/change` и `pin/biometric` тратит серверную
 попытку и может залочить аккаунт. Такое дёргать автоматически нельзя, цена
 ошибки — человек, запертый вне приложения (ADR 0013).
+
+`.github/workflows/contract-check.yml` пока даёт выбрать только `booking` в
+выпадающем списке `vertical` — `orders` туда не добавлен: у агента нет прав
+править файлы в `.github/workflows/` (GitHub App). Через workflow `orders.sh`
+не запустить, пока кто-то не допишет `options` руками; напрямую (команда
+выше) — можно уже сейчас.
 
 Скрипт дёргает ручки вертикали по этому файлу и складывает ответы стенда
 в `app/src/test/resources/contract/<вертикаль>/`. Дальше их разбирает

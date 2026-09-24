@@ -135,12 +135,17 @@
     <string name="wallet_held">Заморожено</string>
     <string name="wallet_bonus">Бонусы</string>
     <string name="wallet_status_blocked">Кошелёк заблокирован</string>
-    <string name="wallet_history_title">История операций</string>
     <string name="wallet_history_empty">Операций пока нет.</string>
     <string name="wallet_transaction_default_title">Операция</string>
     <string name="wallet_transaction_pending">В обработке</string>
     <string name="wallet_transaction_failed">Не прошла</string>
     <string name="wallet_transaction_bonus">Бонус</string>
+    <string name="wallet_tab_transactions">Операции</string>
+    <string name="wallet_tab_payments">Платежи</string>
+    <string name="wallet_payments_empty">Платежей пока нет.</string>
+    <string name="wallet_payment_default_title">Платёж</string>
+    <string name="wallet_payment_status_cancelled">Отменён</string>
+    <string name="wallet_payment_status_refunded">Возвращён</string>
     <string name="wallet_top_up">Пополнить</string>
     <string name="wallet_top_up_title">Пополнение кошелька</string>
     <string name="wallet_top_up_amount">Сумма</string>
@@ -898,6 +903,22 @@
     <string name="fashion_catalog_empty_title">Здесь пока нет товаров</string>
     <string name="fashion_catalog_empty_description">Магазин ещё не наполнил витрину. Загляните позже.</string>
 
+    <string name="fashion_add_product">Добавить товар</string>
+    <string name="fashion_new_product_title">Новый товар</string>
+    <string name="fashion_field_name">Название</string>
+    <string name="fashion_field_name_invalid">Введите название</string>
+    <string name="fashion_field_price">Цена, сум</string>
+    <string name="fashion_field_price_invalid">Введите цену</string>
+    <string name="fashion_field_brand">Бренд</string>
+    <string name="fashion_field_description">Описание</string>
+    <string name="fashion_field_gender">Кому предназначено</string>
+    <string name="fashion_field_category">Категория</string>
+    <string name="fashion_gender_male">Мужчинам</string>
+    <string name="fashion_gender_female">Женщинам</string>
+    <string name="fashion_gender_unisex">Унисекс</string>
+    <string name="fashion_gender_kids">Детям</string>
+    <string name="fashion_create_submit">Добавить</string>
+
     <string name="fashion_product_title">Товар</string>
     <string name="fashion_product_unnamed">Товар без названия</string>
     <string name="fashion_product_unavailable">Товар не найден</string>
@@ -914,6 +935,17 @@
     <string name="fashion_add_to_cart">В корзину</string>
     <string name="fashion_variant_out_of_stock">Выбранного размера нет в наличии. Выберите другой размер или цвет.</string>
     <string name="fashion_open_cart">Открыть корзину</string>
+
+    <string name="fashion_add_variant">Добавить вариант</string>
+    <string name="fashion_new_variant_title">Новый вариант</string>
+    <string name="fashion_field_color_name">Название цвета</string>
+    <string name="fashion_field_color_name_invalid">Введите название цвета</string>
+    <string name="fashion_field_color_hex">Код цвета (необязательно)</string>
+    <string name="fashion_field_size">Размер</string>
+    <string name="fashion_field_size_invalid">Введите размер</string>
+    <string name="fashion_field_sku">Артикул (необязательно)</string>
+    <string name="fashion_field_stock">Остаток (необязательно)</string>
+    <string name="fashion_field_stock_invalid">Введите целое число</string>
 
     <string name="fashion_cart_title">Корзина</string>
     <string name="fashion_cart_empty_title">Корзина пуста</string>
@@ -1015,6 +1047,7 @@
     <string name="cinema_empty_title">Афиша пуста</string>
     <string name="cinema_empty_description">Кинотеатр ещё не завёл фильмов. Загляните позже.</string>
     <string name="cinema_movie_unnamed">Название не указано</string>
+    <string name="cinema_movie_trailer">Смотреть трейлер</string>
     <string name="cinema_sessions_title">Сеансы</string>
     <string name="cinema_sessions_empty_title">На этот день сеансов нет</string>
     <string name="cinema_sessions_empty_description">Выберите другой день: в афише ближайшие две недели.</string>
@@ -1079,6 +1112,14 @@
     <string name="pharmacy_stock_edit_submit">Сохранить</string>
     <!-- Владельцу остаток нужен всегда, а не только когда товар кончается — нейтральная подпись, не строка про срочность. -->
     <string name="pharmacy_stock_owner_count">Остаток: %1$d</string>
+    <!-- Правка и удаление товара (issue #288) -->
+    <string name="pharmacy_edit_product_action">Редактировать товар</string>
+    <string name="pharmacy_edit_product_title">Редактировать товар</string>
+    <string name="pharmacy_edit_product_submit">Сохранить</string>
+    <string name="pharmacy_delete_action">Удалить</string>
+    <string name="pharmacy_delete_title">Удалить товар</string>
+    <string name="pharmacy_delete_message">%1$s будет удалено безвозвратно. Это действие нельзя отменить.</string>
+    <string name="pharmacy_delete_confirm">Удалить</string>
     <!-- Игровые зоны (эпик #11, issue #98). -->
     <string name="gaming_title">Игровые зоны</string>
     <string name="gaming_zones_empty_title">Зон пока нет</string>
@@ -1231,7 +1272,15 @@
     <string name="business_menu_stopped">%1$s — в стоп-листе</string>
     <string name="business_menu_resumed">%1$s снова в продаже</string>
     <string name="business_menu_created">%1$s добавлено</string>
+    <string name="business_menu_updated">%1$s обновлено</string>
+    <string name="business_menu_deleted">%1$s удалено</string>
     <string name="business_menu_add">Добавить позицию</string>
+    <string name="business_menu_edit_title">Редактировать позицию</string>
+    <string name="business_menu_edit_action">Редактировать</string>
+    <string name="business_menu_delete_action">Удалить</string>
+    <string name="business_menu_delete_title">Удалить позицию</string>
+    <string name="business_menu_delete_message">%1$s будет удалено безвозвратно. Если по позиции есть история заказов, вместо удаления снимите её с продажи переключателем «В продаже».</string>
+    <string name="business_menu_delete_confirm">Удалить</string>
     <string name="business_menu_save">Сохранить</string>
     <string name="business_menu_section">Раздел</string>
     <string name="business_menu_field_name">Название</string>
