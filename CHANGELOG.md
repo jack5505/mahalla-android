@@ -3363,3 +3363,43 @@ Issue #236 завели, когда #158, #161 и #173 были ещё откр�
 **Ревью диффа субагентом** (свежий контекст, как требует `CLAUDE.md`) —
 проведено перед PR; по его находкам добавлены `timeKind`-проверки в
 `ActivityRepositoryTest` и поправлено превью.
+
+---
+
+## issue #337 — R8 + shrinkResources в release
+
+`isMinifyEnabled` в release был `false`, `isShrinkResources` не задан:
+прогон 19.09.2026 показал `app-release-unsigned.apk` 121,8 МБ (dex 53 МБ +
+MapKit на 4 ABI), `app-release.aab` 62,6 МБ.
+
+Открытый PR #164 (эпик 13, изначально закрывал #17) уже включал R8 вместе с
+подписью, скриншот-тестами Roborazzi и Baseline Profile, но две недели висел
+без движения и на момент этой задачи — `CONFLICTING` с `main`. Взято из него
+только то, что относится к этой issue: `isMinifyEnabled = true` +
+`isShrinkResources = true` (`app/build.gradle.kts`) и правила в
+`app/proguard-rules.pro` — `uz.mahalla.**$$serializer` целиком (класс
+`Foo.$serializer` резолвится не по прямой ссылке), `com.yandex.**` целиком
+(MapKit создаёт часть классов из C++ по имени через JNI — байткодом это не
+видно), `-renamesourcefileattribute SourceFile` для читаемых стектрейсов
+Sentry. Retrofit-интерфейсы, Room, Hilt, DataStore, Compose, Navigation —
+уже приезжают из consumer-rules библиотек (сверено по
+`app/build/outputs/mapping/release/configuration.txt` после сборки),
+дублировать не стали. Подпись release (issue #336) и добавление
+`assembleRelease` в `ci.yml` (issue #165 — блокировано правами GitHub App на
+`.github/workflows`) — вне скоупа этой задачи.
+
+**Проверено.** `./gradlew testDebugUnitTest` — зелёный. `./gradlew
+assembleRelease bundleRelease` — `BUILD SUCCESSFUL`, `minifyReleaseWithR8` +
+`shrinkReleaseRes` отработали. Результат R8 разобран не только по факту
+сборки: `MahallaApplication`/`MainActivity` (классы из манифеста) остались
+непереименованными в `mapping.txt`; в `seeds.txt` — 1888 `$$serializer`; в
+`mapping.txt` — 2387 `*Dao_Impl` и 536 классов `com.yandex.*`, то есть не
+выпали. Retrofit consumer-rules (`-if interface * { @retrofit2.http.*
+<methods>; } -keep,allowobfuscation interface <1>`) в
+`configuration.txt` подтверждены — `*Api`-интерфейсы в `mapping.txt`
+присутствуют.
+
+**Размер после R8:** `app-release-unsigned.apk` 108,8 МБ (было 121,8 МБ),
+`app-release.aab` 55,2 МБ (было 62,6 МБ). Без подписи (issue #336) — release
+на устройстве не запустить, «прогнать release на устройстве» из чеклиста
+issue не выполнено, перенесено в риски.
