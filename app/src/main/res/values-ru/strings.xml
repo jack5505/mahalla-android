@@ -1306,6 +1306,9 @@
     <string name="activity_empty_active_description">Все заказы и брони завершены — они во вкладке «История».</string>
     <string name="activity_empty_history_title">История пуста</string>
     <string name="activity_empty_history_description">Завершённые заказы и брони попадут сюда.</string>
+    <!-- Пусто, но часть источников отказала (issue #177): каталог не предлагаем. -->
+    <string name="activity_empty_partial_title">Не удалось загрузить часть разделов</string>
+    <string name="activity_empty_partial_description">Здесь могло быть что-то ваше. Попробуйте ещё раз.</string>
     <!-- Хвост списка: следующие страницы по нажатию, а не сами (issue #151) -->
     <string name="action_load_more">Показать ещё</string>
     <!-- Частичный отказ: раздел не загрузился, остальной список показан -->
