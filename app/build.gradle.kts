@@ -161,7 +161,14 @@ android {
             )
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // R8 (issue #337): выкидывает неиспользуемый код и переименовывает
+            // остальной. Правила — в proguard-rules.pro; всё, что резолвится
+            // рефлексией (kotlinx.serialization, JNI MapKit), должно быть
+            // перечислено там, иначе падение будет только в release.
+            isMinifyEnabled = true
+            // Ресурсы шринкуются только вместе с кодом: без minify AGP
+            // отказывается включать shrinkResources.
+            isShrinkResources = true
             buildConfigField("String", "API_BASE_URL", "\"https://api.mahalla.uz/api/v1/\"")
             // Экран адреса в релизе спрятан, пока сборку не попросили обратное:
             // иначе увести приложение на чужой сервер может кто угодно.
