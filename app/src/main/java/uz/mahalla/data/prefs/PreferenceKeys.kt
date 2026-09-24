@@ -16,6 +16,16 @@ internal object PreferenceKeys {
     val OnboardingCompleted = booleanPreferencesKey("settings_onboarding_completed")
     val BiometricEnabled = booleanPreferencesKey("settings_biometric_enabled")
 
+    /**
+     * Маркер, зашифрованный ключом Keystore, который требует биометрию на
+     * каждую операцию (issue #318, `BiometricCipher`). Расшифровка на замке и
+     * оплате — доказательство живого скана STRONG-датчика, а не просто
+     * успешного колбэка промпта. IV — отдельным полем: для GCM он не секрет,
+     * но обязан дойти в паре с тем же шифротекстом.
+     */
+    val BiometricSecretIv = stringPreferencesKey("biometric_secret_iv")
+    val BiometricSecretPayload = stringPreferencesKey("biometric_secret_payload")
+
     /** Город выбирается вручную, когда пользователь отказал в геолокации (эпик 3.6). */
     val CityId = stringPreferencesKey("settings_city_id")
 

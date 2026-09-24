@@ -1,5 +1,6 @@
 package uz.mahalla.feature.wallet.ui.pay
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -18,6 +19,7 @@ import uz.mahalla.data.security.PaymentConfirmationMethod
 import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletPaymentRejection
 import uz.mahalla.feature.wallet.domain.WalletStatus
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakePaymentConfirmationPolicy
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeWalletRepository
@@ -37,6 +39,7 @@ class WalletPaymentFlowTest {
     )
     private val pinStorage = FakePinStorage(initialPin = PIN)
     private val policy = FakePaymentConfirmationPolicy(PaymentConfirmationMethod.Pin)
+    private val biometricCipher = FakeBiometricCipher()
 
     /** Ключи всех попыток отправки — по ним видно и повтор, и второй платёж. */
     private val sentKeys = mutableListOf<String>()
@@ -220,8 +223,51 @@ class WalletPaymentFlowTest {
         val flow = flow()
         flow.start(amountSum = 84_000)
 
-        flow.biometricConfirmed()
+        flow.biometricConfirmed(FakeBiometricCipher.fakeCryptoObject())
 
+        assertEquals(1, sentKeys.size)
+    }
+
+    @Test
+    fun `a crypto operation that fails falls back to the pin`() = runTest {
+        // Ключ не смог расшифровать маркер (issue #318) — успешный колбэк
+        // промпта сам по себе оплату не подтверждает.
+        policy.method = PaymentConfirmationMethod.Biometric
+        val flow = flow(biometricCipher = FakeBiometricCipher(verificationSucceeds = false))
+        flow.start(amountSum = 84_000)
+
+        flow.biometricConfirmed(FakeBiometricCipher.fakeCryptoObject())
+
+        assertEquals(PaymentConfirmationMethod.Pin, flow.state.value?.method)
+        assertEquals(emptyList<String>(), sentKeys)
+    }
+
+    @Test
+    fun `a second callback while the crypto operation is in flight is ignored`() = runTest {
+        // Пока первый `completeVerification` не ответил, шаг у состояния всё
+        // ещё `Confirm` — без отдельного флага второй колбэк промпта запустил
+        // бы вторую крипто-операцию поверх первой.
+        policy.method = PaymentConfirmationMethod.Biometric
+        var verificationCalls = 0
+        val gate = CompletableDeferred<Unit>()
+        val flow = flow(
+            biometricCipher = FakeBiometricCipher(
+                verificationGate = {
+                    verificationCalls++
+                    gate.await()
+                },
+            ),
+        )
+        flow.start(amountSum = 84_000)
+        val cryptoObject = FakeBiometricCipher.fakeCryptoObject()
+
+        flow.biometricConfirmed(cryptoObject)
+        // Первая операция ещё не ответила — второй колбэк не должен дойти до
+        // крипто-операции вовсе.
+        flow.biometricConfirmed(cryptoObject)
+        gate.complete(Unit)
+
+        assertEquals(1, verificationCalls)
         assertEquals(1, sentKeys.size)
     }
 
@@ -269,10 +315,13 @@ class WalletPaymentFlowTest {
         assertTrue(sentKeys[0] != sentKeys[1])
     }
 
-    private fun TestScope.flow(): WalletPaymentFlow<String> = WalletPaymentFlow(
+    private fun TestScope.flow(
+        biometricCipher: FakeBiometricCipher = this@WalletPaymentFlowTest.biometricCipher,
+    ): WalletPaymentFlow<String> = WalletPaymentFlow(
         walletRepository = walletRepository,
         pinStorage = pinStorage,
         confirmationPolicy = policy,
+        biometricCipher = biometricCipher,
         // Немедленная отправка: шаги оплаты — цепочка корутин, и ждать их
         // руками в каждом тесте значило бы проверять диспетчер, а не оплату.
         scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler)),

@@ -15,6 +15,7 @@ import uz.mahalla.core.ui.state.toListScreenState
 import uz.mahalla.data.network.inspector.HttpInspector
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.feature.auth.data.AuthRepository
@@ -44,6 +45,7 @@ class ProfileViewModel @Inject constructor(
     private val mediaRepository: MediaRepository,
     private val profileRepository: ProfileRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val biometricCipher: BiometricCipher,
     private val notificationChannels: NotificationChannels,
 ) : MviViewModel<ProfileState, ProfileEvent, ProfileEffect>(ProfileState()) {
 
@@ -96,7 +98,17 @@ class ProfileViewModel @Inject constructor(
             }
 
             is ProfileEvent.BiometricToggled -> toggleBiometric(event.enabled)
-            ProfileEvent.BiometricPromptSucceeded -> setBiometricEnabled(true)
+            is ProfileEvent.BiometricPromptSucceeded -> viewModelScope.launch {
+                // Датчик подтвердил, но включаем только если ключ реально
+                // расшифровал маркер (issue #318) — успешный колбэк промпта
+                // сам по себе этого не доказывает.
+                val enrolled = runCatchingCancellable {
+                    biometricCipher.completeEnrollment(event.cryptoObject)
+                }.reportSwallowed("profile.completeEnrollment").getOrDefault(false)
+                if (enrolled) setBiometricEnabled(true) else updateState {
+                    copy(biometricPromptFailed = true)
+                }
+            }
             ProfileEvent.BiometricPromptFailed -> updateState { copy(biometricPromptFailed = true) }
             ProfileEvent.BiometricPromptCancelled -> Unit
 
@@ -261,7 +273,14 @@ class ProfileViewModel @Inject constructor(
             return
         }
         if (currentState.biometricStatus != BiometricStatus.Available) return
-        emitEffect(ProfileEffect.ShowBiometricPrompt)
+        viewModelScope.launch {
+            val cryptoObject = biometricCipher.prepareEnrollment()
+            if (cryptoObject == null) {
+                updateState { copy(biometricPromptFailed = true) }
+            } else {
+                emitEffect(ProfileEffect.ShowBiometricPrompt(cryptoObject))
+            }
+        }
     }
 
     private fun setBiometricEnabled(enabled: Boolean) {
@@ -270,6 +289,12 @@ class ProfileViewModel @Inject constructor(
             // повод падать: PIN остаётся входом, как и в онбординге.
             runCatchingCancellable { settingsDataStore.setBiometricEnabled(enabled) }
                 .reportSwallowed("settings.setBiometricEnabled")
+            // Выключили — ключ и маркер больше не нужны, следующее включение
+            // создаст их заново.
+            if (!enabled) {
+                runCatchingCancellable { biometricCipher.clear() }
+                    .reportSwallowed("profile.clearBiometricCipher")
+            }
         }
     }
 

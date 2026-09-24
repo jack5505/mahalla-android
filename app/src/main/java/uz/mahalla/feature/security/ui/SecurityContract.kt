@@ -1,5 +1,6 @@
 package uz.mahalla.feature.security.ui
 
+import androidx.biometric.BiometricPrompt
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
@@ -62,7 +63,7 @@ sealed interface SecurityEvent : UiEvent {
     data class BiometricToggled(val enabled: Boolean) : SecurityEvent
 
     /** Промпт подтвердил, что датчик работает и человек на месте. */
-    data object BiometricPromptSucceeded : SecurityEvent
+    data class BiometricPromptSucceeded(val cryptoObject: BiometricPrompt.CryptoObject) : SecurityEvent
     data object BiometricPromptFailed : SecurityEvent
     data object BiometricPromptCancelled : SecurityEvent
 
@@ -72,5 +73,5 @@ sealed interface SecurityEvent : UiEvent {
 
 sealed interface SecurityEffect : UiEffect {
     /** Показать системный промпт — он живёт только в Activity. */
-    data object ShowBiometricPrompt : SecurityEffect
+    data class ShowBiometricPrompt(val cryptoObject: BiometricPrompt.CryptoObject) : SecurityEffect
 }

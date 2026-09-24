@@ -13,6 +13,7 @@ import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.core.ui.state.toScreenState
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
 import uz.mahalla.feature.security.data.SecurityRepository
 import uz.mahalla.feature.security.domain.AppLockManager
@@ -35,6 +36,7 @@ class SecurityViewModel @Inject constructor(
     private val securityRepository: SecurityRepository,
     private val onboardingRepository: OnboardingRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val biometricCipher: BiometricCipher,
     private val appLockManager: AppLockManager,
 ) : MviViewModel<SecurityState, SecurityEvent, SecurityEffect>(SecurityState()) {
 
@@ -72,10 +74,22 @@ class SecurityViewModel @Inject constructor(
             // снять: поле ввода в шторке нарисовано как `enabled = !busy`, и
             // забытый флаг оставил бы шторку с мёртвым полем — то есть
             // включить биометрию было бы нельзя вовсе.
-            SecurityEvent.BiometricPromptSucceeded ->
-                updateState {
-                    copy(busy = false, pinPrompt = pendingEnable, pin = cleared(), failure = null)
+            is SecurityEvent.BiometricPromptSucceeded -> viewModelScope.launch {
+                // Датчик подтвердил, но код всё равно спрашиваем только если
+                // ключ реально расшифровал маркер (issue #318): успешный
+                // колбэк промпта сам по себе этого не доказывает.
+                val enrolled = runCatchingCancellable {
+                    biometricCipher.completeEnrollment(event.cryptoObject)
+                }.reportSwallowed("security.completeEnrollment").getOrDefault(false)
+                if (enrolled) {
+                    updateState {
+                        copy(busy = false, pinPrompt = pendingEnable, pin = cleared(), failure = null)
+                    }
+                } else {
+                    pendingEnable = null
+                    updateState { copy(busy = false, biometricPromptFailed = true) }
                 }
+            }
 
             SecurityEvent.BiometricPromptFailed -> {
                 pendingEnable = null
@@ -90,8 +104,19 @@ class SecurityViewModel @Inject constructor(
             is SecurityEvent.PinChanged -> onPinChanged(event.raw)
 
             SecurityEvent.PinPromptDismissed -> {
+                // Ключ и маркер уже записаны на предыдущем шаге (промпт
+                // подтвердил датчик) — код так и не подтверждён сервером,
+                // включённым флаг не станет. Оставленный ключ смысла не имеет
+                // и будет мешать следующей попытке.
+                val wasEnabling = pendingEnable == true
                 pendingEnable = null
                 updateState { copy(pinPrompt = null, pin = cleared(), busy = false) }
+                if (wasEnabling) {
+                    viewModelScope.launch {
+                        runCatchingCancellable { biometricCipher.clear() }
+                            .reportSwallowed("security.clearAbandonedBiometricCipher")
+                    }
+                }
             }
         }
     }
@@ -101,12 +126,31 @@ class SecurityViewModel @Inject constructor(
             if (showLoading) updateState { copy(status = ScreenState.Loading) }
             val loaded = securityRepository.pinStatus().toScreenState()
             if (loaded is ScreenState.Content && currentState.biometricEnabled != loaded.data.biometricEnabled) {
-                runCatchingCancellable {
-                    onboardingRepository.setBiometricEnabled(loaded.data.biometricEnabled)
-                }.reportSwallowed("security.syncBiometricEnabled")
+                syncBiometricEnabled(loaded.data.biometricEnabled)
             }
             updateState { copy(status = loaded) }
         }
+    }
+
+    /**
+     * Флаг синхронизируется с сервером — кроме одного случая: сервер говорит
+     * «включено», а локальный ключ/маркер уже недоступны (самоисцеление
+     * `AppLockViewModel.disableBrokenBiometric`, issue #318). Слепая
+     * синхронизация вернула бы тумблер во включённое состояние, которое
+     * гарантированно не сработает, и заново включила бы его же на следующем
+     * запирании — кнопка мигала бы между вкладками бесконечно. Возврат в
+     * `true` допускается только если есть чем это подтвердить: `prepareVerification`
+     * лишь собирает `Cipher`, датчик при этом не спрашивается.
+     */
+    private suspend fun syncBiometricEnabled(serverEnabled: Boolean) {
+        if (serverEnabled) {
+            val canConfirm = runCatchingCancellable {
+                biometricCipher.prepareVerification() != null
+            }.getOrDefault(false)
+            if (!canConfirm) return
+        }
+        runCatchingCancellable { onboardingRepository.setBiometricEnabled(serverEnabled) }
+            .reportSwallowed("security.syncBiometricEnabled")
     }
 
     /**
@@ -129,7 +173,15 @@ class SecurityViewModel @Inject constructor(
             // Включение начинается с датчика: обещать вход по отпечатку до
             // того, как он сработал хоть раз, нельзя.
             updateState { copy(busy = true) }
-            emitEffect(SecurityEffect.ShowBiometricPrompt)
+            viewModelScope.launch {
+                val cryptoObject = biometricCipher.prepareEnrollment()
+                if (cryptoObject == null) {
+                    pendingEnable = null
+                    updateState { copy(busy = false, biometricPromptFailed = true) }
+                } else {
+                    emitEffect(SecurityEffect.ShowBiometricPrompt(cryptoObject))
+                }
+            }
         } else {
             // Выключение датчика не требует: человек как раз говорит, что
             // пользоваться им не будет.
@@ -152,6 +204,13 @@ class SecurityViewModel @Inject constructor(
             when (val result = securityRepository.setBiometricEnabled(enabled, pin)) {
                 is ApiResult.Success -> {
                     pendingEnable = null
+                    // Сервер выключил (подтвердил выключение или отверг
+                    // включение) — ключ и маркер больше не нужны, следующее
+                    // включение создаст их заново.
+                    if (!result.data) {
+                        runCatchingCancellable { biometricCipher.clear() }
+                            .reportSwallowed("security.clearBiometricCipher")
+                    }
                     // Флаг приезжает из репозитория (он же его и записал):
                     // сервер вправе ответить не тем, о чём просили.
                     updateState {
@@ -167,8 +226,18 @@ class SecurityViewModel @Inject constructor(
 
                 // Отказ остаётся в шторке рядом с набранным кодом: закрыть её
                 // значило бы потерять объяснение (issue #34).
-                is ApiResult.Failure -> updateState {
-                    copy(busy = false, pin = cleared(), failure = result.failure)
+                is ApiResult.Failure -> {
+                    // Ключ и маркер уже записаны промптом, а включение сервер
+                    // так и не подтвердил — оставленный ключ нечего защищать
+                    // и он же помешает следующей попытке включить биометрию.
+                    // Выключение ничего нового не писало — трогать нечего.
+                    if (enabled) {
+                        runCatchingCancellable { biometricCipher.clear() }
+                            .reportSwallowed("security.clearFailedBiometricCipher")
+                    }
+                    updateState {
+                        copy(busy = false, pin = cleared(), failure = result.failure)
+                    }
                 }
             }
         }

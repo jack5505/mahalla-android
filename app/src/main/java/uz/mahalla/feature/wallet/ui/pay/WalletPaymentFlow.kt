@@ -1,5 +1,6 @@
 package uz.mahalla.feature.wallet.ui.pay
 
+import androidx.biometric.BiometricPrompt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.text.OtpFieldState
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.data.security.PaymentConfirmationMethod
 import uz.mahalla.data.security.PaymentConfirmationPolicy
 import uz.mahalla.data.security.PinStorage
@@ -52,6 +54,7 @@ class WalletPaymentFlow<T> internal constructor(
     private val walletRepository: WalletRepository,
     private val pinStorage: PinStorage,
     private val confirmationPolicy: PaymentConfirmationPolicy,
+    private val biometricCipher: BiometricCipher,
     private val scope: CoroutineScope,
     private val newKey: () -> String,
     private val submit: suspend (idempotencyKey: String) -> ApiResult<T>,
@@ -78,6 +81,13 @@ class WalletPaymentFlow<T> internal constructor(
 
     /** Оплата уже прошла: повторять её нечем и незачем. */
     private var isPaid: Boolean = false
+
+    /**
+     * Второй колбэк промпта, пока первый `completeVerification` ещё не
+     * ответил (issue #318): шаг остаётся `Confirm`, поэтому без этого флага
+     * `biometricConfirmed` запустил бы вторую крипто-операцию поверх первой.
+     */
+    private var biometricConfirmationInFlight: Boolean = false
 
     private val current: WalletPaymentState? get() = mutableState.value
 
@@ -136,12 +146,40 @@ class WalletPaymentFlow<T> internal constructor(
         if (pin.isComplete) verifyPin(pin.code)
     }
 
-    /** Системный промпт подтвердил личность. */
-    fun biometricConfirmed() {
+    /**
+     * `CryptoObject` для промпта (issue #318): ключ, привязанный к биометрии,
+     * а не просто её колбэк. `null` — секрета нет или ключ инвалидирован,
+     * показывать промпт нечем, шторка сама уйдёт на PIN.
+     */
+    suspend fun prepareBiometricCryptoObject(): BiometricPrompt.CryptoObject? =
+        biometricCipher.prepareVerification()
+
+    /**
+     * Системный промпт подтвердил личность. Подтверждение засчитывается
+     * только если `cryptoObject` реально расшифровал маркер — успешный
+     * колбэк промпта сам по себе этого не доказывает (issue #318).
+     */
+    fun biometricConfirmed(cryptoObject: BiometricPrompt.CryptoObject) {
         val state = current ?: return
         if (state.step != WalletPaymentStep.Confirm) return
         if (state.method != PaymentConfirmationMethod.Biometric) return
-        confirmed()
+        // Шаг остаётся `Confirm`, пока `completeVerification` не ответил (в
+        // отличие от `verifyPin` здесь нечем занять экран: PIN не набирают,
+        // показать нечего). Повторный колбэк промпта отсекает вот этот флаг,
+        // а не гонка за `confirmJob`, которую он бы иначе выиграл.
+        if (biometricConfirmationInFlight) return
+        biometricConfirmationInFlight = true
+        confirmJob = scope.launch {
+            try {
+                if (biometricCipher.completeVerification(cryptoObject)) {
+                    confirmed()
+                } else {
+                    biometricRejected()
+                }
+            } finally {
+                biometricConfirmationInFlight = false
+            }
+        }
     }
 
     /**
@@ -281,6 +319,7 @@ class WalletPaymentFlowFactory @Inject constructor(
     private val walletRepository: WalletRepository,
     private val pinStorage: PinStorage,
     private val confirmationPolicy: PaymentConfirmationPolicy,
+    private val biometricCipher: BiometricCipher,
 ) {
 
     fun <T> create(
@@ -291,6 +330,7 @@ class WalletPaymentFlowFactory @Inject constructor(
         walletRepository = walletRepository,
         pinStorage = pinStorage,
         confirmationPolicy = confirmationPolicy,
+        biometricCipher = biometricCipher,
         scope = scope,
         newKey = newKey,
         submit = submit,

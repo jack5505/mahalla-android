@@ -74,7 +74,7 @@ fun SecurityScreen(
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                SecurityEffect.ShowBiometricPrompt -> {
+                is SecurityEffect.ShowBiometricPrompt -> {
                     val activity = context.findFragmentActivity()
                     if (activity == null) {
                         viewModel.onEvent(SecurityEvent.BiometricPromptCancelled)
@@ -84,8 +84,9 @@ fun SecurityScreen(
                             title = promptTitle,
                             subtitle = promptSubtitle,
                             negativeLabel = promptNegative,
+                            cryptoObject = effect.cryptoObject,
                             onSuccess = {
-                                viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded)
+                                viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(it))
                             },
                             onCancelled = {
                                 viewModel.onEvent(SecurityEvent.BiometricPromptCancelled)

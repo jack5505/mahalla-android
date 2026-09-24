@@ -11,6 +11,7 @@ import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.text.OtpFieldState
 import uz.mahalla.data.security.BiometricAvailability
+import uz.mahalla.data.security.BiometricCipher
 import uz.mahalla.data.security.PinAttemptStore
 import uz.mahalla.data.security.PinStorage
 import uz.mahalla.feature.onboarding.data.OnboardingRepository
@@ -47,6 +48,7 @@ class AppLockViewModel @Inject constructor(
     private val pinAttemptStore: PinAttemptStore,
     private val onboardingRepository: OnboardingRepository,
     private val biometricAvailability: BiometricAvailability,
+    private val biometricCipher: BiometricCipher,
     private val securityRepository: SecurityRepository,
     private val appLockManager: AppLockManager,
     private val authRepository: AuthRepository,
@@ -115,7 +117,16 @@ class AppLockViewModel @Inject constructor(
             restartAuth()
             return
         }
-        if (currentState.canUseBiometric) emitEffect(AppLockEffect.ShowBiometricPrompt)
+        if (currentState.canUseBiometric) {
+            // `null` — секрет отсутствует или ключ инвалидирован (issue
+            // #318): промпт, которым нечем распорядиться, только сбил бы
+            // человека с толку, поэтому остаёмся на PIN и выключаем флаг —
+            // иначе экран предлагал бы гарантированно нерабочую кнопку на
+            // каждом запирании до конца времён.
+            biometricCipher.prepareVerification()?.let {
+                emitEffect(AppLockEffect.ShowBiometricPrompt(it))
+            } ?: disableBrokenBiometric()
+        }
     }
 
     /**
@@ -137,7 +148,15 @@ class AppLockViewModel @Inject constructor(
 
             AppLockEvent.BiometricRequested ->
                 if (currentState.canUseBiometric && !currentState.busy) {
-                    emitEffect(AppLockEffect.ShowBiometricPrompt)
+                    viewModelScope.launch {
+                        val cryptoObject = biometricCipher.prepareVerification()
+                        if (cryptoObject == null) {
+                            updateState { copy(error = AppLockError.BIOMETRIC_FAILED) }
+                            disableBrokenBiometric()
+                        } else {
+                            emitEffect(AppLockEffect.ShowBiometricPrompt(cryptoObject))
+                        }
+                    }
                 }
 
             // Отпечаток — полноценная замена PIN'у: так решил сам человек,
@@ -145,11 +164,21 @@ class AppLockViewModel @Inject constructor(
             // сессию по биометрии» у бэкенда нет, есть только `pin-resume`.
             // Счётчик неверных кодов при этом обнуляется: датчик подтвердил
             // хозяина, и держать за ним прошлые опечатки незачем.
-            AppLockEvent.BiometricSucceeded ->
+            //
+            // Разблокировка идёт только если ключ реально расшифровал маркер
+            // (issue #318) — успешный колбэк промпта сам по себе этого не
+            // доказывает.
+            is AppLockEvent.BiometricSucceeded ->
                 if (!currentState.busy) {
-                    appLockManager.unlock()
-                    updateState { copy(attemptsLeft = AppLockState.MAX_ATTEMPTS) }
-                    viewModelScope.launch { resetAttempts() }
+                    viewModelScope.launch {
+                        if (biometricCipher.completeVerification(event.cryptoObject)) {
+                            appLockManager.unlock()
+                            updateState { copy(attemptsLeft = AppLockState.MAX_ATTEMPTS) }
+                            resetAttempts()
+                        } else {
+                            updateState { copy(error = AppLockError.BIOMETRIC_FAILED) }
+                        }
+                    }
                 }
 
             AppLockEvent.BiometricFailed ->
@@ -241,6 +270,28 @@ class AppLockViewModel @Inject constructor(
      */
     private suspend fun resetAttempts() {
         runCatchingCancellable { pinAttemptStore.reset() }.reportSwallowed("applock.resetAttempts")
+    }
+
+    /**
+     * Флаг включён, а расшифровать секрет нечем — либо ключ инвалидирован
+     * (новый отпечаток на устройстве), либо это первый запуск после issue
+     * #318 и секрет для старых пользователей биометрии никогда не писался.
+     * В обоих случаях кнопка «отпечаток» гарантированно не сработает —
+     * выключаем флаг, а не оставляем её мёртвой до следующего похода в
+     * настройки. PIN как был входом, так и остаётся.
+     *
+     * `clear()` здесь обязателен, а не только сброс флага: инвалидированная
+     * запись в Keystore сама по себе никуда не девается — `generateKey()`
+     * при следующей попытке включить биометрию просто вернула бы тот же
+     * мёртвый ключ, и `Cipher.init` бросал бы `KeyPermanentlyInvalidatedException`
+     * заново при каждой попытке, до переустановки приложения.
+     */
+    private suspend fun disableBrokenBiometric() {
+        updateState { copy(biometricEnabled = false) }
+        runCatchingCancellable { onboardingRepository.setBiometricEnabled(false) }
+            .reportSwallowed("applock.disableBrokenBiometric")
+        runCatchingCancellable { biometricCipher.clear() }
+            .reportSwallowed("applock.clearBrokenBiometricCipher")
     }
 
     /**

@@ -32,6 +32,7 @@ import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletPaymentRejection
 import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlowFactory
 import uz.mahalla.testutil.FakeAnalyticsTracker
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeDeliveryFeeRepository
 import uz.mahalla.testutil.FakeOrderRepository
@@ -482,6 +483,7 @@ class CheckoutViewModelTest {
             walletRepository = walletRepository,
             pinStorage = pinStorage,
             confirmationPolicy = confirmationPolicy,
+            biometricCipher = FakeBiometricCipher(),
         ),
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )

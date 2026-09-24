@@ -1,5 +1,6 @@
 package uz.mahalla.feature.security.ui.lock
 
+import androidx.biometric.BiometricPrompt
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
@@ -69,7 +70,9 @@ sealed interface AppLockEvent : UiEvent {
 
     /** Тап по кнопке «отпечаток»: промпт показывает экран. */
     data object BiometricRequested : AppLockEvent
-    data object BiometricSucceeded : AppLockEvent
+
+    /** Промпт подтвердил датчик — `cryptoObject` прогоняется через расшифровку (issue #318). */
+    data class BiometricSucceeded(val cryptoObject: BiometricPrompt.CryptoObject) : AppLockEvent
     data object BiometricFailed : AppLockEvent
 
     /** Отмена промпта — не ошибка, человек решил ввести код руками. */
@@ -87,7 +90,7 @@ sealed interface AppLockEvent : UiEvent {
 
 sealed interface AppLockEffect : UiEffect {
     /** Показать системный промпт — он живёт только в Activity. */
-    data object ShowBiometricPrompt : AppLockEffect
+    data class ShowBiometricPrompt(val cryptoObject: BiometricPrompt.CryptoObject) : AppLockEffect
 
     /**
      * Сессии больше нет: пускать некуда, приложение уходит на вход. Экран

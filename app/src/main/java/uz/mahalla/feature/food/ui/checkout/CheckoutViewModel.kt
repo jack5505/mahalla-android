@@ -89,6 +89,13 @@ class CheckoutViewModel @Inject constructor(
      */
     private var cashIdempotencyKey: String? = null
 
+    /**
+     * `CryptoObject` для промпта подтверждения оплаты (issue #318). Шторка
+     * зовёт его сама перед показом промпта — то же самое, что `onEvent`, но с
+     * возвращаемым значением, которого у эффектов MVI нет.
+     */
+    suspend fun prepareBiometricCryptoObject() = payment.prepareBiometricCryptoObject()
+
     init {
         viewModelScope.launch {
             payment.state.collect { paymentState -> updateState { copy(payment = paymentState) } }
@@ -134,7 +141,7 @@ class CheckoutViewModel @Inject constructor(
             CheckoutEvent.BackClicked -> emitEffect(CheckoutEffect.NavigateBack)
 
             is CheckoutEvent.PaymentPinChanged -> payment.pinChanged(event.pin)
-            CheckoutEvent.PaymentBiometricConfirmed -> payment.biometricConfirmed()
+            is CheckoutEvent.PaymentBiometricConfirmed -> payment.biometricConfirmed(event.cryptoObject)
             CheckoutEvent.PaymentBiometricRejected -> payment.biometricRejected()
             CheckoutEvent.PaymentRetried -> payment.retry()
             CheckoutEvent.PaymentDismissed -> payment.dismiss()

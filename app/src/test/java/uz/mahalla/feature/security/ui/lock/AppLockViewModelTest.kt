@@ -20,6 +20,7 @@ import uz.mahalla.data.security.BiometricStatus
 import uz.mahalla.feature.security.domain.AppLockManager
 import uz.mahalla.feature.security.domain.SessionCheck
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeBiometricCipher
 import uz.mahalla.testutil.FakeOnboardingRepository
 import uz.mahalla.testutil.FakePinAttemptStore
 import uz.mahalla.testutil.FakePinStorage
@@ -148,7 +149,7 @@ class AppLockViewModelTest {
         appLockManager.lockNow()
         val viewModel = viewModel(biometricEnabled = true)
 
-        viewModel.onEvent(AppLockEvent.BiometricSucceeded)
+        viewModel.onEvent(AppLockEvent.BiometricSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         assertFalse(appLockManager.locked.value)
         // Ручки «продолжить сессию по биометрии» у бэкенда нет — отправлять
@@ -161,7 +162,7 @@ class AppLockViewModelTest {
         val viewModel = viewModel(biometricEnabled = true)
 
         assertTrue(viewModel.state.value.canUseBiometric)
-        assertEquals(AppLockEffect.ShowBiometricPrompt, viewModel.effects.first())
+        assertTrue(viewModel.effects.first() is AppLockEffect.ShowBiometricPrompt)
     }
 
     @Test
@@ -174,6 +175,39 @@ class AppLockViewModelTest {
         // Флаг остался с тех пор, когда отпечаток был добавлен: кнопка,
         // которая ничего не откроет, читается как сломанная.
         assertFalse(viewModel.state.value.canUseBiometric)
+    }
+
+    @Test
+    fun `an invalidated key silently turns the flag off instead of offering a dead button`() = runTest {
+        // Ключ Keystore инвалидирован (новый отпечаток на устройстве) — или
+        // это первый запуск после issue #318, и секрет для прежних
+        // пользователей биометрии никогда не писался. В обоих случаях кнопка
+        // гарантированно не сработает: молча выключаем флаг и остаёмся на
+        // PIN, а не оставляем мёртвую кнопку до похода в настройки.
+        appLockManager.lockNow()
+        val cipher = FakeBiometricCipher(verificationAvailable = false)
+        val viewModel = viewModel(biometricEnabled = true, biometricCipher = cipher)
+
+        assertFalse(viewModel.state.value.canUseBiometric)
+        assertNull(viewModel.state.value.error)
+        assertFalse(onboarding.current.biometricEnabled)
+        // Иначе следующая попытка включить биометрию в настройках наткнулась
+        // бы на тот же самый мёртвый ключ Keystore и не сработала бы никогда.
+        assertTrue(cipher.cleared)
+    }
+
+    @Test
+    fun `a crypto verification that fails does not unlock`() = runTest {
+        appLockManager.lockNow()
+        val viewModel = viewModel(
+            biometricEnabled = true,
+            biometricCipher = FakeBiometricCipher(verificationSucceeds = false),
+        )
+
+        viewModel.onEvent(AppLockEvent.BiometricSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+
+        assertTrue(appLockManager.locked.value)
+        assertEquals(AppLockError.BIOMETRIC_FAILED, viewModel.state.value.error)
     }
 
     @Test
@@ -260,6 +294,7 @@ class AppLockViewModelTest {
         pinStorage: FakePinStorage = this.pinStorage,
         biometricEnabled: Boolean = false,
         biometricStatus: BiometricStatus = BiometricStatus.Available,
+        biometricCipher: FakeBiometricCipher = FakeBiometricCipher(),
         attemptStore: FakePinAttemptStore = this.attemptStore,
     ): AppLockViewModel {
         onboarding = FakeOnboardingRepository(
@@ -272,6 +307,7 @@ class AppLockViewModelTest {
             biometricAvailability = object : BiometricAvailability {
                 override fun status(): BiometricStatus = biometricStatus
             },
+            biometricCipher = biometricCipher,
             securityRepository = securityRepository,
             appLockManager = appLockManager,
             authRepository = authRepository,
@@ -294,7 +330,7 @@ class AppLockViewModelTest {
         viewModel.onEvent(AppLockEvent.Shown)
 
         assertEquals(checksAfterFirst + 1, securityRepository.sessionCheckCount)
-        assertEquals(AppLockEffect.ShowBiometricPrompt, viewModel.effects.first())
+        assertTrue(viewModel.effects.first() is AppLockEffect.ShowBiometricPrompt)
     }
 
     @Test
@@ -383,7 +419,7 @@ class AppLockViewModelTest {
         val viewModel = viewModel(biometricEnabled = true)
         viewModel.onEvent(AppLockEvent.PinChanged("000000"))
 
-        viewModel.onEvent(AppLockEvent.BiometricSucceeded)
+        viewModel.onEvent(AppLockEvent.BiometricSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         // Датчик подтвердил хозяина — держать за ним прошлые опечатки незачем.
         assertEquals(0, attemptStore.failed)

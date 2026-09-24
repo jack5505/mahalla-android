@@ -54,11 +54,20 @@ class AndroidBiometricAvailability @Inject constructor(
 
     companion object {
         /**
-         * `BIOMETRIC_WEAK`: разблокировка приложения — не платёжная операция,
-         * а на части устройств Узбекистана распознавание лица проходит только
-         * по weak-классу. Криптоключи этой биометрией не защищаются (PIN
-         * лежит под ключом Keystore, см. [PinCipher]).
+         * `BIOMETRIC_STRONG` (issue #318): промпт всегда показывается с
+         * `CryptoObject` поверх ключа Keystore ([BiometricCipher]), а такой
+         * ключ **физически недоступен** без датчика, признанного Android
+         * class 3 — weak-класс (2D-лицо, которое на части устройств
+         * открывается фотографией) для него не годится в принципе, слабее
+         * ставить нечего.
+         *
+         * Фолбэк не отдельная ветка кода: `canAuthenticate(STRONG)` для
+         * устройства с одним лишь weak-датчиком возвращает `NotEnrolled`/
+         * `Unavailable`, [BiometricStatus.canEnable] — `false`, и все экраны
+         * (онбординг 3.5, настройки, профиль, app-lock) уже умеют это как
+         * «биометрия недоступна» — держат тумблер выключенным и остаются на
+         * PIN, ничего сверх этого писать не пришлось.
          */
-        const val AUTHENTICATORS = Authenticators.BIOMETRIC_WEAK
+        const val AUTHENTICATORS = Authenticators.BIOMETRIC_STRONG
     }
 }
