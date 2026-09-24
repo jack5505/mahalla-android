@@ -12,7 +12,9 @@
 # — прежде чем добавлять правило, посмотри туда: свои правила привозят OkHttp,
 # Retrofit (включая keep на наши интерфейсы с `@retrofit2.http.*`),
 # kotlinx.serialization (`-if @Serializable` целиком), Room, Hilt/Dagger,
-# DataStore, Compose, Navigation, Sentry.
+# DataStore, Compose, Navigation, Sentry, Yandex MapKit
+# (`com.yandex.mapkit.**` и `com.yandex.runtime.**` целиком — единственные два
+# пакета, которые реально использует приложение, сверено по `mapping.txt`).
 
 # --- Стектрейсы падений (issue #74) ---
 # Атрибуты для читаемого стектрейса привозит сам Sentry; здесь только
@@ -27,15 +29,6 @@
 # ответов — приложение, падающее у всех на первом же запросе. В dex это
 # десятки килобайт против 6 МБ кода.
 -keep class uz.mahalla.**$$serializer { *; }
-
-# --- Yandex MapKit (эпик 4.2) ---
-# SDK привозит keep на `com.yandex.mapkit.**` и `com.yandex.runtime.**`, но
-# половина классов создаётся из C++ по имени через JNI, и что именно позовёт
-# нативная часть, из байткода не видно. Правило из документации MapKit —
-# держать группу целиком; урезать его можно только вместе с проверкой карты на
-# устройстве, а эмулятора в CI нет.
--keep class com.yandex.** { *; }
--dontwarn com.yandex.**
 
 # --- Coil (issue #60) ---
 # Загрузчик собирает декодеры и мапперы рефлексией по классам, на которые в
