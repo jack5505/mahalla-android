@@ -816,6 +816,38 @@ class ActivityViewModelTest {
     }
 
     @Test
+    fun `a resume during an in-flight load more does not shorten the list`() = runTest {
+        // Issue #175: охрана `onScreenResumed` (см. `Mvi.kt`) смотрит только
+        // на `loadJob` — догрузка кнопкой «показать ещё» идёт в отдельном
+        // `loadMoreJob`, и резюм посреди неё эту охрану не видит. Список к
+        // этому моменту ещё не вырос (ответ страницы висит на `gate`), и
+        // `resumeLoad()` обязан реплеить ровно то, что уже показано, а не
+        // откатывать список к состоянию до нажатия «показать ещё».
+        val repository = FakeActivityRepository()
+        repository.defaultFeed = ActivityFeed(
+            items = listOf(activity("o-1", ActivitySource.Orders)),
+            nextPages = mapOf(ActivitySource.Orders to 1),
+        )
+        val viewModel = ActivityViewModel(repository)
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // первый resume — открытие, не в счёт.
+
+        val gate = CompletableDeferred<Unit>()
+        repository.gate = gate
+        viewModel.onEvent(ActivityEvent.LoadMore)
+        assertTrue(viewModel.state.value.isLoadingMore)
+        assertEquals(listOf("o-1"), viewModel.state.value.visible.map(Activity::id))
+
+        repository.gate = null
+        viewModel.onEvent(ActivityEvent.ScreenResumed) // возврат посреди догрузки.
+
+        val state = viewModel.state.value
+        assertEquals(listOf("o-1"), state.visible.map(Activity::id))
+        assertFalse(state.isLoadingMore)
+
+        gate.complete(Unit)
+    }
+
+    @Test
     fun `resume replay is capped the same way drain is`() = runTest {
         // Не-блокер ревью PR #332: без потолка `replay()` реплеит ровно
         // столько страниц, сколько человек набрал кнопкой «показать ещё» за
