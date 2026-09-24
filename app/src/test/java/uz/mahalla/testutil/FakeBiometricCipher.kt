@@ -7,14 +7,20 @@ import uz.mahalla.data.security.BiometricCipher
 
 /**
  * Ключ биометрии в памяти (issue #318): не трогает AndroidKeyStore — тесты
- * идут на чистом JVM, — но `CryptoObject` настоящий, через `SunJCE`, чтобы
- * `doFinal` вело себя как в проде: тег GCM не проверяется, здесь и не нужно,
- * поведение задаётся полями, а не самим шифром.
+ * идут на чистом JVM. `CryptoObject` собран через настоящий `javax.crypto`
+ * (`SunJCE`, `AES/CBC`, не `AES/GCM` прода) просто чтобы дать промпту непустой
+ * `Cipher` — сам `doFinal` фейк не зовёт вовсе, успех/провал задаётся полями
+ * ниже, а не шифром.
+ *
+ * [verificationGate] — точка, где `completeVerification` можно придержать
+ * (например, `CompletableDeferred`), чтобы в тесте застать состояние ровно
+ * между «промпт подтвердил» и «крипто-операция ответила».
  */
 class FakeBiometricCipher(
     var enrollmentSucceeds: Boolean = true,
     var verificationAvailable: Boolean = true,
     var verificationSucceeds: Boolean = true,
+    private val verificationGate: suspend () -> Unit = {},
 ) : BiometricCipher {
 
     var cleared: Boolean = false
@@ -29,8 +35,10 @@ class FakeBiometricCipher(
     override suspend fun prepareVerification(): BiometricPrompt.CryptoObject? =
         if (verificationAvailable) fakeCryptoObject() else null
 
-    override suspend fun completeVerification(cryptoObject: BiometricPrompt.CryptoObject): Boolean =
-        verificationSucceeds
+    override suspend fun completeVerification(cryptoObject: BiometricPrompt.CryptoObject): Boolean {
+        verificationGate()
+        return verificationSucceeds
+    }
 
     override suspend fun clear() {
         cleared = true

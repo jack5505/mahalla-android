@@ -279,11 +279,19 @@ class AppLockViewModel @Inject constructor(
      * В обоих случаях кнопка «отпечаток» гарантированно не сработает —
      * выключаем флаг, а не оставляем её мёртвой до следующего похода в
      * настройки. PIN как был входом, так и остаётся.
+     *
+     * `clear()` здесь обязателен, а не только сброс флага: инвалидированная
+     * запись в Keystore сама по себе никуда не девается — `generateKey()`
+     * при следующей попытке включить биометрию просто вернула бы тот же
+     * мёртвый ключ, и `Cipher.init` бросал бы `KeyPermanentlyInvalidatedException`
+     * заново при каждой попытке, до переустановки приложения.
      */
     private suspend fun disableBrokenBiometric() {
         updateState { copy(biometricEnabled = false) }
         runCatchingCancellable { onboardingRepository.setBiometricEnabled(false) }
             .reportSwallowed("applock.disableBrokenBiometric")
+        runCatchingCancellable { biometricCipher.clear() }
+            .reportSwallowed("applock.clearBrokenBiometricCipher")
     }
 
     /**

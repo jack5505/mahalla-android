@@ -71,6 +71,38 @@ class SecurityViewModelTest {
     }
 
     @Test
+    fun `a broken cipher keeps the self-healed flag off instead of reviving it from the server`() = runTest {
+        // AppLockViewModel уже выключил флаг локально (issue #318,
+        // самоисцеление), но сервер про это не знает и всё ещё отвечает
+        // `true`. Слепая синхронизация вернула бы тумблер во включённое
+        // состояние, которое гарантированно не сработает.
+        onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = false))
+        repository.status = ApiResult.Success(
+            ServerPinStatus(pinSet = true, biometricEnabled = true, lockedSecondsRemaining = 0),
+        )
+
+        val viewModel = viewModel(biometricCipher = FakeBiometricCipher(verificationAvailable = false))
+
+        assertFalse(viewModel.state.value.biometricEnabled)
+        assertFalse(onboarding.current.biometricEnabled)
+    }
+
+    @Test
+    fun `a working cipher still syncs the flag back on from the server`() = runTest {
+        // Другой случай того же расхождения: биометрию включили с другого
+        // устройства/сессии, и здесь есть чем подтвердить, что ключ рабочий.
+        onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = false))
+        repository.status = ApiResult.Success(
+            ServerPinStatus(pinSet = true, biometricEnabled = true, lockedSecondsRemaining = 0),
+        )
+
+        val viewModel = viewModel(biometricCipher = FakeBiometricCipher(verificationAvailable = true))
+
+        assertTrue(viewModel.state.value.biometricEnabled)
+        assertTrue(onboarding.current.biometricEnabled)
+    }
+
+    @Test
     fun `enabling asks the sensor before anything is written`() = runTest {
         val viewModel = viewModel()
 
@@ -157,7 +189,11 @@ class SecurityViewModelTest {
 
     @Test
     fun `dismissing the sheet cancels the toggle`() = runTest {
-        val viewModel = viewModel()
+        // Ключ и маркер уже записаны промптом (BiometricPromptSucceeded), а
+        // код так и не отправлен — брошенный ключ нечего защищать, и он же
+        // помешал бы следующей попытке включить биометрию (issue #318).
+        val cipher = FakeBiometricCipher()
+        val viewModel = viewModel(biometricCipher = cipher)
         viewModel.onEvent(SecurityEvent.BiometricToggled(true))
         viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
@@ -166,6 +202,21 @@ class SecurityViewModelTest {
         assertNull(viewModel.state.value.pinPrompt)
         assertFalse(viewModel.state.value.busy)
         assertTrue(repository.biometricCalls.isEmpty())
+        assertTrue(cipher.cleared)
+    }
+
+    @Test
+    fun `dismissing a disable prompt does not touch a working key`() = runTest {
+        // Здесь ключ никто не создавал — человек как раз выключает биометрию,
+        // а не включает: `clear()` без разбора стёр бы уже рабочий секрет.
+        onboarding = FakeOnboardingRepository(AppSettings(biometricEnabled = true))
+        val cipher = FakeBiometricCipher()
+        val viewModel = viewModel(biometricCipher = cipher)
+        viewModel.onEvent(SecurityEvent.BiometricToggled(false))
+
+        viewModel.onEvent(SecurityEvent.PinPromptDismissed)
+
+        assertFalse(cipher.cleared)
     }
 
     @Test
@@ -191,6 +242,21 @@ class SecurityViewModelTest {
         viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
 
         viewModel.onEvent(SecurityEvent.PinChanged("123456"))
+
+        assertTrue(cipher.cleared)
+    }
+
+    @Test
+    fun `a server refusal to enable clears the abandoned key`() = runTest {
+        // Тот же брошенный ключ, что и при отмене шторки, только сервер
+        // ответил отказом (PIN_INVALID), а не человек закрыл экран.
+        repository.biometricResult = ApiResult.Failure(ApiError.Business("PIN_INVALID"))
+        val cipher = FakeBiometricCipher()
+        val viewModel = viewModel(biometricCipher = cipher)
+        viewModel.onEvent(SecurityEvent.BiometricToggled(true))
+        viewModel.onEvent(SecurityEvent.BiometricPromptSucceeded(FakeBiometricCipher.fakeCryptoObject()))
+
+        viewModel.onEvent(SecurityEvent.PinChanged("000000"))
 
         assertTrue(cipher.cleared)
     }

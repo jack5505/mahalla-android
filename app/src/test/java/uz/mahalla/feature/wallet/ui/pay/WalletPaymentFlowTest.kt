@@ -1,5 +1,6 @@
 package uz.mahalla.feature.wallet.ui.pay
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -239,6 +240,35 @@ class WalletPaymentFlowTest {
 
         assertEquals(PaymentConfirmationMethod.Pin, flow.state.value?.method)
         assertEquals(emptyList<String>(), sentKeys)
+    }
+
+    @Test
+    fun `a second callback while the crypto operation is in flight is ignored`() = runTest {
+        // Пока первый `completeVerification` не ответил, шаг у состояния всё
+        // ещё `Confirm` — без отдельного флага второй колбэк промпта запустил
+        // бы вторую крипто-операцию поверх первой.
+        policy.method = PaymentConfirmationMethod.Biometric
+        var verificationCalls = 0
+        val gate = CompletableDeferred<Unit>()
+        val flow = flow(
+            biometricCipher = FakeBiometricCipher(
+                verificationGate = {
+                    verificationCalls++
+                    gate.await()
+                },
+            ),
+        )
+        flow.start(amountSum = 84_000)
+        val cryptoObject = FakeBiometricCipher.fakeCryptoObject()
+
+        flow.biometricConfirmed(cryptoObject)
+        // Первая операция ещё не ответила — второй колбэк не должен дойти до
+        // крипто-операции вовсе.
+        flow.biometricConfirmed(cryptoObject)
+        gate.complete(Unit)
+
+        assertEquals(1, verificationCalls)
+        assertEquals(1, sentKeys.size)
     }
 
     @Test

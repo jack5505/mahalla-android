@@ -82,6 +82,13 @@ class WalletPaymentFlow<T> internal constructor(
     /** Оплата уже прошла: повторять её нечем и незачем. */
     private var isPaid: Boolean = false
 
+    /**
+     * Второй колбэк промпта, пока первый `completeVerification` ещё не
+     * ответил (issue #318): шаг остаётся `Confirm`, поэтому без этого флага
+     * `biometricConfirmed` запустил бы вторую крипто-операцию поверх первой.
+     */
+    private var biometricConfirmationInFlight: Boolean = false
+
     private val current: WalletPaymentState? get() = mutableState.value
 
     /**
@@ -156,11 +163,21 @@ class WalletPaymentFlow<T> internal constructor(
         val state = current ?: return
         if (state.step != WalletPaymentStep.Confirm) return
         if (state.method != PaymentConfirmationMethod.Biometric) return
+        // Шаг остаётся `Confirm`, пока `completeVerification` не ответил (в
+        // отличие от `verifyPin` здесь нечем занять экран: PIN не набирают,
+        // показать нечего). Повторный колбэк промпта отсекает вот этот флаг,
+        // а не гонка за `confirmJob`, которую он бы иначе выиграл.
+        if (biometricConfirmationInFlight) return
+        biometricConfirmationInFlight = true
         confirmJob = scope.launch {
-            if (biometricCipher.completeVerification(cryptoObject)) {
-                confirmed()
-            } else {
-                biometricRejected()
+            try {
+                if (biometricCipher.completeVerification(cryptoObject)) {
+                    confirmed()
+                } else {
+                    biometricRejected()
+                }
+            } finally {
+                biometricConfirmationInFlight = false
             }
         }
     }

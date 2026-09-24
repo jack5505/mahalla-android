@@ -185,14 +185,15 @@ class AppLockViewModelTest {
         // гарантированно не сработает: молча выключаем флаг и остаёмся на
         // PIN, а не оставляем мёртвую кнопку до похода в настройки.
         appLockManager.lockNow()
-        val viewModel = viewModel(
-            biometricEnabled = true,
-            biometricCipher = FakeBiometricCipher(verificationAvailable = false),
-        )
+        val cipher = FakeBiometricCipher(verificationAvailable = false)
+        val viewModel = viewModel(biometricEnabled = true, biometricCipher = cipher)
 
         assertFalse(viewModel.state.value.canUseBiometric)
         assertNull(viewModel.state.value.error)
         assertFalse(onboarding.current.biometricEnabled)
+        // Иначе следующая попытка включить биометрию в настройках наткнулась
+        // бы на тот же самый мёртвый ключ Keystore и не сработала бы никогда.
+        assertTrue(cipher.cleared)
     }
 
     @Test
