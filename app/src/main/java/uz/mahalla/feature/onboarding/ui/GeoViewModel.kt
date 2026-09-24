@@ -29,7 +29,13 @@ class GeoViewModel @Inject constructor(
             is GeoEvent.PermissionResult -> if (event.granted) {
                 emitEffect(GeoEffect.Finished)
             } else {
-                updateState { copy(stage = GeoStage.CityPicker, permissionDenied = true) }
+                updateState {
+                    copy(
+                        stage = GeoStage.CityPicker,
+                        permissionDenied = true,
+                        permissionPermanentlyDenied = event.permanentlyDenied,
+                    )
+                }
             }
 
             GeoEvent.ChooseCityRequested -> updateState { copy(stage = GeoStage.CityPicker) }

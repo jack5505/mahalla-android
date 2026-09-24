@@ -435,7 +435,7 @@ class GraphAssemblyTest {
         assertNotNull(
             DefaultProviderRepository(
                 api = api,
-                locationSource = AndroidLocationSource(context),
+                locationSource = AndroidLocationSource(context, AppModule.provideClock()),
                 // «Мои заведения» (issue #94): переключатель доступности
                 // отправляет координаты устройства той же лестницей, что и
                 // запросы авторизации.
@@ -779,7 +779,7 @@ class GraphAssemblyTest {
     private fun languageHeaderInterceptor() = LanguageHeaderInterceptor()
 
     private fun locationProvider(context: Context) = DefaultRequestLocationProvider(
-        locationSource = AndroidLocationSource(context),
+        locationSource = AndroidLocationSource(context, AppModule.provideClock()),
         settings = SettingsDataStore(sharedDataStore(context)),
     )
 

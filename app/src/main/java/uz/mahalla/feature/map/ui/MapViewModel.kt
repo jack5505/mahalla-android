@@ -112,9 +112,11 @@ class MapViewModel @Inject constructor(
 
             is MapEvent.LocationPermissionChecked -> onPermissionChecked(event.granted)
 
-            is MapEvent.LocationPermissionResult -> onPermissionResult(event.granted)
+            is MapEvent.LocationPermissionResult ->
+                onPermissionResult(event.granted, event.permanentlyDenied)
 
-            MapEvent.NoticeDismissed -> updateState { copy(locationNotice = null) }
+            MapEvent.NoticeDismissed ->
+                updateState { copy(locationNotice = null, locationPermissionPermanentlyDenied = false) }
 
             is MapEvent.PlaceClicked -> emitEffect(MapEffect.OpenPlace(event.placeId))
         }
@@ -254,7 +256,7 @@ class MapViewModel @Inject constructor(
     }
 
     private fun onMyLocationClicked() {
-        updateState { copy(locationNotice = null) }
+        updateState { copy(locationNotice = null, locationPermissionPermanentlyDenied = false) }
         if (currentState.showUserLocation) {
             locate()
         } else {
@@ -272,15 +274,21 @@ class MapViewModel @Inject constructor(
      * поверх карты была бы ответом на незаданный вопрос.
      */
     private fun onPermissionChecked(granted: Boolean) {
-        updateState { copy(showUserLocation = granted) }
+        updateState {
+            copy(
+                showUserLocation = granted,
+                locationPermissionPermanentlyDenied = locationPermissionPermanentlyDenied && !granted,
+            )
+        }
         if (granted && !locateRequested) locate(silent = true)
     }
 
-    private fun onPermissionResult(granted: Boolean) {
+    private fun onPermissionResult(granted: Boolean, permanentlyDenied: Boolean) {
         updateState {
             copy(
                 showUserLocation = granted,
                 locationNotice = if (granted) null else LocationNotice.PermissionDenied,
+                locationPermissionPermanentlyDenied = !granted && permanentlyDenied,
             )
         }
         if (granted) locate()
