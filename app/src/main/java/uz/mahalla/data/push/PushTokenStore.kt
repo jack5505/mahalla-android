@@ -58,6 +58,16 @@ class PushTokenStore @Inject constructor(
         }
     }
 
+    /**
+     * Токен больше не принадлежит вошедшему (выход, чужой аккаунт на
+     * устройстве, истёкшая сессия — issue #341): держать его дальше значит
+     * слать пуши следующему человеку на этом устройстве, пока сервер не
+     * перепривяжет новый токен ближайшим входом.
+     */
+    suspend fun clear() {
+        dataStore.edit { preferences -> preferences.remove(PreferenceKeys.FcmToken) }
+    }
+
     private companion object {
         const val MAX_TOKEN_LENGTH = 500
     }

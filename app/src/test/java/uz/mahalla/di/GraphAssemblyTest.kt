@@ -17,6 +17,7 @@ import org.robolectric.annotation.Config
 import uz.mahalla.core.crash.NoopCrashReporter
 import uz.mahalla.core.crash.di.CrashModule
 import uz.mahalla.core.di.AppModule
+import uz.mahalla.data.db.MahallaDatabase
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.device.AndroidDeviceInfoProvider
 import uz.mahalla.data.device.DeviceIdStore
@@ -38,9 +39,11 @@ import uz.mahalla.data.prefs.DataStoreSessionStore
 import uz.mahalla.data.prefs.DataStoreUserProfileStore
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
+import uz.mahalla.data.push.PushTokenRegistrar
 import uz.mahalla.data.security.AndroidKeystorePinCipher
 import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.KeystorePinStorage
+import uz.mahalla.data.session.LocalUserDataCleaner
 import uz.mahalla.feature.auth.data.DefaultAuthRepository
 import uz.mahalla.feature.booking.data.DefaultBookingRepository
 import uz.mahalla.feature.booking.data.di.BookingDataModule
@@ -73,6 +76,7 @@ import uz.mahalla.feature.onboarding.data.DataStoreOnboardingRepository
 import uz.mahalla.feature.security.data.DefaultSecurityRepository
 import uz.mahalla.feature.security.data.di.SecurityDataModule
 import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakePushTokenProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.pharmacy.data.DefaultPharmacyRepository
@@ -120,30 +124,36 @@ class GraphAssemblyTest {
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
 
         val sessionStore = DataStoreSessionStore(sharedDataStore(context))
-        val client = NetworkModule.provideOkHttpClient(
-            authInterceptor = AuthInterceptor(sessionStore),
-            tokenAuthenticator = TokenAuthenticator(
-                sessionStore = sessionStore,
-                sessionExpiry = SessionExpiry(),
-                authApi = authApi,
-                deviceInfoProvider = deviceInfoProvider(context),
-                locationProvider = locationProvider(context),
-                clock = AppModule.provideClock(),
-            ),
-            backendUrlInterceptor = backendUrlInterceptor,
-            geoHeaderInterceptor = geoHeaderInterceptor(),
-            languageHeaderInterceptor = languageHeaderInterceptor(),
-            httpInspector = inspector(),
-            certificatePin = certificatePin(),
-            overrideEnabled = true,
-        )
-        val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val client = NetworkModule.provideOkHttpClient(
+                authInterceptor = AuthInterceptor(sessionStore),
+                tokenAuthenticator = TokenAuthenticator(
+                    sessionStore = sessionStore,
+                    sessionExpiry = SessionExpiry(),
+                    authApi = authApi,
+                    deviceInfoProvider = deviceInfoProvider(context),
+                    locationProvider = locationProvider(context),
+                    clock = AppModule.provideClock(),
+                    localUserDataCleaner = localUserDataCleaner(database),
+                ),
+                backendUrlInterceptor = backendUrlInterceptor,
+                geoHeaderInterceptor = geoHeaderInterceptor(),
+                languageHeaderInterceptor = languageHeaderInterceptor(),
+                httpInspector = inspector(),
+                certificatePin = certificatePin(),
+                overrideEnabled = true,
+            )
+            val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
 
-        assertNotNull(DiscoveryDataModule.provideCatalogApi(retrofit))
-        // Refresh-клиент обязан быть без authenticator'а: иначе 401 на сам
-        // refresh снова позовёт его и получится рекурсия.
-        assertTrue(client.authenticator is TokenAuthenticator)
-        assertFalse(refreshClient.authenticator is TokenAuthenticator)
+            assertNotNull(DiscoveryDataModule.provideCatalogApi(retrofit))
+            // Refresh-клиент обязан быть без authenticator'а: иначе 401 на сам
+            // refresh снова позовёт его и получится рекурсия.
+            assertTrue(client.authenticator is TokenAuthenticator)
+            assertFalse(refreshClient.authenticator is TokenAuthenticator)
+        } finally {
+            database.close()
+        }
     }
 
     /**
@@ -307,29 +317,35 @@ class GraphAssemblyTest {
             ),
         )
         val dataStore = sharedDataStore(context)
-
-        val sessionStore = DataStoreSessionStore(dataStore)
-        val repository = DefaultAuthRepository(
-            authApi = authApi,
-            sessionStore = sessionStore,
-            userProfileStore = DataStoreUserProfileStore(dataStore),
-            formOwnership = SettingsDataStore(dataStore),
-            pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
-            deviceInfoProvider = deviceInfoProvider(context),
-            locationProvider = locationProvider(context),
-            clock = AppModule.provideClock(),
-            tokenAuthenticator = TokenAuthenticator(
-                sessionStore = sessionStore,
-                sessionExpiry = SessionExpiry(),
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            val sessionStore = DataStoreSessionStore(dataStore)
+            val repository = DefaultAuthRepository(
                 authApi = authApi,
+                sessionStore = sessionStore,
+                userProfileStore = DataStoreUserProfileStore(dataStore),
+                formOwnership = SettingsDataStore(dataStore),
+                pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
                 deviceInfoProvider = deviceInfoProvider(context),
                 locationProvider = locationProvider(context),
                 clock = AppModule.provideClock(),
-            ),
-        )
+                tokenAuthenticator = TokenAuthenticator(
+                    sessionStore = sessionStore,
+                    sessionExpiry = SessionExpiry(),
+                    authApi = authApi,
+                    deviceInfoProvider = deviceInfoProvider(context),
+                    locationProvider = locationProvider(context),
+                    clock = AppModule.provideClock(),
+                    localUserDataCleaner = localUserDataCleaner(database),
+                ),
+                localUserDataCleaner = localUserDataCleaner(database),
+            )
 
-        assertNotNull(repository)
-        assertFalse(refreshClient.authenticator is TokenAuthenticator)
+            assertNotNull(repository)
+            assertFalse(refreshClient.authenticator is TokenAuthenticator)
+        } finally {
+            database.close()
+        }
     }
 
     /**
@@ -771,6 +787,16 @@ class GraphAssemblyTest {
      * Координаты в заголовках каждого запроса (issue #53): без них бэкенд
      * отвечает 403 `GEO_PERMISSION_REQUIRED` ещё до маршрутизации.
      */
+    /**
+     * Уборка Room/токена пушей при выходе и истёкшей сессии (issue #341):
+     * `TokenAuthenticator` и `DefaultAuthRepository` теперь оба на ней стоят.
+     */
+    private fun localUserDataCleaner(database: MahallaDatabase) = LocalUserDataCleaner(
+        orderDao = DatabaseModule.provideOrderDao(database),
+        cartDraftDao = DatabaseModule.provideCartDraftDao(database),
+        pushTokenRegistrar = PushTokenRegistrar(FakePushTokenProvider(), PushTokenStore(sharedDataStore(context))),
+    )
+
     private fun geoHeaderInterceptor() = GeoHeaderInterceptor(
         locationProvider = locationProvider(context),
         clock = AppModule.provideClock(),

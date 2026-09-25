@@ -3,6 +3,7 @@ package uz.mahalla.data.network
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import okhttp3.Protocol
@@ -21,13 +22,22 @@ import retrofit2.Converter
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
+import uz.mahalla.data.db.entity.CartDraftItemEntity
+import uz.mahalla.data.db.entity.OrderEntity
 import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.location.RequestLocationProvider
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
+import uz.mahalla.data.push.PushTokenRegistrar
+import uz.mahalla.data.push.PushTokenStore
+import uz.mahalla.data.session.LocalUserDataCleaner
 import uz.mahalla.feature.discovery.data.CatalogApi
 import uz.mahalla.feature.discovery.data.PlaceDetailDto
+import uz.mahalla.testutil.FakeCartDraftDao
 import uz.mahalla.testutil.FakeDeviceInfoProvider
+import uz.mahalla.testutil.FakeOrderDao
+import uz.mahalla.testutil.FakePreferencesDataStore
+import uz.mahalla.testutil.FakePushTokenProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import java.time.Clock
@@ -59,6 +69,11 @@ class NetworkStackTest {
 
     private var locationProvider: RequestLocationProvider = FakeRequestLocationProvider()
 
+    private lateinit var orderDao: FakeOrderDao
+    private lateinit var cartDraftDao: FakeCartDraftDao
+    private lateinit var pushTokenStore: PushTokenStore
+    private lateinit var pushTokenProvider: FakePushTokenProvider
+
     /**
      * Срок жизни токена должен быть детерминированным, но счётчик
      * неоднозначных провалов refresh (issue #301) требует ещё и умения
@@ -81,6 +96,10 @@ class NetworkStackTest {
         // должен. `SessionExpiry` без replay: подписаться надо заранее.
         expiryScope = CoroutineScope(Dispatchers.Unconfined)
         expiryScope.launch { sessionExpiry.expired.collect { expiryEvents += it } }
+        orderDao = FakeOrderDao()
+        cartDraftDao = FakeCartDraftDao()
+        pushTokenStore = PushTokenStore(FakePreferencesDataStore())
+        pushTokenProvider = FakePushTokenProvider()
     }
 
     @After
@@ -188,6 +207,28 @@ class NetworkStackTest {
         // где каждый экран отвечает 401 (issue #138).
         assertEquals(1, expiryEvents.size)
     }
+
+    @Test
+    fun `a rejected refresh also wipes the order cache, the cart draft and the push token`() =
+        runTest {
+            // Стереть только токены недостаточно (issue #341): следующий
+            // человек на этом же устройстве увидел бы чужие заказы и корзину
+            // из офлайн-кэша и получал бы чужие пуши, пока сервер не
+            // перепривяжет токен.
+            sessionStore.save(Session("stale", "refresh-1"))
+            orderDao.upsert(listOf(order(id = "o-1")))
+            cartDraftDao.upsert(draft(placeId = "place-1", productId = "osh"))
+            pushTokenStore.save("fcm-1")
+            server.enqueue(MockResponse().setResponseCode(401))
+            server.enqueue(MockResponse().setResponseCode(401))
+
+            apiCall { catalogApi().place("p-1") }
+
+            assertEquals(emptyList<OrderEntity>(), orderDao.observeAll().first())
+            assertEquals(emptyList<CartDraftItemEntity>(), cartDraftDao.observe("place-1").first())
+            assertNull(pushTokenStore.current())
+            assertEquals(1, pushTokenProvider.deleteCalls)
+        }
 
     @Test
     fun `a broken connection during refresh keeps the session`() = runTest {
@@ -410,6 +451,33 @@ class NetworkStackTest {
         assertNull(auth.authenticate(route = null, response = unauthorized(request)))
         assertNull("третий подряд — контракт сломан, а не прокси", sessionStore.current())
         assertEquals(1, expiryEvents.size)
+    }
+
+    @Test
+    fun `three consecutive ambiguous refresh failures also wipe local user data`() = runTest {
+        // Тот же второй путь смерти сессии (issue #198), тот же долг
+        // (issue #341): контракт сломан, а не сервер явно отказал, но кэш
+        // заказов и токен пушей всё равно принадлежат умершей сессии.
+        sessionStore.save(Session("stale", "refresh-1"))
+        orderDao.upsert(listOf(order(id = "o-1")))
+        pushTokenStore.save("fcm-1")
+        val auth = authenticator()
+        val request = staleRequest()
+
+        server.enqueue(jsonResponse("""{"success":true,"data":{"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(
+            envelopeError(httpCode = 200, code = "TOKEN_INVALID", message = "Token noto'g'ri"),
+        )
+        auth.authenticate(route = null, response = unauthorized(request))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(jsonResponse("""{"success":true,"data":{"sessionId":"s-1"}}"""))
+        auth.authenticate(route = null, response = unauthorized(request))
+
+        assertNull(sessionStore.current())
+        assertEquals(emptyList<OrderEntity>(), orderDao.observeAll().first())
+        assertNull(pushTokenStore.current())
     }
 
     @Test
@@ -734,6 +802,11 @@ class NetworkStackTest {
             deviceInfoProvider = FakeDeviceInfoProvider(),
             locationProvider = locationProvider,
             clock = movableClock,
+            localUserDataCleaner = LocalUserDataCleaner(
+                orderDao = orderDao,
+                cartDraftDao = cartDraftDao,
+                pushTokenRegistrar = PushTokenRegistrar(pushTokenProvider, pushTokenStore),
+            ),
         )
     }
 
@@ -771,6 +844,24 @@ class NetworkStackTest {
     private fun envelopeError(httpCode: Int, code: String, message: String): MockResponse =
         jsonResponse("""{"success":false,"error":{"code":"$code","message":"$message"}}""")
             .setResponseCode(httpCode)
+
+    private fun order(id: String) = OrderEntity(
+        id = id,
+        placeId = "place-1",
+        placeName = "Osh markazi",
+        status = "NEW",
+        totalSum = 50_000,
+        createdAtEpochSeconds = FIXED_NOW_EPOCH_SECONDS,
+    )
+
+    private fun draft(placeId: String, productId: String) = CartDraftItemEntity(
+        placeId = placeId,
+        lineId = productId,
+        productId = productId,
+        name = productId,
+        priceSum = 30_000,
+        quantity = 1,
+    )
 
     /** Часы, которые можно подвинуть: не только «когда», но и «насколько давно». */
     private class MovableClock(private var now: Instant) : Clock() {

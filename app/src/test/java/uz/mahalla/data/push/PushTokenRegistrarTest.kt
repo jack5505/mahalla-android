@@ -79,6 +79,24 @@ class PushTokenRegistrarTest {
     }
 
     /**
+     * Выход/чужой аккаунт/истёкшая сессия (issue #341): токен больше не
+     * принадлежит вошедшему, и держать его дальше значит слать пуши
+     * следующему человеку на этом устройстве.
+     */
+    @Test
+    fun `forget deletes the firebase token and clears the local record`() = runTest {
+        val store = PushTokenStore(newDataStore())
+        val provider = FakePushTokenProvider(token = "fcm-1")
+        val registrar = PushTokenRegistrar(provider, store)
+        registrar.sync()
+
+        registrar.forget()
+
+        assertNull(store.current())
+        assertEquals(1, provider.deleteCalls)
+    }
+
+    /**
      * `fcmToken` в `AuthDeviceInfo` ограничен 500 символами
      * (`docs/API-CONTRACT.md`). Реальные токены короче, но без обрезки на
      * клиенте превышение уронило бы валидацией не пуши, а весь вход целиком.

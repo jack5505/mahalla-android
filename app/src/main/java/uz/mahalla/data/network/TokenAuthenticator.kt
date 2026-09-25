@@ -18,6 +18,7 @@ import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.session.LocalUserDataCleaner
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Clock
@@ -52,6 +53,7 @@ class TokenAuthenticator @Inject constructor(
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
+    private val localUserDataCleaner: LocalUserDataCleaner,
 ) : Authenticator {
 
     /**
@@ -134,7 +136,14 @@ class TokenAuthenticator @Inject constructor(
             val refreshToken = tokens?.refreshToken?.takeIf { it.isNotBlank() }
             if (accessToken == null || refreshToken == null) {
                 if (refresh.rejectsSession()) {
-                    runBlocking { sessionStore.clear() }
+                    runBlocking {
+                        sessionStore.clear()
+                        // Кэш заказов, черновик корзины и токен пушей — тоже
+                        // личные данные умершей сессии (issue #341): без
+                        // уборки следующий вход на этом же устройстве видел бы
+                        // их в офлайне и получал бы чужие пуши.
+                        localUserDataCleaner.clear()
+                    }
                     // Повторять запрос нечем, и это конец сессии: наверху
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
@@ -175,7 +184,10 @@ class TokenAuthenticator @Inject constructor(
                             // зацикливается, а сломанный контракт — да. Без этого
                             // сессия жива вечно, а сервер её токены не понимает
                             // (issue #198).
-                            runBlocking { sessionStore.clear() }
+                            runBlocking {
+                                sessionStore.clear()
+                                localUserDataCleaner.clear()
+                            }
                             sessionExpiry.notifyExpired()
                             // Сессия мертва — считать дальше нечего. Не обнулить
                             // здесь значило бы, что счётчик переживает вход
