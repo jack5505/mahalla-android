@@ -90,8 +90,9 @@ class BookingContractTest {
     /**
      * Ради этой пробы всё и затевалось: сам факт её наличия означает, что
      * `POST appointments` принял тело в том виде, в каком его шлёт
-     * [BookAppointmentRequest], — то есть имена полей, выведенные из
-     * перекрытой коллизией схемы, угаданы верно.
+     * [BookAppointmentRequest], — то есть имена полей, когда-то выведенные из
+     * схемы, перекрытой коллизией springdoc, угаданы верно (коллизия
+     * разведена сверкой 2026-09-10, имя теперь `AppointmentBookRequest`).
      */
     @Test
     fun `a booking created on the stand matches AppointmentDto`() {

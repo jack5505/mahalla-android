@@ -120,8 +120,9 @@ class FashionOrdersViewModelTest {
         viewModel.onEvent(FashionOrdersEvent.CancelConfirmed)
 
         assertEquals(listOf("o-1"), repository.cancelled)
-        // Новое состояние перечитывается у сервера: ответ отмены описан
-        // перекрытой коллизией схемой.
+        // Новое состояние перечитывается у сервера: имя схемы ответа отмены
+        // больше не перекрыто коллизией (issue #235), но парсить его всё
+        // равно не стали.
         assertEquals(listOf("o-1"), repository.requestedOrders)
         val orders = (viewModel.state.value.orders as ScreenState.Content).data
         assertEquals(OrderStatus.Cancelled, orders.single().status)

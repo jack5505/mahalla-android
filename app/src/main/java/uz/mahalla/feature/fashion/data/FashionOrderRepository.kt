@@ -23,15 +23,17 @@ import uz.mahalla.feature.food.domain.Order
  * по магазинам умеет домен ([FashionCartStore]).
  *
  * Читается список общим `orders`-контроллером с фильтром `vertical=CLOTHING`:
- * у `fashion/orders/my` схема ответа перекрыта коллизией springdoc (см. KDoc
- * [FashionApi]).
+ * у `fashion/orders/my` схема ответа (`FashionOrderResponse`) больше не
+ * перекрыта коллизией springdoc (issue #235), но решение не изменилось — см.
+ * KDoc [FashionApi].
  */
 interface FashionOrderRepository {
 
     /**
-     * Оформить заказ по магазину. Возвращается только идентификатор: ответ
-     * `POST fashion/orders` описан перекрытой схемой, и читать из него что-то
-     * кроме id — гадание.
+     * Оформить заказ по магазину. Возвращается только идентификатор: имя
+     * схемы ответа (`FashionOrderResponse`) больше не перекрыто коллизией
+     * (issue #235), но полный заказ всё равно читает [order] — второй парсер
+     * под данные, которые тут же перезапрашивают, незачем.
      *
      * [promoCode] — проверенный код (issue #180, `GET promotions/check`);
      * `null`, если код не применяли или отказ пришёл до подтверждения.

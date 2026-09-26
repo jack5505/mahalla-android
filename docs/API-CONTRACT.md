@@ -50,19 +50,35 @@
 Сами эндпоинты `auth/*` ходят на `@RefreshClient` — клиент без authenticator'а.
 
 **Коллизия springdoc разведена** (сверено 2026-09-10). Раньше одно имя схемы
-(`BookRequest`, `ServiceResponse`, `Response`) занимали сразу несколько
-вертикалей, побеждала одна, и половина DTO в клиенте была **выведена**, а не
-прочитана (issue #76, #84, #97). Теперь имена уникальны — 255 схем, ни одного
-`BookRequest`/`ServiceResponse`/`Response` без префикса вертикали:
-`AppointmentBookRequest` / `GamingBookRequest` / `HospitalBookRequest`,
-`AppointmentServiceResponse` / `FreelancerServiceResponse`. Значит всё, что в
-клиенте помечено «имена выведены из схемы», **теперь можно проверить чтением**.
-По чтению перепроверена пока только вертикаль записи (`BookingApi`,
-`GamingApi.book`, `ReviewDto`, `FreelancerApi.services`) — где сделано,
-отмечено датой. Остальные KDoc и тесты, которые считают коллизию действующей
-(`CreateRequest` у `ProviderApi` и `POST reviews`, `OrderResponse` у еды /
-одежды / мастеров, `Response` у walk-in), не перепроверялись — сквозной
-проход вынесен в issue #235.
+(`BookRequest`, `ServiceResponse`, `Response`, `CreateRequest`,
+`OrderResponse`) занимали сразу несколько вертикалей, побеждала одна, и
+половина DTO в клиенте была **выведена**, а не прочитана (issue #76, #84,
+#97). Теперь имена уникальны — 255 схем, ни одного голого
+`BookRequest`/`ServiceResponse`/`Response`/`CreateRequest`/`OrderResponse` без
+префикса вертикали: `AppointmentBookRequest` / `GamingBookRequest` /
+`HospitalBookRequest`, `AppointmentServiceResponse` /
+`FreelancerServiceResponse`, `ReviewCreateRequest` / `PlaceCreateRequest` /
+`PromotionCreateRequest` / `PharmacyCreateRequest` / `FreelancerCreateRequest`,
+`FoodOrderResponse` / `FashionOrderResponse` / `FreelancerOrderResponse`.
+
+Вертикаль записи перепроверена в issue #217 (`BookingApi`, `GamingApi.book`,
+`ReviewDto`, `FreelancerApi.services`); вертикаль чтения — сквозным проходом
+issue #235 (2026-09-18). Везде, где KDoc и тесты называли коллизию активной
+для этих имён, текст поправлен на факт с датой. Решения о том, включать ли
+разбор ответа там, где он был отключён «из-за коллизии» (создание и отмена
+заказа еды/одежды, отмена walk-in-талона), **не изменились**: полный заказ и
+так читает канонический `OrderView`, а талон и так возвращает сам себя из
+`send`/`cancel` — второй парсер под данные, которые тут же перечитывают, не
+заводили. Отдельно поправлены три заголовка секций (`FashionApi`, `WalkInApi`,
+`ProviderApi`), которые помечали файл «НЕ СВЕРЕН», хотя KDoc в самом файле
+уже содержал даты и результаты curl-проверок — тот же класс расхождения
+документации, что ревью PR #217 нашло у `FreelancerApi`.
+
+**Не перепроверено и после #235.** Поля тел, которые нельзя увидеть живым
+запросом (`ProviderApi.createPlace`, `POST reviews` — оба отвечают `401` до
+валидации), остаются выведены из соседнего ответа (`Detail`, `ReviewResponse`
+на том же пути), а не прочитаны из собственной схемы: без
+`CONTRACT_REFRESH_TOKEN` в CI это не проверить.
 
 **Страничные ответы** — один конверт `PageResponse…` на все списки:
 `content` / `page` / `size` / `totalElements` / `totalPages` / `first` /
@@ -452,9 +468,12 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
 теперь разбирается и выводится под текстом отзыва.
 
-## FashionApi ⚠️
+## FashionApi ✅
 
-`app/src/main/java/uz/mahalla/feature/fashion/data/FashionApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/fashion/data/FashionApi.kt` — сверен со
+стендом (`/v3/api-docs` + прямые curl'ы 2026-09-05): каталог и категории
+анонимны (`200` без токена), корзина и заказы требуют Bearer (`401`).
+Заголовок ниже отставал от файла — правка issue #235.
 
 | Метод | Путь |
 |---|---|
@@ -495,8 +514,11 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 `{storeId}` внутри.
 
 `GET orders` — **общая** ручка списка заказов, не фэшн-овая: `fashion/orders/my`
-отдаёт то же самое, но в схеме `OrderResponse`, а это имя в `/v3/api-docs`
-перекрыто коллизией springdoc. Параметр `vertical` необязателен: с ним
+отдаёт то же самое в схеме `FashionOrderResponse` (раньше `OrderResponse`,
+перекрытое коллизией springdoc; сверка 2026-09-10 разнесла имена по
+вертикалям, issue #235), но за общим `orders` идут и дальше — `OrderView` там
+без коллизий с самого начала, заводить второй парсер незачем. Параметр
+`vertical` необязателен: с ним
 приезжают заказы одной вертикали (одежда), без него — **всех**
 (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`). Так его и зовут «Мои
 активности» (issue #73) — см. раздел о них в начале файла.
@@ -590,8 +612,8 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 | PUT | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
 | DELETE | `freelancers/me/services/{serviceId}` | ⚠️ путь есть (`401`) |
 | PUT | `freelancers/me/toggle-availability` | ⚠️ путь есть (`401`) |
-| GET | `freelancers/me/orders` | ⚠️ путь есть (`401`), схема — та же `PageResponseOrderResponse` (issue #190) |
-| PUT | `freelancers/orders/{orderId}/status` | ⚠️ путь есть (`401`), тело `{status}` — то же перечисление, что `OrderResponse.status` (issue #190) |
+| GET | `freelancers/me/orders` | ⚠️ путь есть (`401`), схема — та же `PageResponseFreelancerOrderResponse` (имя разведено сверкой 2026-09-10, issue #235; сама схема этого пути не проверена — issue #190) |
+| PUT | `freelancers/orders/{orderId}/status` | ⚠️ путь есть (`401`), тело `{status}` — то же перечисление, что `FreelancerOrderResponse.status` (issue #190) |
 
 **Услуги мастера — это `FreelancerServiceResponse`, а не `ServiceResponse`
 барбершопа** (issue #71, схема перечитана 2026-09-10). До этого они
@@ -659,12 +681,14 @@ UTC.
 используются экраном «Входящие заказы» (`ui/orders/MyFreelancerIncomingOrders*`),
 но **ни путь, ни тело не проверены живым запросом**: `CONTRACT_REFRESH_TOKEN`
 не был задан ни на момент issue, ни в прогоне, который это писал. Схема ответа
-`incomingOrders` — та же `PageResponseOrderResponse`, что у `orders/my`, тело
-`{status}` смены статуса выведено из `OrderResponse.status`. Значения статуса
-не расширены: переиспользован тот же `FreelancerOrderStatus`, что уже
-подтверждён для `OrderResponse` (`PENDING`, `ACCEPTED`, `REJECTED`,
-`COMPLETED`) — своего перечисления для смены статуса мастером в схеме не
-описано, шлём те же значения.
+`incomingOrders` — та же `PageResponseFreelancerOrderResponse`, что у
+`orders/my` (имя разведено сверкой 2026-09-10, issue #235; сама схема этого
+пути по-прежнему не проверена — issue #190), тело `{status}` смены статуса
+выведено из `FreelancerOrderResponse.status`. Значения статуса не расширены:
+переиспользован тот же `FreelancerOrderStatus`, что уже подтверждён для
+`FreelancerOrderResponse` (`PENDING`, `ACCEPTED`, `REJECTED`, `COMPLETED`) —
+своего перечисления для смены статуса мастером в схеме не описано, шлём те же
+значения.
 
 ## GamingApi ⚠️ частично
 
@@ -972,18 +996,26 @@ products` снят живыми curl'ами 2026-09-04 (заметка «⚠️ 
 клиенте нет ни формы, ни подтверждённой схемы. При расхождении смотреть
 сюда в первую очередь и подтвердить настоящим curl'ом до релиза.
 
-## WalkInApi ⚠️
+## WalkInApi ✅
 
-`app/src/main/java/uz/mahalla/feature/queue/data/WalkInApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/queue/data/WalkInApi.kt` — сверен со
+стендом (`/v3/api-docs` + прямые curl'ы 2026-09-04): оба клиентских пути
+(`send`, `cancel`) требуют Bearer (`401` без токена). Заголовок ниже отставал
+от файла — правка issue #235.
 
 | Метод | Путь |
 |---|---|
 | POST | `walkin/send` |
 | POST | `walkin/{id}/cancel` |
 
-## ProviderApi ⚠️
+## ProviderApi ⚠️ пути сверены
 
-`app/src/main/java/uz/mahalla/feature/role/data/ProviderApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.
+`app/src/main/java/uz/mahalla/feature/role/data/ProviderApi.kt` — пути сняты
+со стенда и проверены curl'ом (`POST places` и `places/my` — `401` без
+токена, см. KDoc файла). Заголовок ниже отставал от файла — правка issue
+#235. Тело `POST places` (`PlaceCreateRequest`, раньше перекрыто коллизией
+springdoc — см. ниже) curl'ом не проверить: `401` приходит до валидации, а
+`CONTRACT_REFRESH_TOKEN` в CI по-прежнему нет.
 
 | Метод | Путь |
 |---|---|

@@ -32,12 +32,14 @@ import uz.mahalla.feature.food.data.OrderViewDto
  * анонимным ручкам не мешает, а «голый» `@RefreshClient` сломал бы корзину.
  *
  * **Заказы читаются общим `orders`-контроллером, а не путями `fashion/orders`.**
- * Ответ фэшн-заказа описан схемой `OrderResponse`, а это имя в `/v3/api-docs`
- * перекрыто коллизией springdoc (16 путей, показан вариант заказа
- * фрилансера — `freelancerId`, `serviceId`, `serviceTitle`), то есть имена
- * полей оттуда взять нельзя. У общего `OrderView` схема однозначна, а
- * `CLOTHING` входит в его `vertical`. Ровно то же решение принято для «Еды»
- * (issue #9).
+ * Ответ фэшн-заказа описан схемой `OrderResponse` — раньше это имя в
+ * `/v3/api-docs` перекрывала коллизия springdoc (16 путей, показан вариант
+ * заказа фрилансера — `freelancerId`, `serviceId`, `serviceTitle`); сверка
+ * 2026-09-10 разнесла имена по вертикалям, и у одежды теперь своя
+ * `FashionOrderResponse` (issue #235). Решение не изменилось: у общего
+ * `OrderView` схема однозначна и без коллизий с самого начала, а `CLOTHING`
+ * входит в его `vertical` — второй парсер под те же данные незачем. Ровно то
+ * же решение принято для «Еды» (issue #9).
  */
 interface FashionApi {
 
@@ -127,8 +129,10 @@ interface FashionApi {
     suspend fun createOrder(@Body body: FashionPlaceOrderRequestDto): ApiResponse<CreatedOrderDto>
 
     /**
-     * Свои заказы. `fashion/orders/my` отдаёт то же самое, но в перекрытой
-     * коллизией схеме — поэтому идём в общий список с фильтром по вертикали.
+     * Свои заказы. `fashion/orders/my` отдаёт то же самое в
+     * `FashionOrderResponse` (имя больше не перекрыто коллизией, issue #235)
+     * — но всё равно идём в общий список с фильтром по вертикали: `OrderView`
+     * уже даёт суммы и статус без второго DTO под ту же информацию.
      *
      * [vertical] нулевой — фильтра нет, и приезжают заказы **всех**
      * вертикалей (`FOOD`, `CLOTHING`, `PHARMACY`, `CINEMA`, `GAMING`): так их
@@ -146,10 +150,10 @@ interface FashionApi {
     suspend fun order(@Path("orderId") orderId: String): ApiResponse<OrderViewDto>
 
     /**
-     * Отмена. Тело ответа не разбирается (та же коллизия схемы) — новое
-     * состояние заказа вызывающий перечитывает [order]'ом. Иначе неудачный
-     * разбор ответа выглядел бы как «отменить не удалось», хотя заказ уже
-     * отменён.
+     * Отмена. Тело ответа не разбирается: имя схемы (`FashionOrderResponse`)
+     * больше не перекрыто коллизией (issue #235), но новое состояние заказа
+     * вызывающий всё равно перечитывает [order]'ом. Иначе неудачный разбор
+     * ответа выглядел бы как «отменить не удалось», хотя заказ уже отменён.
      */
     @POST("fashion/orders/{orderId}/cancel")
     suspend fun cancelOrder(@Path("orderId") orderId: String): ApiResponse<JsonElement>

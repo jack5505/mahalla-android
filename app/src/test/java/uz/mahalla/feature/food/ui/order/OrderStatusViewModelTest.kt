@@ -161,8 +161,9 @@ class OrderStatusViewModelTest {
     @Test
     fun `cancelling is confirmed first and the new status is read from the server`() =
         runTest(mainDispatcherRule.dispatcher) {
-            // Ответ отмены приложение не разбирает (схема перекрыта коллизией
-            // springdoc) — статус приезжает перезапросом заказа.
+            // Ответ отмены приложение не разбирает: имя схемы
+            // (`FoodOrderResponse`) больше не перекрыто коллизией (issue
+            // #235), но статус всё равно приезжает перезапросом заказа.
             val viewModel = viewModel()
             runCurrent()
 

@@ -381,8 +381,9 @@ class FoodRepositoriesTest {
 
     @Test
     fun `cancelling reports success without guessing the response fields`() = runTest {
-        // Ответ отмены описан схемой, перекрытой коллизией springdoc: тело не
-        // разбирается вовсе, новое состояние читает `order()`.
+        // Имя схемы ответа (`FoodOrderResponse`) больше не перекрыто
+        // коллизией springdoc (issue #235) — тело всё равно не разбирается:
+        // новое состояние читает `order()`.
         server.enqueue(json("""{"success":true,"data":{"id":"o-1","status":"CANCELLED"}}"""))
 
         val result = orderRepository().cancel("o-1")

@@ -193,8 +193,10 @@ class WalkInRepositoryTest {
 
     @Test
     fun `a cancel answered without a body still counts as cancelled`() = runTest {
-        // Ответ описан коллизией схем, и неудачный разбор не должен превращать
-        // удавшуюся отмену в «отменить не удалось».
+        // Имя схемы (`WalkInResponse`) больше не перекрыто коллизией (issue
+        // #235), но тело всё равно не обязательно к разбору: неудачный
+        // разбор не должен превращать удавшуюся отмену в «отменить не
+        // удалось».
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
