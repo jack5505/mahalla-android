@@ -10,6 +10,12 @@
 #   - по тегу вида v1.2.3 (git tag v1.2.3 && git push origin v1.2.3).
 # Правило проекта «тесты обязательны» — тесты гоняются перед сборкой,
 # красные тесты релиз останавливают.
+#
+# Подпись: секрет `DEBUG_KEYSTORE_BASE64` (base64 от debug.keystore со
+# стандартными alias/паролями `androiddebugkey`/`android`). Без него раннер
+# каждый раз генерирует новый ключ, и следующий релиз не ставится поверх
+# предыдущего («пакет недействителен»). Ключ читает app/build.gradle.kts
+# через `DEBUG_KEYSTORE_FILE`.
 name: Release (internal test)
 
 on:
@@ -60,8 +66,21 @@ jobs:
       - name: Тесты
         run: ./gradlew testDebugUnitTest
 
-      - name: Сборка debug-APK
-        run: ./gradlew assembleDebug
+      - name: Постоянный debug-ключ
+        id: keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "::warning::Секрет DEBUG_KEYSTORE_BASE64 не задан: APK подписан случайным ключом раннера и не встанет поверх предыдущего релиза"
+            echo "note=⚠️ Подписано случайным ключом: перед установкой удалите предыдущую сборку." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/debug.keystore"
+          # Неверный секрет лучше поймать здесь, а не туманной ошибкой из assembleDebug.
+          keytool -list -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey > /dev/null
+          echo "DEBUG_KEYSTORE_FILE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
+          echo "note=" >> "$GITHUB_OUTPUT"
 
       - name: Версия и имя релиза
         id: meta
@@ -92,6 +111,7 @@ jobs:
           body: |
             Debug-сборка для внутреннего тестирования (не для Play).
             Коммит: ${{ github.sha }}
+            ${{ steps.keystore.outputs.note }}
 
             ${{ inputs.notes }}
           prerelease: true
