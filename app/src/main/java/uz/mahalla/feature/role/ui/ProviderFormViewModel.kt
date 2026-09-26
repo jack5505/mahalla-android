@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.prefs.UserProfileStore
+import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.ProviderRepository
 import uz.mahalla.feature.role.data.RoleRepository
@@ -28,9 +29,15 @@ class ProviderFormViewModel @Inject constructor(
     private val roleRepository: RoleRepository,
     private val profileStore: UserProfileStore,
     private val phoneValidator: PhoneNumberValidator,
+    private val categoryRepository: CategoryRepository,
 ) : MviViewModel<ProviderFormState, ProviderFormEvent, ProviderFormEffect>(ProviderFormState()) {
 
     init {
+        // Выбор категории — из тех, что включены в дашборде (issue #378):
+        // заведение выключенной категории в каталоге всё равно не покажут.
+        viewModelScope.launch {
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
+        }
         viewModelScope.launch {
             val city = roleRepository.current().customer.city
             val digits = phoneValidator.nationalDigits(profileStore.current().phone.orEmpty())

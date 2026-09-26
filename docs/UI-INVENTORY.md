@@ -53,7 +53,7 @@ gh issue list --state open   # 47 открытых issue
 | Тестов | **2061 в 190 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-10; на 2026-09-09 было 1967 в 184) |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
 | `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
-| Room | 3 сущности, 3 DAO | `data/db/` |
+| Room | 4 сущности, 4 DAO | `data/db/` |
 
 ---
 
@@ -63,7 +63,7 @@ gh issue list --state open   # 47 открытых issue
 
 | Таб | Экран | Состояние |
 |---|---|---|
-| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
+| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, категории из `GET categories` с кэшем в Room (#378, до первого ответа — зашитые 7), «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
 | Мои активности | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба — `nav_activity` («Активности»/«Amallarim») кеглем 9/600 из ТЗ (`design/android/TZ-ANDROID.md`, компонент `navbar`): с M3-шными 12sp она обрезалась бы при системном fontScale 1.3 на 393 dp и при 1.15 на 360 dp (#211). Макет (`figma/svg`, `prototype/screens.js`) до сих пор подписывает этот пункт «Заказы»/«Buyurtmalar» и держит 5 пунктов против 4 — дизайн-репо отстал от #73 (jack5505/mahalla#214) |
 | Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
 | Профиль | `profile/ui/ProfileScreen.kt` (869) | **работает**: имя (редактируется, `PUT users/me`), телефон, аватар (`media/upload` + `PUT users/me`, issue #170), профиль перечитывается `GET users/me` при открытии и возврате на экран, мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |

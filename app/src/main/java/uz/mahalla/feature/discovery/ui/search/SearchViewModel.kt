@@ -11,6 +11,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.data.SearchHistoryStore
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
@@ -33,6 +34,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val historyStore: SearchHistoryStore,
+    private val categoryRepository: CategoryRepository,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<SearchState, SearchEvent, SearchEffect>(SearchState()) {
 
@@ -56,6 +58,10 @@ class SearchViewModel @Inject constructor(
 
         viewModelScope.launch {
             historyStore.queries.collect { queries -> updateState { copy(history = queries) } }
+        }
+        // Чипы категорий — из кэша (issue #378); обновляет его главная.
+        viewModelScope.launch {
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
         }
         search(delayMillis = 0)
     }
