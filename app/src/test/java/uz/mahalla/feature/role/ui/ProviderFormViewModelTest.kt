@@ -23,6 +23,7 @@ import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.ProviderFormError
 import uz.mahalla.feature.role.domain.RegisteredPlace
+import uz.mahalla.testutil.FakeCategoryRepository
 import uz.mahalla.testutil.FakeProviderRepository
 import uz.mahalla.testutil.FakeRoleRepository
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -36,6 +37,19 @@ class ProviderFormViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val provider = FakeProviderRepository()
+
+    private val categories = FakeCategoryRepository()
+
+    @Test
+    fun `category choices follow the category cache`() = runTest(mainDispatcherRule.dispatcher) {
+        categories.categories.value = listOf(PlaceCategory.Master, PlaceCategory.Food)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        // Выключенной в дашборде категории в анкете нет: заведение под ней
+        // каталог всё равно не покажет.
+        assertEquals(listOf(PlaceCategory.Master, PlaceCategory.Food), viewModel.state.value.categories)
+    }
 
     @Test
     fun `phone and city are prefilled from what the app already knows`() = runTest(
@@ -242,5 +256,6 @@ class ProviderFormViewModelTest {
         roleRepository = FakeRoleRepository(RoleProfile(customer = CustomerForm(city = city))),
         profileStore = FakeUserProfileStore(UserProfile(phone = phone)),
         phoneValidator = PhoneNumberValidator(),
+        categoryRepository = categories,
     )
 }

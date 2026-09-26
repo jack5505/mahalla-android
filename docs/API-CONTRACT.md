@@ -452,6 +452,45 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
 теперь разбирается и выводится под текстом отзыва.
 
+## CategoriesApi ⚠️ схема из исходников бэкенда, стенд ещё без ручки
+
+`app/src/main/java/uz/mahalla/feature/discovery/data/CategoriesApi.kt` — issue #378,
+бэкенд jack5505/mahalla#340 (вмержен в `main` 2026-09-26, закрывает
+jack5505/mahalla#338).
+
+| Метод | Путь |
+|---|---|
+| GET | `categories` |
+
+```
+GET /api/v1/categories        (без JWT, без X-Geo-*; Cache-Control: max-age=3600, ETag)
+→ ApiResponse<List<CategoryItem>> {code, titleUz, titleRu, sortOrder}
+```
+
+**Откуда снято.** Не с `/v3/api-docs`, а из исходников вмерженного PR:
+`CategoryDto.CategoryItem` (`@Schema(name = "CategoryItem")`) и
+`CategoryController`. На 2026-09-26 стенд `157.173.109.181.nip.io` этот PR
+ещё не крутит: `GET /api/v1/categories` отвечает `403` — с гео-заголовками
+пустым телом, без них `GEO_PERMISSION_REQUIRED`, — а `/v3/api-docs` по
+этому хосту отдаёт `404` nginx. Первое, что сверить после выкатки: путь и
+имена четырёх полей (`contract/paths.sh` и `CategoryRepositoryTest`).
+
+- `code` — значение `Place.Category` бэкенда, то же, что в параметре
+  `category` у `places/nearby`, `places/map-bounds`, `search`; сопоставляется
+  `PlaceCategory.fromApi`. Кодов **тринадцать** (`V39__place_categories.sql`):
+  семь клиентских плюс `BAKERY`, `SHOP`, `MUSEUM`, `PARK`, `MOSQUE`,
+  `FREELANCER`. Неизвестный код клиент складывает в кэш и пропускает.
+- Отдаются только включённые в дашборде, уже отсортированные по `sortOrder`;
+  клиент всё равно сортирует по нему при чтении из Room.
+- `titleUz`/`titleRu` разбираются и кэшируются, но плитка рисуется по своим
+  строкам (`labelRes`) — иконка и подпись выбираются по коду.
+- Кнопка «Все» в ответ не входит — клиентская.
+- Админские `GET/PUT admin/categories` клиент не зовёт.
+- Выключенная категория: `places/nearby`, `places/map-bounds`, `search` её
+  места не отдают и без параметра `category`; `category=<выключенная>` — `200`
+  с пустым `data` (старая версия приложения с зашитой плиткой не падает);
+  `places/{id}` продолжает работать.
+
 ## FashionApi ⚠️
 
 `app/src/main/java/uz/mahalla/feature/fashion/data/FashionApi.kt` — НЕ СВЕРЕН: писался по описанию задачи — проверить перед правкой.

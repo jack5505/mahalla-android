@@ -26,6 +26,7 @@ import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.discovery.domain.PlaceSort
 import uz.mahalla.testutil.FakeCatalogRepository
+import uz.mahalla.testutil.FakeCategoryRepository
 import uz.mahalla.testutil.FakeSearchHistoryStore
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
@@ -52,6 +53,20 @@ class SearchViewModelTest {
 
     private val repository = FakeCatalogRepository()
     private val history = FakeSearchHistoryStore()
+    private val categories = FakeCategoryRepository()
+
+    @Test
+    fun `filter chips follow the category cache`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Cinema, PlaceCategory.Food)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(PlaceCategory.Cinema, PlaceCategory.Food), viewModel.state.value.categories)
+
+        // Поиск сам кэш не обновляет — это делает главная при загрузке.
+        assertEquals(0, categories.refreshCount)
+    }
 
     @Test
     fun `initial load runs without waiting for the debounce`() = runTest {
@@ -450,6 +465,7 @@ class SearchViewModelTest {
     ) = SearchViewModel(
         repository = repository,
         historyStore = history,
+        categoryRepository = categories,
         savedStateHandle = SavedStateHandle(
             mapOf("categoryId" to categoryId, "query" to query),
         ),

@@ -4,9 +4,11 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import uz.mahalla.data.db.dao.CartDraftDao
 import uz.mahalla.data.db.dao.OrderDao
+import uz.mahalla.data.db.dao.PlaceCategoryDao
 import uz.mahalla.data.db.dao.PlaceDao
 import uz.mahalla.data.db.entity.CartDraftItemEntity
 import uz.mahalla.data.db.entity.OrderEntity
+import uz.mahalla.data.db.entity.PlaceCategoryEntity
 import uz.mahalla.data.db.entity.PlaceEntity
 
 /**
@@ -26,10 +28,12 @@ import uz.mahalla.data.db.entity.PlaceEntity
         PlaceEntity::class,
         OrderEntity::class,
         CartDraftItemEntity::class,
+        PlaceCategoryEntity::class,
     ],
     // v2 — эпик 4: в кэш мест добавлены адрес, координаты, фото и контакты.
     // v3 — эпик 5: строка черновика корзины ключуется позицией + модификаторами.
     // v4 — issue #149: суммы в кэше переведены из тийинов в сумы.
+    // v5 — issue #378: кэш включённых категорий каталога (`GET categories`).
     version = MahallaDatabase.VERSION,
     exportSchema = true,
 )
@@ -38,11 +42,12 @@ abstract class MahallaDatabase : RoomDatabase() {
     abstract fun placeDao(): PlaceDao
     abstract fun orderDao(): OrderDao
     abstract fun cartDraftDao(): CartDraftDao
+    abstract fun placeCategoryDao(): PlaceCategoryDao
 
     companion object {
         const val NAME = "mahalla.db"
 
         /** Текущая версия схемы. Константа, чтобы тест миграций сверялся с ней. */
-        const val VERSION = 4
+        const val VERSION = 5
     }
 }

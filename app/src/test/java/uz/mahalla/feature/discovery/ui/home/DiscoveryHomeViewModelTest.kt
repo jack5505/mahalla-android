@@ -20,6 +20,7 @@ import uz.mahalla.feature.promotions.domain.PromotionPage
 import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.queue.domain.WalkInTicket
 import uz.mahalla.testutil.FakeCatalogRepository
+import uz.mahalla.testutil.FakeCategoryRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeWalkInTicketStore
 import uz.mahalla.testutil.MainDispatcherRule
@@ -43,6 +44,40 @@ class DiscoveryHomeViewModelTest {
     private val promotions = FakePromotionsRepository()
 
     private val tickets = FakeWalkInTicketStore()
+
+    private val categories = FakeCategoryRepository()
+
+    @Test
+    fun `category tiles come from the cache and are refreshed on every load`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Pharmacy, PlaceCategory.Food)
+
+        val viewModel = viewModel()
+
+        // Порядок — как в кэше (то есть как в дашборде), не как в перечислении.
+        assertEquals(listOf(PlaceCategory.Pharmacy, PlaceCategory.Food), viewModel.state.value.categories)
+        assertEquals(1, categories.refreshCount)
+
+        // Дашборд выключил аптеку — кэш обновился, плитка ушла без перезапуска экрана.
+        categories.categories.value = listOf(PlaceCategory.Food)
+        assertEquals(listOf(PlaceCategory.Food), viewModel.state.value.categories)
+
+        viewModel.onEvent(DiscoveryHomeEvent.Refresh)
+        assertEquals(2, categories.refreshCount)
+    }
+
+    @Test
+    fun `a failed category refresh leaves the tiles and the catalog alone`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        // Не зашитый набор: иначе тест не отличил бы подписку на кэш от дефолта состояния.
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val state = viewModel().state.value
+
+        assertEquals(listOf(PlaceCategory.Food), state.categories)
+        assertTrue(state.content is ScreenState.Content)
+    }
 
     @Test
     fun `successful load splits the answer into sections`() = runTest {
@@ -367,6 +402,7 @@ class DiscoveryHomeViewModelTest {
         repository = repository,
         promotions = promotions,
         tickets = tickets,
+        categories = categories,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 

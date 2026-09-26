@@ -160,6 +160,7 @@ fun SearchContent(
     if (state.filtersVisible) {
         FiltersSheet(
             filters = state.filters,
+            categories = state.categories,
             onEvent = onEvent,
             onDismiss = { onEvent(SearchEvent.FiltersClosed) },
         )
