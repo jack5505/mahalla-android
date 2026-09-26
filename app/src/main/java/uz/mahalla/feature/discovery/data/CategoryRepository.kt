@@ -3,7 +3,6 @@ package uz.mahalla.feature.discovery.data
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -75,25 +74,39 @@ class DefaultCategoryRepository @Inject constructor(
 ) : CategoryRepository {
 
     /**
-     * Был ли за время жизни процесса хотя бы один успешный ответ сервера.
-     * Репозиторий — `@Singleton`, поэтому отметка общая на все экраны.
+     * Список, подтверждённый последним успешным ответом сервера за время жизни
+     * процесса, или `null`, пока такого ответа не было. Репозиторий —
+     * `@Singleton`, поэтому отметка общая на все экраны.
+     *
+     * Значение — снимок из самого ответа, а не производная от [categories]:
+     * Room пересчитывает `dao.observeAll()` асинхронно (`InvalidationTracker`
+     * уходит на отдельный executor), и синхронная отметка «есть подтверждение»
+     * рядом с ним могла обогнать переэмиссию — [confirmedCategories] отдавала
+     * бы подтверждение с ещё не обновившимся списком.
      */
-    private val confirmed = MutableStateFlow(false)
+    private val confirmed = MutableStateFlow<List<PlaceCategory>?>(null)
 
     override fun categories(): Flow<List<PlaceCategory>> = dao.observeAll()
         .map { rows -> PlaceCategoryCatalog.resolve(rows.map(PlaceCategoryEntity::code)) }
         .distinctUntilChanged()
 
-    override fun confirmedCategories(): Flow<List<PlaceCategory>> =
-        combine(confirmed, categories()) { ok, list -> list.takeIf { ok } }
-            .filterNotNull()
+    override fun confirmedCategories(): Flow<List<PlaceCategory>> = confirmed.filterNotNull()
 
     override suspend fun refresh(): ApiResult<Unit> {
         val result = apiCall { api.categories().payload() }
         return when (result) {
             is ApiResult.Failure -> result
-            is ApiResult.Success -> store(result.data.mapNotNull(CategoryDto::toEntity))
-                .also { stored -> if (stored is ApiResult.Success) confirmed.value = true }
+            is ApiResult.Success -> {
+                val entities = result.data.mapNotNull(CategoryDto::toEntity)
+                store(entities).also { stored ->
+                    if (stored is ApiResult.Success) {
+                        val codes = entities
+                            .sortedWith(compareBy(PlaceCategoryEntity::sortOrder, PlaceCategoryEntity::code))
+                            .map(PlaceCategoryEntity::code)
+                        confirmed.value = PlaceCategoryCatalog.resolve(codes)
+                    }
+                }
+            }
         }
     }
 

@@ -83,7 +83,10 @@ class SearchViewModelTest {
         advanceUntilIdle()
         assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
 
+        // В реальном репозитории список меняется только записью с сервера —
+        // "выключили в дашборде" здесь тоже смоделировано новым refresh().
         categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refresh()
         advanceUntilIdle()
 
         assertEquals(emptySet<PlaceCategory>(), viewModel.state.value.filters.categories)
@@ -147,6 +150,7 @@ class SearchViewModelTest {
         val searches = repository.requestedFilters.size
 
         categories.categories.value = listOf(PlaceCategory.Hospital, PlaceCategory.Food)
+        categories.refresh()
         advanceUntilIdle()
 
         assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
