@@ -3,6 +3,8 @@ package uz.mahalla.testutil
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -31,11 +33,18 @@ class FakeCategoryRepository(
     var refreshCount = 0
         private set
 
+    /** Отметка об успешном обновлении — ровно как в настоящем репозитории. */
+    private val confirmed = MutableStateFlow(false)
+
     override fun categories(): Flow<List<PlaceCategory>> = categories
+
+    override fun confirmedCategories(): Flow<List<PlaceCategory>> =
+        combine(confirmed, categories) { ok, list -> list.takeIf { ok } }.filterNotNull()
 
     override suspend fun refresh(): ApiResult<Unit> {
         refreshCount++
         refreshGate?.await()
+        if (refreshResult is ApiResult.Success) confirmed.value = true
         return refreshResult
     }
 }

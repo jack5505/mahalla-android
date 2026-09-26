@@ -59,24 +59,18 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.queries.collect { queries -> updateState { copy(history = queries) } }
         }
-        // Чипы категорий — из кэша (issue #378). Кэш обновляется и отсюда, а не
-        // только с главной: на поиск попадают по deep link, не открыв её
-        // (issue #382).
+        // Чипы рисуются по кэшу сразу (issue #378), а выбор снимается только по
+        // подтверждённому списку — отсюда две подписки, а не одна.
         viewModelScope.launch {
-            var cacheRefreshed = false
-            launch {
-                // Результат не разбираем: отказ оставит прежний кэш.
-                categoryRepository.refresh()
-                cacheRefreshed = true
-                dropDisabledCategories(currentState.categories)
-            }
-            categoryRepository.categories().collect { list ->
-                updateState { copy(categories = list) }
-                // До первого обновления выбор не трогаем: устаревший кэш снял бы
-                // категорию, которую сервер всё ещё отдаёт.
-                if (cacheRefreshed) dropDisabledCategories(list)
-            }
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
         }
+        viewModelScope.launch {
+            categoryRepository.confirmedCategories().collect(::dropDisabledCategories)
+        }
+        // Кэш обновляется и отсюда, а не только с главной: на поиск попадают по
+        // deep link, не открыв её (issue #382). Результат не разбираем — отказ
+        // оставит прежний кэш и ничего не подтвердит.
+        viewModelScope.launch { categoryRepository.refresh() }
         search(delayMillis = 0)
     }
 

@@ -92,8 +92,8 @@ class SearchViewModelTest {
     }
 
     /**
-     * Устаревший кэш не должен снимать выбор: до первого обновления список
-     * категорий — это то, что лежало в базе с прошлого запуска, и сервер
+     * Устаревший кэш не должен снимать выбор: пока с сервера не пришло ни
+     * одного успешного ответа, список в базе мог пролежать неделю, и сервер
      * вполне может всё ещё отдавать эту категорию.
      */
     @Test
@@ -105,12 +105,33 @@ class SearchViewModelTest {
 
         val viewModel = viewModel(categoryId = "HOSPITAL")
         advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
 
+        // Устаревший кэш шевельнулся, пока ответа сервера всё ещё нет, —
+        // выбор трогать нельзя и теперь.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
         assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
 
         // Обновление дошло и подтвердило, что клиника всё-таки включена.
         categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Hospital)
         categories.refreshGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+    }
+
+    /**
+     * Офлайн: `refresh()` вернул отказ, и кэш остался прежним — то есть
+     * по-прежнему непроверенным. Снимать по нему выбор нельзя, иначе человек
+     * с deep link в кармане теряет фильтр ровно тогда, когда связи нет.
+     */
+    @Test
+    fun `a failed refresh never drops the selection`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val viewModel = viewModel(categoryId = "HOSPITAL")
         advanceUntilIdle()
 
         assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)

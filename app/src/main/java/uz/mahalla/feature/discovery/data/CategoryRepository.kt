@@ -2,7 +2,10 @@ package uz.mahalla.feature.discovery.data
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
@@ -33,8 +36,25 @@ interface CategoryRepository {
     fun categories(): Flow<List<PlaceCategory>>
 
     /**
+     * То же, но молчит, пока с сервера не пришёл хотя бы один успешный ответ
+     * за время жизни процесса.
+     *
+     * Нужно там, где по списку не рисуют, а **снимают** уже сделанный выбор:
+     * категорию, выключенную в дашборде, надо убрать из применённого фильтра
+     * и из анкеты (issue #382), но делать это по кэшу, который мог пролежать
+     * неделю, нельзя — сервер вполне может всё ещё отдавать эту категорию, и
+     * человек молча потеряет свой выбор.
+     *
+     * Отметка об успешном обновлении общая на весь процесс: обновила главная —
+     * поиску и анкете ждать своего ответа уже незачем.
+     */
+    fun confirmedCategories(): Flow<List<PlaceCategory>>
+
+    /**
      * Перечитать список с сервера и переписать кэш. Отказ сети кэш не трогает:
-     * подписчики [categories] продолжают видеть прошлый список.
+     * подписчики [categories] продолжают видеть прошлый список, а
+     * [confirmedCategories] так и молчит: неудачное обновление ничего не
+     * подтверждает.
      */
     suspend fun refresh(): ApiResult<Unit>
 }
@@ -54,15 +74,26 @@ class DefaultCategoryRepository @Inject constructor(
     private val dao: PlaceCategoryDao,
 ) : CategoryRepository {
 
+    /**
+     * Был ли за время жизни процесса хотя бы один успешный ответ сервера.
+     * Репозиторий — `@Singleton`, поэтому отметка общая на все экраны.
+     */
+    private val confirmed = MutableStateFlow(false)
+
     override fun categories(): Flow<List<PlaceCategory>> = dao.observeAll()
         .map { rows -> PlaceCategoryCatalog.resolve(rows.map(PlaceCategoryEntity::code)) }
         .distinctUntilChanged()
+
+    override fun confirmedCategories(): Flow<List<PlaceCategory>> =
+        combine(confirmed, categories()) { ok, list -> list.takeIf { ok } }
+            .filterNotNull()
 
     override suspend fun refresh(): ApiResult<Unit> {
         val result = apiCall { api.categories().payload() }
         return when (result) {
             is ApiResult.Failure -> result
             is ApiResult.Success -> store(result.data.mapNotNull(CategoryDto::toEntity))
+                .also { stored -> if (stored is ApiResult.Success) confirmed.value = true }
         }
     }
 

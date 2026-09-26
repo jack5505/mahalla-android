@@ -36,23 +36,16 @@ class ProviderFormViewModel @Inject constructor(
     init {
         // Выбор категории — из тех, что включены в дашборде (issue #378):
         // заведение выключенной категории в каталоге всё равно не покажут.
-        // Кэш обновляется и отсюда: анкету открывают из профиля, минуя
-        // главную (issue #382).
+        // Список для показа берётся из кэша сразу, а снимать уже сделанный
+        // выбор можно только по подтверждённому серверу списку (issue #382).
         viewModelScope.launch {
-            var cacheRefreshed = false
-            launch {
-                // Результат не разбираем: отказ оставит прежний кэш.
-                categoryRepository.refresh()
-                cacheRefreshed = true
-                dropDisabledCategory(currentState.categories)
-            }
-            categoryRepository.categories().collect { list ->
-                updateState { copy(categories = list) }
-                // До первого обновления выбор не трогаем: устаревший кэш снял бы
-                // категорию, которую сервер всё ещё отдаёт.
-                if (cacheRefreshed) dropDisabledCategory(list)
-            }
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
         }
+        viewModelScope.launch {
+            categoryRepository.confirmedCategories().collect(::dropDisabledCategory)
+        }
+        // Анкету открывают из профиля, минуя главную, — кэш обновляет она сама.
+        viewModelScope.launch { categoryRepository.refresh() }
         viewModelScope.launch {
             val city = roleRepository.current().customer.city
             val digits = phoneValidator.nationalDigits(profileStore.current().phone.orEmpty())
@@ -102,7 +95,10 @@ class ProviderFormViewModel @Inject constructor(
     private fun dropDisabledCategory(enabled: List<PlaceCategory>) {
         val selected = currentState.form.category ?: return
         if (selected in enabled) return
-        updateState { copy(form = form.copy(category = null)).revalidated() }
+        // submitError гасится по тому же правилу, что в updateForm (issue #76):
+        // форма изменилась, и прошлый отказ сервера относится уже к другим
+        // данным — неважно, правил её человек или кэш.
+        updateState { copy(form = form.copy(category = null), submitError = null).revalidated() }
     }
 
     private fun updateForm(transform: ProviderForm.() -> ProviderForm) {

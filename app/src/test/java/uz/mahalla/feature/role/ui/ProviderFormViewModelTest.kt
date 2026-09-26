@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -93,11 +94,59 @@ class ProviderFormViewModelTest {
         advanceUntilIdle()
         assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
 
+        // Устаревший кэш шевельнулся, ответа сервера всё ещё нет: в списке
+        // «мастера» нет, но снимать выбор по непроверенному кэшу нельзя.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+
+        // Ответ пришёл и подтвердил, что «мастер» включён.
         categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Master)
         categories.refreshGate?.complete(Unit)
         advanceUntilIdle()
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+    }
+
+    /** Офлайн: отказ обновления ничего не подтверждает, выбор остаётся. */
+    @Test
+    fun `a failed refresh never drops the selection`() = runTest(mainDispatcherRule.dispatcher) {
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(ProviderFormEvent.CategorySelected(PlaceCategory.Master))
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
 
         assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+    }
+
+    /**
+     * Снятие категории гасит прошлый отказ сервера — по тому же правилу, что
+     * правка формы руками (issue #76): сообщение относилось бы уже к другим
+     * данным.
+     */
+    @Test
+    fun `dropping a disabled category clears a stale submit error`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Master)
+        provider.result = ApiResult.Failure(ApiFailure(error = ApiError.Forbidden, server = null))
+        val viewModel = viewModel(phone = "+998901234567")
+        advanceUntilIdle()
+        fill(viewModel)
+        viewModel.onEvent(ProviderFormEvent.SubmitClicked)
+        advanceUntilIdle()
+        assertNotNull(viewModel.state.value.submitError)
+
+        // Дашборд выключил «еду» — выбор снялся, и прошлый отказ сервера
+        // относится уже к другой заявке.
+        categories.categories.value = listOf(PlaceCategory.Master)
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.form.category)
+        assertNull(viewModel.state.value.submitError)
     }
 
     @Test
