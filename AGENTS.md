@@ -132,7 +132,9 @@ SDK лежит внутри проекта в `.sdk/` (в `.gitignore`), `local.
 - `CONTRACT_REFRESH_TOKEN` — без него `contract-check.yml` проверяет только
   анонимную половину контракта, остальное тихо пропускается;
 - `BACKEND_IMAGE` / `BACKEND_PORT` / `BACKEND_HEALTH_PATH` — docker-бэкенд
-  в `claude-dev.yml`.
+  в `claude-dev.yml`;
+- `DEBUG_KEYSTORE_BASE64` — постоянный debug-ключ для `release-internal.yml`;
+  без него каждый релиз подписан новым ключом и не ставится поверх старого.
 
 ## Как поддерживать эти файлы
 

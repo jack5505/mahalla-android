@@ -107,6 +107,24 @@ fun backendUrlOverrideEnabled(): Boolean {
     return (fromEnvironment ?: fromProperty).orEmpty().trim().equals("true", ignoreCase = true)
 }
 
+/**
+ * Постоянный отладочный ключ для debug-сборок (внутренние релизы).
+ *
+ * Без него каждый раннер GitHub Actions генерирует свой `debug.keystore`, и
+ * каждый следующий internal-релиз подписан другим ключом: на телефоне он не
+ * встаёт поверх предыдущего — «пакет недействителен / повреждён». Путь к
+ * файлу — в `DEBUG_KEYSTORE_FILE`; `release-internal.yml` кладёт его туда из
+ * секрета `DEBUG_KEYSTORE_BASE64`. Пароли и алиас — стандартные для debug,
+ * секрета в них нет. Переменная не задана — обычный ключ из `~/.android`.
+ */
+fun debugKeystoreFile(): File? {
+    val path = providers.environmentVariable("DEBUG_KEYSTORE_FILE").orNull?.trim()
+    if (path.isNullOrEmpty()) return null
+    val file = rootProject.file(path)
+    require(file.isFile) { "DEBUG_KEYSTORE_FILE задан, но файла нет: $path" }
+    return file
+}
+
 /** Строковый литерал для `buildConfigField`: ключ едет в генерируемый .java. */
 fun stringLiteral(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -132,6 +150,18 @@ android {
         buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
+    }
+
+    signingConfigs {
+        // Постоянный ключ debug-сборок, см. debugKeystoreFile().
+        debugKeystoreFile()?.let { keystore ->
+            getByName("debug") {
+                storeFile = keystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {
