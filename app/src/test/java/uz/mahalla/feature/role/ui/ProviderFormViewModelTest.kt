@@ -1,11 +1,13 @@
 package uz.mahalla.feature.role.ui
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -23,6 +25,7 @@ import uz.mahalla.feature.role.domain.CustomerForm
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.ProviderFormError
 import uz.mahalla.feature.role.domain.RegisteredPlace
+import uz.mahalla.testutil.FakeCategoryRepository
 import uz.mahalla.testutil.FakeProviderRepository
 import uz.mahalla.testutil.FakeRoleRepository
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -36,6 +39,115 @@ class ProviderFormViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val provider = FakeProviderRepository()
+
+    private val categories = FakeCategoryRepository()
+
+    @Test
+    fun `category choices follow the category cache`() = runTest(mainDispatcherRule.dispatcher) {
+        categories.categories.value = listOf(PlaceCategory.Master, PlaceCategory.Food)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        // Выключенной в дашборде категории в анкете нет: заведение под ней
+        // каталог всё равно не покажет.
+        assertEquals(listOf(PlaceCategory.Master, PlaceCategory.Food), viewModel.state.value.categories)
+        // Анкету открывают из профиля, минуя главную, — кэш обновляет она сама
+        // (issue #382).
+        assertEquals(1, categories.refreshCount)
+    }
+
+    /**
+     * Категорию выбрали, а дашборд её тем временем выключил: заявка ушла бы с
+     * категорией, которой в каталоге нет, а снять её в форме было бы нечем
+     * (issue #382).
+     */
+    @Test
+    fun `a category disabled in the dashboard is dropped from the form`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        categories.categories.value = listOf(PlaceCategory.Master, PlaceCategory.Food)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onEvent(ProviderFormEvent.CategorySelected(PlaceCategory.Master))
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+
+        categories.categories.value = listOf(PlaceCategory.Food)
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.form.category)
+        // Упрёка за то, чего человек не делал, на экране нет: ошибки валидации
+        // поднимает только «Отправить».
+        assertEquals(emptyList<ProviderFormError>(), viewModel.state.value.visibleErrors)
+    }
+
+    /** Устаревший кэш выбор не снимает — сервер может всё ещё отдавать категорию. */
+    @Test
+    fun `a stale cache does not drop the selection before the first refresh`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshGate = CompletableDeferred()
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(ProviderFormEvent.CategorySelected(PlaceCategory.Master))
+        advanceUntilIdle()
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+
+        // Устаревший кэш шевельнулся, ответа сервера всё ещё нет: в списке
+        // «мастера» нет, но снимать выбор по непроверенному кэшу нельзя.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+
+        // Ответ пришёл и подтвердил, что «мастер» включён.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Master)
+        categories.refreshGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+    }
+
+    /** Офлайн: отказ обновления ничего не подтверждает, выбор остаётся. */
+    @Test
+    fun `a failed refresh never drops the selection`() = runTest(mainDispatcherRule.dispatcher) {
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshResult = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(ProviderFormEvent.CategorySelected(PlaceCategory.Master))
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
+
+        assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
+    }
+
+    /**
+     * Снятие категории гасит прошлый отказ сервера — по тому же правилу, что
+     * правка формы руками (issue #76): сообщение относилось бы уже к другим
+     * данным.
+     */
+    @Test
+    fun `dropping a disabled category clears a stale submit error`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Master)
+        provider.result = ApiResult.Failure(ApiFailure(error = ApiError.Forbidden, server = null))
+        val viewModel = viewModel(phone = "+998901234567")
+        advanceUntilIdle()
+        fill(viewModel)
+        viewModel.onEvent(ProviderFormEvent.SubmitClicked)
+        advanceUntilIdle()
+        assertNotNull(viewModel.state.value.submitError)
+
+        // Дашборд выключил «еду» — выбор снялся, и прошлый отказ сервера
+        // относится уже к другой заявке.
+        categories.categories.value = listOf(PlaceCategory.Master)
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.form.category)
+        assertNull(viewModel.state.value.submitError)
+    }
 
     @Test
     fun `phone and city are prefilled from what the app already knows`() = runTest(
@@ -242,5 +354,6 @@ class ProviderFormViewModelTest {
         roleRepository = FakeRoleRepository(RoleProfile(customer = CustomerForm(city = city))),
         profileStore = FakeUserProfileStore(UserProfile(phone = phone)),
         phoneValidator = PhoneNumberValidator(),
+        categoryRepository = categories,
     )
 }

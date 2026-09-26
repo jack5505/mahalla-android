@@ -43,17 +43,17 @@ gh issue list --state open   # 47 открытых issue
 
 | Что | Сколько | Чем считать |
 |---|---|---|
-| Kotlin в `main` | 405 файлов | `find app/src/main -name '*.kt' \| wc -l` |
-| feature-пакетов | 24 | `ls app/src/main/java/uz/mahalla/feature` |
-| Назначений в графе | **45** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
-| Экранов (`*Screen.kt`) | 45 | `find app/src/main -name '*Screen.kt' \| wc -l` |
-| ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
-| `*Api.kt` / эндпоинтов | 19 / **81** уникальный | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (82 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-10**: было «77 в 79 аннотациях» на 2026-09-09, из четырёх новых один — `food/delivery-fee` (issue #179), остальные приехали чужими PR |
-| Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://157.173.109.181.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
-| Тестов | **2061 в 190 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-10; на 2026-09-09 было 1967 в 184) |
+| Kotlin в `main` | 543 файла | `find app/src/main -name '*.kt' \| wc -l` |
+| feature-пакетов | 27 | `ls app/src/main/java/uz/mahalla/feature` |
+| Назначений в графе | **58** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
+| Экранов (`*Screen.kt`) | 59 | `find app/src/main -name '*Screen.kt' \| wc -l` |
+| ViewModel / репозиториев | 61 / 24 | `find … -name '*ViewModel.kt'` |
+| `*Api.kt` / эндпоинтов | 28 / **140** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (142 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-26** (issue #382): на 2026-09-10 было «81 в 82 аннотациях» — таблица отстала на две недели чужих PR |
+| Эндпоинтов на стенде | **180** в 164 путях (счёт от 2026-09-10) | `/v3/api-docs` по хосту стенда с тех пор отдаёт `404` nginx — пересчитать нечем, цифра устарела и держится только как ориентир |
+| Тестов | **2989 в 253 классах**, 0 падений, 6 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-26, issue #382; на 2026-09-10 было 2061 в 190). Пропущены — шесть отдельных кейсов в `OrdersContractTest`, `SecurityContractTest` и `BookingContractTest`, которым нужна проба под токеном: без `CONTRACT_REFRESH_TOKEN` она не снимается. Анонимные пробы этих же классов закоммичены и гоняются. Нет пробы — тест пропускается, а не краснеет |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
 | `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
-| Room | 3 сущности, 3 DAO | `data/db/` |
+| Room | 4 сущности, 4 DAO | `data/db/` |
 
 ---
 
@@ -63,7 +63,7 @@ gh issue list --state open   # 47 открытых issue
 
 | Таб | Экран | Состояние |
 |---|---|---|
-| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
+| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, категории из `GET categories` с кэшем в Room (#378, до первого ответа — зашитые 7), «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
 | Мои активности | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба — `nav_activity` («Активности»/«Amallarim») кеглем 9/600 из ТЗ (`design/android/TZ-ANDROID.md`, компонент `navbar`): с M3-шными 12sp она обрезалась бы при системном fontScale 1.3 на 393 dp и при 1.15 на 360 dp (#211). Макет (`figma/svg`, `prototype/screens.js`) до сих пор подписывает этот пункт «Заказы»/«Buyurtmalar» и держит 5 пунктов против 4 — дизайн-репо отстал от #73 (jack5505/mahalla#214) |
 | Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
 | Профиль | `profile/ui/ProfileScreen.kt` (869) | **работает**: имя (редактируется, `PUT users/me`), телефон, аватар (`media/upload` + `PUT users/me`, issue #170), профиль перечитывается `GET users/me` при открытии и возврате на экран, мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |

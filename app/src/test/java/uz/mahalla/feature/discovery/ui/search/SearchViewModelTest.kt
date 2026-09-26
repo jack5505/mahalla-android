@@ -2,6 +2,7 @@ package uz.mahalla.feature.discovery.ui.search
 
 import android.app.Application
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -26,6 +27,7 @@ import uz.mahalla.feature.discovery.domain.Place
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.discovery.domain.PlaceSort
 import uz.mahalla.testutil.FakeCatalogRepository
+import uz.mahalla.testutil.FakeCategoryRepository
 import uz.mahalla.testutil.FakeSearchHistoryStore
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.place
@@ -52,6 +54,104 @@ class SearchViewModelTest {
 
     private val repository = FakeCatalogRepository()
     private val history = FakeSearchHistoryStore()
+    private val categories = FakeCategoryRepository()
+
+    @Test
+    fun `filter chips follow the category cache and refresh it once`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Cinema, PlaceCategory.Food)
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf(PlaceCategory.Cinema, PlaceCategory.Food), viewModel.state.value.categories)
+
+        // Поиск обновляет кэш сам: сюда попадают по deep link, минуя главную
+        // (issue #382).
+        assertEquals(1, categories.refreshCount)
+    }
+
+    /**
+     * Категорию выключили в дашборде, пока экран открыт: её чип пропал, и
+     * применённый фильтр обязан отпустить её следом — иначе снять его нечем,
+     * кроме «сбросить всё» (issue #382).
+     */
+    @Test
+    fun `a category disabled in the dashboard leaves the applied filter`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Hospital)
+        val viewModel = viewModel(categoryId = "HOSPITAL")
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+
+        categories.categories.value = listOf(PlaceCategory.Food)
+        advanceUntilIdle()
+
+        assertEquals(emptySet<PlaceCategory>(), viewModel.state.value.filters.categories)
+        // Выдача перезапрошена уже без категории.
+        assertEquals(null, repository.requestedFilters.last().first.apiCategory())
+    }
+
+    /**
+     * Устаревший кэш не должен снимать выбор: пока с сервера не пришло ни
+     * одного успешного ответа, список в базе мог пролежать неделю, и сервер
+     * вполне может всё ещё отдавать эту категорию.
+     */
+    @Test
+    fun `a stale cache does not drop the selection before the first refresh`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        // Кэш от прошлого запуска клиники не знает, а маршрут — про неё.
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshGate = CompletableDeferred()
+
+        val viewModel = viewModel(categoryId = "HOSPITAL")
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+
+        // Устаревший кэш шевельнулся, пока ответа сервера всё ещё нет, —
+        // выбор трогать нельзя и теперь.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Cinema)
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+
+        // Обновление дошло и подтвердило, что клиника всё-таки включена.
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Hospital)
+        categories.refreshGate?.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+    }
+
+    /**
+     * Офлайн: `refresh()` вернул отказ, и кэш остался прежним — то есть
+     * по-прежнему непроверенным. Снимать по нему выбор нельзя, иначе человек
+     * с deep link в кармане теряет фильтр ровно тогда, когда связи нет.
+     */
+    @Test
+    fun `a failed refresh never drops the selection`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refreshResult = ApiResult.Failure(ApiError.NoConnection)
+
+        val viewModel = viewModel(categoryId = "HOSPITAL")
+        advanceUntilIdle()
+
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+    }
+
+    /** Кэш обновился, а выбранная категория в нём осталась — выдачу не трогаем. */
+    @Test
+    fun `an unchanged selection does not re-run the search`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Hospital)
+        val viewModel = viewModel(categoryId = "HOSPITAL")
+        advanceUntilIdle()
+        val searches = repository.requestedFilters.size
+
+        categories.categories.value = listOf(PlaceCategory.Hospital, PlaceCategory.Food)
+        advanceUntilIdle()
+
+        assertEquals(setOf(PlaceCategory.Hospital), viewModel.state.value.filters.categories)
+        assertEquals(searches, repository.requestedFilters.size)
+    }
 
     @Test
     fun `initial load runs without waiting for the debounce`() = runTest {
@@ -450,6 +550,7 @@ class SearchViewModelTest {
     ) = SearchViewModel(
         repository = repository,
         historyStore = history,
+        categoryRepository = categories,
         savedStateHandle = SavedStateHandle(
             mapOf("categoryId" to categoryId, "query" to query),
         ),
