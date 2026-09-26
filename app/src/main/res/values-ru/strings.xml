@@ -1318,6 +1318,7 @@
     <string name="activity_source_master_appointments">записи к мастеру</string>
     <string name="activity_source_doctor_appointments">записи к врачу</string>
     <string name="activity_source_cinema_tickets">билеты в кино</string>
+    <string name="activity_source_walkin">очередь</string>
     <!-- Вид активности: названия заведения бэкенд не отдаёт ни в одном ответе -->
     <string name="activity_kind_food_order">Заказ еды</string>
     <string name="activity_kind_clothing_order">Заказ одежды</string>
@@ -1329,6 +1330,7 @@
     <string name="activity_kind_master_appointment">Запись к мастеру</string>
     <string name="activity_kind_doctor_appointment">Запись к врачу</string>
     <string name="activity_kind_cinema_ticket">Билет в кино</string>
+    <string name="activity_kind_walkin_ticket">Очередь</string>
     <!-- Общий вид статусов пяти источников -->
     <string name="activity_status_placed">Принят</string>
     <string name="activity_status_confirmed">Подтверждён</string>
