@@ -452,7 +452,7 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
 теперь разбирается и выводится под текстом отзыва.
 
-## CategoriesApi ⚠️ схема из исходников бэкенда, стенд ещё без ручки
+## CategoriesApi ✅
 
 `app/src/main/java/uz/mahalla/feature/discovery/data/CategoriesApi.kt` — issue #378,
 бэкенд jack5505/mahalla#340 (вмержен в `main` 2026-09-26, закрывает
@@ -467,13 +467,15 @@ GET /api/v1/categories        (без JWT, без X-Geo-*; Cache-Control: max-ag
 → ApiResponse<List<CategoryItem>> {code, titleUz, titleRu, sortOrder}
 ```
 
-**Откуда снято.** Не с `/v3/api-docs`, а из исходников вмерженного PR:
-`CategoryDto.CategoryItem` (`@Schema(name = "CategoryItem")`) и
-`CategoryController`. На 2026-09-26 стенд `157.173.109.181.nip.io` этот PR
-ещё не крутит: `GET /api/v1/categories` отвечает `403` — с гео-заголовками
-пустым телом, без них `GEO_PERMISSION_REQUIRED`, — а `/v3/api-docs` по
-этому хосту отдаёт `404` nginx. Первое, что сверить после выкатки: путь и
-имена четырёх полей (`contract/paths.sh` и `CategoryRepositoryTest`).
+**Сверено (issue #382, 2026-09-26).** Живой запрос на `157.173.109.181.nip.io`
+отдаёт `200` и ровно те четыре поля, что ожидались из исходников:
+
+```json
+{"success":true,"data":[{"code":"FOOD","titleUz":"Ovqat","titleRu":"Еда","sortOrder":10}, …]}
+```
+
+Путь и имена полей совпали, `CategoryDto`/`CategoryRepositoryTest` править не
+пришлось.
 
 - `code` — значение `Place.Category` бэкенда, то же, что в параметре
   `category` у `places/nearby`, `places/map-bounds`, `search`; сопоставляется

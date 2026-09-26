@@ -64,8 +64,8 @@ class SearchViewModelTest {
 
         assertEquals(listOf(PlaceCategory.Cinema, PlaceCategory.Food), viewModel.state.value.categories)
 
-        // Поиск сам кэш не обновляет — это делает главная при загрузке.
-        assertEquals(0, categories.refreshCount)
+        // Поиск не полагается на то, что до него открыли главную (issue #382).
+        assertEquals(1, categories.refreshCount)
     }
 
     @Test
@@ -456,6 +456,24 @@ class SearchViewModelTest {
     @Test
     fun `default state carries default filters`() {
         assertEquals(DiscoveryFilters(), SearchState().filters)
+    }
+
+    @Test
+    fun `a category disabled after selection is dropped from the applied filter`() = runTest {
+        categories.categories.value = listOf(PlaceCategory.Cinema, PlaceCategory.Food)
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+
+        viewModel.onEvent(SearchEvent.CategoryToggled(PlaceCategory.Cinema))
+        advanceUntilIdle()
+        assertEquals(setOf(PlaceCategory.Cinema), viewModel.state.value.filters.categories)
+
+        // Дашборд выключил «Кино» уже после того, как её выбрали.
+        categories.categories.value = listOf(PlaceCategory.Food)
+        advanceUntilIdle()
+
+        assertEquals(emptySet<PlaceCategory>(), viewModel.state.value.filters.categories)
     }
 
     private fun viewModel(

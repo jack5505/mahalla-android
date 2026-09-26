@@ -59,10 +59,23 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.queries.collect { queries -> updateState { copy(history = queries) } }
         }
-        // Чипы категорий — из кэша (issue #378); обновляет его главная.
+        // Чипы категорий — из кэша (issue #378). Раньше кэш обновляла только
+        // главная — сюда можно было попасть и без захода на неё (issue #382),
+        // поэтому экран тоже дёргает refresh, не полагаясь на чужую загрузку.
         viewModelScope.launch {
-            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
+            categoryRepository.categories().collect { list ->
+                updateState { copy(categories = list) }
+                // Категория, выключенная в дашборде уже после выбора, не
+                // должна остаться приклеенной к применённому фильтру (issue
+                // #382): её чипа в шторке больше нет, а результаты без этого
+                // молча фильтровались бы по невидимой категории.
+                val restricted = currentState.filters.restrictedTo(list)
+                if (restricted != currentState.filters) {
+                    applyFilters { restrictedTo(list) }
+                }
+            }
         }
+        viewModelScope.launch { categoryRepository.refresh() }
         search(delayMillis = 0)
     }
 

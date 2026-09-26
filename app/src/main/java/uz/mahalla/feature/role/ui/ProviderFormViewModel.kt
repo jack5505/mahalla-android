@@ -35,9 +35,12 @@ class ProviderFormViewModel @Inject constructor(
     init {
         // Выбор категории — из тех, что включены в дашборде (issue #378):
         // заведение выключенной категории в каталоге всё равно не покажут.
+        // Кэш обновляет не только главная (issue #382) — до анкеты можно
+        // дойти, ни разу её не открыв.
         viewModelScope.launch {
             categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
         }
+        viewModelScope.launch { categoryRepository.refresh() }
         viewModelScope.launch {
             val city = roleRepository.current().customer.city
             val digits = phoneValidator.nationalDigits(profileStore.current().phone.orEmpty())

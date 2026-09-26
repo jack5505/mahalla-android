@@ -21,7 +21,7 @@ import uz.mahalla.data.network.ApiResponse
  */
 @Serializable
 data class CategoryDto(
-    @SerialName("code") val code: String = "",
+    @SerialName("code") val code: String? = null,
     @SerialName("titleUz") val titleUz: String? = null,
     @SerialName("titleRu") val titleRu: String? = null,
     @SerialName("sortOrder") val sortOrder: Int = 0,

@@ -93,4 +93,22 @@ class DiscoveryFiltersTest {
     fun `api category is null when only the unknown category is selected`() {
         assertNull(DiscoveryFilters(categories = setOf(PlaceCategory.Other)).apiCategory())
     }
+
+    @Test
+    fun `restricting to the available list drops categories no longer there`() {
+        val filters = DiscoveryFilters(categories = setOf(PlaceCategory.Cinema, PlaceCategory.Food))
+
+        val restricted = filters.restrictedTo(listOf(PlaceCategory.Food))
+
+        assertEquals(setOf(PlaceCategory.Food), restricted.categories)
+    }
+
+    @Test
+    fun `restricting to a list that still has everything changes nothing`() {
+        val filters = DiscoveryFilters(categories = setOf(PlaceCategory.Cinema, PlaceCategory.Food))
+
+        val restricted = filters.restrictedTo(listOf(PlaceCategory.Food, PlaceCategory.Cinema, PlaceCategory.Pharmacy))
+
+        assertEquals(filters, restricted)
+    }
 }

@@ -8,8 +8,8 @@ import uz.mahalla.data.db.entity.PlaceCategoryEntity
  * такая запись пропускается, а не роняет весь список (разбор мягкий).
  */
 fun CategoryDto.toEntity(): PlaceCategoryEntity? {
-    val code = code.trim()
-    if (code.isEmpty()) return null
+    val code = code?.trim()
+    if (code.isNullOrEmpty()) return null
     return PlaceCategoryEntity(
         code = code,
         titleUz = titleUz.orEmpty(),

@@ -50,7 +50,7 @@ gh issue list --state open   # 47 открытых issue
 | ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
 | `*Api.kt` / эндпоинтов | 19 / **81** уникальный | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (82 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-10**: было «77 в 79 аннотациях» на 2026-09-09, из четырёх новых один — `food/delivery-fee` (issue #179), остальные приехали чужими PR |
 | Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://157.173.109.181.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
-| Тестов | **2061 в 190 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-10; на 2026-09-09 было 1967 в 184) |
+| Тестов | **2980 в 252 классах**, 0 падений, 6 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-26, issue #382; на 2026-09-10 было 2061 в 190) |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
 | `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
 | Room | 4 сущности, 4 DAO | `data/db/` |

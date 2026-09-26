@@ -118,6 +118,15 @@ class CategoryRepositoryTest {
     }
 
     @Test
+    fun `an explicit null code is skipped, not a parse failure`() = runTest {
+        server.enqueue(envelope("""[{"code":null,"sortOrder":1},{"code":"CINEMA","sortOrder":40}]"""))
+
+        assertTrue(repository.refresh() is ApiResult.Success)
+
+        assertEquals(listOf(PlaceCategory.Cinema), repository.categories().first())
+    }
+
+    @Test
     fun `a successful answer replaces the cache entirely`() = runTest {
         server.enqueue(envelope("""[{"code":"FOOD","sortOrder":10},{"code":"HOSPITAL","sortOrder":30}]"""))
         repository.refresh()

@@ -52,6 +52,15 @@ class ProviderFormViewModelTest {
     }
 
     @Test
+    fun `the form refreshes the category cache itself`() = runTest(mainDispatcherRule.dispatcher) {
+        // До анкеты можно дойти, ни разу не открыв главную (issue #382).
+        viewModel()
+        advanceUntilIdle()
+
+        assertEquals(1, categories.refreshCount)
+    }
+
+    @Test
     fun `phone and city are prefilled from what the app already knows`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
