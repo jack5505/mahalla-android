@@ -21,7 +21,13 @@ import uz.mahalla.data.network.ApiResponse
  */
 @Serializable
 data class CategoryDto(
-    @SerialName("code") val code: String = "",
+    /**
+     * Nullable, хотя по схеме бэкенда поле обязательное: `String` без `?`
+     * спасает только от **отсутствующего** ключа (сработает дефолт), а на
+     * явный `"code": null` kotlinx бросает исключение — и одна битая строка
+     * унесла бы весь список категорий вместо себя одной.
+     */
+    @SerialName("code") val code: String? = null,
     @SerialName("titleUz") val titleUz: String? = null,
     @SerialName("titleRu") val titleRu: String? = null,
     @SerialName("sortOrder") val sortOrder: Int = 0,

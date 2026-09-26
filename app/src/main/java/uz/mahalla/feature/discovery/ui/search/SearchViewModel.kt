@@ -59,9 +59,23 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.queries.collect { queries -> updateState { copy(history = queries) } }
         }
-        // Чипы категорий — из кэша (issue #378); обновляет его главная.
+        // Чипы категорий — из кэша (issue #378). Кэш обновляется и отсюда, а не
+        // только с главной: на поиск попадают по deep link, не открыв её
+        // (issue #382).
         viewModelScope.launch {
-            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
+            var cacheRefreshed = false
+            launch {
+                // Результат не разбираем: отказ оставит прежний кэш.
+                categoryRepository.refresh()
+                cacheRefreshed = true
+                dropDisabledCategories(currentState.categories)
+            }
+            categoryRepository.categories().collect { list ->
+                updateState { copy(categories = list) }
+                // До первого обновления выбор не трогаем: устаревший кэш снял бы
+                // категорию, которую сервер всё ещё отдаёт.
+                if (cacheRefreshed) dropDisabledCategories(list)
+            }
         }
         search(delayMillis = 0)
     }
@@ -109,6 +123,20 @@ class SearchViewModel @Inject constructor(
             SearchEvent.Retry -> search(delayMillis = 0)
             is SearchEvent.PlaceClicked -> emitEffect(SearchEffect.OpenPlace(event.placeId))
         }
+    }
+
+    /**
+     * Категорию выключили в дашборде — её чип пропал из шторки, и оставлять её
+     * в применённом фильтре нельзя: снять такой фильтр было бы нечем, кроме
+     * «сбросить всё» (issue #382). Выдача перезапрашивается только когда выбор
+     * правда изменился: лишний запрос на каждое обновление кэша — это моргание
+     * списка на ровном месте.
+     */
+    private fun dropDisabledCategories(enabled: List<PlaceCategory>) {
+        val selected = currentState.filters.categories
+        val kept = selected intersect enabled.toSet()
+        if (kept.size == selected.size) return
+        applyFilters { copy(categories = kept) }
     }
 
     private fun applyFilters(transform: DiscoveryFilters.() -> DiscoveryFilters) {

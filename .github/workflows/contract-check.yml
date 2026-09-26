@@ -27,6 +27,8 @@ on:
         type: choice
         options:
           - booking
+          - categories
+          - security
       ask_claude:
         description: 'Отдать результат Claude (разобрать, починить, открыть PR)'
         required: false

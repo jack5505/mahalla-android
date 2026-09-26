@@ -15,6 +15,9 @@
 #                           токеном пропускаются, анонимные всё равно идут
 #   CONTRACT_INSECURE     1 (по умолчанию) — не проверять TLS: у стенда
 #                         самоподписанный сертификат (ADR 0005)
+#   CONTRACT_GEO_HEADERS  1 (по умолчанию) — слать X-Geo-*. 0 — не слать:
+#                         публичные ручки (`categories`) их не требуют, и это
+#                         утверждение о контракте, которое надо уметь проверить
 
 set -euo pipefail
 
@@ -22,6 +25,7 @@ CONTRACT_BASE_URL="${CONTRACT_BASE_URL:-https://157.173.109.181.nip.io/api/v1}"
 CONTRACT_GEO_LAT="${CONTRACT_GEO_LAT:-41.311081}"
 CONTRACT_GEO_LNG="${CONTRACT_GEO_LNG:-69.240562}"
 CONTRACT_INSECURE="${CONTRACT_INSECURE:-1}"
+CONTRACT_GEO_HEADERS="${CONTRACT_GEO_HEADERS:-1}"
 CONTRACT_REFRESH_TOKEN="${CONTRACT_REFRESH_TOKEN:-}"
 
 ACCESS_TOKEN=""
@@ -35,7 +39,8 @@ command -v jq >/dev/null || { echo "нужен jq: brew install jq (в CI уже
 _curl() {
     local args=(--silent --show-error --max-time 30)
     [ "$CONTRACT_INSECURE" = "1" ] && args+=(--insecure)
-    args+=(-H "X-Geo-Lat: $CONTRACT_GEO_LAT" -H "X-Geo-Lng: $CONTRACT_GEO_LNG")
+    [ "$CONTRACT_GEO_HEADERS" = "1" ] &&
+        args+=(-H "X-Geo-Lat: $CONTRACT_GEO_LAT" -H "X-Geo-Lng: $CONTRACT_GEO_LNG")
     [ -n "$ACCESS_TOKEN" ] && args+=(-H "Authorization: Bearer $ACCESS_TOKEN")
     curl "${args[@]}" "$@"
 }

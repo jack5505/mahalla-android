@@ -452,38 +452,44 @@ helpfulCount, ownerReply, createdAt}` — ни фото, ни имени, тол
 него), а не угаданное и всегда пустое поле. Ответ заведения (`ownerReply`)
 теперь разбирается и выводится под текстом отзыва.
 
-## CategoriesApi ⚠️ схема из исходников бэкенда, стенд ещё без ручки
+## CategoriesApi ✅ сверен со стендом 2026-09-26
 
 `app/src/main/java/uz/mahalla/feature/discovery/data/CategoriesApi.kt` — issue #378,
-бэкенд jack5505/mahalla#340 (вмержен в `main` 2026-09-26, закрывает
-jack5505/mahalla#338).
+хвосты — issue #382. Бэкенд jack5505/mahalla#340 (закрывает jack5505/mahalla#338).
 
 | Метод | Путь |
 |---|---|
 | GET | `categories` |
 
 ```
-GET /api/v1/categories        (без JWT, без X-Geo-*; Cache-Control: max-age=3600, ETag)
+GET /api/v1/categories        (без JWT и без X-Geo-*; Cache-Control: max-age=3600, ETag)
 → ApiResponse<List<CategoryItem>> {code, titleUz, titleRu, sortOrder}
 ```
 
-**Откуда снято.** Не с `/v3/api-docs`, а из исходников вмерженного PR:
-`CategoryDto.CategoryItem` (`@Schema(name = "CategoryItem")`) и
-`CategoryController`. На 2026-09-26 стенд `157.173.109.181.nip.io` этот PR
-ещё не крутит: `GET /api/v1/categories` отвечает `403` — с гео-заголовками
-пустым телом, без них `GEO_PERMISSION_REQUIRED`, — а `/v3/api-docs` по
-этому хосту отдаёт `404` nginx. Первое, что сверить после выкатки: путь и
-имена четырёх полей (`contract/paths.sh` и `CategoryRepositoryTest`).
+**Сверено живым ответом**, а не выведено из схемы: `contract/categories.sh`
+снимает пробу в `app/src/test/resources/contract/categories/`, разбирает её
+`CategoriesContractTest`. Имена всех четырёх полей совпали с теми, что были
+выведены из исходников бэкенда, — `/v3/api-docs` по хосту стенда так и
+отдаёт `404` nginx, так что проба остаётся единственным источником правды.
 
 - `code` — значение `Place.Category` бэкенда, то же, что в параметре
   `category` у `places/nearby`, `places/map-bounds`, `search`; сопоставляется
-  `PlaceCategory.fromApi`. Кодов **тринадцать** (`V39__place_categories.sql`):
-  семь клиентских плюс `BAKERY`, `SHOP`, `MUSEUM`, `PARK`, `MOSQUE`,
-  `FREELANCER`. Неизвестный код клиент складывает в кэш и пропускает.
-- Отдаются только включённые в дашборде, уже отсортированные по `sortOrder`;
-  клиент всё равно сортирует по нему при чтении из Room.
+  `PlaceCategory.fromApi`. Стенд отдаёт **тринадцать** кодов: `FOOD`,
+  `PHARMACY`, `HOSPITAL`, `CINEMA`, `GAMING`, `BARBER`, `FASHION` — те, под
+  которые в приложении есть плитка, — плюс `BAKERY`, `SHOP`, `MUSEUM`,
+  `PARK`, `MOSQUE`, `FREELANCER`. Неизвестный код клиент складывает в кэш и
+  пропускает при отрисовке; `FREELANCER` — алиас «мастера», отдельной плитки
+  не даёт.
+- `sortOrder` — 10, 20, … 130, строго растущий. Тест на это отдельный:
+  ошибись клиент в имени поля, все значения стали бы нулями и плитки встали
+  бы по алфавиту кода, не уронив ни разбор, ни экран.
+- Отдаются только включённые в дашборде, уже отсортированные; клиент всё
+  равно сортирует по `sortOrder` при чтении из Room.
 - `titleUz`/`titleRu` разбираются и кэшируются, но плитка рисуется по своим
   строкам (`labelRes`) — иконка и подпись выбираются по коду.
+- **Гео-заголовки не нужны**, в отличие от `places/*`. Это проверяется
+  отдельной пробой: начни ручка их требовать, плитки пропали бы у всех, кто
+  не дал геолокацию.
 - Кнопка «Все» в ответ не входит — клиентская.
 - Админские `GET/PUT admin/categories` клиент не зовёт.
 - Выключенная категория: `places/nearby`, `places/map-bounds`, `search` её

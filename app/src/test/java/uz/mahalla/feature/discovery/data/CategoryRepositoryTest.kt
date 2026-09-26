@@ -117,6 +117,31 @@ class CategoryRepositoryTest {
         assertEquals(listOf(PlaceCategory.Cinema), repository.categories().first())
     }
 
+    /**
+     * Дефолт `code` спасает только от отсутствующего ключа; явный `null` в
+     * non-nullable `String` уронил бы разбор всего списка, и одна битая строка
+     * унесла бы каталог целиком (issue #382).
+     */
+    @Test
+    fun `an explicit null code is skipped like a missing one`() = runTest {
+        server.enqueue(envelope("""[{"code":null,"titleUz":"?"},{"code":"FOOD","sortOrder":10}]"""))
+
+        assertTrue(repository.refresh() is ApiResult.Success)
+
+        assertEquals(listOf(PlaceCategory.Food), repository.categories().first())
+        assertEquals(listOf("FOOD"), database.placeCategoryDao().all().map { it.code })
+    }
+
+    /** Пробелы вместо кода — то же самое, что его отсутствие. */
+    @Test
+    fun `a blank code is skipped`() = runTest {
+        server.enqueue(envelope("""[{"code":"   ","sortOrder":1},{"code":"FOOD","sortOrder":10}]"""))
+
+        assertTrue(repository.refresh() is ApiResult.Success)
+
+        assertEquals(listOf("FOOD"), database.placeCategoryDao().all().map { it.code })
+    }
+
     @Test
     fun `a successful answer replaces the cache entirely`() = runTest {
         server.enqueue(envelope("""[{"code":"FOOD","sortOrder":10},{"code":"HOSPITAL","sortOrder":30}]"""))

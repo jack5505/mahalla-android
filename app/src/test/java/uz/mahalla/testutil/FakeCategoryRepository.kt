@@ -1,5 +1,6 @@
 package uz.mahalla.testutil
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import uz.mahalla.core.result.ApiResult
@@ -19,6 +20,13 @@ class FakeCategoryRepository(
 
     var refreshResult: ApiResult<Unit> = ApiResult.Success(Unit)
 
+    /**
+     * Гейт для проверки гонки: обновление висит, пока его не открыли. Нужен
+     * там, где важно поведение экрана **до** первого ответа сервера — выбор
+     * категории по устаревшему кэшу снимать нельзя (issue #382).
+     */
+    var refreshGate: CompletableDeferred<Unit>? = null
+
     /** Сколько раз просили обновить кэш с сервера. */
     var refreshCount = 0
         private set
@@ -27,6 +35,7 @@ class FakeCategoryRepository(
 
     override suspend fun refresh(): ApiResult<Unit> {
         refreshCount++
+        refreshGate?.await()
         return refreshResult
     }
 }
