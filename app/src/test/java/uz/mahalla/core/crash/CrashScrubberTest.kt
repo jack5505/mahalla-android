@@ -62,7 +62,7 @@ class CrashScrubberTest {
     fun `request loses its secrets but stays recognisable`() {
         val event = SentryEvent().apply {
             request = Request().apply {
-                url = "https://189-74-96-232.nip.io/api/v1/auth/verify-otp?otpToken=abc123"
+                url = "https://157.173.109.181.nip.io/api/v1/auth/verify-otp?otpToken=abc123"
                 method = "POST"
                 queryString = "otpToken=abc123&device=ANDROID"
                 headers = mapOf(
