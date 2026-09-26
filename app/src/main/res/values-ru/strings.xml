@@ -1202,6 +1202,24 @@
     <string name="business_section_orders_description">Принять и менять статус</string>
     <string name="business_section_menu">Меню</string>
     <string name="business_section_menu_description">Позиции и стоп-лист</string>
+    <string name="business_section_earnings">Заработок</string>
+    <string name="business_section_earnings_description">Баланс, история и вывод средств</string>
+
+    <!-- Заработок (issue #290): баланс бизнес-кошелька, история, вывод -->
+    <string name="business_earnings_available">Можно вывести</string>
+    <string name="business_earnings_history_empty">Начислений пока нет.</string>
+    <string name="business_earnings_payout">Вывести</string>
+    <string name="business_earnings_payout_sent">Заявка отправлена</string>
+    <string name="business_earnings_payout_status_pending">На рассмотрении</string>
+    <string name="business_earnings_payout_status_approved">Подтверждена</string>
+    <string name="business_earnings_payout_status_completed">Выплачена</string>
+    <string name="business_earnings_payout_status_rejected">Отклонена</string>
+    <string name="business_earnings_payout_title">Заявка на вывод</string>
+    <string name="business_earnings_payout_amount">Сумма</string>
+    <string name="business_earnings_payout_card">Номер карты</string>
+    <string name="business_earnings_payout_error_amount">Введите сумму.</string>
+    <string name="business_earnings_payout_error_card">Номер карты должен состоять из 16 цифр.</string>
+    <string name="business_earnings_payout_submit">Отправить</string>
 
     <string name="business_queue_next_title">Следующий</string>
     <string name="business_queue_call_next">Вызвать следующего</string>

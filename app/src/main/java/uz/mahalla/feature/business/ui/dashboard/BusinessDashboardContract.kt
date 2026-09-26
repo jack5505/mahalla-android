@@ -70,6 +70,8 @@ sealed interface BusinessDashboardEffect : UiEffect {
     ) : BusinessDashboardEffect
 
     data class OpenMenu(val placeId: String, val placeName: String) : BusinessDashboardEffect
+
+    data class OpenEarnings(val placeId: String, val placeName: String) : BusinessDashboardEffect
 }
 
 /** Куда ведёт раздел. Отдельно от [BusinessSection] — домен про экраны не знает. */
@@ -82,4 +84,7 @@ internal fun BusinessSection.effect(access: BusinessAccess): BusinessDashboardEf
     )
 
     BusinessSection.Menu -> BusinessDashboardEffect.OpenMenu(access.placeId, access.placeName)
+
+    BusinessSection.Earnings ->
+        BusinessDashboardEffect.OpenEarnings(access.placeId, access.placeName)
 }

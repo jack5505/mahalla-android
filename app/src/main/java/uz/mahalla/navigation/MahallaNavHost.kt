@@ -16,6 +16,7 @@ import uz.mahalla.feature.booking.ui.BookingScreen
 import uz.mahalla.feature.booking.ui.appointment.AppointmentScreen
 import uz.mahalla.feature.booking.ui.appointments.MyAppointmentsScreen
 import uz.mahalla.feature.business.ui.dashboard.BusinessDashboardScreen
+import uz.mahalla.feature.business.ui.earnings.BusinessEarningsScreen
 import uz.mahalla.feature.business.ui.menu.BusinessMenuScreen
 import uz.mahalla.feature.business.ui.orders.BusinessOrdersScreen
 import uz.mahalla.feature.business.ui.queue.BusinessQueueScreen
@@ -494,6 +495,9 @@ fun MahallaNavHost(
                 onOpenMenu = { placeId, placeName ->
                     navController.navigate(BusinessMenuRoute(placeId, placeName))
                 },
+                onOpenEarnings = { placeId, placeName ->
+                    navController.navigate(BusinessEarningsRoute(placeId, placeName))
+                },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -508,6 +512,10 @@ fun MahallaNavHost(
 
         composable<BusinessMenuRoute> {
             BusinessMenuScreen(onBack = { navController.navigateUp() })
+        }
+
+        composable<BusinessEarningsRoute> {
+            BusinessEarningsScreen(onBack = { navController.navigateUp() })
         }
 
         // «Сотрудники» заведения (issue #189) — открывается со своей карточки
