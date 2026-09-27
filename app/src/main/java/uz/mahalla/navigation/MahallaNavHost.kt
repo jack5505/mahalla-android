@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.BuildConfig
 import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
@@ -275,12 +276,16 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> {
-                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
-                // строка в профиле (issue #103).
-                WalletScreen(
-                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
-                )
+            // Скоуп релиза (issue #333): пилот и публичный запуск идут без
+            // кошелька — маршрута в графе нет, как и таба (`BottomNavItem.visible`).
+            if (BuildConfig.PAYMENTS_ENABLED) {
+                composable<WalletRoute> {
+                    // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                    // строка в профиле (issue #103).
+                    WalletScreen(
+                        onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    )
+                }
             }
             composable<ProfileRoute> {
                 ProfileScreen(
@@ -337,7 +342,13 @@ fun MahallaNavHost(
                         navController.navigate(MyFreelancerIncomingOrdersRoute)
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
-                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    // `null` вне скоупа релиза (issue #333) — строка в профиле
+                    // не рисуется вовсе, а не ведёт в никуда.
+                    onOpenSubscription = if (BuildConfig.PAYMENTS_ENABLED) {
+                        { navController.navigate(SubscriptionRoute) }
+                    } else {
+                        null
+                    },
                     // Настройки уведомлений (эпик 11): тот же экран, что из
                     // центра уведомлений.
                     onOpenNotificationSettings = {
@@ -521,10 +532,18 @@ fun MahallaNavHost(
         // Deep link `mahalla://subscription` (эпик 11): «подписка
         // заканчивается» ведёт туда, где её продлевают. Аргументов у экрана
         // нет — какая подписка, бэкенд знает сам.
-        composable<SubscriptionRoute>(
-            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.SUBSCRIPTION_PATTERN }),
-        ) {
-            SubscriptionScreen(onBack = { navController.navigateUp() })
+        //
+        // Скоуп релиза (issue #333): вне флага маршрута в графе нет — ни
+        // строка профиля, ни deep link (манифест тоже не регистрирует хост
+        // `subscription`), ни push-цель (`NotificationTarget.of`) на него не
+        // попадают, так что оставлять composable недостижимым не пришлось бы,
+        // но лишний маршрут в графе — лишний повод для ошибки навигации.
+        if (BuildConfig.PAYMENTS_ENABLED) {
+            composable<SubscriptionRoute>(
+                deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.SUBSCRIPTION_PATTERN }),
+            ) {
+                SubscriptionScreen(onBack = { navController.navigateUp() })
+            }
         }
 
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,

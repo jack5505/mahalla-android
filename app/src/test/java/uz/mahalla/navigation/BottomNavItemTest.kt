@@ -6,10 +6,12 @@ import android.content.res.Configuration
 import androidx.test.core.app.ApplicationProvider
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import uz.mahalla.BuildConfig
 import uz.mahalla.R
 
 /**
@@ -45,6 +47,20 @@ class BottomNavItemTest {
         assertEquals(R.string.nav_activity, BottomNavItem.Activities.labelRes)
         assertEquals("Amallarim", contextFor("uz").getString(R.string.nav_activity))
         assertEquals("Активности", contextFor("ru").getString(R.string.nav_activity))
+    }
+
+    /**
+     * Скоуп релиза (issue #333): без оплаты и подписок кошелёк — таб на
+     * пустой экран, поэтому `BottomNavItem.visible` его не отдаёт. Флаг
+     * зашит в defaultConfig и в этой сборке всегда `false` — тест ловит
+     * случайный возврат Wallet в список, а не подтверждает константу самим
+     * собой: без изменений в `visible` он бы падал.
+     */
+    @Test
+    fun `wallet tab is hidden while payments are out of release scope`() {
+        assertFalse(BuildConfig.PAYMENTS_ENABLED)
+        assertFalse(BottomNavItem.visible.contains(BottomNavItem.Wallet))
+        assertTrue(BottomNavItem.entries.contains(BottomNavItem.Wallet))
     }
 
     @Test

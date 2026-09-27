@@ -1,8 +1,10 @@
 package uz.mahalla.feature.notifications.push
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Test
+import uz.mahalla.BuildConfig
 import uz.mahalla.feature.notifications.domain.NotificationCategory
 import uz.mahalla.feature.notifications.domain.NotificationType
 
@@ -33,12 +35,17 @@ class PushMessageTest {
         assertEquals("n-1", message.tag)
     }
 
+    /**
+     * Скоуп релиза (issue #333): подписки нет в этой сборке — экрана для
+     * пуша нет, ведём в центр уведомлений, как и любой другой пуш без цели.
+     */
     @Test
-    fun `subscription push opens the subscription screen without an entity`() {
+    fun `subscription push opens the notification centre while out of release scope`() {
+        assertFalse(BuildConfig.PAYMENTS_ENABLED)
         val message = PushMessage.of(mapOf("type" to "SUBSCRIPTION_EXPIRES"))
 
         assertEquals(NotificationCategory.Payments, message.category)
-        assertEquals("mahalla://subscription", message.deepLink)
+        assertEquals("mahalla://notifications", message.deepLink)
     }
 
     /**

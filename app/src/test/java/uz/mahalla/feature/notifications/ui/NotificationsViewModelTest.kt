@@ -11,6 +11,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import uz.mahalla.BuildConfig
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
@@ -395,12 +396,18 @@ class NotificationsViewModelTest {
     }
 
     /**
-     * Подписка (эпик 11): цель без `entityId` — экран `SubscriptionRoute`
-     * аргументов не принимает. Сервер его и не присылает, и раньше такое
-     * уведомление никуда не вело.
+     * Скоуп релиза (issue #333): подписки нет в этой сборке —
+     * `SubscriptionRoute` не зарегистрирован в графе, и `NotificationTarget.of`
+     * возвращает `None` для `SubscriptionExpires`, поэтому клик гасит
+     * уведомление, но никуда не ведёт. Проверяется не только состояние
+     * (`ScreenState.Content` не изменился бы и при регрессии), а сам канал
+     * эффектов: если бы подписка всё-таки эмитила `OpenSubscription`, он
+     * пришёл бы туда первым — `effects.first()` вернул бы его, а не
+     * следующий эффект от заказа.
      */
     @Test
-    fun `a subscription notification opens the subscription screen`() = runTest {
+    fun `a subscription notification does not navigate while out of release scope`() = runTest {
+        assertFalse(BuildConfig.PAYMENTS_ENABLED)
         val repository = FakeNotificationsRepository()
         repository.defaultPage = page(
             listOf(
@@ -409,14 +416,17 @@ class NotificationsViewModelTest {
                     type = NotificationType.SubscriptionExpires,
                     entityId = null,
                 ),
+                notification(id = "n-2", type = NotificationType.OrderPlaced, entityId = "o-42"),
             ),
             hasMore = false,
         )
         val viewModel = NotificationsViewModel(repository)
 
         viewModel.onEvent(NotificationsEvent.NotificationClicked("n-1"))
+        viewModel.onEvent(NotificationsEvent.NotificationClicked("n-2"))
 
-        assertEquals(NotificationsEffect.OpenSubscription, viewModel.effects.first())
+        assertEquals(NotificationsEffect.OpenOrder("o-42"), viewModel.effects.first())
+        assertTrue(viewModel.state.value.items is ScreenState.Content)
     }
 
     @Test

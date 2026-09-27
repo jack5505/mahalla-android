@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.ui.graphics.vector.ImageVector
+import uz.mahalla.BuildConfig
 import uz.mahalla.R
 
 /** Разделы нижней навигации (эпик 1.2). Порядок = порядок в макете. */
@@ -19,5 +20,14 @@ enum class BottomNavItem(
     Discovery(DiscoveryRoute, R.string.nav_discovery, Icons.Outlined.Place),
     Activities(ActivitiesRoute, R.string.nav_activity, Icons.AutoMirrored.Outlined.ReceiptLong),
     Wallet(WalletRoute, R.string.nav_wallet, Icons.Outlined.AccountBalanceWallet),
-    Profile(ProfileRoute, R.string.nav_profile, Icons.Outlined.Person),
+    Profile(ProfileRoute, R.string.nav_profile, Icons.Outlined.Person);
+
+    companion object {
+        /**
+         * Табы, доступные в этой сборке. Кошелёк скрыт вне скоупа релиза
+         * (issue #333): без оплаты и подписок это таб на пустой экран.
+         */
+        val visible: List<BottomNavItem>
+            get() = entries.filter { it != Wallet || BuildConfig.PAYMENTS_ENABLED }
+    }
 }

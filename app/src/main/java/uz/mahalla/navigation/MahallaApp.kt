@@ -55,7 +55,7 @@ fun MahallaApp(
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentDestination = currentEntry?.destination
-    val selectedItem = BottomNavItem.entries.firstOrNull { it.matches(currentDestination) }
+    val selectedItem = BottomNavItem.visible.firstOrNull { it.matches(currentDestination) }
     val snackbarController = rememberSnackbarController()
     val expiredMessage = stringResource(R.string.error_unauthorized)
 
@@ -82,7 +82,7 @@ fun MahallaApp(
                 // Нижняя навигация — компонент UI-кита (эпик 2.2): цвета,
                 // подписи и цель нажатия 48dp заданы там, а не на каждом экране.
                 MahallaBottomNav(
-                    items = BottomNavItem.entries.map { item ->
+                    items = BottomNavItem.visible.map { item ->
                         NavItemUi(
                             id = item.name,
                             label = stringResource(item.labelRes),
@@ -93,7 +93,7 @@ fun MahallaApp(
                     onSelect = { selected ->
                         // Ищем по name, а не valueOf: неизвестный id — это баг
                         // сборки списка, а не повод уронить приложение.
-                        BottomNavItem.entries
+                        BottomNavItem.visible
                             .firstOrNull { it.name == selected.id }
                             ?.let(navController::navigateToTab)
                     },

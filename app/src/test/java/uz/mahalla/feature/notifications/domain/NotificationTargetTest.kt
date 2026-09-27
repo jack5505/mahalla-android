@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uz.mahalla.BuildConfig
 import java.time.Instant
 
 /**
@@ -46,19 +47,20 @@ class NotificationTargetTest {
     }
 
     /**
-     * Подписка (эпик 11) — цель без `entityId`: экран `SubscriptionRoute`
-     * аргументов не принимает, какая подписка, бэкенд знает сам. Тем она и
-     * безопасна: разбирать нечего, значит и ошибиться не в чем.
+     * Скоуп релиза (issue #333): подписки нет в этой сборке —
+     * `SubscriptionRoute` не зарегистрирован в графе, и цель на него вела бы
+     * в никуда. Флаг зашит в defaultConfig и в этой сборке всегда `false`.
      */
     @Test
-    fun `subscription notifications lead to the subscription screen`() {
+    fun `subscription notifications lead nowhere while out of release scope`() {
+        assertFalse(BuildConfig.PAYMENTS_ENABLED)
         val notification = notification(
             type = NotificationType.SubscriptionExpires,
             entityId = null,
         )
 
-        assertEquals(NotificationTarget.Subscription, NotificationTarget.of(notification))
-        assertTrue(notification.isActionable)
+        assertEquals(NotificationTarget.None, NotificationTarget.of(notification))
+        assertFalse(notification.isActionable)
     }
 
     @Test
