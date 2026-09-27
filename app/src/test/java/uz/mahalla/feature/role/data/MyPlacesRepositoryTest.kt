@@ -246,6 +246,24 @@ class MyPlacesRepositoryTest {
         )
     }
 
+    /**
+     * Тот же дефект бэкенда (issue #191, #256), но без тела вовсе — самый
+     * частый случай: без токена сервер молча отвечает `500`. Тут показать
+     * «ошибка сервера» значило бы соврать про причину, которую клиент на самом
+     * деле знает — до фикса бэкенда честнее «войдите заново» (issue #344).
+     * Ответ с текстом (тест выше) при этом не трогаем: там сервер объяснился
+     * сам, и врать незачем.
+     */
+    @Test
+    fun `a bodiless 500 without a token reads as a session that ended`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val failure = (repository().myPlaces() as ApiResult.Failure).failure
+
+        assertEquals(ApiError.Unauthorized, failure.error)
+        assertNull(failure.serverMessage)
+    }
+
     private fun repository() = DefaultProviderRepository(
         api = NetworkFactory
             .retrofit(

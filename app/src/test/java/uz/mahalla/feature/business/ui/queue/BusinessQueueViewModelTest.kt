@@ -154,13 +154,13 @@ class BusinessQueueViewModelTest {
     fun `a refusal of an action keeps the queue and shows the server message`() = runTest {
         val repository = FakeBusinessRepository()
         repository.queueResult = ApiResult.Success(listOf(entry("t-1", WalkInStatus.Waiting)))
-        repository.actResult = { _, _ -> ApiResult.Failure(ApiFailure(ApiError.Forbidden)) }
+        repository.actResult = { _, _ -> ApiResult.Failure(ApiFailure(ApiError.Forbidden())) }
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessQueueEvent.ActionClicked("t-1", QueueAction.Start))
 
         val state = viewModel.state.value
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertEquals(
             WalkInStatus.Waiting,
             (state.entries as ScreenState.Content).data.single().status,

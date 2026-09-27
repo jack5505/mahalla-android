@@ -78,7 +78,7 @@ class NotificationsViewModelTest {
         val repository = FakeNotificationsRepository()
         repository.defaultPage = ApiResult.Failure(
             ApiFailure(
-                error = ApiError.Forbidden,
+                error = ApiError.Forbidden(),
                 server = ServerError(httpCode = 403, message = "Joylashuv ruxsatini yoqing"),
             ),
         )

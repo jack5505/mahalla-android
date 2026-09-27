@@ -203,7 +203,7 @@ class DefaultCatalogRepository @Inject constructor(
             // Место удалили или скрыли — своя копия из Room тут не помощь, а
             // выдумка: человек пойдёт по адресу, которого больше нет. Заодно
             // чистим кэш, чтобы оно не всплыло в офлайн-выдаче.
-            if (place.error in GONE_ERRORS) {
+            if (place.error.isGone()) {
                 placeDao.delete(placeId)
                 return place
             }
@@ -231,7 +231,7 @@ class DefaultCatalogRepository @Inject constructor(
     override suspend fun placeCard(placeId: String): ApiResult<Place> {
         val response = apiCall { api.place(placeId).payload() }
         if (response is ApiResult.Failure) {
-            if (response.error in GONE_ERRORS) {
+            if (response.error.isGone()) {
                 placeDao.delete(placeId)
                 return response
             }
@@ -301,6 +301,26 @@ class DefaultCatalogRepository @Inject constructor(
         else -> false
     }
 
+    /**
+     * Место действительно пропало из выдачи, а не временно недоступно по
+     * причине, не связанной с самим местом (issue #344). 404 — сервер прямо
+     * сказал «нет». 403 без кода — исторически то же самое: своей карточки у
+     * этой причины нет, но и намёка на «попробуйте позже» тоже нет.
+     *
+     * Единственное подтверждённое исключение — гео (`GEO_*`,
+     * `docs/API-CONTRACT.md`): без геозаголовков или с мусором в них 403
+     * приходит на **любой** запрос, а не из-за конкретного места, и раньше
+     * это заодно стирало карточку из кэша при первой же попытке без гео.
+     * Другие машинные коды 403 (гейт вертикали, блокировка) сюда намеренно не
+     * добавлены: контракт не даёт понять, что именно они означают для
+     * конкретного места, — тот же код бэкенд вешает и на «это не ваше
+     * заведение» (см. `PharmacyRepositoryTest`), а там место действительно
+     * не должно всплывать из кэша. Расширять список — только когда бэкенд
+     * заведёт свой код и подтвердит его смысл.
+     */
+    private fun ApiError.isGone(): Boolean = this == ApiError.NotFound ||
+        (this is ApiError.Forbidden && !isGeo)
+
     private suspend fun location(): DeviceLocation = locationProvider.current()
 
     private suspend fun cachedPage(
@@ -348,9 +368,6 @@ class DefaultCatalogRepository @Inject constructor(
     }
 
     private companion object {
-        /** Ответы, после которых кэшу верить нельзя: места больше нет. */
-        val GONE_ERRORS = setOf(ApiError.NotFound, ApiError.Forbidden)
-
         /** Сколько мест держим в офлайн-выдаче — один экран прокрутки. */
         const val CACHE_PAGE_SIZE = 50
 

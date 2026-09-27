@@ -279,6 +279,7 @@
     <string name="error_timeout">Сервер не ответил</string>
     <string name="error_unauthorized">Сессия истекла, войдите снова</string>
     <string name="error_forbidden">Нет доступа к этому действию</string>
+    <string name="error_geo_required">Разрешите доступ к геолокации для этого действия</string>
     <string name="error_not_found">Данные не найдены</string>
     <string name="error_server">Ошибка на сервере</string>
     <string name="error_unknown">Что-то пошло не так</string>
