@@ -47,15 +47,23 @@ class CheckoutValidatorTest {
     }
 
     @Test
+    fun `the default payment method is cash`() {
+        assertEquals(PaymentMethod.Cash, CheckoutForm().payment)
+    }
+
+    @Test
     fun `wallet payment reports exactly how much is missing`() {
-        val errors = validate(pickup(), walletBalanceSum = 30_000)
+        // Наличные — единственный способ на релизе (issue #334), но валидатор
+        // остаётся общим: кошелёк оформление больше не предлагает, а логика
+        // проверки баланса не выдумана заново, если он вернётся.
+        val errors = validate(pickup().copy(payment = PaymentMethod.Wallet), walletBalanceSum = 30_000)
 
         assertEquals(listOf(CheckoutError.InsufficientFunds(20_000)), errors)
     }
 
     @Test
     fun `cash payment does not look at the wallet`() {
-        val errors = validate(pickup().copy(payment = PaymentMethod.Cash), walletBalanceSum = 0)
+        val errors = validate(pickup(), walletBalanceSum = 0)
 
         assertTrue(errors.isEmpty())
     }
@@ -70,7 +78,11 @@ class CheckoutValidatorTest {
 
     @Test
     fun `every problem is reported at once`() {
-        val form = CheckoutForm(method = DeliveryMethod.Delivery, address = "")
+        val form = CheckoutForm(
+            method = DeliveryMethod.Delivery,
+            address = "",
+            payment = PaymentMethod.Wallet,
+        )
 
         val errors = validate(form, walletBalanceSum = 0)
 
@@ -79,10 +91,10 @@ class CheckoutValidatorTest {
     }
 
     @Test
-    fun `a filled form with money on the wallet passes`() {
+    fun `a filled cash form passes`() {
         val form = CheckoutForm(method = DeliveryMethod.Delivery, address = "Navoiy 5")
 
-        assertTrue(CheckoutValidator.canSubmit(form, totals, false, 50_000))
+        assertTrue(CheckoutValidator.canSubmit(form, totals, false, 0))
     }
 
     private fun pickup() = CheckoutForm(method = DeliveryMethod.Pickup)

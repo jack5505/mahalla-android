@@ -482,12 +482,10 @@
     <string name="checkout_payment">To\'lov</string>
     <string name="checkout_payment_wallet">Hamyon</string>
     <string name="checkout_payment_cash">Naqd pul</string>
-    <string name="checkout_wallet_balance">Hamyon balansi: %1$s</string>
     <string name="checkout_top_up">Hamyonni to\'ldirish</string>
     <string name="checkout_delivery_fee">Yetkazib berish</string>
     <string name="checkout_submit">Buyurtma berish</string>
     <string name="checkout_error_address">Yetkazib berish uchun manzilni kiriting</string>
-    <string name="checkout_error_insufficient_funds">Hamyonda %1$s yetishmayapti</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Buyurtma</string>

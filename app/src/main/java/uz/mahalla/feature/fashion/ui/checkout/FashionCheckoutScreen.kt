@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,7 +39,6 @@ import uz.mahalla.feature.fashion.ui.priceText
 import uz.mahalla.feature.food.domain.CartTotals
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -59,7 +57,6 @@ import uz.mahalla.ui.theme.TabularNums
 @Composable
 fun FashionCheckoutScreen(
     onOpenOrders: () -> Unit,
-    onOpenWallet: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FashionCheckoutViewModel = hiltViewModel(),
@@ -70,7 +67,6 @@ fun FashionCheckoutScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 FashionCheckoutEffect.OpenOrders -> onOpenOrders()
-                FashionCheckoutEffect.OpenWallet -> onOpenWallet()
             }
         }
     }
@@ -190,43 +186,15 @@ private fun CheckoutForm(
         )
     }
 
+    // Оплата — только наличные на этом релизе (issue #334): выбора нет,
+    // карточка одна.
     SectionHeader(title = stringResource(R.string.checkout_payment))
-    Column(
-        modifier = Modifier.selectableGroup(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.item),
-    ) {
-        MahallaChoiceCard(
-            title = stringResource(R.string.checkout_payment_wallet),
-            selected = state.form.payment == PaymentMethod.Wallet,
-            onClick = { onEvent(FashionCheckoutEvent.PaymentSelected(PaymentMethod.Wallet)) },
-            note = state.walletNote(),
-            enabled = !state.orderCreated,
-        )
-        MahallaChoiceCard(
-            title = stringResource(R.string.checkout_payment_cash),
-            selected = state.form.payment == PaymentMethod.Cash,
-            onClick = { onEvent(FashionCheckoutEvent.PaymentSelected(PaymentMethod.Cash)) },
-            enabled = !state.orderCreated,
-        )
-    }
-
-    // Сколько не хватает — числом: «недостаточно средств» не отвечает на
-    // вопрос, сколько пополнять.
-    state.insufficientFunds?.let { error ->
-        Text(
-            text = stringResource(
-                R.string.checkout_error_insufficient_funds,
-                priceText(error.missingSum),
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.error,
-        )
-        MahallaButton(
-            text = stringResource(R.string.checkout_top_up),
-            onClick = { onEvent(FashionCheckoutEvent.TopUpClicked) },
-            variant = MahallaButtonVariant.Secondary,
-        )
-    }
+    MahallaChoiceCard(
+        title = stringResource(R.string.checkout_payment_cash),
+        selected = true,
+        onClick = {},
+        enabled = false,
+    )
 
     state.submitError?.let { FashionFailure(failure = it) }
 
@@ -358,18 +326,6 @@ private fun OrderLine(item: FashionCartItem) {
     }
 }
 
-/**
- * Подпись кошелька: сколько на нём есть. Баланс не приехал — подписи нет:
- * «0 сум» на неотвеченном запросе — прямая ложь о деньгах.
- */
-@Composable
-private fun FashionCheckoutState.walletNote(): String? =
-    if (balanceKnown) {
-        stringResource(R.string.checkout_wallet_balance, priceText(walletBalanceSum))
-    } else {
-        null
-    }
-
 @ThemeLanguagePreviews
 @Composable
 private fun FashionCheckoutPreview() {
@@ -390,8 +346,6 @@ private fun FashionCheckoutPreview() {
                     ),
                 ),
                 totals = CartTotals(subtotalSum = 480_000),
-                balanceKnown = true,
-                walletBalanceSum = 1_000_000,
             ),
             onEvent = {},
             onBack = {},

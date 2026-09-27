@@ -9,7 +9,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -24,21 +23,13 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.feature.food.domain.Cart
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.onboarding.domain.City
 import uz.mahalla.feature.role.domain.CustomerForm
-import uz.mahalla.data.security.PaymentConfirmationMethod
-import uz.mahalla.feature.wallet.domain.Wallet
-import uz.mahalla.feature.wallet.domain.WalletPaymentRejection
-import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlowFactory
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeCartRepository
 import uz.mahalla.testutil.FakeDeliveryFeeRepository
 import uz.mahalla.testutil.FakeOrderRepository
-import uz.mahalla.testutil.FakePaymentConfirmationPolicy
-import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakeRoleRepository
-import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
 import uz.mahalla.testutil.cartLine
 
@@ -47,6 +38,9 @@ import uz.mahalla.testutil.cartLine
  *
  * Ни времени заказа, ни комментария в форме нет: `PlaceOrderRequest` бэкенда
  * их не принимает.
+ *
+ * Оплата — только наличные (issue #334, релиз только `CASH`): кошелёк из
+ * чекаута убран, заказ уходит в сеть сразу по нажатию «оформить».
  *
  * Стоимость доставки приезжает отдельным запросом с задержкой (issue #179):
  * тесты, которым она важна, двигают время `advanceUntilIdle()`.
@@ -61,17 +55,8 @@ class CheckoutViewModelTest {
 
     private val cartRepository = FakeCartRepository()
     private val orderRepository = FakeOrderRepository()
-    private val walletRepository = FakeWalletRepository()
     private val roleRepository = FakeRoleRepository()
     private val deliveryFeeRepository = FakeDeliveryFeeRepository()
-    private val pinStorage = FakePinStorage(initialPin = PIN)
-
-    /**
-     * По умолчанию подтверждать нечем: тестам про форму заказа важен сам
-     * заказ, а не шторка оплаты. Подтверждение проверяется отдельными тестами
-     * ниже и полностью — в `WalletPaymentFlowTest`.
-     */
-    private val confirmationPolicy = FakePaymentConfirmationPolicy()
 
     @Test
     fun `an unknown delivery fee leaves the total at the price of the items`() = runTest {
@@ -134,21 +119,6 @@ class CheckoutViewModelTest {
         advanceUntilIdle()
 
         assertEquals(60_100L, viewModel.state.value.totals.totalSum)
-    }
-
-    @Test
-    fun `the wallet is checked against the total with the delivery fee`() = runTest {
-        // Баланс, которого хватает на позиции, но не на доставку, — отказ
-        // сервера при оформлении; сказать об этом надо раньше.
-        seed()
-        deliveryFeeRepository.fee = ApiResult.Success(5_000)
-        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 60_000))
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        advanceUntilIdle()
-
-        assertEquals(5_000L, viewModel.state.value.insufficientFunds?.missingSum)
     }
 
     @Test
@@ -227,79 +197,17 @@ class CheckoutViewModelTest {
     }
 
     @Test
-    fun `a failed cash order keeps the form and shows the error`() = runTest {
+    fun `a failed order keeps the form and shows the error`() = runTest {
         seed()
         orderRepository.created = ApiResult.Failure(ApiError.NoConnection)
         val viewModel = viewModel()
         viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
 
         viewModel.onEvent(CheckoutEvent.SubmitClicked)
 
         assertEquals(ApiError.NoConnection, viewModel.state.value.submitError?.error)
         assertEquals("Amir Temur 1", viewModel.state.value.form.address)
         assertFalse(viewModel.state.value.isSubmitting)
-    }
-
-    /**
-     * У оплаты кошельком отказ остаётся в шторке подтверждения (8.3), а не
-     * уходит под форму: там же кнопка «повторить» — тем же ключом
-     * идемпотентности, — и там же названа сумма, из-за которой всё началось.
-     */
-    @Test
-    fun `a failed wallet payment keeps the form and shows the refusal in the sheet`() = runTest {
-        seed()
-        orderRepository.created = ApiResult.Failure(ApiError.NoConnection)
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-
-        val rejection = viewModel.state.value.payment?.rejection
-        assertEquals(
-            ApiError.NoConnection,
-            (rejection as WalletPaymentRejection.Declined).failure.error,
-        )
-        assertTrue(viewModel.state.value.payment?.canRetry == true)
-        assertEquals("Amir Temur 1", viewModel.state.value.form.address)
-    }
-
-    @Test
-    fun `wallet payment reports how much is missing`() = runTest {
-        seed()
-        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 50_000))
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-
-        assertEquals(10_000L, viewModel.state.value.insufficientFunds?.missingSum)
-        assertNull(orderRepository.createdWith)
-    }
-
-    @Test
-    fun `switching to cash unblocks an order the wallet cannot pay`() = runTest {
-        seed()
-        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 0))
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
-
-        assertTrue(viewModel.state.value.canSubmit)
-    }
-
-    @Test
-    fun `an unknown balance does not block the order`() = runTest {
-        // Решающее слово всё равно за сервером; отказать из-за неотвеченного
-        // запроса — хуже.
-        seed()
-        walletRepository.wallet = ApiResult.Failure(ApiError.Timeout)
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        assertFalse(viewModel.state.value.balanceKnown)
-        assertTrue(viewModel.state.value.canSubmit)
     }
 
     @Test
@@ -324,84 +232,13 @@ class CheckoutViewModelTest {
         assertEquals(CheckoutEffect.OrderCreated("o-42"), viewModel.effects.first())
     }
 
-    // --- Оплата кошельком: подтверждение и идемпотентность (8.3, issue #12) ---
-
     @Test
-    fun `wallet payment waits for the pin before creating the order`() = runTest {
-        confirmationPolicy.method = PaymentConfirmationMethod.Pin
-        seed()
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-
-        assertNotNull(viewModel.state.value.payment)
-        assertEquals(0, orderRepository.createCount)
-
-        viewModel.onEvent(CheckoutEvent.PaymentPinChanged(PIN))
-
-        assertEquals(1, orderRepository.createCount)
-        assertEquals(CheckoutEffect.OrderCreated("o-1"), viewModel.effects.first())
-    }
-
-    @Test
-    fun `a second tap on submit does not create a second order`() = runTest {
-        // До 8.3 второе нажатие ловил только флаг isSubmitting — то есть не
-        // ловил ничего после отказа.
-        confirmationPolicy.method = PaymentConfirmationMethod.Pin
-        seed()
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-        viewModel.onEvent(CheckoutEvent.PaymentPinChanged(PIN))
-
-        assertEquals(1, orderRepository.createCount)
-    }
-
-    @Test
-    fun `a wrong pin leaves the order uncreated`() = runTest {
-        confirmationPolicy.method = PaymentConfirmationMethod.Pin
-        seed()
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-
-        repeat(3) { viewModel.onEvent(CheckoutEvent.PaymentPinChanged("000000")) }
-
-        assertEquals(
-            WalletPaymentRejection.ConfirmationFailed,
-            viewModel.state.value.payment?.rejection,
-        )
-        assertEquals(0, orderRepository.createCount)
-    }
-
-    @Test
-    fun `topping up from the sheet closes it and opens the wallet`() = runTest {
-        confirmationPolicy.method = PaymentConfirmationMethod.Pin
-        walletRepository.wallet = ApiResult.Success(Wallet(availableSum = 0))
-        seed()
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Wallet))
-
-        viewModel.onEvent(CheckoutEvent.TopUpClicked)
-
-        assertNull(viewModel.state.value.payment)
-        assertEquals(CheckoutEffect.OpenWallet, viewModel.effects.first())
-    }
-
-    @Test
-    fun `a cash order repeated after a refusal keeps the same idempotency key`() = runTest {
-        // Повтор — тот же заказ, а не второй: наличные подтверждения не
-        // требуют, но от двойного оформления защищены так же.
+    fun `an order repeated after a refusal keeps the same idempotency key`() = runTest {
+        // Повтор — тот же заказ, а не второй.
         seed()
         orderRepository.created = ApiResult.Failure(ApiError.NoConnection)
         val viewModel = viewModel()
         viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
 
         viewModel.onEvent(CheckoutEvent.SubmitClicked)
         viewModel.onEvent(CheckoutEvent.SubmitClicked)
@@ -435,26 +272,6 @@ class CheckoutViewModelTest {
         )
     }
 
-    /**
-     * С 8.3 у кошелька и наличных разные пути к созданному заказу — тест выше
-     * идёт кошельком (он по умолчанию), этот держит наличные.
-     */
-    @Test
-    fun `a cash order is counted as well`() = runTest {
-        seed()
-        orderRepository.created = ApiResult.Success("o-42")
-        val viewModel = viewModel()
-        viewModel.onEvent(CheckoutEvent.AddressChanged("Amir Temur 1"))
-        viewModel.onEvent(CheckoutEvent.PaymentSelected(PaymentMethod.Cash))
-
-        viewModel.onEvent(CheckoutEvent.SubmitClicked)
-
-        assertEquals(
-            listOf(AnalyticsEvents.ordered(PLACE_ID, AnalyticsVertical.Food)),
-            analytics.events,
-        )
-    }
-
     @Test
     fun `a refused order is not counted`() = runTest {
         seed()
@@ -474,20 +291,13 @@ class CheckoutViewModelTest {
     private fun viewModel() = CheckoutViewModel(
         cartRepository = cartRepository,
         orderRepository = orderRepository,
-        walletRepository = walletRepository,
         roleRepository = roleRepository,
         deliveryFeeRepository = deliveryFeeRepository,
         analytics = analytics,
-        paymentFlows = WalletPaymentFlowFactory(
-            walletRepository = walletRepository,
-            pinStorage = pinStorage,
-            confirmationPolicy = confirmationPolicy,
-        ),
         savedStateHandle = SavedStateHandle(mapOf("placeId" to PLACE_ID)),
     )
 
     private companion object {
         const val PLACE_ID = "place-1"
-        const val PIN = "123456"
     }
 }

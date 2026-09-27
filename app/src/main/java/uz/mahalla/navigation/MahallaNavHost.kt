@@ -871,7 +871,6 @@ fun MahallaNavHost(
                         popUpTo<MenuRoute> { inclusive = true }
                     }
                 },
-                onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -915,7 +914,6 @@ fun MahallaNavHost(
                         popUpTo<FashionCartRoute> { inclusive = true }
                     }
                 },
-                onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
         }
