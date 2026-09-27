@@ -92,8 +92,11 @@ interface CatalogRepository {
  *
  * Правила фоллбэка:
  *
- * - первая страница при сетевой ошибке отдаётся из кэша, отфильтрованная
- *   [PlaceFilterEngine] целиком: кроме этих правил у кэша ничего нет;
+ * - первая страница при сетевой ошибке ([isNetworkFailure]: нет соединения,
+ *   таймаут, 5xx) отдаётся из кэша, отфильтрованная [PlaceFilterEngine]
+ *   целиком: кроме этих правил у кэша ничего нет. [ApiError.Serialization] и
+ *   прочие отказы кэшем не маскируются — это не «сеть недоступна», а сервер
+ *   ответил что-то, что клиент не ждал, и это надо показать (issue #387);
  * - ответ сервера повторно не фильтруется — только сортируется
  *   ([PlaceFilterEngine.applyRemote]);
  * - карточка поднимается из кэша только когда место просто не доехало
@@ -137,6 +140,7 @@ class DefaultCatalogRepository @Inject constructor(
             } else {
                 api.search(query = query, category = filters.apiCategory())
                     .payload()
+                    .content
                     .map { it.toDomain(location) }
             }
         }
@@ -156,7 +160,18 @@ class DefaultCatalogRepository @Inject constructor(
                 )
             }
 
-            is ApiResult.Failure -> cachedPage(filters, page, response.failure)
+            is ApiResult.Failure -> {
+                // Кэш маскирует только сетевой отказ. Serialization — баг
+                // контракта (issue #387: search три недели молча подменялся
+                // кэшем именно так), Business/Unauthorized/… — ответ сервера,
+                // который нужно показать как есть, а не спрятать за "старыми
+                // данными".
+                if (response.error.isNetworkFailure()) {
+                    cachedPage(filters, page, response.failure)
+                } else {
+                    response
+                }
+            }
         }
     }
 
@@ -274,6 +289,18 @@ class DefaultCatalogRepository @Inject constructor(
      * позицию, а без разрешения — центр выбранного города: пустой экран из-за
      * отсутствия координат хуже, чем выдача по центру города.
      */
+    /**
+     * Кэш — офлайновая копия, а не универсальный фоллбэк. Он подменяет только
+     * отказ, за которым не стоит осмысленный ответ сервера: нет соединения,
+     * таймаут, 5xx. [ApiError.Serialization], [ApiError.Business] и прочее —
+     * сервер ответил, и это надо показать, а не спрятать за старыми данными.
+     */
+    private fun ApiError.isNetworkFailure(): Boolean = when (this) {
+        ApiError.NoConnection, ApiError.Timeout -> true
+        is ApiError.Http -> code >= 500
+        else -> false
+    }
+
     private suspend fun location(): DeviceLocation = locationProvider.current()
 
     private suspend fun cachedPage(

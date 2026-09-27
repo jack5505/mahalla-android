@@ -3,6 +3,7 @@ package uz.mahalla.feature.discovery.data
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -224,6 +225,50 @@ class CatalogRepositoryTest {
 
         val ids = (result as ApiResult.Success).data.items.map(Place::id)
         assertEquals(listOf("pharmacy", "unknown"), ids)
+    }
+
+    @Test
+    fun `an empty search page is a success, not a serialization failure`() = runTest {
+        // Симптом issue #387: сервер честно отвечает "ничего не найдено"
+        // (content: []), а не ошибка контракта — экран обязан показать
+        // "ничего не найдено", а не тихо подменить это кэшем.
+        dao.seed(listOf(entity("cached")))
+        server.enqueue(json(SEARCH_EMPTY_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "ox"))
+
+        val page = (result as ApiResult.Success).data
+        assertTrue(page.items.isEmpty())
+        assertFalse("пустой ответ сервера — не повод показать кэш", page.fromCache)
+    }
+
+    @Test
+    fun `a serialization failure is not masked by the cache`() = runTest {
+        // Ровно причина issue #387: контракт разошёлся (старая форма ответа —
+        // список вместо страницы), разбор падает в ApiError.Serialization —
+        // и это баг контракта, который нужно показать, а не спрятать за
+        // "показаны сохранённые данные". Кэш нарочно содержит подходящую под
+        // запрос запись — маскировать нечем не потому, что кэш пуст.
+        dao.seed(listOf(entity("cached", name = "Oxy Cached")))
+        server.enqueue(json(SEARCH_LEGACY_LIST_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "ox"))
+
+        assertEquals(ApiError.Serialization, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `a no-connection failure still falls back to the cache`() = runTest {
+        // Регрессия офлайна: отвал сети по-прежнему должен уводить в кэш —
+        // маскировать нужно только контрактный баг, не реальный офлайн.
+        dao.seed(listOf(entity("cached", name = "Oxy Cached", distanceMeters = 200)))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repository().places(DiscoveryFilters(query = "ox"))
+
+        val page = (result as ApiResult.Success).data
+        assertEquals(listOf("cached"), page.items.map(Place::id))
+        assertTrue(page.fromCache)
     }
 
     @Test
@@ -653,10 +698,31 @@ class CatalogRepositoryTest {
             ]}
         """
 
+        // Ответ `search` — страница (`PageResponse`), а не голый список
+        // (issue #387: до этой сверки контракт был снят до смены ответа
+        // бэкенда, и разбор списком тихо падал в ApiError.Serialization).
         const val SEARCH_BODY = """
-            {"success":true,"data":[
+            {"success":true,"data":{"content":[
               {"id":"s-1","name":"Osh markazi","category":"FOOD","description":"Shashlik ham bor",
                "city":"Toshkent","lat":41.3157,"lng":69.2797,"ratingAvg":4.6,"isActive":true}
+              ],"page":0,"size":20,"totalElements":1,"totalPages":1,"first":true,"last":true}}
+        """
+
+        /** Тот же симптом, что в issue #387: ни одного совпадения. */
+        const val SEARCH_EMPTY_BODY = """
+            {"success":true,"data":{"content":[],
+              "page":0,"size":20,"totalElements":0,"totalPages":0,"first":true,"last":true}}
+        """
+
+        /**
+         * Старая форма ответа (голый список) — то, что бэкенд отдавал до
+         * jack5505/mahalla#204. `PageDto` ждёт объект, а не массив: разбор
+         * такого тела должен упасть в `SerializationException`, а не молча
+         * подставить пустую страницу.
+         */
+        const val SEARCH_LEGACY_LIST_BODY = """
+            {"success":true,"data":[
+              {"id":"s-1","name":"Osh markazi","category":"FOOD"}
             ]}
         """
 
