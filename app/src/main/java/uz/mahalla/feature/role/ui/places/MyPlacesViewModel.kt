@@ -7,6 +7,7 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.NewPromotionDraft
 import uz.mahalla.feature.role.data.ProviderRepository
@@ -252,11 +253,19 @@ class MyPlacesViewModel @Inject constructor(
     /**
      * Экран сам не рисует кнопку тому, кому нельзя (issue #252) — проверка
      * здесь на случай, если событие всё-таки придёт.
+     *
+     * Категория решает, какая витрина откроется (issue #280): у обеих форма
+     * создания живёт в самой витрине, а не здесь, поэтому дальше расходится
+     * только пункт назначения.
      */
     private fun manageProducts(placeId: String) {
         val place = placeOrNull(placeId) ?: return
         if (!place.canManageProducts) return
-        emitEffect(MyPlacesEffect.OpenPharmacyManagement(place.id, place.name))
+        when (place.category) {
+            PlaceCategory.Fashion ->
+                emitEffect(MyPlacesEffect.OpenFashionManagement(place.id, place.name))
+            else -> emitEffect(MyPlacesEffect.OpenPharmacyManagement(place.id, place.name))
+        }
     }
 
     /** Кнопка скрыта не тому, кому нельзя, — проверка здесь на всякий случай. */

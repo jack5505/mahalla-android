@@ -63,6 +63,7 @@ class BusinessMenuViewModel @Inject constructor(
             is BusinessMenuEvent.StopListToggled -> toggleStopList(event.itemId)
 
             BusinessMenuEvent.AddItemClicked -> openForm()
+            is BusinessMenuEvent.EditItemClicked -> openEditForm(event.itemId)
             BusinessMenuEvent.FormDismissed -> closeForm()
             is BusinessMenuEvent.SectionSelected -> editForm { copy(sectionId = event.sectionId) }
             is BusinessMenuEvent.NameChanged -> editForm { copy(name = event.value) }
@@ -78,6 +79,10 @@ class BusinessMenuViewModel @Inject constructor(
 
             is BusinessMenuEvent.HalalChanged -> editForm { copy(isHalal = event.value) }
             BusinessMenuEvent.SaveClicked -> save()
+
+            is BusinessMenuEvent.DeleteClicked -> requestDelete(event.itemId)
+            BusinessMenuEvent.DeleteConfirmed -> confirmDelete()
+            BusinessMenuEvent.DeleteDismissed -> dismissDelete()
         }
     }
 
@@ -150,11 +155,27 @@ class BusinessMenuViewModel @Inject constructor(
      * нескольких экран всё равно покажет.
      */
     private fun openForm() {
+        if (currentState.isBusy) return
         val sections = currentState.sectionIds
         updateState {
             copy(
                 isFormVisible = true,
                 form = NewMenuItemForm(sectionId = sections.firstOrNull().orEmpty()),
+                formErrors = emptyList(),
+                formFailure = null,
+            )
+        }
+    }
+
+    /** Правка уже выставленной позиции — форма та же, предзаполненная (issue #288). */
+    private fun openEditForm(itemId: String) {
+        if (currentState.isBusy) return
+        val sectionId = sectionIdOf(itemId) ?: return
+        val item = itemOrNull(itemId) ?: return
+        updateState {
+            copy(
+                isFormVisible = true,
+                form = NewMenuItemForm.of(item, sectionId),
                 formErrors = emptyList(),
                 formFailure = null,
             )
@@ -210,7 +231,12 @@ class BusinessMenuViewModel @Inject constructor(
 
         updateState { copy(isSaving = true, formErrors = emptyList(), formFailure = null) }
         viewModelScope.launch {
-            when (val result = repository.createItem(placeId, form)) {
+            val result = if (form.isNew) {
+                repository.createItem(placeId, form)
+            } else {
+                repository.updateItem(placeId, form)
+            }
+            when (result) {
                 is ApiResult.Failure -> updateState {
                     copy(isSaving = false, formFailure = result.failure)
                 }
@@ -224,7 +250,42 @@ class BusinessMenuViewModel @Inject constructor(
                             form = NewMenuItemForm(),
                         )
                     }
-                    emitEffect(BusinessMenuEffect.ItemCreated(form.name))
+                    emitEffect(
+                        if (form.isNew) {
+                            BusinessMenuEffect.ItemCreated(form.name)
+                        } else {
+                            BusinessMenuEffect.ItemUpdated(form.name)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    /** Спрашивает подтверждение: название и цену набирали руками (issue #288). */
+    private fun requestDelete(itemId: String) {
+        if (currentState.isBusy) return
+        val item = itemOrNull(itemId) ?: return
+        updateState { copy(pendingDelete = item) }
+    }
+
+    private fun dismissDelete() {
+        if (currentState.deletingItemId != null) return
+        updateState { copy(pendingDelete = null) }
+    }
+
+    private fun confirmDelete() {
+        val item = currentState.pendingDelete ?: return
+        updateState { copy(pendingDelete = null, deletingItemId = item.id) }
+        viewModelScope.launch {
+            when (val result = repository.deleteItem(placeId, item.id)) {
+                is ApiResult.Failure -> updateState {
+                    copy(deletingItemId = null, actionFailure = result.failure)
+                }
+
+                is ApiResult.Success -> {
+                    updateState { copy(menu = result.toMenuState(), deletingItemId = null) }
+                    emitEffect(BusinessMenuEffect.ItemDeleted(item.name))
                 }
             }
         }
@@ -247,6 +308,11 @@ class BusinessMenuViewModel @Inject constructor(
 
     private fun itemOrNull(itemId: String): BusinessMenuItem? =
         (currentState.menu as? ScreenState.Content)?.data?.item(itemId)
+
+    private fun sectionIdOf(itemId: String): String? =
+        (currentState.menu as? ScreenState.Content)?.data?.sections
+            ?.firstOrNull { section -> section.items.any { it.id == itemId } }
+            ?.id
 
     private fun ApiResult<BusinessMenu>.toMenuState(): ScreenState<BusinessMenu> = when (this) {
         is ApiResult.Failure -> ScreenState.Error(failure)

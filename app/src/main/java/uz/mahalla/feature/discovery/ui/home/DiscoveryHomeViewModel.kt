@@ -9,6 +9,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.data.PlacePage
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.HomeSections
@@ -31,12 +32,18 @@ import javax.inject.Inject
  * они **параллельно** каталогу: последовательный запрос удвоил бы время до
  * первого экрана. Каталог и акции друг друга не роняют — пустая выдача не
  * повод спрятать акции, а отказ акций не повод потерять выдачу.
+ *
+ * Плитки категорий (issue #378) читаются из кэша [CategoryRepository] и
+ * обновляются с сервера на каждой загрузке главной — при старте и по
+ * pull-to-refresh. Отказ обновления экран не замечает: плитки остаются
+ * прежними, а пустой кэш подменяет зашитым набором `PlaceCategoryCatalog`.
  */
 @HiltViewModel
 class DiscoveryHomeViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val promotions: PromotionsRepository,
     private val tickets: WalkInTicketStore,
+    private val categories: CategoryRepository,
     private val clock: Clock,
 ) : MviViewModel<DiscoveryHomeState, DiscoveryHomeEvent, DiscoveryHomeEffect>(
     DiscoveryHomeState(),
@@ -46,6 +53,9 @@ class DiscoveryHomeViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            categories.categories().collect { list -> updateState { copy(categories = list) } }
+        }
         load(refreshing = false)
         readTicket()
     }
@@ -109,6 +119,10 @@ class DiscoveryHomeViewModel @Inject constructor(
             )
         }
         loadJob = viewModelScope.launch {
+            // Результат не ждём и не разбираем: плитки приедут через подписку
+            // на кэш, а отказ (сети или базы — репозиторий возвращает оба как
+            // Failure) ничего на экране не меняет.
+            launch { categories.refresh() }
             val places = async { repository.places(DiscoveryFilters()) }
             val promos = async { promotions.platformPromotions() }
             val result = places.await()

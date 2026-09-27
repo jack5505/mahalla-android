@@ -231,41 +231,8 @@ private fun AppointmentCard(
     onEvent: (MyAppointmentsEvent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMahallaColors.current
     MahallaCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.item),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = appointment.serviceName
-                    ?: stringResource(vertical.unnamedRes()),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            MahallaBadge(
-                text = stringResource(appointment.status.labelRes()),
-                tone = appointment.status.tone(),
-            )
-        }
-
-        Text(
-            text = appointment.whenText(),
-            modifier = Modifier.padding(top = Spacing.item),
-            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        appointment.priceSum.takeIf { it > 0 }?.let { price ->
-            Text(
-                text = MoneyFormatter.withCurrency(price, stringResource(R.string.currency_uzs)),
-                modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                color = colors.fgMuted,
-            )
-        }
+        AppointmentSummary(appointment = appointment, vertical = vertical)
 
         // Перенос выше отмены: время можно передвинуть, и предлагать это
         // первым честнее, чем сразу отдавать слот другому. Кнопки в столбец, а
@@ -294,11 +261,59 @@ private fun AppointmentCard(
 }
 
 /**
- * Когда. Дата без времени и время без даты — оба случая законны (поля в
- * контракте необязательные), и молчать о записи из-за одного из них нельзя.
+ * Услуга, статус, время и цена записи — общее тело карточки для «Моих
+ * записей» и карточки одной записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen]). Кнопки
+ * (перенос, отмена) сюда не входят: список их показывает, карточка одной
+ * записи — нет (issue #183), и это единственное, чем они отличаются.
  */
 @Composable
-private fun Appointment.whenText(): String {
+internal fun AppointmentSummary(appointment: Appointment, vertical: AppointmentVertical) {
+    val colors = LocalMahallaColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = appointment.serviceName
+                ?: stringResource(vertical.unnamedRes()),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        MahallaBadge(
+            text = stringResource(appointment.status.labelRes()),
+            tone = appointment.status.tone(),
+        )
+    }
+
+    Text(
+        text = appointment.whenText(),
+        modifier = Modifier.padding(top = Spacing.item),
+        style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+
+    appointment.priceSum.takeIf { it > 0 }?.let { price ->
+        Text(
+            text = MoneyFormatter.withCurrency(price, stringResource(R.string.currency_uzs)),
+            modifier = Modifier.padding(top = Spacing.item),
+            style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
+            color = colors.fgMuted,
+        )
+    }
+}
+
+/**
+ * Когда. Дата без времени и время без даты — оба случая законны (поля в
+ * контракте необязательные), и молчать о записи из-за одного из них нельзя.
+ *
+ * `internal`, а не `private`: то же правило форматирует карточку записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen], issue #183).
+ */
+@Composable
+internal fun Appointment.whenText(): String {
     val day = date?.let(DateTimeFormatters::date)
     val time = startTime?.let(DateTimeFormatters::time)
     return when {
@@ -329,16 +344,25 @@ private fun AppointmentVertical.emptyDescriptionRes(): Int = when (this) {
  * Чем подписана запись, у которой сервер не назвал услугу. У врача её место
  * занимает не «услуга», а сам приём: «Xizmat ko'rsatilmagan» на карточке
  * записи к врачу читалось бы как чужой текст.
+ *
+ * `internal`, а не `private`: тем же правилом подписывает карточку записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen], issue #183)
+ * — вторая копия разошлась бы при первой же правке текста.
  */
 @StringRes
-private fun AppointmentVertical.unnamedRes(): Int = when (this) {
+internal fun AppointmentVertical.unnamedRes(): Int = when (this) {
     AppointmentVertical.Barber -> R.string.my_appointments_unnamed_service
     AppointmentVertical.Doctor -> R.string.my_doctor_appointments_unnamed
 }
 
-/** Подписи статусов: домен знает состояние, ресурсы — формулировку. */
+/**
+ * Подписи статусов: домен знает состояние, ресурсы — формулировку.
+ *
+ * `internal`, а не `private`: тем же текстом подписывает карточку записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen], issue #183).
+ */
 @StringRes
-private fun AppointmentStatus.labelRes(): Int = when (this) {
+internal fun AppointmentStatus.labelRes(): Int = when (this) {
     AppointmentStatus.Pending -> R.string.appointment_status_pending
     AppointmentStatus.Confirmed -> R.string.appointment_status_confirmed
     AppointmentStatus.Cancelled -> R.string.appointment_status_cancelled
@@ -347,8 +371,13 @@ private fun AppointmentStatus.labelRes(): Int = when (this) {
     AppointmentStatus.Unknown -> R.string.appointment_status_unknown
 }
 
-/** Отмена — решение человека, а не сбой: красная плашка читалась бы иначе. */
-private fun AppointmentStatus.tone(): MahallaTone = when (this) {
+/**
+ * Отмена — решение человека, а не сбой: красная плашка читалась бы иначе.
+ *
+ * `internal`, а не `private`: та же цветовая логика у карточки записи
+ * ([uz.mahalla.feature.booking.ui.appointment.AppointmentScreen], issue #183).
+ */
+internal fun AppointmentStatus.tone(): MahallaTone = when (this) {
     AppointmentStatus.Confirmed -> MahallaTone.Success
     AppointmentStatus.Pending -> MahallaTone.Info
     AppointmentStatus.Completed -> MahallaTone.Neutral

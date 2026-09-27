@@ -64,16 +64,10 @@ interface HospitalRepository : AppointmentsSource {
     suspend fun book(draft: DoctorAppointmentDraft): ApiResult<Appointment>
 
     /**
-     * Карточка записи к врачу (issue #181). Ручка объявлена по контракту, но
-     * пока не используется ни одним экраном — карточка записи целиком
-     * отдельная задача (#183).
-     */
-    suspend fun appointment(appointmentId: String): ApiResult<Appointment>
-
-    /**
      * Дотягивает имя врача (issue #219) для записей, где оно не пришло, —
-     * единственная реализация на двух потребителей: [myAppointments] и «мои
-     * активности» (`ActivityRepository.load`, issue #266), которая читает
+     * единственная реализация на три потребителя: [myAppointments],
+     * [appointment] (issue #183) и «мои активности»
+     * (`ActivityRepository.load`, issue #266), которая читает
      * `HospitalApi.myAppointments` напрямую, в обход этого репозитория, и без
      * общего метода осталась бы без подписи вовсе.
      */
@@ -141,8 +135,24 @@ class DefaultHospitalRepository @Inject constructor(
         }.map(AppointmentDto::toCreated)
     }
 
-    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
-        apiCall { api.appointment(appointmentId).payload() }.map(AppointmentDto::toCreated)
+    /**
+     * Имя врача дотягивается тем же [withDoctorNames], что и список: карточка
+     * записи — третий потребитель (issue #183) после [myAppointments] и «моих
+     * активностей». `.map` здесь не годится — его `transform` не `suspend`, а
+     * дотягивание имени идёт отдельным запросом.
+     *
+     * Запрошенный `id` уже известен — его молчание в ответе не теряет карточку
+     * (тот же приём, что у [doctor]).
+     */
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> {
+        val result = apiCall { api.appointment(appointmentId).payload() }
+        return when (result) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> ApiResult.Success(
+                withDoctorNames(listOf(result.data)).first().toDomain(appointmentId),
+            )
+        }
+    }
 
     /**
      * `HospitalAppointmentResponse` не называет врача — только `doctorId`

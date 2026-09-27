@@ -18,6 +18,7 @@ import uz.mahalla.data.network.auth.RefreshTokenRequest
 import uz.mahalla.data.network.auth.toDto
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.SessionStore
+import uz.mahalla.data.session.LocalUserDataCleaner
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.time.Clock
@@ -52,6 +53,7 @@ class TokenAuthenticator @Inject constructor(
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
+    private val localUserDataCleaner: LocalUserDataCleaner,
 ) : Authenticator {
 
     /**
@@ -78,6 +80,22 @@ class TokenAuthenticator @Inject constructor(
      * после предыдущего засчитанного.
      */
     private var lastAmbiguousRefreshFailureAt: Instant? = null
+
+    /**
+     * Обнулить счётчик неоднозначных провалов refresh. Сессию пишут и стирают
+     * ещё в нескольких местах мимо этого класса — `AuthRepository.signIn()`
+     * (а значит и повторный вход после `logout()`/`clearLocalIdentity()`).
+     * Без сброса застрявший на 1–2 счёт из прежней сессии добивает себя до
+     * порога первым же неоднозначным ответом в новой и стирает её мгновенно —
+     * тот же цикл «вход → платный SMS → моментальный выход», от которого
+     * защищает issue #138 (issue #309).
+     */
+    fun reset() {
+        synchronized(this) {
+            consecutiveAmbiguousRefreshFailures = 0
+            lastAmbiguousRefreshFailureAt = null
+        }
+    }
 
     override fun authenticate(route: Route?, response: Response): Request? {
         if (attemptCount(response) >= MAX_ATTEMPTS) return null
@@ -118,7 +136,14 @@ class TokenAuthenticator @Inject constructor(
             val refreshToken = tokens?.refreshToken?.takeIf { it.isNotBlank() }
             if (accessToken == null || refreshToken == null) {
                 if (refresh.rejectsSession()) {
-                    runBlocking { sessionStore.clear() }
+                    runBlocking {
+                        sessionStore.clear()
+                        // Кэш заказов, черновик корзины и токен пушей — тоже
+                        // личные данные умершей сессии (issue #341): без
+                        // уборки следующий вход на этом же устройстве видел бы
+                        // их в офлайне и получал бы чужие пуши.
+                        localUserDataCleaner.clear()
+                    }
                     // Повторять запрос нечем, и это конец сессии: наверху
                     // человека надо увести на вход, а не оставить перед кнопкой
                     // «повторить», которой уже нечем помочь (issue #138).
@@ -126,8 +151,7 @@ class TokenAuthenticator @Inject constructor(
                     // Та же причина, что и у сброса ниже: следующий вход пишет
                     // сессию мимо этого класса, и застрявший счётчик убил бы
                     // её на первом же неоднозначном ответе (issue #198).
-                    consecutiveAmbiguousRefreshFailures = 0
-                    lastAmbiguousRefreshFailureAt = null
+                    reset()
                     return@synchronized null
                 }
                 // Refresh не дошёл до сервера. Вернуть `null` значило бы отдать
@@ -160,7 +184,10 @@ class TokenAuthenticator @Inject constructor(
                             // зацикливается, а сломанный контракт — да. Без этого
                             // сессия жива вечно, а сервер её токены не понимает
                             // (issue #198).
-                            runBlocking { sessionStore.clear() }
+                            runBlocking {
+                                sessionStore.clear()
+                                localUserDataCleaner.clear()
+                            }
                             sessionExpiry.notifyExpired()
                             // Сессия мертва — считать дальше нечего. Не обнулить
                             // здесь значило бы, что счётчик переживает вход
@@ -168,8 +195,7 @@ class TokenAuthenticator @Inject constructor(
                             // `TokenAuthenticator`, так что без явного сброса
                             // первый же неоднозначный ответ в новой сессии сразу
                             // добивает счёт до порога и стирает её мгновенно.
-                            consecutiveAmbiguousRefreshFailures = 0
-                            lastAmbiguousRefreshFailureAt = null
+                            reset()
                         }
                     }
                     return@synchronized null
@@ -178,8 +204,7 @@ class TokenAuthenticator @Inject constructor(
                 // не двигаем: он не про эти причины, они уже разобраны выше.
                 return@synchronized null
             }
-            consecutiveAmbiguousRefreshFailures = 0
-            lastAmbiguousRefreshFailureAt = null
+            reset()
 
             runBlocking {
                 sessionStore.save(

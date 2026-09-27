@@ -196,6 +196,26 @@ class MapPickerViewModelTest {
         assertNull(viewModel.state.value.locationNotice)
     }
 
+    @Test
+    fun `a permanently denied permission offers settings instead of the dialog`() {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapPickerEvent.LocationPermissionResult(granted = false, permanentlyDenied = true))
+
+        assertEquals(LocationNotice.PermissionDenied, viewModel.state.value.locationNotice)
+        assertTrue(viewModel.state.value.locationPermissionPermanentlyDenied)
+    }
+
+    @Test
+    fun `dismissing the notice also clears the settings flag`() {
+        val viewModel = viewModel()
+        viewModel.onEvent(MapPickerEvent.LocationPermissionResult(granted = false, permanentlyDenied = true))
+
+        viewModel.onEvent(MapPickerEvent.NoticeDismissed)
+
+        assertFalse(viewModel.state.value.locationPermissionPermanentlyDenied)
+    }
+
     private fun position(latitude: Double, longitude: Double) = MapCameraPosition(
         target = MapCoordinates(latitude, longitude),
         zoom = MapCameraFit.SINGLE_MARKER_ZOOM,

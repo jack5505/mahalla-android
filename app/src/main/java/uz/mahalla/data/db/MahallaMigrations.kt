@@ -111,6 +111,22 @@ object MahallaMigrations {
         }
     }
 
+    /**
+     * v4 → v5 (issue #378): кэш включённых категорий каталога — ответ
+     * `GET categories`, по которому рисуются плитки главной, чипы фильтра и
+     * выбор категории в анкете продавца. Таблица новая и пустая: до первого
+     * успешного ответа экраны показывают прежний зашитый набор.
+     */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `place_categories` (`code` TEXT NOT NULL, " +
+                    "`titleUz` TEXT NOT NULL, `titleRu` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`code`))",
+            )
+        }
+    }
+
     /** Все миграции по порядку — этот список уходит в `Room.databaseBuilder`. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }

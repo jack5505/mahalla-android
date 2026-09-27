@@ -30,6 +30,11 @@ data class SearchState(
     val loadMoreFailure: ApiFailure? = null,
     val fromCache: Boolean = false,
     val filtersVisible: Boolean = false,
+    /**
+     * Чипы категорий в шторке фильтров (issue #378): включённые в дашборде,
+     * в его порядке. До первого ответа сервера — зашитый набор.
+     */
+    val categories: List<PlaceCategory> = PlaceCategory.selectable,
 ) : UiState {
 
     val query: String get() = filters.query

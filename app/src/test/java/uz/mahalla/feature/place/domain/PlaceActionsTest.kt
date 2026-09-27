@@ -72,9 +72,9 @@ class PlaceActionsTest {
     }
 
     @Test
-    fun `capabilities come from the server, not from the category`() {
-        // Кафе без доставки не должно предлагать заказ только потому, что оно
-        // относится к категории «еда».
+    fun `ordering can still be turned off explicitly`() {
+        // `PlaceCapabilities` не привязан к категории насильно: конструктор
+        // по умолчанию выключен, и `resolve` этого не подменяет.
         val actions = PlaceActions.resolve(
             capabilities = PlaceCapabilities(ordering = false),
             contacts = PlaceContacts(),
@@ -151,16 +151,17 @@ class PlaceActionsTest {
             PlaceCapabilities.of(PlaceCategory.Pharmacy),
         )
 
-        listOf(
-            PlaceCategory.Food,
-            PlaceCategory.Other,
-        ).forEach {
-            // Кнопка, ведущая в никуда, хуже отсутствующей: услуги и записи
-            // бэкенд отдаёт у мастеров (`barber-services`) и у больниц
-            // (`hospitals`), зоны — у игровых клубов, товары — только у
-            // аптек, а «Заказать» — вне объёма этих задач.
-            assertEquals(it.name, PlaceCapabilities(), PlaceCapabilities.of(it))
-        }
+        // Еда добавилась в issue #335: меню заведения (`food/…/menu`) — до
+        // этого `ordering` не включался ни для одной категории, и первый
+        // заказ был недостижим с карточки места.
+        assertEquals(
+            PlaceCapabilities(ordering = true),
+            PlaceCapabilities.of(PlaceCategory.Food),
+        )
+
+        // Кнопка, ведущая в никуда, хуже отсутствующей: у [Other] нет своего
+        // контроллера вовсе — категория ещё не появилась в приложении.
+        assertEquals(PlaceCapabilities(), PlaceCapabilities.of(PlaceCategory.Other))
     }
 
     @Test
@@ -252,5 +253,20 @@ class PlaceActionsTest {
         // очередь, бронь и «Заказать» у него выключены (issue #108).
         assertEquals(PlaceAction.Shop, PlaceActions.primary(actions))
         assertEquals(listOf(PlaceAction.Shop, PlaceAction.Call), actions)
+    }
+
+    @Test
+    fun `a food place card shows ordering as its primary action`() {
+        val actions = PlaceActions.resolve(
+            capabilities = PlaceCapabilities.of(PlaceCategory.Food),
+            contacts = PlaceContacts(phone = "+998901234567"),
+            place = place("p"),
+        )
+
+        // Меню — единственное, что заведение общепита умеет в приложении:
+        // до issue #335 `ordering` не включался ни для одной категории, и
+        // первое «Заказать» было недостижимо с карточки места.
+        assertEquals(PlaceAction.Order, PlaceActions.primary(actions))
+        assertEquals(listOf(PlaceAction.Order, PlaceAction.Call), actions)
     }
 }

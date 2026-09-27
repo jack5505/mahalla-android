@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,6 +36,9 @@ import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaComponentDefaults
 import uz.mahalla.core.ui.components.SectionHeader
+import uz.mahalla.core.ui.permission.canRequestPermissionAgain
+import uz.mahalla.core.ui.permission.findActivity
+import uz.mahalla.core.ui.permission.openAppSettings
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.ui.theme.Spacing
@@ -50,38 +54,53 @@ fun GeoScreen(
     viewModel: GeoViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
         // Точность выбирает пользователь: для «рядом со мной» достаточно
         // приблизительных координат, поэтому просим обе и радуемся любой.
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        viewModel.onEvent(GeoEvent.PermissionResult(granted.values.any { it }))
+        val anyGranted = granted.values.any { it }
+        // shouldShowRequestPermissionRationale — только после того, как диалог
+        // уже был показан: до этого он тоже вернул бы false и не отличался бы
+        // от «Больше не спрашивать».
+        val permanentlyDenied = !anyGranted &&
+            context.findActivity()?.canRequestPermissionAgain(GEO_PERMISSIONS) == false
+        viewModel.onEvent(
+            GeoEvent.PermissionResult(granted = anyGranted, permanentlyDenied = permanentlyDenied),
+        )
     }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
             when (effect) {
-                GeoEffect.RequestLocationPermission -> permissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                    ),
-                )
+                GeoEffect.RequestLocationPermission -> permissionLauncher.launch(GEO_PERMISSIONS)
 
                 GeoEffect.Finished -> onFinished()
             }
         }
     }
 
-    GeoContent(state = state, onEvent = viewModel::onEvent, modifier = modifier)
+    GeoContent(
+        state = state,
+        onEvent = viewModel::onEvent,
+        onOpenSettings = { context.openAppSettings() },
+        modifier = modifier,
+    )
 }
+
+private val GEO_PERMISSIONS = arrayOf(
+    Manifest.permission.ACCESS_COARSE_LOCATION,
+    Manifest.permission.ACCESS_FINE_LOCATION,
+)
 
 @Composable
 private fun GeoContent(
     state: GeoState,
     onEvent: (GeoEvent) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSettings: () -> Unit = {},
 ) {
     OnboardingStep(
         title = stringResource(R.string.onboarding_geo_title),
@@ -122,6 +141,16 @@ private fun GeoContent(
         if (state.stage == GeoStage.CityPicker) {
             if (state.permissionDenied) {
                 OnboardingError(stringResource(R.string.onboarding_geo_denied))
+                // «Больше не спрашивать»: системный диалог больше не покажется,
+                // единственный путь назад — настройки приложения (issue #348).
+                if (state.permissionPermanentlyDenied) {
+                    MahallaButton(
+                        text = stringResource(R.string.notification_permission_open_settings),
+                        onClick = onOpenSettings,
+                        variant = MahallaButtonVariant.Ghost,
+                        fillWidth = false,
+                    )
+                }
             }
             SectionHeader(title = stringResource(R.string.onboarding_geo_city_title))
             Column(

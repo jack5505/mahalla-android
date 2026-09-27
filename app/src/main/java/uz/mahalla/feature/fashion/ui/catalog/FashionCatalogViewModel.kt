@@ -12,6 +12,7 @@ import uz.mahalla.feature.fashion.data.FashionCartRepository
 import uz.mahalla.feature.fashion.data.FashionRepository
 import uz.mahalla.feature.fashion.domain.FashionCatalogPage
 import uz.mahalla.feature.fashion.domain.FashionProduct
+import uz.mahalla.feature.fashion.domain.NewFashionProductDraft
 import uz.mahalla.navigation.FashionArgs
 import javax.inject.Inject
 
@@ -36,13 +37,16 @@ class FashionCatalogViewModel @Inject constructor(
 
     private val storeId: String = savedStateHandle[FashionArgs.PLACE_ID] ?: ""
     private val placeName: String = savedStateHandle[FashionArgs.PLACE_NAME] ?: ""
+    private val isOwner: Boolean = savedStateHandle[FashionArgs.IS_OWNER] ?: false
 
     private var loadMoreJob: Job? = null
     private var loadedPage = 0
+    private var createJob: Job? = null
 
     init {
         val name = placeName
-        updateState { copy(placeName = name) }
+        val owner = isOwner
+        updateState { copy(placeName = name, isOwner = owner) }
         loadCategories()
         load()
         refreshCartCount()
@@ -66,6 +70,78 @@ class FashionCatalogViewModel @Inject constructor(
                 emitEffect(FashionCatalogEffect.OpenProduct(event.productId))
 
             FashionCatalogEvent.CartClicked -> emitEffect(FashionCatalogEffect.OpenCart)
+
+            FashionCatalogEvent.AddProductClicked -> onAddProductClicked()
+            FashionCatalogEvent.CreateFormDismissed -> {
+                // Отменяет и незавершённый запрос: иначе его поздний ответ
+                // застал бы уже другую, вновь открытую форму (тот же приём,
+                // что у аптеки, issue #252).
+                createJob?.cancel()
+                updateState { copy(createForm = null) }
+            }
+            is FashionCatalogEvent.CreateNameChanged -> updateCreateDraft { withName(event.value) }
+            is FashionCatalogEvent.CreateBrandChanged -> updateCreateDraft { withBrand(event.value) }
+            is FashionCatalogEvent.CreateDescriptionChanged ->
+                updateCreateDraft { withDescription(event.value) }
+            is FashionCatalogEvent.CreateMaterialChanged ->
+                updateCreateDraft { withMaterial(event.value) }
+            is FashionCatalogEvent.CreateCareInstructionsChanged ->
+                updateCreateDraft { withCareInstructions(event.value) }
+            is FashionCatalogEvent.CreateSizeGuideChanged ->
+                updateCreateDraft { withSizeGuide(event.value) }
+            is FashionCatalogEvent.CreateGenderChanged ->
+                updateCreateDraft { withGender(event.value) }
+            is FashionCatalogEvent.CreateCategoryChanged ->
+                updateCreateDraft { withCategory(event.categoryId) }
+            is FashionCatalogEvent.CreatePriceChanged -> updateCreateDraft { withPrice(event.value) }
+            FashionCatalogEvent.CreateSubmitted -> submitCreate()
+        }
+    }
+
+    /** Кнопка скрыта не-владельцу самим экраном — проверка здесь на всякий случай. */
+    private fun onAddProductClicked() {
+        if (!currentState.isOwner) return
+        createJob?.cancel()
+        updateState { copy(createForm = NewFashionProductFormState()) }
+    }
+
+    private inline fun updateCreateDraft(
+        crossinline transform: NewFashionProductDraft.() -> NewFashionProductDraft,
+    ) {
+        updateState {
+            copy(
+                createForm = createForm?.let {
+                    it.copy(draft = it.draft.transform(), failure = null)
+                },
+            )
+        }
+    }
+
+    /**
+     * Успех перечитывает витрину целиком (тот же приём, что у аптеки,
+     * issue #252) — сервер возвращает `id`, и только он делает новый товар
+     * кликабельным в списке.
+     */
+    private fun submitCreate() {
+        val form = currentState.createForm ?: return
+        if (form.submitting) return
+        if (!form.draft.canSubmit) {
+            updateState { copy(createForm = form.copy(submitAttempted = true)) }
+            return
+        }
+
+        updateState { copy(createForm = form.copy(submitting = true, failure = null)) }
+        createJob = viewModelScope.launch {
+            when (val result = repository.createProduct(storeId, form.draft)) {
+                is ApiResult.Failure -> updateState {
+                    copy(createForm = createForm?.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> {
+                    updateState { copy(createForm = null) }
+                    load()
+                }
+            }
         }
     }
 

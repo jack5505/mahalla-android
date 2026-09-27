@@ -118,7 +118,7 @@ class ActivityDomainTest {
     // --- Отбор и порядок ---
 
     @Test
-    fun `the active tab shows the nearest first and history the most recent`() {
+    fun `the active tab shows the nearest event first and history the most recent`() {
         val soon = activity(id = "soon", at = "2026-09-04T10:00:00Z")
         val later = activity(id = "later", at = "2026-09-09T10:00:00Z")
         val doneOld = activity(
@@ -140,6 +140,63 @@ class ActivityDomainTest {
         assertEquals(
             listOf("new", "old"),
             ActivityMerge.filter(all, ActivityFilter.History).map(Activity::id),
+        )
+    }
+
+    @Test
+    fun `active tab does not bury an order being prepared under a stale order`() {
+        // issue #174: заказ создан давно и висит без движения — не должен
+        // стоять выше заказа, который готовят прямо сейчас, только потому что
+        // `occurredAt` заказов — это `createdAt`, а не время события.
+        val staleOrder = activity(
+            id = "stale",
+            source = ActivitySource.Orders,
+            timeKind = ActivityTimeKind.Recorded,
+            at = "2026-09-01T00:00:00Z",
+        )
+        val preparingOrder = activity(
+            id = "preparing",
+            source = ActivitySource.Orders,
+            timeKind = ActivityTimeKind.Recorded,
+            at = "2026-09-09T10:00:00Z",
+        )
+        val appointment = activity(
+            id = "appointment",
+            source = ActivitySource.MasterAppointments,
+            timeKind = ActivityTimeKind.Event,
+            at = "2026-09-09T11:00:00Z",
+        )
+
+        assertEquals(
+            listOf("preparing", "stale", "appointment"),
+            ActivityMerge
+                .filter(listOf(staleOrder, preparingOrder, appointment), ActivityFilter.Active)
+                .map(Activity::id),
+        )
+    }
+
+    @Test
+    fun `a recorded time and an event time never compare directly`() {
+        // Одна ось возрастания положила бы будущее событие после свежей
+        // записи о заказе только потому что число миллисекунд больше — это и
+        // есть баг issue #174. Recorded-группа целиком идёт перед
+        // Event-группой независимо от конкретных значений времени.
+        val freshOrder = activity(
+            id = "fresh-order",
+            timeKind = ActivityTimeKind.Recorded,
+            at = "2026-09-20T00:00:00Z",
+        )
+        val distantEvent = activity(
+            id = "distant-event",
+            timeKind = ActivityTimeKind.Event,
+            at = "2026-09-04T00:00:00Z",
+        )
+
+        assertEquals(
+            listOf("fresh-order", "distant-event"),
+            ActivityMerge
+                .filter(listOf(distantEvent, freshOrder), ActivityFilter.Active)
+                .map(Activity::id),
         )
     }
 
@@ -260,11 +317,13 @@ class ActivityDomainTest {
         source: ActivitySource = ActivitySource.Orders,
         status: ActivityStatus = ActivityStatus.Placed,
         at: String? = "2026-09-04T10:00:00Z",
+        timeKind: ActivityTimeKind = ActivityTimeKind.Event,
     ) = Activity(
         id = id,
         source = source,
         kind = ActivityKind.FoodOrder,
         status = status,
         occurredAt = at?.let(Instant::parse),
+        timeKind = timeKind,
     )
 }

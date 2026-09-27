@@ -36,6 +36,18 @@ data class PharmacyState(
     val isOwner: Boolean = false,
     val createForm: NewProductFormState? = null,
     val stockForm: StockEditFormState? = null,
+    val editForm: EditProductFormState? = null,
+    val deleteConfirmation: PharmacyProduct? = null,
+    /**
+     * Товары, для которых сейчас идёт запрос удаления. Множество, а не
+     * одиночный id: удаление не показывает модальную форму, и список
+     * остаётся кликабельным — два разных товара можно отправить на удаление
+     * почти одновременно, и первый не должен разблокироваться раньше своего
+     * ответа (issue #288).
+     */
+    val deletingProductIds: Set<String> = emptySet(),
+    /** Отказ удаления (issue #288) — список уже на экране, ронять его незачем. */
+    val deleteFailure: ApiFailure? = null,
 ) : UiState
 
 /** Форма нового товара (issue #252). */
@@ -44,6 +56,18 @@ data class NewProductFormState(
     /** Ошибки полей показываются только после первой попытки сохранить —
      * форма стартует пустой, и незаполненное обязательное поле не должно
      * выглядеть ошибкой раньше, чем человек успел его тронуть. */
+    val submitAttempted: Boolean = false,
+    val submitting: Boolean = false,
+    val failure: ApiFailure? = null,
+)
+
+/**
+ * Форма правки товара (issue #288, `PUT products/{id}`). Остаток и описание
+ * в неё не входят — см. KDoc `PharmacyRepository.updateProduct`.
+ */
+data class EditProductFormState(
+    val productId: String,
+    val draft: NewPharmacyProductDraft = NewPharmacyProductDraft(),
     val submitAttempted: Boolean = false,
     val submitting: Boolean = false,
     val failure: ApiFailure? = null,
@@ -90,4 +114,20 @@ sealed interface PharmacyEvent : UiEvent {
     data object StockFormDismissed : PharmacyEvent
     data class StockQuantityChanged(val value: String) : PharmacyEvent
     data object StockSubmitted : PharmacyEvent
+
+    // Правка товара (issue #288).
+    data class EditProductClicked(val product: PharmacyProduct) : PharmacyEvent
+    data object EditFormDismissed : PharmacyEvent
+    data class EditNameChanged(val value: String) : PharmacyEvent
+    data class EditManufacturerChanged(val value: String) : PharmacyEvent
+    data class EditDosageFormChanged(val value: String) : PharmacyEvent
+    data class EditStrengthChanged(val value: String) : PharmacyEvent
+    data class EditPriceChanged(val value: String) : PharmacyEvent
+    data class EditPrescriptionChanged(val value: Boolean) : PharmacyEvent
+    data object EditSubmitted : PharmacyEvent
+
+    // Удаление товара (issue #288).
+    data class DeleteProductClicked(val product: PharmacyProduct) : PharmacyEvent
+    data object DeleteConfirmed : PharmacyEvent
+    data object DeleteDismissed : PharmacyEvent
 }

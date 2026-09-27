@@ -6,6 +6,8 @@ import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.data.prefs.UserProfileStore
+import uz.mahalla.feature.discovery.data.CategoryRepository
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.onboarding.domain.PhoneNumberValidator
 import uz.mahalla.feature.role.data.ProviderRepository
 import uz.mahalla.feature.role.data.RoleRepository
@@ -28,9 +30,22 @@ class ProviderFormViewModel @Inject constructor(
     private val roleRepository: RoleRepository,
     private val profileStore: UserProfileStore,
     private val phoneValidator: PhoneNumberValidator,
+    private val categoryRepository: CategoryRepository,
 ) : MviViewModel<ProviderFormState, ProviderFormEvent, ProviderFormEffect>(ProviderFormState()) {
 
     init {
+        // Выбор категории — из тех, что включены в дашборде (issue #378):
+        // заведение выключенной категории в каталоге всё равно не покажут.
+        // Список для показа берётся из кэша сразу, а снимать уже сделанный
+        // выбор можно только по подтверждённому серверу списку (issue #382).
+        viewModelScope.launch {
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
+        }
+        viewModelScope.launch {
+            categoryRepository.confirmedCategories().collect(::dropDisabledCategory)
+        }
+        // Анкету открывают из профиля, минуя главную, — кэш обновляет она сама.
+        viewModelScope.launch { categoryRepository.refresh() }
         viewModelScope.launch {
             val city = roleRepository.current().customer.city
             val digits = phoneValidator.nationalDigits(profileStore.current().phone.orEmpty())
@@ -66,6 +81,24 @@ class ProviderFormViewModel @Inject constructor(
             ProviderFormEvent.SubmitClicked -> submit()
             ProviderFormEvent.DoneClicked -> emitEffect(ProviderFormEffect.Finished)
         }
+    }
+
+    /**
+     * Категорию выбрали, а дашборд её тем временем выключил: чип из списка
+     * пропал, и оставлять выбор нельзя — заявка ушла бы с категорией, которой
+     * в каталоге нет, а снять её в форме было бы нечем (issue #382).
+     *
+     * Ошибку валидации это не показывает: [ProviderFormState.validationShown]
+     * поднимает только «Отправить». Человек увидит пустой выбор, а не упрёк за
+     * то, чего не делал.
+     */
+    private fun dropDisabledCategory(enabled: List<PlaceCategory>) {
+        val selected = currentState.form.category ?: return
+        if (selected in enabled) return
+        // submitError гасится по тому же правилу, что в updateForm (issue #76):
+        // форма изменилась, и прошлый отказ сервера относится уже к другим
+        // данным — неважно, правил её человек или кэш.
+        updateState { copy(form = form.copy(category = null), submitError = null).revalidated() }
     }
 
     private fun updateForm(transform: ProviderForm.() -> ProviderForm) {

@@ -10,6 +10,7 @@ import uz.mahalla.feature.cinema.domain.CinemaTicket
 import uz.mahalla.feature.cinema.domain.CinemaTicketPage
 import uz.mahalla.feature.cinema.domain.CinemaTicketStatus
 import uz.mahalla.feature.cinema.domain.Movie
+import uz.mahalla.feature.cinema.domain.TrailerLink
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): без `id` запись отбрасывается —
@@ -31,7 +32,7 @@ internal fun MovieDto.toDomain(): Movie? {
         durationMinutes = durationMinutes?.takeIf { it > 0 },
         releaseDate = parseServerLocalDate(releaseDate),
         posterUrl = posterUrl?.trim()?.takeIf { it.isNotEmpty() },
-        trailerUrl = trailerUrl?.trim()?.takeIf { it.isNotEmpty() },
+        trailerUrl = TrailerLink.sanitize(trailerUrl),
         ageRating = rating?.trim()?.takeIf { it.isNotEmpty() },
         placeId = placeId?.takeIf { it.isNotBlank() },
         // Молчание сервера — «идёт в прокате»: см. KDoc `Movie.isActive`.

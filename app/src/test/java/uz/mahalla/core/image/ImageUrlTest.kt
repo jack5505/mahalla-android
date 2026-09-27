@@ -7,7 +7,7 @@ import org.junit.Test
 /** Приведение ссылок на картинки к загружаемому виду (issue #60). */
 class ImageUrlTest {
 
-    private val base = "https://189-74-96-232.nip.io/api/v1/"
+    private val base = "https://157.173.109.181.nip.io/api/v1/"
 
     @Test
     fun `absolute https url is kept as is`() {
@@ -25,7 +25,7 @@ class ImageUrlTest {
     @Test
     fun `root relative path takes host of the backend, not its path`() {
         assertEquals(
-            "https://189-74-96-232.nip.io/media/entity/42.jpg",
+            "https://157.173.109.181.nip.io/media/entity/42.jpg",
             ImageUrl.resolve(base, "/media/entity/42.jpg"),
         )
     }
@@ -33,7 +33,7 @@ class ImageUrlTest {
     @Test
     fun `relative path is resolved against api path`() {
         assertEquals(
-            "https://189-74-96-232.nip.io/api/v1/media/42.jpg",
+            "https://157.173.109.181.nip.io/api/v1/media/42.jpg",
             ImageUrl.resolve(base, "media/42.jpg"),
         )
     }
@@ -41,7 +41,7 @@ class ImageUrlTest {
     @Test
     fun `query is kept`() {
         assertEquals(
-            "https://189-74-96-232.nip.io/api/v1/media/42.jpg?w=200",
+            "https://157.173.109.181.nip.io/api/v1/media/42.jpg?w=200",
             ImageUrl.resolve(base, "media/42.jpg?w=200"),
         )
     }

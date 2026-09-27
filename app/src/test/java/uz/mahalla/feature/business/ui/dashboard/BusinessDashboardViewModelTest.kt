@@ -137,7 +137,25 @@ class BusinessDashboardViewModelTest {
         viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Orders))
 
         assertEquals(
-            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi"),
+            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi", "FOOD"),
+            viewModel.effects.first(),
+        )
+    }
+
+    /**
+     * «Одежда» тоже открывает заказы (issue #187), но эффект несёт её
+     * категорию — иначе экран заказов позвал бы ручку еды за чужой магазин.
+     */
+    @Test
+    fun `a fashion store opens the orders section with its own category`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.accessResult = ApiResult.Success(access(category = PlaceCategory.Fashion))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.SectionClicked(BusinessSection.Orders))
+
+        assertEquals(
+            BusinessDashboardEffect.OpenOrders(PLACE, "Osh Markazi", "FASHION"),
             viewModel.effects.first(),
         )
     }

@@ -44,6 +44,8 @@ import uz.mahalla.ui.theme.Spacing
 @Composable
 fun FiltersSheet(
     filters: DiscoveryFilters,
+    /** Включённые категории в порядке сервера (issue #378), не `PlaceCategory.selectable`. */
+    categories: List<PlaceCategory>,
     onEvent: (SearchEvent) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -53,14 +55,18 @@ fun FiltersSheet(
         modifier = modifier,
         title = stringResource(R.string.filters_title),
     ) {
-        FilterGroup(title = stringResource(R.string.filters_category)) {
-            PlaceCategory.selectable.forEach { category ->
-                MahallaFilterChip(
-                    label = stringResource(category.labelRes),
-                    selected = category in filters.categories,
-                    onClick = { onEvent(SearchEvent.CategoryToggled(category)) },
-                    icon = category.icon,
-                )
+        // Дашборд выключил всё, что приложение умеет, — заголовок над пустотой
+        // читался бы как сломанная шторка.
+        if (categories.isNotEmpty()) {
+            FilterGroup(title = stringResource(R.string.filters_category)) {
+                categories.forEach { category ->
+                    MahallaFilterChip(
+                        label = stringResource(category.labelRes),
+                        selected = category in filters.categories,
+                        onClick = { onEvent(SearchEvent.CategoryToggled(category)) },
+                        icon = category.icon,
+                    )
+                }
             }
         }
 

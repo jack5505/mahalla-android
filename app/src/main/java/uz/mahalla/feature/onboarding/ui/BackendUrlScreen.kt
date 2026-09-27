@@ -192,8 +192,8 @@ private fun BackendUrlScreenPreview() {
     PreviewSurface {
         BackendUrlContent(
             state = BackendUrlState(
-                url = "https://189-74-96-232.nip.io/api/v1/",
-                defaultUrl = "https://189-74-96-232.nip.io/api/v1/",
+                url = "https://157.173.109.181.nip.io/api/v1/",
+                defaultUrl = "https://157.173.109.181.nip.io/api/v1/",
             ),
             onEvent = {},
         )

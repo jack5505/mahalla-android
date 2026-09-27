@@ -2,7 +2,9 @@ package uz.mahalla.feature.pharmacy.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -87,6 +89,35 @@ interface PharmacyApi {
         @Path("id") productId: String,
         @Body body: Map<String, Int>,
     ): ApiResponse<ProductDto>
+
+    /**
+     * Правка товара (issue #288, задача 12.4 бэкенда — #221). ⚠️ Путь не
+     * сверен живым запросом: `/v3/api-docs` теперь отвечает `401` даже с
+     * гео-заголовками, а `CONTRACT_REFRESH_TOKEN` не задан. Взят по аналогии
+     * с уже слитым и точно таким же случаем — правкой услуги мастера
+     * (`PUT freelancers/me/services/{id}`, issue #71): тот же контроллер, что
+     * и у [create] и [updateStock], тело как у создания. Сверить при первом
+     * расхождении — `docs/API-CONTRACT.md`.
+     */
+    @PUT("pharmacy/places/{placeId}/products/{id}")
+    suspend fun update(
+        @Path("placeId") placeId: String,
+        @Path("id") productId: String,
+        @Body body: CreateProductRequest,
+    ): ApiResponse<ProductDto>
+
+    /**
+     * Удаление товара (issue #288, задача 12.4 бэкенда — #221). ⚠️ Тоже не
+     * сверено — см. [update]. `ApiResponseVoid`: удаляет ли бэкенд запись или
+     * снимает с продажи, контракт не говорит, и приложение на это не
+     * закладывается — витрина перечитывается у сервера (тот же приём, что у
+     * `deleteMyService`, issue #71).
+     */
+    @DELETE("pharmacy/places/{placeId}/products/{id}")
+    suspend fun delete(
+        @Path("placeId") placeId: String,
+        @Path("id") productId: String,
+    ): ApiResponse<JsonElement>
 }
 
 /**

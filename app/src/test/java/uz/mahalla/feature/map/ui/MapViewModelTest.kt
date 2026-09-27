@@ -333,6 +333,38 @@ class MapViewModelTest {
     }
 
     @Test
+    fun `a permanently denied permission offers settings instead of the dialog`() = runTest {
+        repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapEvent.LocationPermissionResult(granted = false, permanentlyDenied = true))
+
+        assertEquals(LocationNotice.PermissionDenied, viewModel.state.value.locationNotice)
+        assertTrue(viewModel.state.value.locationPermissionPermanentlyDenied)
+    }
+
+    @Test
+    fun `a plain denial does not point to settings`() = runTest {
+        repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
+        val viewModel = viewModel()
+
+        viewModel.onEvent(MapEvent.LocationPermissionResult(granted = false, permanentlyDenied = false))
+
+        assertFalse(viewModel.state.value.locationPermissionPermanentlyDenied)
+    }
+
+    @Test
+    fun `dismissing the notice also clears the settings flag`() = runTest {
+        repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
+        val viewModel = viewModel()
+        viewModel.onEvent(MapEvent.LocationPermissionResult(granted = false, permanentlyDenied = true))
+
+        viewModel.onEvent(MapEvent.NoticeDismissed)
+
+        assertFalse(viewModel.state.value.locationPermissionPermanentlyDenied)
+    }
+
+    @Test
     fun `the notice is dismissed by the user`() = runTest {
         repository.respondWith(listOf(place("a", point = GeoPoint(41.31, 69.28))))
         val viewModel = viewModel()

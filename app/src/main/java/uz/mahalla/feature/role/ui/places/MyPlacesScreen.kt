@@ -83,6 +83,7 @@ fun MyPlacesScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     onManageProducts: (placeId: String, placeName: String) -> Unit = { _, _ -> },
+    onManageFashionProducts: (placeId: String, placeName: String) -> Unit = { _, _ -> },
     viewModel: MyPlacesViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -98,6 +99,8 @@ fun MyPlacesScreen(
                     onOpenBusiness(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenPharmacyManagement ->
                     onManageProducts(effect.placeId, effect.placeName)
+                is MyPlacesEffect.OpenFashionManagement ->
+                    onManageFashionProducts(effect.placeId, effect.placeName)
                 is MyPlacesEffect.OpenStaff -> onManageStaff(effect.placeId)
                 // Список акций заведения на этом экране не показывается —
                 // без снекбара успех и смахнутую шторку было бы не отличить
@@ -350,9 +353,9 @@ private fun MyPlaceCard(
             )
         }
 
-        // Витрина аптеки (issue #252) — единственная вертикаль с формой
-        // создания на клиенте сегодня, поэтому кнопка условна на категории, а
-        // не общая для всех «своих заведений».
+        // Витрина аптеки (issue #252) и одежды (issue #280) — кнопка условна
+        // на категории (см. `MyPlace.canManageProducts`), а не общая для всех
+        // «своих заведений»: форма создания есть не у каждой вертикали.
         if (place.canManageProducts) {
             MahallaButton(
                 text = stringResource(R.string.my_places_manage_products),

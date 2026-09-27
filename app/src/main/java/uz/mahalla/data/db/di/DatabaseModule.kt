@@ -11,6 +11,7 @@ import uz.mahalla.data.db.MahallaDatabase
 import uz.mahalla.data.db.MahallaMigrations
 import uz.mahalla.data.db.dao.CartDraftDao
 import uz.mahalla.data.db.dao.OrderDao
+import uz.mahalla.data.db.dao.PlaceCategoryDao
 import uz.mahalla.data.db.dao.PlaceDao
 import javax.inject.Singleton
 
@@ -42,4 +43,7 @@ object DatabaseModule {
 
     @Provides
     fun provideCartDraftDao(database: MahallaDatabase): CartDraftDao = database.cartDraftDao()
+
+    @Provides
+    fun providePlaceCategoryDao(database: MahallaDatabase): PlaceCategoryDao = database.placeCategoryDao()
 }

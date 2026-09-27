@@ -14,6 +14,7 @@ import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderFilter
 import uz.mahalla.feature.business.domain.BusinessOrderPage
 import uz.mahalla.feature.business.domain.BusinessOrderStatusFlow
+import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.navigation.BusinessArgs
 import javax.inject.Inject
@@ -36,6 +37,15 @@ class BusinessOrdersViewModel @Inject constructor(
 ) {
 
     private val placeId: String = savedStateHandle.get<String>(BusinessArgs.PLACE_ID).orEmpty()
+
+    /**
+     * `FASHION` зовёт `fashion/stores/{id}/orders`, всё остальное (в т. ч.
+     * пропавшее значение — экран открывается только с дашборда, где категория
+     * уже известна) — `food/places/{id}/orders` (issue #187).
+     */
+    private val category: PlaceCategory =
+        PlaceCategory.fromApi(savedStateHandle.get<String>(BusinessArgs.CATEGORY))
+            .takeIf { it == PlaceCategory.Fashion } ?: PlaceCategory.Food
 
     private var loadJob: Job? = null
     private var loadMoreJob: Job? = null
@@ -90,7 +100,12 @@ class BusinessOrdersViewModel @Inject constructor(
         }
         val filter = currentState.filter
         loadJob = viewModelScope.launch {
-            val result = repository.orders(placeId = placeId, status = filter.apiValue, page = 0)
+            val result = repository.orders(
+                placeId = placeId,
+                status = filter.apiValue,
+                page = 0,
+                category = category,
+            )
             // Пока шёл запрос, вкладку могли переключить — ответ на прежний
             // фильтр перезаписал бы её список чужими заказами.
             if (currentState.filter != filter) return@launch
@@ -137,6 +152,7 @@ class BusinessOrdersViewModel @Inject constructor(
                 placeId = placeId,
                 status = filter.apiValue,
                 page = nextPage,
+                category = category,
             )
             if (currentState.filter != filter) return@launch
             when (result) {
@@ -204,6 +220,7 @@ class BusinessOrdersViewModel @Inject constructor(
                 placeId = placeId,
                 orderId = orderId,
                 status = status,
+                category = category,
             )
             when (result) {
                 is ApiResult.Failure -> updateState {

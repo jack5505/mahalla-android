@@ -16,8 +16,15 @@ class FakePushTokenProvider(
     var calls: Int = 0
         private set
 
+    var deleteCalls: Int = 0
+        private set
+
     override suspend fun token(): String? {
         calls++
         return token
+    }
+
+    override suspend fun deleteToken() {
+        deleteCalls++
     }
 }

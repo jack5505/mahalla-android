@@ -16,6 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import uz.mahalla.data.db.di.DatabaseModule
 import uz.mahalla.data.db.entity.CartDraftItemEntity
+import uz.mahalla.data.db.entity.PlaceCategoryEntity
 import uz.mahalla.feature.food.domain.CartCalculator
 
 /**
@@ -205,6 +206,38 @@ class MahallaMigrationsTest {
             assertEquals(15_001L, line.deliverySum)
             assertEquals(2, line.quantity)
             assertEquals(75_000L, database.orderDao().byId("order-5")?.totalSum)
+        } finally {
+            database.close()
+        }
+    }
+
+    /**
+     * v5 (issue #378) добавляет таблицу категорий: прежние данные на месте,
+     * кэш категорий пуст — до первого ответа сервера экраны показывают
+     * зашитый набор, — и в него можно писать.
+     */
+    @Test
+    fun `category cache is empty but usable after upgrade from version 4`() = runTest {
+        createLegacyDatabase(version = 4) { db ->
+            db.execSQL(CREATE_PLACES_V2)
+            db.execSQL(CREATE_PLACES_CATEGORY_INDEX)
+            db.execSQL(CREATE_ORDERS)
+            db.execSQL(CREATE_CART_DRAFT_ITEMS_V3)
+            db.execSQL(
+                "INSERT INTO `cart_draft_items` VALUES " +
+                    "('place-6', 'non', 'non', 'Non', 3000, 1, 'Non uyi', 0, '', '')",
+            )
+        }
+
+        val database = DatabaseModule.provideDatabase(context)
+        try {
+            // v4 уже хранит сумы — миграция 4→5 их не трогает.
+            assertEquals(3000L, database.cartDraftDao().items("place-6").single().priceSum)
+
+            val dao = database.placeCategoryDao()
+            assertTrue(dao.all().isEmpty())
+            dao.replaceAll(listOf(PlaceCategoryEntity("FOOD", "Ovqat", "Еда", 10)))
+            assertEquals("FOOD", dao.all().single().code)
         } finally {
             database.close()
         }

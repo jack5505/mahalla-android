@@ -56,6 +56,8 @@ class FakeBusinessRepository : BusinessRepository {
     var menuResult: ApiResult<BusinessMenu> = ApiResult.Success(BusinessMenu())
     var toggleStopListResult: ApiResult<Boolean>? = null
     var createItemResult: ApiResult<BusinessMenu>? = null
+    var updateItemResult: ApiResult<BusinessMenu>? = null
+    var deleteItemResult: ApiResult<BusinessMenu>? = null
 
     val accessRequests = mutableListOf<String>()
     val dashboardRequests = mutableListOf<String>()
@@ -63,9 +65,13 @@ class FakeBusinessRepository : BusinessRepository {
     val actions = mutableListOf<Triple<String, String, QueueAction>>()
     val paused = mutableListOf<Pair<String, Boolean>>()
     val orderRequests = mutableListOf<Pair<String?, Int>>()
+    val orderCategoryRequests = mutableListOf<PlaceCategory>()
     val statusUpdates = mutableListOf<Pair<String, OrderStatus>>()
+    val statusUpdateCategories = mutableListOf<PlaceCategory>()
     val toggledItems = mutableListOf<Pair<String, Boolean>>()
     val createdItems = mutableListOf<NewMenuItemForm>()
+    val updatedItems = mutableListOf<NewMenuItemForm>()
+    val deletedItemIds = mutableListOf<String>()
 
     /** Талоны, из которых `act` берёт исходный: без них исход не собрать. */
     val knownEntries = mutableMapOf<String, QueueEntry>()
@@ -119,8 +125,10 @@ class FakeBusinessRepository : BusinessRepository {
         status: String?,
         page: Int,
         size: Int,
+        category: PlaceCategory,
     ): ApiResult<BusinessOrderPage> {
         orderRequests += status to page
+        orderCategoryRequests += category
         return orderPages[status to page] ?: defaultOrderPage
     }
 
@@ -128,8 +136,10 @@ class FakeBusinessRepository : BusinessRepository {
         placeId: String,
         orderId: String,
         status: OrderStatus,
+        category: PlaceCategory,
     ): ApiResult<BusinessOrder> {
         statusUpdates += orderId to status
+        statusUpdateCategories += category
         return updateOrderResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
     }
 
@@ -146,6 +156,19 @@ class FakeBusinessRepository : BusinessRepository {
     ): ApiResult<BusinessMenu> {
         createdItems += form
         return createItemResult ?: menuResult
+    }
+
+    override suspend fun updateItem(
+        placeId: String,
+        form: NewMenuItemForm,
+    ): ApiResult<BusinessMenu> {
+        updatedItems += form
+        return updateItemResult ?: menuResult
+    }
+
+    override suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu> {
+        deletedItemIds += itemId
+        return deleteItemResult ?: menuResult
     }
 
     companion object {

@@ -32,10 +32,10 @@ class BackendDefaultUrlTest {
     @Test
     fun `debug build points at the development stand`() {
         // Стенд отдаёт https с сертификатом Let's Encrypt (домен nip.io
-        // резолвится в 189.74.96.232), поэтому доверять сертификату руками
+        // резолвится в 157.173.109.181), поэтому доверять сертификату руками
         // (issue #32) больше не требуется.
         if (!BuildConfig.DEBUG) return
-        assertEquals("https://189-74-96-232.nip.io/api/v1/", BuildConfig.API_BASE_URL)
+        assertEquals("https://157.173.109.181.nip.io/api/v1/", BuildConfig.API_BASE_URL)
         assertTrue(BuildConfig.API_BASE_URL, BuildConfig.API_BASE_URL.startsWith("https://"))
     }
 }

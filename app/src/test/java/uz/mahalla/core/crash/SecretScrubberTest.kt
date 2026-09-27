@@ -65,7 +65,7 @@ class SecretScrubberTest {
 
     @Test
     fun `only secret query parameters are cut, the rest identify the request`() {
-        val url = "https://189-74-96-232.nip.io/api/v1/auth/telegram/check" +
+        val url = "https://157.173.109.181.nip.io/api/v1/auth/telegram/check" +
             "?deepLinkToken=abc123&device=ANDROID&page=2"
 
         val scrubbed = SecretScrubber.scrubUrl(url)!!
@@ -74,12 +74,12 @@ class SecretScrubberTest {
         assertTrue(scrubbed.contains("deepLinkToken=${SecretScrubber.REDACTED}"))
         assertTrue(scrubbed.contains("device=ANDROID"))
         assertTrue(scrubbed.contains("page=2"))
-        assertTrue(scrubbed.startsWith("https://189-74-96-232.nip.io/api/v1/auth/telegram/check?"))
+        assertTrue(scrubbed.startsWith("https://157.173.109.181.nip.io/api/v1/auth/telegram/check?"))
     }
 
     @Test
     fun `url without query is left alone`() {
-        val url = "https://189-74-96-232.nip.io/api/v1/places/nearby"
+        val url = "https://157.173.109.181.nip.io/api/v1/places/nearby"
 
         assertEquals(url, SecretScrubber.scrubUrl(url))
     }

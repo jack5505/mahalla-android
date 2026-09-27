@@ -5,6 +5,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -17,6 +18,7 @@ import uz.mahalla.feature.fashion.domain.FashionCartItem
 import uz.mahalla.feature.fashion.domain.FashionCatalogPage
 import uz.mahalla.feature.fashion.domain.FashionCategory
 import uz.mahalla.feature.fashion.domain.FashionProduct
+import uz.mahalla.feature.fashion.domain.NewFashionProductDraft
 import uz.mahalla.feature.fashion.ui.catalog.FashionCatalogEvent
 import uz.mahalla.feature.fashion.ui.catalog.FashionCatalogViewModel
 import uz.mahalla.navigation.FashionArgs
@@ -157,11 +159,81 @@ class FashionCatalogViewModelTest {
         assertEquals(2, cartRepository.cartRequests)
     }
 
-    private fun viewModel() = FashionCatalogViewModel(
+    @Test
+    fun `a customer never sees the owner actions`() = runTest {
+        val viewModel = viewModel(isOwner = false)
+
+        assertFalse(viewModel.state.value.isOwner)
+
+        // Экран сам не рисует кнопку, но проверка на месте — на случай, если
+        // событие всё-таки придёт.
+        viewModel.onEvent(FashionCatalogEvent.AddProductClicked)
+        assertNull(viewModel.state.value.createForm)
+    }
+
+    @Test
+    fun `an owner opens an empty form, and an unattempted submit shows no errors`() = runTest {
+        val viewModel = viewModel(isOwner = true)
+
+        viewModel.onEvent(FashionCatalogEvent.AddProductClicked)
+
+        val form = viewModel.state.value.createForm
+        assertEquals(NewFashionProductDraft(), form?.draft)
+        assertFalse(form?.submitAttempted ?: true)
+    }
+
+    @Test
+    fun `submitting an invalid draft shows field errors instead of calling the server`() = runTest {
+        val viewModel = viewModel(isOwner = true)
+        viewModel.onEvent(FashionCatalogEvent.AddProductClicked)
+
+        viewModel.onEvent(FashionCatalogEvent.CreateSubmitted)
+
+        assertTrue(viewModel.state.value.createForm?.submitAttempted == true)
+        assertTrue(repository.createdProducts.isEmpty())
+    }
+
+    @Test
+    fun `a created product closes the form and reloads the catalog`() = runTest {
+        repository.defaultCatalog = ApiResult.Success(page(listOf(product("p-1"))))
+        val viewModel = viewModel(isOwner = true)
+        viewModel.onEvent(FashionCatalogEvent.AddProductClicked)
+        viewModel.onEvent(FashionCatalogEvent.CreateNameChanged("Oq ko'ylak"))
+        viewModel.onEvent(FashionCatalogEvent.CreatePriceChanged("320000"))
+        val catalogRequests = repository.catalogRequests.size
+
+        viewModel.onEvent(FashionCatalogEvent.CreateSubmitted)
+
+        assertEquals("Oq ko'ylak", repository.createdProducts.single().second.name)
+        assertNull(viewModel.state.value.createForm)
+        // Витрина перечитана целиком — новый товар получит `id` от сервера.
+        assertEquals(catalogRequests + 1, repository.catalogRequests.size)
+    }
+
+    @Test
+    fun `a refused creation keeps the form open with the server's reason`() = runTest {
+        repository.createProductResult = ApiResult.Failure(ApiError.Forbidden)
+        val viewModel = viewModel(isOwner = true)
+        viewModel.onEvent(FashionCatalogEvent.AddProductClicked)
+        viewModel.onEvent(FashionCatalogEvent.CreateNameChanged("Oq ko'ylak"))
+        viewModel.onEvent(FashionCatalogEvent.CreatePriceChanged("320000"))
+
+        viewModel.onEvent(FashionCatalogEvent.CreateSubmitted)
+
+        val form = viewModel.state.value.createForm
+        assertEquals(ApiError.Forbidden, form?.failure?.error)
+        assertFalse(form?.submitting ?: true)
+    }
+
+    private fun viewModel(isOwner: Boolean = false) = FashionCatalogViewModel(
         repository = repository,
         cartRepository = cartRepository,
         savedStateHandle = SavedStateHandle(
-            mapOf(FashionArgs.PLACE_ID to STORE, FashionArgs.PLACE_NAME to "Zara"),
+            mapOf(
+                FashionArgs.PLACE_ID to STORE,
+                FashionArgs.PLACE_NAME to "Zara",
+                FashionArgs.IS_OWNER to isOwner,
+            ),
         ),
     )
 

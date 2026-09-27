@@ -43,16 +43,19 @@ import uz.mahalla.core.ui.components.MahallaCard
 import uz.mahalla.core.ui.components.MahallaDivider
 import uz.mahalla.core.ui.components.MahallaErrorDetails
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
+import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.MahallaTopBar
-import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.core.ui.userMessage
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
+import uz.mahalla.feature.wallet.domain.PaymentTransaction
 import uz.mahalla.feature.wallet.domain.TransactionDirection
 import uz.mahalla.feature.wallet.domain.TransactionStatus
 import uz.mahalla.feature.wallet.domain.Wallet
@@ -186,10 +189,27 @@ fun WalletContentScreen(
                     }
                 }
 
-                item(key = "history-header") {
-                    SectionHeader(title = stringResource(R.string.wallet_history_title))
+                // Вкладка выбирает, что показывать: движения по счёту или
+                // платежи PAYME/CLICK/UZUM (issue #184). Обе истории уже
+                // загружены — переключение не ждёт сеть.
+                item(key = "history-tabs") {
+                    val selectedIndex = if (state.selectedTab == WalletTab.Payments) 1 else 0
+                    MahallaSegmentedControl(
+                        options = listOf(
+                            stringResource(R.string.wallet_tab_transactions),
+                            stringResource(R.string.wallet_tab_payments),
+                        ),
+                        selectedIndex = selectedIndex,
+                        onSelect = { index ->
+                            val tab = if (index == 1) WalletTab.Payments else WalletTab.Transactions
+                            onEvent(WalletEvent.TabSelected(tab))
+                        },
+                    )
                 }
-                historyItems(state = state, onEvent = onEvent)
+                when (state.selectedTab) {
+                    WalletTab.Transactions -> historyItems(state = state, onEvent = onEvent)
+                    WalletTab.Payments -> paymentItems(state = state, onEvent = onEvent)
+                }
             }
         }
     }
@@ -243,6 +263,56 @@ private fun LazyListScope.historyItems(
                         isLoading = state.isLoadingMore,
                         failure = state.loadMoreFailure,
                         onLoadMore = { onEvent(WalletEvent.LoadMore) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Платежи PAYME/CLICK/UZUM (issue #184) — своя ручка и своя пагинация,
+ * отдельная от [historyItems].
+ */
+private fun LazyListScope.paymentItems(
+    state: WalletState,
+    onEvent: (WalletEvent) -> Unit,
+) {
+    when (val payments = state.payments) {
+        is ScreenState.Loading -> item(key = "payments-loading") {
+            ListSkeleton(itemCount = HISTORY_SKELETONS)
+        }
+
+        // Пусто — это не ошибка: платежей могло не быть вовсе.
+        is ScreenState.Empty -> item(key = "payments-empty") {
+            Text(
+                text = stringResource(R.string.wallet_payments_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMahallaColors.current.fgMuted,
+            )
+        }
+
+        is ScreenState.Error -> item(key = "payments-error") {
+            InlineFailure(
+                failure = payments.failure,
+                onRetry = { onEvent(WalletEvent.PaymentsRetry) },
+            )
+        }
+
+        is ScreenState.Content -> {
+            itemsIndexed(payments.data, key = { _, it -> it.id }) { index, payment ->
+                Column {
+                    if (index > 0) MahallaDivider()
+                    PaymentCard(payment = payment)
+                }
+            }
+            if (state.hasMorePayments || state.loadMorePaymentsFailure != null) {
+                item(key = "payments-more") {
+                    LoadMoreAuto(
+                        itemCount = payments.data.size,
+                        isLoading = state.isLoadingMorePayments,
+                        failure = state.loadMorePaymentsFailure,
+                        onLoadMore = { onEvent(WalletEvent.LoadMorePayments) },
                     )
                 }
             }
@@ -532,6 +602,95 @@ private fun TransactionCard(transaction: WalletTransaction, modifier: Modifier =
             }
         }
     }
+}
+
+/**
+ * Строка платежа PAYME/CLICK/UZUM (issue #184): провайдер, сумма, статус и
+ * причина отказа. В отличие от [TransactionCard] сумма без знака — это не
+ * движение по счёту с направлением, а сам платёж.
+ */
+@Composable
+private fun PaymentCard(payment: PaymentTransaction, modifier: Modifier = Modifier) {
+    val colors = LocalMahallaColors.current
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.item)
+            .semantics(mergeDescendants = true) {},
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.gap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = payment.provider.titleRes()?.let { stringResource(it) }
+                        ?: stringResource(R.string.wallet_payment_default_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                payment.createdAt?.let { createdAt ->
+                    Text(
+                        text = DateTimeFormatters.dateTime(createdAt),
+                        style = MaterialTheme.typography.labelLarge.merge(TabularNums),
+                        color = colors.fgMuted,
+                    )
+                }
+            }
+            Text(
+                text = MoneyFormatter.amount(payment.amountSum),
+                style = MaterialTheme.typography.titleMedium.merge(TabularNums),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        // Статус показывается бейджем только там, где он не «всё в порядке» —
+        // успешный платёж бейджем не отмечен, как и завершённая операция
+        // кошелька.
+        val statusLabel = payment.status.badgeRes()
+        if (statusLabel != null) {
+            Row(modifier = Modifier.padding(top = Spacing.item)) {
+                MahallaBadge(
+                    text = stringResource(statusLabel),
+                    tone = if (payment.status == ChargeStatus.Failed) {
+                        MahallaTone.Error
+                    } else {
+                        MahallaTone.Warning
+                    },
+                )
+            }
+        }
+        // Причина отказа — текст сервера как есть, свой придумать нельзя.
+        payment.errorMessage?.let { errorMessage ->
+            Text(
+                text = errorMessage,
+                modifier = Modifier.padding(top = Spacing.item),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/** Провайдер незнакомого значения ([ChargeProvider.Unknown]) не подписан. */
+private fun ChargeProvider.titleRes(): Int? = when (this) {
+    ChargeProvider.Payme -> R.string.wallet_top_up_provider_payme
+    ChargeProvider.Click -> R.string.wallet_top_up_provider_click
+    ChargeProvider.Uzum -> R.string.wallet_top_up_provider_uzum
+    ChargeProvider.Cash -> R.string.checkout_payment_cash
+    ChargeProvider.Unknown -> null
+}
+
+/**
+ * Бейдж статуса. `Paid` бейджем не отмечен — это ожидаемый исход платежа, не
+ * то, ради чего в историю заходят.
+ */
+private fun ChargeStatus.badgeRes(): Int? = when (this) {
+    ChargeStatus.Pending -> R.string.wallet_transaction_pending
+    ChargeStatus.Failed -> R.string.wallet_transaction_failed
+    ChargeStatus.Cancelled -> R.string.wallet_payment_status_cancelled
+    ChargeStatus.Refunded -> R.string.wallet_payment_status_refunded
+    ChargeStatus.Paid, ChargeStatus.Unknown -> null
 }
 
 /**

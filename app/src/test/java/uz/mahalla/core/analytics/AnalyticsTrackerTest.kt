@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -15,6 +16,8 @@ import uz.mahalla.core.analytics.di.AnalyticsModule
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.testutil.FakeAnalyticsRepository
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * «Выстрелил и забыл» (issue #169): проверяется ровно то, за что отвечает
@@ -93,17 +96,28 @@ class AnalyticsTrackerTest {
         // Область собирает `AnalyticsModule`, и тестов у него не было: подмени
         // её потом на `viewModelScope` — все остальные тесты остались бы
         // зелёными, а события начали бы теряться на закрытии экрана.
-        // Здесь трекер берётся именно из модуля, без своей области и без
-        // тестового диспетчера: он обязан доставить событие сам.
-        val tracker = AnalyticsModule.provideAnalyticsTracker(repository)
+        // Здесь трекер берётся именно из модуля, на области из
+        // `provideAnalyticsScope` (настоящий `Dispatchers.IO`, без тестового
+        // диспетчера) — он обязан доставить событие сам.
+        val scope = AnalyticsModule.provideAnalyticsScope()
+        try {
+            val tracker = AnalyticsModule.provideAnalyticsTracker(repository, scope)
+            val delivered = CountDownLatch(1)
+            repository.onTrack = { delivered.countDown() }
 
-        tracker.track(AnalyticsEvents.placeViewed("p-1"))
+            tracker.track(AnalyticsEvents.placeViewed("p-1"))
 
-        val deadline = System.currentTimeMillis() + DELIVERY_TIMEOUT_MS
-        while (repository.events.isEmpty() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(POLL_MS)
+            // Ждём сигнал о доставке, а не опрашиваем `events` по стенным
+            // часам: на загруженном CI-раннере опрос мог не успеть заметить
+            // результат до дедлайна и покраснеть без изменений в коде
+            // (issue #228, п. 3).
+            assertTrue(delivered.await(DELIVERY_TIMEOUT_MS, TimeUnit.MILLISECONDS))
+            assertEquals(listOf(AnalyticsEvents.placeViewed("p-1")), repository.events)
+        } finally {
+            // Область — синглтон графа: тест не должен пережить её собой,
+            // иначе она утечёт до конца JVM тестового прогона.
+            scope.cancel()
         }
-        assertEquals(listOf(AnalyticsEvents.placeViewed("p-1")), repository.events)
     }
 
     private fun TestScope.tracker() = DefaultAnalyticsTracker(
@@ -118,6 +132,5 @@ class AnalyticsTrackerTest {
     private companion object {
         /** Отправка идёт на `Dispatchers.IO` — ждём её, а не спим наугад. */
         const val DELIVERY_TIMEOUT_MS = 5_000L
-        const val POLL_MS = 5L
     }
 }

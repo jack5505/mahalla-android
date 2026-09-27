@@ -18,12 +18,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import uz.mahalla.R
 import uz.mahalla.core.ui.components.MahallaButton
 import uz.mahalla.core.ui.components.MahallaButtonVariant
 import uz.mahalla.core.ui.components.MahallaIconButton
+import uz.mahalla.core.ui.permission.openAppSettings
 import uz.mahalla.ui.theme.Spacing
 
 /**
@@ -155,3 +157,31 @@ fun locationNoticeText(notice: LocationNotice): String = stringResource(
         LocationNotice.Unavailable -> R.string.map_location_unavailable
     },
 )
+
+/**
+ * Строка плашки отказа геолокации — общая для карты (issue #65) и выбора
+ * точки (issue #90).
+ *
+ * После «Больше не спрашивать» системный диалог никогда не появится: кнопка
+ * ведёт в настройки приложения вместо того, чтобы просто закрыть плашку
+ * (issue #348).
+ */
+@Composable
+fun LocationNoticeBannerRow(
+    notice: LocationNotice,
+    permanentlyDenied: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    MapBannerRow(
+        text = locationNoticeText(notice),
+        actionLabel = stringResource(
+            if (permanentlyDenied) R.string.notification_permission_open_settings else R.string.action_close,
+        ),
+        onAction = if (permanentlyDenied) {
+            { context.openAppSettings() }
+        } else {
+            onDismiss
+        },
+    )
+}

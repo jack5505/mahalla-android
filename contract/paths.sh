@@ -65,7 +65,7 @@ done
 
 cd "$(dirname "$0")/.."
 
-CONTRACT_BASE_URL="${CONTRACT_BASE_URL:-https://189-74-96-232.nip.io/api/v1}"
+CONTRACT_BASE_URL="${CONTRACT_BASE_URL:-https://157.173.109.181.nip.io/api/v1}"
 # lib.sh допускает адрес и с «/» на конце — срезаем, иначе /api/v1 не отрежется.
 CONTRACT_BASE_URL="${CONTRACT_BASE_URL%/}"
 CONTRACT_DOCS_URL="${CONTRACT_DOCS_URL:-${CONTRACT_BASE_URL%/api/v1}/v3/api-docs}"

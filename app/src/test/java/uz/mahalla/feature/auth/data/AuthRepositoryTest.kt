@@ -1,10 +1,14 @@
 package uz.mahalla.feature.auth.data
 
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
@@ -17,11 +21,19 @@ import org.junit.Before
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
+import uz.mahalla.data.db.entity.CartDraftItemEntity
+import uz.mahalla.data.db.entity.OrderEntity
 import uz.mahalla.data.location.DeviceLocation
+import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.NetworkFactory
+import uz.mahalla.data.network.SessionExpiry
+import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.prefs.Session
 import uz.mahalla.data.prefs.UserProfile
+import uz.mahalla.data.push.PushTokenRegistrar
+import uz.mahalla.data.push.PushTokenStore
+import uz.mahalla.data.session.LocalUserDataCleaner
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.OtpDeliveryChannel
@@ -30,9 +42,13 @@ import uz.mahalla.feature.auth.domain.ServerPinChallenge
 import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.TelegramLoginState
 import uz.mahalla.feature.auth.domain.VerificationResult
+import uz.mahalla.testutil.FakeCartDraftDao
 import uz.mahalla.testutil.FakeDeviceInfoProvider
 import uz.mahalla.testutil.FakeFormOwnership
+import uz.mahalla.testutil.FakeOrderDao
 import uz.mahalla.testutil.FakePinStorage
+import uz.mahalla.testutil.FakePreferencesDataStore
+import uz.mahalla.testutil.FakePushTokenProvider
 import uz.mahalla.testutil.FakeRequestLocationProvider
 import uz.mahalla.testutil.FakeSessionStore
 import uz.mahalla.testutil.FakeUserProfileStore
@@ -57,6 +73,10 @@ class AuthRepositoryTest {
     private lateinit var userProfileStore: FakeUserProfileStore
     private lateinit var formOwnership: FakeFormOwnership
     private lateinit var pinStorage: FakePinStorage
+    private lateinit var orderDao: FakeOrderDao
+    private lateinit var cartDraftDao: FakeCartDraftDao
+    private lateinit var pushTokenStore: PushTokenStore
+    private lateinit var pushTokenProvider: FakePushTokenProvider
 
     private val deviceInfoProvider = FakeDeviceInfoProvider()
     private val locationProvider = FakeRequestLocationProvider(
@@ -74,6 +94,10 @@ class AuthRepositoryTest {
         userProfileStore = FakeUserProfileStore()
         formOwnership = FakeFormOwnership()
         pinStorage = FakePinStorage(initialPin = "1234")
+        orderDao = FakeOrderDao()
+        cartDraftDao = FakeCartDraftDao()
+        pushTokenStore = PushTokenStore(FakePreferencesDataStore())
+        pushTokenProvider = FakePushTokenProvider()
     }
 
     @After
@@ -249,6 +273,67 @@ class AuthRepositoryTest {
         assertEquals("otp-1", body["otpToken"]?.jsonPrimitive?.content)
         assertEquals("123456", body["otpCode"]?.jsonPrimitive?.content)
         assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `signing in again resets the ambiguous refresh counter`() = runTest {
+        // Счётчик неоднозначных провалов refresh (issue #198) — состояние
+        // `TokenAuthenticator`, а сессию пишет `signIn()` мимо него. Без
+        // явного сброса счёт из прежней сессии (два прощённых, порог не
+        // достигнут) пережил бы новый вход, и первый же неоднозначный ответ
+        // в новой сессии сразу добил бы его до порога и стёр её — тот же
+        // цикл «вход → платный SMS → моментальный выход», от которого
+        // защищает issue #138 (issue #309).
+        val movableClock = MovableClock(Instant.ofEpochSecond(FIXED_NOW_EPOCH_SECONDS))
+        val auth = tokenAuthenticator(clock = movableClock)
+        val repository = repository(tokenAuthenticator = auth, clock = movableClock)
+
+        sessionStore.save(Session("stale", "refresh-1"))
+        val staleRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer stale")
+            .build()
+
+        // Два прощённых неоднозначных провала подряд в прежней сессии —
+        // порог (3) ещё не достигнут, счётчик на 2.
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(staleRequest)))
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(staleRequest)))
+        assertEquals(
+            "два прощённых — сессия ещё жива",
+            Session("stale", "refresh-1"),
+            sessionStore.current(),
+        )
+
+        // Новый вход поверх незакрытого счёта.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(
+            envelope(
+                """{"sessionId":"s-2",
+                   "tokens":{"accessToken":"new-access","refreshToken":"new-refresh"},
+                   "user":{"id":"u-1","phone":"+998901234567"}}""",
+            ),
+        )
+        repository.verifyCode("otp-1", "123456")
+        assertEquals("new-access", sessionStore.current()?.accessToken)
+
+        val newRequest = Request.Builder()
+            .url(server.url("/places/p-1"))
+            .header(AuthInterceptor.HEADER_AUTHORIZATION, "Bearer new-access")
+            .build()
+
+        // Один неоднозначный ответ в новой сессии: не сброшен счётчик — это
+        // третий подряд, и сессия гибнет; сброшен — снова прощаем.
+        movableClock.advanceBy(TokenAuthenticator.MIN_AMBIGUOUS_REFRESH_GAP)
+        server.enqueue(ambiguousRefreshResponse())
+        assertNull(auth.authenticate(route = null, response = unauthorized(newRequest)))
+        assertEquals(
+            "счётчик сброшен новым входом — сессия жива",
+            "new-access",
+            sessionStore.current()?.accessToken,
+        )
     }
 
     @Test
@@ -695,6 +780,23 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun `logout wipes the order cache, the cart draft and the push token`() = runTest {
+        // Без этого следующий человек на том же устройстве видел бы чужие
+        // заказы и корзину из офлайн-кэша и получал бы чужие пуши, пока
+        // сервер не перепривяжет токен (issue #341).
+        orderDao.upsert(listOf(order(id = "o-1")))
+        cartDraftDao.upsert(draft(placeId = "place-1", productId = "osh"))
+        pushTokenStore.save("fcm-1")
+
+        repository().logout()
+
+        assertEquals(emptyList<OrderEntity>(), orderDao.observeAll().first())
+        assertEquals(emptyList<CartDraftItemEntity>(), cartDraftDao.observe("place-1").first())
+        assertNull(pushTokenStore.current())
+        assertEquals(1, pushTokenProvider.deleteCalls)
+    }
+
+    @Test
     fun `authorized flag follows the stored session`() = runTest {
         val repository = repository()
         server.enqueue(envelope("""{"tokens":{"accessToken":"a-1","refreshToken":"r-1"}}"""))
@@ -981,6 +1083,7 @@ class AuthRepositoryTest {
             Session(accessToken = "old", refreshToken = "old-r", sessionId = "s-old"),
         )
         userProfileStore = FakeUserProfileStore(UserProfile(phone = "+998937555505"))
+        orderDao.upsert(listOf(order("o-old")))
         server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
 
         repository().requestCode("+998901234567")
@@ -990,6 +1093,10 @@ class AuthRepositoryTest {
         assertNull(sessionStore.current())
         assertEquals(UserProfile(), userProfileStore.current())
         assertNull(pinStorage.storedPin)
+        // И его заказы/корзина из офлайн-кэша не должны остаться видны
+        // следующему, кто входит под другим номером на этом устройстве
+        // (issue #341).
+        assertEquals(emptyList<OrderEntity>(), orderDao.observeAll().first())
     }
 
     @Test
@@ -1035,7 +1142,10 @@ class AuthRepositoryTest {
         assertTrue(result is ApiResult.Success)
     }
 
-    private fun repository(): AuthRepository = DefaultAuthRepository(
+    private fun repository(
+        tokenAuthenticator: TokenAuthenticator = tokenAuthenticator(),
+        clock: Clock = this.clock,
+    ): AuthRepository = DefaultAuthRepository(
         authApi = authApi(),
         sessionStore = sessionStore,
         userProfileStore = userProfileStore,
@@ -1044,6 +1154,12 @@ class AuthRepositoryTest {
         deviceInfoProvider = deviceInfoProvider,
         locationProvider = locationProvider,
         clock = clock,
+        tokenAuthenticator = tokenAuthenticator,
+        localUserDataCleaner = LocalUserDataCleaner(
+            orderDao = orderDao,
+            cartDraftDao = cartDraftDao,
+            pushTokenRegistrar = PushTokenRegistrar(pushTokenProvider, pushTokenStore),
+        ),
     )
 
     /** Тот же «голый» клиент, что и `@RefreshClient` в проде. */
@@ -1053,6 +1169,35 @@ class AuthRepositoryTest {
         converterFactory = NetworkFactory.converterFactory(NetworkFactory.json()),
     ).create(AuthApi::class.java)
 
+    private fun tokenAuthenticator(clock: Clock = this.clock): TokenAuthenticator =
+        TokenAuthenticator(
+            sessionStore = sessionStore,
+            sessionExpiry = SessionExpiry(),
+            authApi = authApi(),
+            deviceInfoProvider = deviceInfoProvider,
+            locationProvider = locationProvider,
+            clock = clock,
+            localUserDataCleaner = LocalUserDataCleaner(
+                orderDao = orderDao,
+                cartDraftDao = cartDraftDao,
+                pushTokenRegistrar = PushTokenRegistrar(pushTokenProvider, pushTokenStore),
+            ),
+        )
+
+    /** Ответ, у которого нет причины, названной сервером (issue #198). */
+    private fun ambiguousRefreshResponse(): MockResponse = MockResponse()
+        .setResponseCode(200)
+        .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+        .setBody("""{"success":true,"data":{""")
+
+    /** Ответ собирается вручную для прямого вызова `TokenAuthenticator.authenticate`. */
+    private fun unauthorized(request: Request): Response = Response.Builder()
+        .request(request)
+        .protocol(Protocol.HTTP_1_1)
+        .code(401)
+        .message("Unauthorized")
+        .build()
+
     /** Успешный ответ в конверте бэкенда: полезная нагрузка лежит в `data`. */
     private fun envelope(data: String): MockResponse = MockResponse()
         .setResponseCode(200)
@@ -1061,6 +1206,36 @@ class AuthRepositoryTest {
 
     private fun RecordedRequest.bodyJson(): JsonObject =
         Json.parseToJsonElement(body.readUtf8()).jsonObject
+
+    private fun order(id: String) = OrderEntity(
+        id = id,
+        placeId = "place-1",
+        placeName = "Osh markazi",
+        status = "NEW",
+        totalSum = 50_000,
+        createdAtEpochSeconds = FIXED_NOW_EPOCH_SECONDS,
+    )
+
+    private fun draft(placeId: String, productId: String) = CartDraftItemEntity(
+        placeId = placeId,
+        lineId = productId,
+        productId = productId,
+        name = productId,
+        priceSum = 30_000,
+        quantity = 1,
+    )
+
+    /** Часы, которые можно подвинуть: счётчик неоднозначных провалов refresh
+     * (issue #301) различает соседние ответы по интервалу между ними. */
+    private class MovableClock(private var now: Instant) : Clock() {
+        override fun instant(): Instant = now
+        override fun getZone() = ZoneOffset.UTC
+        override fun withZone(zone: java.time.ZoneId): Clock = this
+
+        fun advanceBy(duration: java.time.Duration) {
+            now = now.plus(duration)
+        }
+    }
 
     private companion object {
         const val FIXED_NOW_EPOCH_SECONDS = 1_774_000_000L

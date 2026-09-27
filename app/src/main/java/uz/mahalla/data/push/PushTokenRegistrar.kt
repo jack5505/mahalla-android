@@ -20,6 +20,12 @@ interface PushTokenProvider {
 
     /** `null` — токена нет: Firebase не настроен в сборке или не ответил. */
     suspend fun token(): String?
+
+    /**
+     * Отвязать токен от Firebase (issue #341): без сборки/без ответа — просто
+     * нечего отвязывать, а не сбой.
+     */
+    suspend fun deleteToken()
 }
 
 /**
@@ -63,6 +69,16 @@ class PushTokenRegistrar @Inject constructor(
         runCatchingCancellable { tokenStore.save(token) }
             .reportSwallowed("push.saveToken")
     }
+
+    /**
+     * Выход, чужой аккаунт на устройстве или истёкшая сессия (issue #341):
+     * токен больше не принадлежит вошедшему. Оба шага независимы — недоступный
+     * Firebase не должен помешать стереть локальную запись, и наоборот.
+     */
+    suspend fun forget() {
+        runCatchingCancellable { tokenProvider.deleteToken() }.reportSwallowed("push.deleteToken")
+        runCatchingCancellable { tokenStore.clear() }.reportSwallowed("push.clearToken")
+    }
 }
 
 /**
@@ -98,6 +114,20 @@ class FirebasePushTokenProvider @Inject constructor(
             // `task.result` у неуспешной задачи кидает исключение, поэтому
             // сперва проверка, а не `takeIf` после обращения.
             continuation.resume(if (task.isSuccessful) task.result else null)
+        }
+    }
+
+    override suspend fun deleteToken() {
+        if (!BuildConfig.PUSH_ENABLED || FirebaseApp.getApps(context).isEmpty()) return
+        runCatchingCancellable { awaitDeleteToken() }.reportSwallowed("push.deleteToken")
+    }
+
+    private suspend fun awaitDeleteToken(): Unit = suspendCancellableCoroutine { continuation ->
+        FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener {
+            // Успех или неудача — обеим сторонам всё равно: локальная запись
+            // (`PushTokenStore`) чистится отдельным шагом рядом, а следующий
+            // вход опишет устройство новым токеном сам.
+            continuation.resume(Unit)
         }
     }
 }

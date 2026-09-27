@@ -50,6 +50,7 @@ class PharmacyViewModel @Inject constructor(
     private var loadMoreJob: Job? = null
     private var createJob: Job? = null
     private var stockJob: Job? = null
+    private var editJob: Job? = null
     private var loadedPage = 0
 
     init {
@@ -102,6 +103,28 @@ class PharmacyViewModel @Inject constructor(
                 copy(stockForm = stockForm?.copy(quantityText = event.value, failure = null))
             }
             PharmacyEvent.StockSubmitted -> submitStock()
+
+            is PharmacyEvent.EditProductClicked -> onEditProductClicked(event.product)
+            PharmacyEvent.EditFormDismissed -> {
+                // Та же причина, что у CreateFormDismissed/StockFormDismissed:
+                // без отмены поздний ответ по прежнему товару закрыл бы форму,
+                // уже открытую для другого (issue #288).
+                editJob?.cancel()
+                updateState { copy(editForm = null) }
+            }
+            is PharmacyEvent.EditNameChanged -> updateEditDraft { withName(event.value) }
+            is PharmacyEvent.EditManufacturerChanged ->
+                updateEditDraft { withManufacturer(event.value) }
+            is PharmacyEvent.EditDosageFormChanged -> updateEditDraft { withDosageForm(event.value) }
+            is PharmacyEvent.EditStrengthChanged -> updateEditDraft { withStrength(event.value) }
+            is PharmacyEvent.EditPriceChanged -> updateEditDraft { withPrice(event.value) }
+            is PharmacyEvent.EditPrescriptionChanged ->
+                updateEditDraft { withPrescription(event.value) }
+            PharmacyEvent.EditSubmitted -> submitEdit()
+
+            is PharmacyEvent.DeleteProductClicked -> onDeleteProductClicked(event.product)
+            PharmacyEvent.DeleteConfirmed -> submitDelete()
+            PharmacyEvent.DeleteDismissed -> updateState { copy(deleteConfirmation = null) }
         }
     }
 
@@ -125,6 +148,7 @@ class PharmacyViewModel @Inject constructor(
                     isRefreshing = refreshing,
                     isLoadingMore = false,
                     loadMoreFailure = null,
+                    deleteFailure = null,
                 )
             }
             val result = repository.products(placeId = route.placeId, query = query, page = 0)
@@ -301,6 +325,122 @@ class PharmacyViewModel @Inject constructor(
                                     if (item.id == result.data.id) result.data else item
                                 },
                             )
+                        } ?: products,
+                    )
+                }
+            }
+        }
+    }
+
+    /** Только владелец/менеджер и только среди уже показанных товаров. */
+    private fun onEditProductClicked(product: PharmacyProduct) {
+        if (!currentState.isOwner) return
+        editJob?.cancel()
+        updateState {
+            copy(
+                editForm = EditProductFormState(
+                    productId = product.id,
+                    // Остаток и описание не предзаполняются: у остатка своя
+                    // форма, а описание `ProductResponse` не отдаёт вовсе
+                    // (issue #288, см. KDoc `PharmacyRepository.updateProduct`).
+                    draft = NewPharmacyProductDraft(
+                        name = product.name,
+                        manufacturer = product.manufacturer.orEmpty(),
+                        dosageForm = product.dosageForm.orEmpty(),
+                        strength = product.strength.orEmpty(),
+                        priceText = product.priceSum?.toString().orEmpty(),
+                        requiresPrescription = product.requiresPrescription,
+                    ),
+                ),
+            )
+        }
+    }
+
+    private inline fun updateEditDraft(
+        crossinline transform: NewPharmacyProductDraft.() -> NewPharmacyProductDraft,
+    ) {
+        updateState {
+            copy(
+                editForm = editForm?.let {
+                    it.copy(draft = it.draft.transform(), failure = null)
+                },
+            )
+        }
+    }
+
+    /**
+     * Успех правит список на месте, как и [submitStock]: сервер уже
+     * подтвердил новые поля, а полная перезагрузка сбросила бы догруженный
+     * хвост и активный поиск.
+     */
+    private fun submitEdit() {
+        val form = currentState.editForm ?: return
+        if (form.submitting) return
+        if (!form.draft.isNameValid || !form.draft.isPriceValid) {
+            updateState { copy(editForm = form.copy(submitAttempted = true)) }
+            return
+        }
+
+        updateState { copy(editForm = form.copy(submitting = true, failure = null)) }
+        editJob = viewModelScope.launch {
+            val result = repository.updateProduct(route.placeId, form.productId, form.draft)
+            when (result) {
+                is ApiResult.Failure -> updateState {
+                    copy(editForm = editForm?.copy(submitting = false, failure = result.failure))
+                }
+
+                is ApiResult.Success -> updateState {
+                    copy(
+                        editForm = null,
+                        products = (products as? ScreenState.Content)?.let { content ->
+                            ScreenState.Content(
+                                content.data.map { item ->
+                                    if (item.id == result.data.id) result.data else item
+                                },
+                            )
+                        } ?: products,
+                    )
+                }
+            }
+        }
+    }
+
+    /** Спрашивает подтверждение: карточку товара набирали руками (issue #288). */
+    private fun onDeleteProductClicked(product: PharmacyProduct) {
+        if (!currentState.isOwner || product.id in currentState.deletingProductIds) return
+        updateState { copy(deleteConfirmation = product, deleteFailure = null) }
+    }
+
+    /**
+     * Удаление правит список на месте — товар просто исчезает из уже
+     * показанной страницы, полная перезагрузка сбросила бы поиск и хвост.
+     *
+     * Удаление не открывает модальную форму — список остаётся кликабельным,
+     * и два разных товара уходят на удаление почти одновременно. Поэтому
+     * [PharmacyState.deletingProductIds] — множество, а не одиночный id: с
+     * одиночным id второй запуск стирал бы отметку первого, и его строка
+     * разблокировалась бы раньше своего ответа (issue #288).
+     */
+    private fun submitDelete() {
+        val product = currentState.deleteConfirmation ?: return
+        updateState {
+            copy(deleteConfirmation = null, deletingProductIds = deletingProductIds + product.id)
+        }
+        viewModelScope.launch {
+            when (val result = repository.deleteProduct(route.placeId, product.id)) {
+                is ApiResult.Failure -> updateState {
+                    copy(
+                        deletingProductIds = deletingProductIds - product.id,
+                        deleteFailure = result.failure,
+                    )
+                }
+
+                is ApiResult.Success -> updateState {
+                    copy(
+                        deletingProductIds = deletingProductIds - product.id,
+                        products = (products as? ScreenState.Content)?.let { content ->
+                            val left = content.data.filterNot { it.id == product.id }
+                            if (left.isEmpty()) ScreenState.Empty else ScreenState.Content(left)
                         } ?: products,
                     )
                 }

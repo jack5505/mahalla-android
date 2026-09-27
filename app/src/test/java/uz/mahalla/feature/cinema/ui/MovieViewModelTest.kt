@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -55,11 +56,9 @@ class MovieViewModelTest {
     private val repository = FakeCinemaRepository()
 
     @Test
-    fun `movie is taken from the poster and the day starts as today`() =
+    fun `movie is read by id and the day starts as today`() =
         runTest(mainDispatcherRule.dispatcher) {
-            repository.moviesResult = ApiResult.Success(
-                listOf(Movie(id = "other", title = "B"), Movie(id = MOVIE, title = "Dune")),
-            )
+            repository.movieResult = ApiResult.Success(Movie(id = MOVIE, title = "Dune"))
 
             val viewModel = viewModel()
             runCurrent()
@@ -67,13 +66,14 @@ class MovieViewModelTest {
             val state = viewModel.state.value
             assertEquals("Dune", (state.movie as ScreenState.Content).data.title)
             assertEquals(TODAY, state.selectedDate)
+            assertEquals(listOf(MOVIE), repository.requestedMovieIds)
             assertEquals(listOf(TODAY), repository.requestedDays)
         }
 
     /** Фильм сняли, пока человек шёл сюда со списка: это «не найдено». */
     @Test
-    fun `movie missing from the poster is not found`() = runTest(mainDispatcherRule.dispatcher) {
-        repository.moviesResult = ApiResult.Success(listOf(Movie(id = "other", title = "B")))
+    fun `a movie the server no longer has is not found`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.movieResult = ApiResult.Failure(ApiError.NotFound)
 
         val viewModel = viewModel()
         runCurrent()
@@ -120,8 +120,8 @@ class MovieViewModelTest {
         runCurrent()
 
         assertEquals(listOf(TODAY, TODAY.plusDays(1)), repository.requestedDays)
-        // Афиша при смене дня не перечитывается: описание фильма не меняется.
-        assertEquals(1, repository.moviesRequests)
+        // Фильм при смене дня не перечитывается: описание не меняется.
+        assertEquals(1, repository.movieRequests)
     }
 
     @Test
@@ -273,7 +273,40 @@ class MovieViewModelTest {
             assertEquals(MovieEffect.OpenMyTickets, effects.single())
         }
 
-    /** Возврат на экран перечитывает расписание, но не афишу. */
+    @Test
+    fun `trailer link opens what the server sent`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.movieResult = ApiResult.Success(
+            Movie(id = MOVIE, title = "Dune", trailerUrl = "https://youtube.com/watch?v=dune"),
+        )
+        val viewModel = viewModel()
+        runCurrent()
+
+        val effects = mutableListOf<MovieEffect>()
+        val job = launch { effects += viewModel.effects.first() }
+        viewModel.onEvent(MovieEvent.TrailerClicked)
+        runCurrent()
+        job.join()
+
+        assertEquals(MovieEffect.OpenTrailer("https://youtube.com/watch?v=dune"), effects.single())
+    }
+
+    /** Фильм без трейлера — эффекта нет, кнопки на экране и не было бы. */
+    @Test
+    fun `trailer click without a url does nothing`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.movieResult = ApiResult.Success(Movie(id = MOVIE, title = "Dune"))
+        val viewModel = viewModel()
+        runCurrent()
+
+        val effects = mutableListOf<MovieEffect>()
+        val job = launch { viewModel.effects.toList(effects) }
+        viewModel.onEvent(MovieEvent.TrailerClicked)
+        runCurrent()
+        job.cancel()
+
+        assertTrue(effects.isEmpty())
+    }
+
+    /** Возврат на экран перечитывает расписание, но не сам фильм. */
     @Test
     fun `returning refreshes only the schedule`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = viewModel()
@@ -283,7 +316,7 @@ class MovieViewModelTest {
         runCurrent()
 
         assertEquals(listOf(TODAY, TODAY), repository.requestedDays)
-        assertEquals(1, repository.moviesRequests)
+        assertEquals(1, repository.movieRequests)
     }
 
     /** Сеанс исчез из нового расписания — шторка закрывается сама. */

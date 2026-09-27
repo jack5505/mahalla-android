@@ -54,6 +54,9 @@ class FakeHospitalRepository : HospitalRepository {
 
     var appointmentResult: ApiResult<Appointment> = ApiResult.Success(Appointment(id = "a-1"))
 
+    /** Записи, у которых спрашивали карточку по id (issue #183), — по порядку запросов. */
+    val requestedAppointments = mutableListOf<String>()
+
     override suspend fun doctors(placeId: String): ApiResult<List<Doctor>> {
         requestedDoctors += placeId
         return doctorsResult
@@ -90,8 +93,10 @@ class FakeHospitalRepository : HospitalRepository {
             ?: ApiResult.Success(appointment.copy(status = AppointmentStatus.Cancelled))
     }
 
-    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
-        appointmentResult
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> {
+        requestedAppointments += appointmentId
+        return appointmentResult
+    }
 
     /** Записи, ушедшие в дотягивание имени врача, — по порядку вызовов. */
     val withDoctorNamesCalls = mutableListOf<List<AppointmentDto>>()

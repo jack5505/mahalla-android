@@ -212,6 +212,11 @@ class DefaultBookingRepository @Inject constructor(
         apiCall { api.myAppointments(page = page.coerceAtLeast(0), size = size).payload() }
             .map(AppointmentPageDto::toDomain)
 
+    /** Запрошенный `id` уже известен — его молчание в ответе не теряет карточку. */
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> =
+        apiCall { api.appointment(appointmentId).payload() }
+            .map { dto -> dto.toDomain(appointmentId) }
+
     /**
      * Ответ на отмену — та же запись, но обязательным его разбор не считаем:
      * `ensureSuccess()` уже подтвердил, что сервер отменил именно её. Если

@@ -199,6 +199,15 @@ sealed interface ActivityTarget {
      */
     data class FoodOrder(val orderId: String) : ActivityTarget
 
+    /** Карточка билета (issue #183): `GET cinema/tickets/{id}`. */
+    data class CinemaTicket(val ticketId: String) : ActivityTarget
+
+    /** Карточка записи к мастеру (issue #183): `GET appointments/{id}`. */
+    data class MasterAppointment(val appointmentId: String) : ActivityTarget
+
+    /** Карточка записи к врачу (issue #183): `GET hospitals/appointments/{id}`. */
+    data class DoctorAppointment(val appointmentId: String) : ActivityTarget
+
     /** Экрана для этой активности пока нет — строка не кликабельна. */
     data object None : ActivityTarget
 }
@@ -214,6 +223,10 @@ sealed interface ActivityTarget {
  * время создания: в списке активностей человек ищет «когда это», а не «когда
  * я нажал кнопку». `null` — сервер не прислал дату или прислала битую; такие
  * строки уходят в конец, а не наверх.
+ * @param timeKind смысл [occurredAt] — прошлое или будущее (issue #174), см.
+ * [ActivityTimeKind]. Нужен отдельной осью сортировки: сравнивать «когда
+ * заказали» с «когда начнётся бронь» как одно число нельзя, см.
+ * [ActivityMerge.filter].
  * @param amount сумма в сумах (бэкенд отдаёт тийины, пересчёт `Money.tiyinToSom`
  * в маппере, issue #149); `null` — источник её не сообщает.
  * @param note короткое уточнение под заголовком: номер заказа, место в зале,
@@ -233,6 +246,7 @@ data class Activity(
     val kind: ActivityKind,
     val status: ActivityStatus,
     val occurredAt: Instant?,
+    val timeKind: ActivityTimeKind = ActivityTimeKind.Recorded,
     val amount: Long? = null,
     val note: String? = null,
     val target: ActivityTarget = ActivityTarget.None,
@@ -255,6 +269,26 @@ enum class ActivityFilter {
 }
 
 /**
+ * Что означает [Activity.occurredAt] — прошлое или будущее (issue #174).
+ *
+ * Источники сообщают время разного смысла: `Orders` и `CinemaTickets` — это
+ * всегда `createdAt`, то есть прошлое (когда заказали); `GamingBookings` и
+ * записи с известной датой — время самого события, то есть обычно будущее.
+ * Смешивать их на одной оси возрастания значит класть старый заказ выше
+ * записи, которая вот-вот начнётся — ровно баг из issue #174. Отдельное поле
+ * вместо вывода смысла из [ActivitySource] нужно потому, что у записи к
+ * мастеру/врачу смысл зависит от данных: `apptDate` есть — это [Event], нет —
+ * это [Recorded] (см. `AppointmentDto.toActivity`).
+ */
+enum class ActivityTimeKind {
+    /** Время в будущем (обычно): начало брони, дата записи. */
+    Event,
+
+    /** Время в прошлом: когда создана запись (заказ, покупка билета). */
+    Recorded,
+}
+
+/**
  * Слияние источников (issue #73).
  *
  * Чистые функции, потому что цена ошибки здесь — пропавшая из списка
@@ -265,23 +299,49 @@ object ActivityMerge {
     /**
      * Отбор по вкладке и сортировка.
      *
-     * Порядок разный у вкладок, и это не прихоть:
-     * - [ActivityFilter.Active] — по возрастанию, «ближайшее сверху»: вкладка
-     *   отвечает на вопрос «что дальше», и бронь на послезавтра не должна
-     *   стоять выше заказа, который готовят прямо сейчас.
-     * - [ActivityFilter.History] — по убыванию, как любой список прошлого.
+     * [ActivityFilter.History] — по убыванию, как любой список прошлого;
+     * `occurredAt` там у всех источников только `createdAt` или прошедшая
+     * дата события, так что одна ось не смешивает разные смыслы.
      *
-     * Записи без даты идут в конец в обоих случаях: наверху они заняли бы
-     * место того, что человек как раз ищет. Внутри одинакового времени
-     * порядок задаёт [Activity.key] — иначе строки переставлялись бы при
-     * каждой перезагрузке списка.
+     * [ActivityFilter.Active] смешивает: `Orders`/`CinemaTickets` несут
+     * **прошлое** ([ActivityTimeKind.Recorded] — когда создана запись), а
+     * `GamingBookings` и записи с известной датой — **будущее**
+     * ([ActivityTimeKind.Event]). Одна ось возрастания клала бы старый заказ
+     * выше брони, которая вот-вот начнётся (issue #174), поэтому сортировка —
+     * две группы, а не одна:
+     * 1. [ActivityTimeKind.Recorded] по убыванию (свежая запись сверху) — это
+     *    то, что происходит прямо сейчас (готовится, обрабатывается), и у
+     *    него нет известного будущего времени, чтобы ранжировать иначе;
+     * 2. [ActivityTimeKind.Event] по возрастанию (ближайшее сверху);
+     * 3. без даты — в самый конец, независимо от группы: наверху такая
+     *    строка заняла бы место того, что человек как раз ищет.
+     *
+     * Внутри одинакового времени порядок задаёт [Activity.key] — иначе
+     * строки переставлялись бы при каждой перезагрузке списка.
      */
     fun filter(items: List<Activity>, filter: ActivityFilter): List<Activity> {
         val selected = items.filter { it.status.isActive == (filter == ActivityFilter.Active) }
-        val sign = if (filter == ActivityFilter.Active) 1 else -1
+        if (filter == ActivityFilter.History) {
+            return selected.sortedWith(
+                compareBy<Activity> { it.occurredAt == null }
+                    .thenByDescending { it.occurredAt?.toEpochMilli() ?: 0L }
+                    .thenBy(Activity::key),
+            )
+        }
         return selected.sortedWith(
-            compareBy<Activity> { it.occurredAt == null }
-                .thenBy { activity -> activity.occurredAt?.toEpochMilli()?.times(sign) ?: 0L }
+            compareBy<Activity> { activity ->
+                when {
+                    activity.occurredAt == null -> 2
+                    activity.timeKind == ActivityTimeKind.Recorded -> 0
+                    else -> 1
+                }
+            }
+                .thenBy { activity ->
+                    when (activity.timeKind) {
+                        ActivityTimeKind.Recorded -> activity.occurredAt?.toEpochMilli()?.unaryMinus() ?: 0L
+                        ActivityTimeKind.Event -> activity.occurredAt?.toEpochMilli() ?: 0L
+                    }
+                }
                 .thenBy(Activity::key),
         )
     }

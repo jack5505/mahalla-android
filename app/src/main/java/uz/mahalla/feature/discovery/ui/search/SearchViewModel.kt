@@ -11,6 +11,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.data.SearchHistoryStore
 import uz.mahalla.feature.discovery.domain.DiscoveryFilters
 import uz.mahalla.feature.discovery.domain.Place
@@ -33,6 +34,7 @@ import javax.inject.Inject
 class SearchViewModel @Inject constructor(
     private val repository: CatalogRepository,
     private val historyStore: SearchHistoryStore,
+    private val categoryRepository: CategoryRepository,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<SearchState, SearchEvent, SearchEffect>(SearchState()) {
 
@@ -57,6 +59,18 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             historyStore.queries.collect { queries -> updateState { copy(history = queries) } }
         }
+        // Чипы рисуются по кэшу сразу (issue #378), а выбор снимается только по
+        // подтверждённому списку — отсюда две подписки, а не одна.
+        viewModelScope.launch {
+            categoryRepository.categories().collect { list -> updateState { copy(categories = list) } }
+        }
+        viewModelScope.launch {
+            categoryRepository.confirmedCategories().collect(::dropDisabledCategories)
+        }
+        // Кэш обновляется и отсюда, а не только с главной: на поиск попадают по
+        // deep link, не открыв её (issue #382). Результат не разбираем — отказ
+        // оставит прежний кэш и ничего не подтвердит.
+        viewModelScope.launch { categoryRepository.refresh() }
         search(delayMillis = 0)
     }
 
@@ -103,6 +117,20 @@ class SearchViewModel @Inject constructor(
             SearchEvent.Retry -> search(delayMillis = 0)
             is SearchEvent.PlaceClicked -> emitEffect(SearchEffect.OpenPlace(event.placeId))
         }
+    }
+
+    /**
+     * Категорию выключили в дашборде — её чип пропал из шторки, и оставлять её
+     * в применённом фильтре нельзя: снять такой фильтр было бы нечем, кроме
+     * «сбросить всё» (issue #382). Выдача перезапрашивается только когда выбор
+     * правда изменился: лишний запрос на каждое обновление кэша — это моргание
+     * списка на ровном месте.
+     */
+    private fun dropDisabledCategories(enabled: List<PlaceCategory>) {
+        val selected = currentState.filters.categories
+        val kept = selected intersect enabled.toSet()
+        if (kept.size == selected.size) return
+        applyFilters { copy(categories = kept) }
     }
 
     private fun applyFilters(transform: DiscoveryFilters.() -> DiscoveryFilters) {

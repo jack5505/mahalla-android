@@ -59,6 +59,16 @@ internal fun AppointmentDto.toDomain(): Appointment? {
  */
 internal fun AppointmentDto.toCreated(): Appointment = appointment(id.orEmpty())
 
+/**
+ * Карточка записи по `id` (issue #183): запрошенный `id` уже известен, поэтому
+ * его молчание в ответе — не повод потерять всю запись, как в списке
+ * ([AppointmentDto.toDomain]), а повод подставить то, что запрашивали, и
+ * разобрать остальные поля как обычно. Тот же приём, что у карточки врача
+ * ([uz.mahalla.feature.hospital.data.DoctorDto.toDomain]).
+ */
+internal fun AppointmentDto.toDomain(requestedId: String): Appointment =
+    appointment(id?.takeIf { it.isNotBlank() } ?: requestedId)
+
 private fun AppointmentDto.appointment(appointmentId: String) = Appointment(
     id = appointmentId,
     placeId = placeId?.takeIf { it.isNotBlank() },

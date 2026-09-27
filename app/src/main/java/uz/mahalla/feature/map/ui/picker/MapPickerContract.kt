@@ -30,6 +30,8 @@ data class MapPickerState(
     val isLocating: Boolean = false,
     /** Почему «моё местоположение» ничего не дало: молчать здесь нельзя. */
     val locationNotice: LocationNotice? = null,
+    /** «Больше не спрашивать»: системный диалог не покажется, дальше — только настройки. */
+    val locationPermissionPermanentlyDenied: Boolean = false,
 ) : UiState {
 
     /** Точка под меткой в центре экрана. */
@@ -56,7 +58,10 @@ sealed interface MapPickerEvent : UiEvent {
     data class LocationPermissionChecked(val granted: Boolean) : MapPickerEvent
 
     /** Ответ системного диалога. */
-    data class LocationPermissionResult(val granted: Boolean) : MapPickerEvent
+    data class LocationPermissionResult(
+        val granted: Boolean,
+        val permanentlyDenied: Boolean = false,
+    ) : MapPickerEvent
 
     data object NoticeDismissed : MapPickerEvent
 

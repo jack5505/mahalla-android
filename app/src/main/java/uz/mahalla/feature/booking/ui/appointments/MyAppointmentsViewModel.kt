@@ -26,9 +26,9 @@ sealed interface MyAppointmentsEffect : UiEffect {
      * Перенос: экран уходит выбирать новое время на экран записи — там уже
      * есть и календарь, и слоты, и правило «прошедший слот не предлагать».
      *
-     * Наружу едет вся [RescheduleTarget], а не только `appointmentId`: взять
-     * её там больше негде — своего экрана у одной записи нет, и
-     * `GET appointments/{id}` приложение не использует.
+     * Наружу едет вся [RescheduleTarget], а не только `appointmentId`: заведение
+     * и услуга нужны немедленно, а карточка записи (issue #183) стоила бы
+     * лишнего запроса ровно за то, что человек только что видел в списке.
      */
     data class OpenReschedule(val target: RescheduleTarget) : MyAppointmentsEffect
 }

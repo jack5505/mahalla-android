@@ -12,6 +12,8 @@ import uz.mahalla.feature.fashion.domain.FashionCatalogPage
 import uz.mahalla.feature.fashion.domain.FashionCategory
 import uz.mahalla.feature.fashion.domain.FashionOrderPage
 import uz.mahalla.feature.fashion.domain.FashionProductDetail
+import uz.mahalla.feature.fashion.domain.NewFashionProductDraft
+import uz.mahalla.feature.fashion.domain.NewFashionVariantDraft
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.Order
 
@@ -57,6 +59,30 @@ class FakeFashionRepository : FashionRepository {
         return productResult ?: ApiResult.Success(
             FashionProductDetail(id = productId, storeId = "s-1", name = "Tovar"),
         )
+    }
+
+    var createProductResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    val createdProducts = mutableListOf<Pair<String, NewFashionProductDraft>>()
+
+    override suspend fun createProduct(
+        storeId: String,
+        draft: NewFashionProductDraft,
+    ): ApiResult<Unit> {
+        createdProducts += storeId to draft
+        return createProductResult
+    }
+
+    var createVariantResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    val createdVariants = mutableListOf<Pair<String, NewFashionVariantDraft>>()
+
+    override suspend fun createVariant(
+        productId: String,
+        draft: NewFashionVariantDraft,
+    ): ApiResult<Unit> {
+        createdVariants += productId to draft
+        return createVariantResult
     }
 }
 

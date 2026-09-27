@@ -43,17 +43,17 @@ gh issue list --state open   # 47 открытых issue
 
 | Что | Сколько | Чем считать |
 |---|---|---|
-| Kotlin в `main` | 405 файлов | `find app/src/main -name '*.kt' \| wc -l` |
-| feature-пакетов | 24 | `ls app/src/main/java/uz/mahalla/feature` |
-| Назначений в графе | **45** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
-| Экранов (`*Screen.kt`) | 45 | `find app/src/main -name '*Screen.kt' \| wc -l` |
-| ViewModel / репозиториев | 46 / 24 | `find … -name '*ViewModel.kt'` |
-| `*Api.kt` / эндпоинтов | 19 / **81** уникальный | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (82 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-10**: было «77 в 79 аннотациях» на 2026-09-09, из четырёх новых один — `food/delivery-fee` (issue #179), остальные приехали чужими PR |
-| Эндпоинтов на стенде | **180** в 164 путях | `curl -sk https://189-74-96-232.nip.io/v3/api-docs`, дальше разбор `paths` по методам |
-| Тестов | **2061 в 190 классах**, 0 падений, 2 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-10; на 2026-09-09 было 1967 в 184) |
+| Kotlin в `main` | 543 файла | `find app/src/main -name '*.kt' \| wc -l` |
+| feature-пакетов | 27 | `ls app/src/main/java/uz/mahalla/feature` |
+| Назначений в графе | **58** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
+| Экранов (`*Screen.kt`) | 59 | `find app/src/main -name '*Screen.kt' \| wc -l` |
+| ViewModel / репозиториев | 61 / 24 | `find … -name '*ViewModel.kt'` |
+| `*Api.kt` / эндпоинтов | 28 / **140** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (142 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-26** (issue #382): на 2026-09-10 было «81 в 82 аннотациях» — таблица отстала на две недели чужих PR |
+| Эндпоинтов на стенде | **180** в 164 путях (счёт от 2026-09-10) | `/v3/api-docs` по хосту стенда с тех пор отдаёт `404` nginx — пересчитать нечем, цифра устарела и держится только как ориентир |
+| Тестов | **2989 в 253 классах**, 0 падений, 6 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-26, issue #382; на 2026-09-10 было 2061 в 190). Пропущены — шесть отдельных кейсов в `OrdersContractTest`, `SecurityContractTest` и `BookingContractTest`, которым нужна проба под токеном: без `CONTRACT_REFRESH_TOKEN` она не снимается. Анонимные пробы этих же классов закоммичены и гоняются. Нет пробы — тест пропускается, а не краснеет |
 | Строк uz / ru | 760 / 758 | расхождение — ровно два `translatable="false"` |
 | `<plurals>` | 26 в uz и 26 в ru | **лежат в отдельном `res/values*/plurals.xml`**: grep по `strings.xml` даёт ноль и обманывает |
-| Room | 3 сущности, 3 DAO | `data/db/` |
+| Room | 4 сущности, 4 DAO | `data/db/` |
 
 ---
 
@@ -63,7 +63,7 @@ gh issue list --state open   # 47 открытых issue
 
 | Таб | Экран | Состояние |
 |---|---|---|
-| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, 7 категорий, «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
+| Главная | `discovery/ui/home/DiscoveryHomeScreen.kt` (300) | **работает**: поиск, категории из `GET categories` с кэшем в Room (#378, до первого ответа — зашитые 7), «рядом», «рекомендуем», карусель акций, бейдж уведомлений, pull-to-refresh |
 | Мои активности | `activity/ui/ActivityScreen.kt` (412) | **работает** («Мои активности», issue #73): один список из пяти источников — `GET orders` без `vertical`, `gaming/bookings/my`, `appointments/my`, `hospitals/appointments/my`, `cinema/tickets/my`; вкладки «активные/история», частичный отказ по источникам, догрузка кнопкой «Показать ещё» (#151), переход на статус заказа «Еды». Подпись таба — `nav_activity` («Активности»/«Amallarim») кеглем 9/600 из ТЗ (`design/android/TZ-ANDROID.md`, компонент `navbar`): с M3-шными 12sp она обрезалась бы при системном fontScale 1.3 на 393 dp и при 1.15 на 360 dp (#211). Макет (`figma/svg`, `prototype/screens.js`) до сих пор подписывает этот пункт «Заказы»/«Buyurtmalar» и держит 5 пунктов против 4 — дизайн-репо отстал от #73 (jack5505/mahalla#214) |
 | Кошелёк | `wallet/ui/WalletScreen.kt` (497) | **работает**: `GET wallet`, история транзакций страницами, пополнение. Зашитого `DEMO_BALANCE_SUM` больше нет |
 | Профиль | `profile/ui/ProfileScreen.kt` (869) | **работает**: имя (редактируется, `PUT users/me`), телефон, аватар (`media/upload` + `PUT users/me`, issue #170), профиль перечитывается `GET users/me` при открытии и возврате на экран, мои устройства (`auth/sessions`, отзыв, доверие), «Выйти», язык, тема, адрес сервера, Chucker + входы во все «мои…» |
@@ -75,12 +75,12 @@ gh issue list --state open   # 47 открытых issue
 
 | Вертикаль | Экраны | Ручки | Готово в |
 |---|---|---|---|
-| **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/delivery-fee`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг), доставка в корзине — #179 |
+| **Еда** (FOOD) | меню → шторка модификаторов → корзина → checkout → статус | `food/places/{id}/menu`, `food/delivery-fee`, `food/orders`, `orders/{id}`, `food/orders/{id}/cancel` | эпик 5 + переделка под реальный контракт (#9, второй круг), доставка в корзине — #179; кнопка «Заказать» на карточке — #335 (до неё `ordering` не включался ни для одной категории, и первый заказ был недостижим) |
 | **Очередь** (walk-in) | талон, слежение, отмена | `walkin/send`, `walkin/{id}/cancel` | #96 |
-| **Бронь** (BARBER) | услуга → день → слот → подтверждение; «мои записи» с отменой и **переносом** | `barber-services/places/{id}`, `.../slots`, `appointments`, `appointments/my`, `appointments/{id}/cancel` | #97, перенос — #11 |
-| **Больницы** | врач → день → время → жалоба → подтверждение; «мои записи к врачу» (тот же экран, что у брони, с `vertical=Doctor`) | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my`, отмена — общая `appointments/{id}/cancel` (см. §4.1) | #99 |
+| **Бронь** (BARBER) | услуга → день → слот → подтверждение; «мои записи» с отменой и **переносом**; карточка одной записи (из «моих активностей») | `barber-services/places/{id}`, `.../slots`, `appointments`, `appointments/my`, `appointments/{id}`, `appointments/{id}/cancel` | #97, перенос — #11, карточка записи — #183 |
+| **Больницы** | врач → день → время → жалоба → подтверждение; «мои записи к врачу» (тот же экран, что у брони, с `vertical=Doctor`); карточка одной записи — тот же экран, что и у брони | `hospitals/places/{id}/doctors`, `hospitals/appointments`, `hospitals/appointments/my`, `hospitals/appointments/{id}`, отмена — общая `appointments/{id}/cancel` (см. §4.1) | #99, карточка записи — #181, #183 |
 | **Игровые зоны** (GAMING) | зоны клуба → время и длительность → «мои брони» | `gaming/places/{id}/zones`, `gaming/bookings`, `gaming/bookings/my` | #98 |
-| **Кино** | афиша → фильм и сеансы → покупка → «мои билеты» | `cinema/movies`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `…/cancel` | #106 |
+| **Кино** | афиша → фильм (карточка по id, постер и трейлер) и сеансы → покупка → «мои билеты»; карточка одного билета (из «моих активностей») | `cinema/movies`, `cinema/movies/{id}`, `cinema/places/{id}/schedule`, `cinema/sessions/{id}/buy`, `cinema/tickets/my`, `cinema/tickets/{id}`, `…/cancel` | #106, карточка фильма и билета — #183 |
 | **Аптека** | витрина товаров с наличием — **только просмотр** | `pharmacy/places/{id}/products` | #100 (заказа нет и у бэкенда) |
 | **Одежда** (FASHION) | каталог → товар (цвет/размер) → **серверная** корзина → checkout → «мои заказы» | `fashion/categories`, `fashion/stores/{id}/catalog`, `fashion/products/{id}`, `fashion/cart*`, `fashion/orders` | #108 |
 | **Мастера** (freelancers) | каталог → профиль и услуги → заказ → «мои заказы» | `freelancers`, `freelancers/{id}`, `…/services`, `…/orders`, `freelancers/orders/my` | #107 |
@@ -193,7 +193,7 @@ startTime`) явно от больницы. Для игровой зоны ну�
 | Соцфункции | `places/{id}/like`, `/save`, `/comments` (GET/POST), `DELETE comments/{id}`, `saved-places`, `places/{id}/status` | issue #105, PR #78; вопросы к бэкенду — #88 |
 | Серверный PIN и app-lock | `pin/status`, `set`, `verify`, `reset`, `PUT pin/change`, `PUT pin/biometric`, `DELETE pin`, `auth/session/check`, `auth/pin-resume` | issue #102, PR #195. В PR уже есть app-lock, смена PIN, переключатель биометрии, `session/check` и `pin-resume`; `pin/set`/`reset`/`DELETE pin` не подключены — см. ADR 0013 |
 | Профиль на сервере | `GET users/me`, `PUT users/me` | issue **#170**: данные пользователя приходят только в ответе на вход, имя и аватар на сервере менять нечем. **Осторожно: девять KDoc в коде утверждают, что этих ручек у бэкенда нет вовсе** (`ProfileViewModel`, `ProfileContract`, `PlaceDetailsViewModel`, `AuthRepository`, `CustomerForm`, `RoleRepository`, `PreferenceKeys`, `UserProfileStore`, `AuthRepositoryTest`) — так было на момент issue #61, в схеме от 2026-09-09 они есть |
-| Платежи | `payments/subscription`, `payments/transactions`, `payments/subscription/activate`, callbacks Click/Payme | issue #12, PR #156/#158 |
+| Платежи | `payments/subscription`, `payments/subscription/activate`, callbacks Click/Payme | issue #184: `payments/transactions` **подключена** — вкладка «Платежи» в кошельке и списания за подписку (`SubscriptionRepository.charges`). `payments/subscription` не используется (issue #103, отдаёт меньше, чем `subscriptions/current`), `payments/subscription/activate` — issue #250 (тело без именованных полей), callbacks зовёт провайдер, не приложение |
 | Аналитика | `POST analytics/track` | issue #169, PR #229 — **подключена**: `VIEW`/`CALL`/`NAVIGATE`/`REVIEW` на карточке места, `BOOK` в пяти вертикалях, `ORDER` в двух. Ручка place-центрична (`placeId` обязателен, перечисление видов закрыто), поэтому событие без заведения — экран, поиск, отказ бэкенда — отправить нечем: issue **#226** |
 | Карта | `GET places/map-bounds` | issue #168, PR #223: маркеры брались из `CatalogRepository` (`places/nearby`), то есть радиусом вокруг человека; в PR область приходит от полотна (`visibleRegion`) с дебаунсом, `nearby` остался первым кадром |
 | Мелочи чека и меню | `promotions/check` (промокод), `food/delivery-fee` | `food/delivery-fee` **подключён** (issue #179): корзина и чекаут «Еды» запрашивают доставку по сумме позиций и показывают её строкой при доставке. Промокод не подключён: поля под код в `POST food/orders` нет вовсе (выдуманный `places/{id}/promo` из эпика 5 убран вместе с UI) — issue #180 |

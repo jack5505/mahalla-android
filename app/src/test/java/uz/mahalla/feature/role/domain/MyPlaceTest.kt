@@ -51,7 +51,7 @@ class MyPlaceTest {
     }
 
     @Test
-    fun `only a pharmacy owner or manager can manage products`() {
+    fun `only a pharmacy or fashion owner or manager can manage products`() {
         assertTrue(place(category = PlaceCategory.Pharmacy).canManageProducts)
         assertTrue(
             place(
@@ -60,10 +60,25 @@ class MyPlaceTest {
             ).canManageProducts,
         )
 
+        // Одежда (issue #280) — вторая вертикаль с формой создания на клиенте.
+        assertTrue(place(category = PlaceCategory.Fashion).canManageProducts)
+        assertTrue(
+            place(
+                category = PlaceCategory.Fashion,
+                staffRole = PlaceStaffRole.Manager,
+            ).canManageProducts,
+        )
+
         // Рядовой сотрудник не получает кнопку, которая гарантированно откажет.
         assertFalse(
             place(
                 category = PlaceCategory.Pharmacy,
+                staffRole = PlaceStaffRole.Staff,
+            ).canManageProducts,
+        )
+        assertFalse(
+            place(
+                category = PlaceCategory.Fashion,
                 staffRole = PlaceStaffRole.Staff,
             ).canManageProducts,
         )
@@ -76,7 +91,7 @@ class MyPlaceTest {
             ).canManageProducts,
         )
 
-        // Пока только у аптеки есть форма создания на клиенте (issue #252).
+        // Остальные категории формы создания на клиенте не имеют.
         assertFalse(place(category = PlaceCategory.Food).canManageProducts)
     }
 

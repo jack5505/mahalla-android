@@ -107,6 +107,24 @@ fun backendUrlOverrideEnabled(): Boolean {
     return (fromEnvironment ?: fromProperty).orEmpty().trim().equals("true", ignoreCase = true)
 }
 
+/**
+ * Постоянный отладочный ключ для debug-сборок (внутренние релизы).
+ *
+ * Без него каждый раннер GitHub Actions генерирует свой `debug.keystore`, и
+ * каждый следующий internal-релиз подписан другим ключом: на телефоне он не
+ * встаёт поверх предыдущего — «пакет недействителен / повреждён». Путь к
+ * файлу — в `DEBUG_KEYSTORE_FILE`; `release-internal.yml` кладёт его туда из
+ * секрета `DEBUG_KEYSTORE_BASE64`. Пароли и алиас — стандартные для debug,
+ * секрета в них нет. Переменная не задана — обычный ключ из `~/.android`.
+ */
+fun debugKeystoreFile(): File? {
+    val path = providers.environmentVariable("DEBUG_KEYSTORE_FILE").orNull?.trim()
+    if (path.isNullOrEmpty()) return null
+    val file = rootProject.file(path)
+    require(file.isFile) { "DEBUG_KEYSTORE_FILE задан, но файла нет: $path" }
+    return file
+}
+
 /** Строковый литерал для `buildConfigField`: ключ едет в генерируемый .java. */
 fun stringLiteral(value: String): String =
     "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -134,6 +152,18 @@ android {
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
 
+    signingConfigs {
+        // Постоянный ключ debug-сборок, см. debugKeystoreFile().
+        debugKeystoreFile()?.let { keystore ->
+            getByName("debug") {
+                storeFile = keystore
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         // baseUrl задаётся buildType'ом (эпик 1.3): debug смотрит на стенд
         // разработки, release — на прод.
@@ -142,7 +172,7 @@ android {
             // то есть в debug приложение из коробки ходит туда, куда надо, и
             // набирать URL руками не нужно.
             //
-            // Домен nip.io резолвится в 189.74.96.232, и на него выписан
+            // Домен nip.io резолвится в 157.173.109.181, и на него выписан
             // сертификат Let's Encrypt — в отличие от прежнего голого IP
             // (issue #32), доверять сертификату вручную больше не требуется.
             // Прежний адрес эмулятора (`http://10.0.2.2:8080/api/v1/`) при
@@ -150,7 +180,7 @@ android {
             //
             // Путь `api/v1/` — часть baseUrl: эндпоинты бэкенда объявлены
             // относительно него (issue #42, `auth/send-otp` и остальные).
-            buildConfigField("String", "API_BASE_URL", "\"https://189-74-96-232.nip.io/api/v1/\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://157.173.109.181.nip.io/api/v1/\"")
             // Адрес бэкенда меняется прямо в приложении (issue #26).
             buildConfigField("boolean", "BACKEND_URL_OVERRIDE", "true")
             // Отчёты о падениях (issue #74): в debug — только по явному флагу.
@@ -161,7 +191,14 @@ android {
             )
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // R8 (issue #337): выкидывает неиспользуемый код и переименовывает
+            // остальной. Правила — в proguard-rules.pro; всё, что резолвится
+            // рефлексией (kotlinx.serialization, JNI MapKit), должно быть
+            // перечислено там, иначе падение будет только в release.
+            isMinifyEnabled = true
+            // Ресурсы шринкуются только вместе с кодом: без minify AGP
+            // отказывается включать shrinkResources.
+            isShrinkResources = true
             buildConfigField("String", "API_BASE_URL", "\"https://api.mahalla.uz/api/v1/\"")
             // Экран адреса в релизе спрятан, пока сборку не попросили обратное:
             // иначе увести приложение на чужой сервер может кто угодно.

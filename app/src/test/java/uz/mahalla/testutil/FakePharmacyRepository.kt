@@ -73,4 +73,42 @@ class FakePharmacyRepository : PharmacyRepository {
         stockRequests += Triple(placeId, productId, quantity)
         return stockResult(productId, quantity)
     }
+
+    /** Что именно отправили на правку товара — по порядку вызовов (issue #288). */
+    val updateRequests = mutableListOf<Triple<String, String, NewPharmacyProductDraft>>()
+
+    var updateResult: (String, NewPharmacyProductDraft) -> ApiResult<PharmacyProduct> =
+        { productId, draft ->
+            ApiResult.Success(
+                PharmacyProduct(id = productId, name = draft.name, priceSum = draft.priceSum),
+            )
+        }
+
+    override suspend fun updateProduct(
+        placeId: String,
+        productId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<PharmacyProduct> {
+        updateRequests += Triple(placeId, productId, draft)
+        return updateResult(productId, draft)
+    }
+
+    /** Что именно удалили — по порядку вызовов (issue #288). */
+    val deleteRequests = mutableListOf<Pair<String, String>>()
+
+    var deleteResult: ApiResult<Unit> = ApiResult.Success(Unit)
+
+    /**
+     * Задержка ответа по конкретному товару — нужна проверке, что удаление
+     * одного товара не сбивает отметку «удаляется» у другого, ещё не
+     * ответившего (issue #288). Без ключа по id один общий гейт держал бы оба
+     * запроса одной и той же задержкой.
+     */
+    val deleteGates: MutableMap<String, CompletableDeferred<Unit>> = mutableMapOf()
+
+    override suspend fun deleteProduct(placeId: String, productId: String): ApiResult<Unit> {
+        deleteRequests += placeId to productId
+        deleteGates[productId]?.await()
+        return deleteResult
+    }
 }

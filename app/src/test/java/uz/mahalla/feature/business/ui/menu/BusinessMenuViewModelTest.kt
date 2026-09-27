@@ -224,6 +224,161 @@ class BusinessMenuViewModelTest {
         assertFalse(NewMenuItemError.NameRequired in viewModel.state.value.formErrors)
     }
 
+    /** Правка предзаполняет форму полями позиции, включая её раздел (issue #288). */
+    @Test
+    fun `editing an item preselects its own fields and section`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(
+            menu(item("i-1", available = true).copy(description = "Achchiq", prepMinutes = 15)),
+        )
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessMenuEvent.EditItemClicked("i-1"))
+
+        val form = viewModel.state.value.form
+        assertTrue(viewModel.state.value.isFormVisible)
+        assertEquals("i-1", form.itemId)
+        assertFalse(form.isNew)
+        assertEquals("i-1", form.name)
+        assertEquals("32000", form.priceText)
+        assertEquals("Achchiq", form.description)
+        assertEquals("15", form.prepMinutesText)
+        assertEquals("s-1", form.sectionId)
+    }
+
+    @Test
+    fun `editing an unknown item does not reach the server`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessMenuEvent.EditItemClicked("i-404"))
+
+        assertFalse(viewModel.state.value.isFormVisible)
+    }
+
+    @Test
+    fun `saving an edited form calls update, not create, and refreshes the menu`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        repository.updateItemResult = ApiResult.Success(
+            menu(item("i-1", available = true).copy(name = "Osh", priceSum = 45_000)),
+        )
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.EditItemClicked("i-1"))
+        viewModel.onEvent(BusinessMenuEvent.NameChanged("Osh"))
+        viewModel.onEvent(BusinessMenuEvent.PriceChanged("45000"))
+
+        viewModel.onEvent(BusinessMenuEvent.SaveClicked)
+
+        assertTrue(repository.createdItems.isEmpty())
+        val sent = repository.updatedItems.single()
+        assertEquals("i-1", sent.itemId)
+        assertEquals("Osh", sent.name)
+        val state = viewModel.state.value
+        assertFalse(state.isFormVisible)
+        assertFalse(state.isSaving)
+        assertEquals(
+            "Osh",
+            (state.menu as ScreenState.Content).data.item("i-1")!!.name,
+        )
+    }
+
+    @Test
+    fun `a refused edit keeps the form open with the server message`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        repository.updateItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.EditItemClicked("i-1"))
+
+        viewModel.onEvent(BusinessMenuEvent.SaveClicked)
+
+        val state = viewModel.state.value
+        assertTrue(state.isFormVisible)
+        assertEquals(ApiError.Forbidden, state.formFailure?.error)
+        assertFalse(state.isSaving)
+    }
+
+    @Test
+    fun `deleting asks for confirmation before touching the server`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
+
+        assertEquals("i-1", viewModel.state.value.pendingDelete?.id)
+        assertTrue(repository.deletedItemIds.isEmpty())
+    }
+
+    @Test
+    fun `dismissing the delete dialog does not call the server`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
+
+        viewModel.onEvent(BusinessMenuEvent.DeleteDismissed)
+
+        assertEquals(null, viewModel.state.value.pendingDelete)
+        assertTrue(repository.deletedItemIds.isEmpty())
+    }
+
+    @Test
+    fun `confirming delete removes the item from the refreshed menu`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(
+            menu(item("i-1", available = true), item("i-2", available = true)),
+        )
+        repository.deleteItemResult = ApiResult.Success(menu(item("i-2", available = true)))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
+
+        viewModel.onEvent(BusinessMenuEvent.DeleteConfirmed)
+
+        assertEquals(listOf("i-1"), repository.deletedItemIds)
+        val state = viewModel.state.value
+        assertEquals(null, state.pendingDelete)
+        assertEquals(null, state.deletingItemId)
+        val menu = (state.menu as ScreenState.Content).data
+        assertEquals(null, menu.item("i-1"))
+        assertTrue(menu.item("i-2") != null)
+    }
+
+    /** Чужое заведение — 403 показывается, а не роняет экран (issue #288). */
+    @Test
+    fun `a forbidden delete shows the server message and keeps the item`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        repository.deleteItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
+
+        viewModel.onEvent(BusinessMenuEvent.DeleteConfirmed)
+
+        val state = viewModel.state.value
+        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(null, state.deletingItemId)
+        assertTrue((state.menu as ScreenState.Content).data.item("i-1") != null)
+    }
+
+    /** Позицию уже удалили — 404 показывается, а не роняет экран (issue #288). */
+    @Test
+    fun `a not-found delete shows the server message without crashing`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
+        repository.deleteItemResult = ApiResult.Failure(ApiFailure(ApiError.NotFound))
+        val viewModel = viewModel(repository)
+        viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
+
+        viewModel.onEvent(BusinessMenuEvent.DeleteConfirmed)
+
+        val state = viewModel.state.value
+        assertEquals(ApiError.NotFound, state.actionFailure?.error)
+        assertEquals(null, state.deletingItemId)
+    }
+
     @Test
     fun `closing the form wipes it`() = runTest {
         val repository = FakeBusinessRepository()

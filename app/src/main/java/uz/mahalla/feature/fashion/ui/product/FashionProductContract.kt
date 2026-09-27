@@ -6,6 +6,7 @@ import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.fashion.domain.FashionProductDetail
+import uz.mahalla.feature.fashion.domain.NewFashionVariantDraft
 import uz.mahalla.feature.fashion.domain.ProductVariant
 
 /**
@@ -19,6 +20,9 @@ import uz.mahalla.feature.fashion.domain.ProductVariant
  * «ничего не произошло» (issue #49).
  * @param addFailure отказ добавления — отдельно от [product]: карточка уже на
  * экране, и прятать её из-за неудавшейся кнопки незачем.
+ * @param isOwner владелец или менеджер магазина (issue #280) — приезжает уже
+ * выставленным с витрины, откуда открыта карточка (тот же приём, что у
+ * [uz.mahalla.feature.fashion.ui.catalog.FashionCatalogState.isOwner]).
  */
 data class FashionProductState(
     val product: ScreenState<FashionProductDetail> = ScreenState.Loading,
@@ -26,6 +30,8 @@ data class FashionProductState(
     val isAdding: Boolean = false,
     val added: Boolean = false,
     val addFailure: ApiFailure? = null,
+    val isOwner: Boolean = false,
+    val createForm: NewFashionVariantFormState? = null,
 ) : UiState {
     val detail: FashionProductDetail? get() = (product as? ScreenState.Content)?.data
 
@@ -39,12 +45,33 @@ data class FashionProductState(
         get() = !isAdding && selectedVariant?.isOrderable == true
 }
 
+/** Форма нового варианта — размер/цвет (issue #280). */
+data class NewFashionVariantFormState(
+    val draft: NewFashionVariantDraft = NewFashionVariantDraft(),
+    /** Ошибки полей показываются только после первой попытки сохранить —
+     * тот же приём, что у [uz.mahalla.feature.pharmacy.ui.NewProductFormState]. */
+    val submitAttempted: Boolean = false,
+    val submitting: Boolean = false,
+    val failure: ApiFailure? = null,
+)
+
 sealed interface FashionProductEvent : UiEvent {
     data object Retry : FashionProductEvent
     data class ColorSelected(val color: String) : FashionProductEvent
     data class VariantSelected(val variantId: String) : FashionProductEvent
     data object AddToCartClicked : FashionProductEvent
     data object CartClicked : FashionProductEvent
+
+    // Новый вариант (issue #280) — доступно только владельцу/менеджеру.
+    data object AddVariantClicked : FashionProductEvent
+    data object CreateFormDismissed : FashionProductEvent
+    data class CreateColorNameChanged(val value: String) : FashionProductEvent
+    data class CreateColorHexChanged(val value: String) : FashionProductEvent
+    data class CreateSizeChanged(val value: String) : FashionProductEvent
+    data class CreateSkuChanged(val value: String) : FashionProductEvent
+    data class CreatePriceChanged(val value: String) : FashionProductEvent
+    data class CreateStockChanged(val value: String) : FashionProductEvent
+    data object CreateSubmitted : FashionProductEvent
 }
 
 sealed interface FashionProductEffect : UiEffect {

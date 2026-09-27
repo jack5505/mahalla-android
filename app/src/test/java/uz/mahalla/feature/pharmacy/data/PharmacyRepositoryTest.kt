@@ -421,6 +421,114 @@ class PharmacyRepositoryTest {
         assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
     }
 
+    @Test
+    fun `an update is sent to the product's own path with the price in tiyin`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"p-1","name":"Osh","price":4500000,"isAvailable":true}""",
+            ),
+        )
+
+        val draft = NewPharmacyProductDraft(name = "Osh", priceText = "45000")
+        val result = repository().updateProduct(PLACE, "p-1", draft)
+
+        val request = server.takeRequest()
+        assertEquals("PUT", request.method)
+        assertEquals("/pharmacy/places/$PLACE/products/p-1", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body, """"name":"Osh"""" in body)
+        assertTrue(body, """"price":4500000""" in body)
+        // Остаток и описание не уходят вовсе — своя форма и невидимое поле.
+        assertFalse(body, "stockQuantity" in body)
+        assertFalse(body, "description" in body)
+        assertEquals(45_000L, (result as ApiResult.Success).data.priceSum)
+    }
+
+    @Test
+    fun `an invalid edit draft never reaches the network`() = runTest {
+        val result = repository().updateProduct(PLACE, "p-1", NewPharmacyProductDraft())
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(NewPharmacyProductDraft.INVALID_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `an update response without an id or a name is a business error`() = runTest {
+        server.enqueue(envelope("""{"price":100}"""))
+
+        val result = repository().updateProduct(
+            PLACE,
+            "p-1",
+            NewPharmacyProductDraft(name = "Osh", priceText = "1000"),
+        )
+
+        assertEquals(
+            ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a delete is sent to the product's own path`() = runTest {
+        server.enqueue(envelope("null"))
+
+        val result = repository().deleteProduct(PLACE, "p-1")
+
+        val request = server.takeRequest()
+        assertEquals("DELETE", request.method)
+        assertEquals("/pharmacy/places/$PLACE/products/p-1", request.path)
+        assertTrue(result is ApiResult.Success)
+    }
+
+    @Test
+    fun `an empty product id never reaches the network on delete`() = runTest {
+        val result = repository().deleteProduct(PLACE, "")
+
+        assertEquals(0, server.requestCount)
+        assertEquals(
+            ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            (result as ApiResult.Failure).error,
+        )
+    }
+
+    @Test
+    fun `a forbidden delete carries the server's reason`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"FORBIDDEN",
+                       "message":"Bu joyning egasi emassiz"}}""",
+                ),
+        )
+
+        val failure = (repository().deleteProduct(PLACE, "p-1") as ApiResult.Failure).failure
+
+        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
+    }
+
+    @Test
+    fun `a not-found delete surfaces as a clear failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"NOT_FOUND",
+                       "message":"Mahsulot topilmadi"}}""",
+                ),
+        )
+
+        val failure = (repository().deleteProduct(PLACE, "p-1") as ApiResult.Failure).failure
+
+        assertEquals(ApiError.NotFound, failure.error)
+    }
+
     private fun repository() = DefaultPharmacyRepository(
         api = NetworkFactory
             .retrofit(

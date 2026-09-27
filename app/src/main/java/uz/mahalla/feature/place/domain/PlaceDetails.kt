@@ -138,8 +138,12 @@ data class PlaceCapabilities(
          * тогда экран скажет это словами; спрятать кнопку заранее нельзя,
          * витрина известна только серверу.
          *
-         * [ordering] остаётся выключенным: «Заказать» — это вертикаль «Еда»,
-         * её экраны есть, но включение кнопки в объём этих задач не входило.
+         * У еды (`FOOD`) это меню заведения (`food/…/menu`, issue #335): до
+         * этой задачи [ordering] нигде не включался, и первый заказ был
+         * недостижим — попасть в меню можно было только через «повторить
+         * заказ» из «Моих активностей». Меню в заведении может и не
+         * оказаться — тогда экран скажет это словами; спрятать кнопку
+         * заранее нельзя, меню известно только серверу.
          */
         fun of(category: PlaceCategory): PlaceCapabilities = when (category) {
             PlaceCategory.Master -> PlaceCapabilities(queue = true, booking = true)
@@ -148,6 +152,7 @@ data class PlaceCapabilities(
             PlaceCategory.Cinema -> PlaceCapabilities(cinema = true)
             PlaceCategory.Fashion -> PlaceCapabilities(shopping = true)
             PlaceCategory.Pharmacy -> PlaceCapabilities(products = true)
+            PlaceCategory.Food -> PlaceCapabilities(ordering = true)
             else -> PlaceCapabilities()
         }
     }

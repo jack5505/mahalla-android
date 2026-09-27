@@ -3,6 +3,7 @@ package uz.mahalla.feature.cinema.data
 import kotlinx.coroutines.test.runTest
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -111,6 +112,62 @@ class CinemaRepositoryTest {
         assertFalse(movies[1].isActive)
         // Молчание сервера — «идёт».
         assertTrue(movies[2].isActive)
+    }
+
+    // --- Карточка фильма (issue #183) ---
+
+    @Test
+    fun `movie card is requested by id and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"$MOVIE","placeId":"$PLACE","title":"Dune","description":"Qum sayyorasi",
+                   "genre":"Fantastika","durationMinutes":155,"posterUrl":"https://cdn/dune.jpg",
+                   "trailerUrl":"https://youtube.com/watch?v=dune"}""",
+            ),
+        )
+
+        val movie = (repository().movie(MOVIE) as ApiResult.Success).data
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/cinema/movies/$MOVIE", request.path)
+        assertEquals("Dune", movie.title)
+        assertEquals("Qum sayyorasi", movie.description)
+        assertEquals("https://youtube.com/watch?v=dune", movie.trailerUrl)
+    }
+
+    /** Фильма без `id` в ответе нет: карточка не может подставить его сама. */
+    @Test
+    fun `movie card without id is not found`() = runTest {
+        server.enqueue(envelope("""{"title":"Ismsiz"}"""))
+
+        val result = repository().movie(MOVIE)
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `movie card 404 is a not found failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"NOT_FOUND","message":"Film topilmadi"}}"""),
+        )
+
+        val result = repository().movie(MOVIE)
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertEquals("Film topilmadi", result.failure.server?.message)
+    }
+
+    @Test
+    fun `movie card network failure is a no connection error`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repository().movie(MOVIE)
+
+        assertEquals(ApiError.NoConnection, (result as ApiResult.Failure).error)
     }
 
     // --- Расписание ---
@@ -307,6 +364,65 @@ class CinemaRepositoryTest {
         server.enqueue(envelope("""{"content":[{"id":"t-1"}],"page":2,"totalPages":3}"""))
 
         assertFalse((repository().myTickets(page = 2) as ApiResult.Success).data.hasMore)
+    }
+
+    // --- Карточка билета (issue #183) ---
+
+    @Test
+    fun `ticket card is requested by id and parsed`() = runTest {
+        server.enqueue(
+            envelope(
+                """{"id":"t-1","sessionId":"$SESSION","seatNumber":"C7","price":4500000,
+                   "qrCode":"4820117499","status":"ACTIVE",
+                   "createdAt":"2026-09-04T14:00:00"}""",
+            ),
+        )
+
+        val ticket = (repository().ticket("t-1") as ApiResult.Success).data
+
+        val request = server.takeRequest()
+        assertEquals("GET", request.method)
+        assertEquals("/cinema/tickets/t-1", request.path)
+        assertEquals("C7", ticket.seatNumber)
+        assertEquals(45_000L, ticket.priceSum)
+        assertEquals(CinemaTicketStatus.Active, ticket.status)
+    }
+
+    /** Билета без `id` в ответе нет: карточка не может подставить его сама. */
+    @Test
+    fun `ticket card without id is not found`() = runTest {
+        server.enqueue(envelope("""{"status":"ACTIVE"}"""))
+
+        val result = repository().ticket("t-1")
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+    }
+
+    @Test
+    fun `ticket card 404 is a not found failure`() = runTest {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(404)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"NOT_FOUND",
+                       "message":"Chipta topilmadi"}}""",
+                ),
+        )
+
+        val result = repository().ticket("t-1")
+
+        assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
+        assertEquals("Chipta topilmadi", result.failure.server?.message)
+    }
+
+    @Test
+    fun `ticket card network failure is a no connection error`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repository().ticket("t-1")
+
+        assertEquals(ApiError.NoConnection, (result as ApiResult.Failure).error)
     }
 
     // --- Возврат ---

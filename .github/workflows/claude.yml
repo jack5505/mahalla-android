@@ -275,3 +275,62 @@ jobs:
           title=${title//,/%2C}
           title=${title//:/%3A}
           echo "::error title=$title::${first:-без текста, см. лог шага}"
+
+      # Одна issue — один PR. По AGENTS.md (шаг 0 рабочего цикла) агент сам
+      # смотрит `gh pr list`, но память ненадёжнее лейбла: по issue #73 вышли
+      # PR #110 и #152. Поэтому после прогона по issue ищем открытый PR из
+      # ветки `claude/issue-<N>-*`, вешаем на issue лейбл `in-pr` и один раз
+      # пишем ссылку на PR.
+      #
+      # Идемпотентно: лейбл ставится повторно без эффекта, комментарий — только
+      # если ссылки на этот PR в issue ещё нет. Спам «взял в работу» на каждом
+      # круге уже был (jack5505/mahalla#208, 28 комментариев) — не повторять.
+      #
+      # Только для событий по issue: у PR-событий `github.event.issue` пуст, а
+      # у комментария в PR есть `issue.pull_request` — оба случая пропускаем.
+      # `always()` — чтобы лейбл встал и когда Claude открыл PR, а упал уже
+      # после (например, на stop-хуке). Шаг вспомогательный: отказ `gh`
+      # (rate limit, 5xx) не должен красить прогон, в котором Claude отработал,
+      # — отсюда continue-on-error.
+      #
+      # Комментарии issue сначала целиком в переменную, и только потом поиск:
+      # `gh api --paginate | grep -q` под pipefail (shell: bash) на длинной
+      # issue закрывает трубу раньше, чем gh дописал, gh падает по SIGPIPE,
+      # конвейер даёт 141 — «ссылки нет», и комментарий дублируется ровно там,
+      # где защита нужна. Та же ловушка, что с `| head` выше.
+      - name: Лейбл in-pr и ссылка на PR в issue
+        if: always() && github.event.issue != null && github.event.issue.pull_request == null
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          pr=$(gh pr list --repo "$REPO" --state open --limit 100 --json number,url,headRefName \
+            | jq -r --arg n "$ISSUE" '[.[] | select(.headRefName | test("^claude/issue-" + $n + "-"))]
+                | sort_by(.number) | first // empty | "\(.number) \(.url)"')
+          if [ -z "$pr" ]; then
+            # PR закрыли без вливания, а по issue снова написали — лейбл врал
+            # бы «PR есть». Снимаем; если его и не было, gh вернёт ошибку —
+            # она не важна.
+            echo "Открытого PR из ветки claude/issue-$ISSUE-* нет — снимаем лейбл, если был."
+            gh issue edit "$ISSUE" --repo "$REPO" --remove-label in-pr 2>/dev/null || true
+            exit 0
+          fi
+          num=${pr%% *}
+          url=${pr#* }
+          echo "PR #$num ($url) по issue #$ISSUE."
+          gh label create in-pr --repo "$REPO" --color 0E8A16 \
+            --description "По этой issue уже открыт PR — правь его, не пиши второй раз" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label in-pr
+          comments=$(gh api "repos/$REPO/issues/$ISSUE/comments" --paginate --jq '.[].body')
+          # Граница после номера: ссылка на pull/12 не должна находиться
+          # внутри упоминания pull/123.
+          re="${url}([^0-9]|$)"
+          if [[ $comments =~ $re ]]; then
+            echo "Ссылка на PR в issue уже есть — комментарий не пишем."
+          else
+            gh issue comment "$ISSUE" --repo "$REPO" \
+              --body "PR по этой issue: $url. Правки — туда, второй PR не открывать (лейбл \`in-pr\`)."
+          fi

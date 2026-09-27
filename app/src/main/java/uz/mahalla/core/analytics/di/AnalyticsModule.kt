@@ -9,12 +9,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import retrofit2.Retrofit
+import uz.mahalla.core.analytics.AnalyticsRepository
 import uz.mahalla.core.analytics.AnalyticsTracker
 import uz.mahalla.core.analytics.DefaultAnalyticsTracker
 import uz.mahalla.data.network.analytics.AnalyticsApi
-import uz.mahalla.data.network.analytics.AnalyticsRepository
 import uz.mahalla.data.network.analytics.DefaultAnalyticsRepository
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/**
+ * Область [provideAnalyticsScope], а не `viewModelScope`: `AnalyticsTracker`
+ * живёт с графом (см. его же doc), и квалификатор нужен ровно затем, чтобы
+ * `AnalyticsTrackerTest` мог взять ровно эту область — с настоящим
+ * `Dispatchers.IO` — и отменить её по завершении теста (issue #228, п. 3).
+ */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class AnalyticsCoroutineScope
 
 /**
  * Продуктовая аналитика в графе (issue #169).
@@ -43,6 +54,11 @@ object AnalyticsModule {
      * отправляется в тот же момент, когда экран закрывается, и на
      * `viewModelScope` запрос отменился бы раньше, чем ушёл.
      *
+     * Отдельный `@Provides`, а не выражение внутри [provideAnalyticsTracker]:
+     * `AnalyticsTrackerTest` берёт область саму по себе, чтобы проверить
+     * доставку на настоящем `Dispatchers.IO` и отменить её по завершении, не
+     * трогая синглтон графа (issue #228, п. 3).
+     *
      * [SupervisorJob] — страховка на случай, если `runCatchingCancellable` в
      * `DefaultAnalyticsTracker.track` когда-нибудь убрать: сейчас до Job не
      * доходит ничего, кроме `Error` и исключения из самого `log` (а `Log.d`
@@ -53,11 +69,15 @@ object AnalyticsModule {
      */
     @Provides
     @Singleton
-    fun provideAnalyticsTracker(repository: AnalyticsRepository): AnalyticsTracker =
-        DefaultAnalyticsTracker(
-            repository = repository,
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        )
+    @AnalyticsCoroutineScope
+    fun provideAnalyticsScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsTracker(
+        repository: AnalyticsRepository,
+        @AnalyticsCoroutineScope scope: CoroutineScope,
+    ): AnalyticsTracker = DefaultAnalyticsTracker(repository = repository, scope = scope)
 }
 
 @Module

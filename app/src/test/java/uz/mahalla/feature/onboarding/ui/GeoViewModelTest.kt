@@ -74,6 +74,28 @@ class GeoViewModelTest {
     }
 
     @Test
+    fun `a permanently denied permission offers a way into settings`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(GeoEvent.PermissionResult(granted = false, permanentlyDenied = true))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.permissionPermanentlyDenied)
+    }
+
+    @Test
+    fun `a plain denial does not point to settings`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel()
+
+        viewModel.onEvent(GeoEvent.PermissionResult(granted = false, permanentlyDenied = false))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.permissionPermanentlyDenied)
+    }
+
+    @Test
     fun `manual choice is available without asking for the permission`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {

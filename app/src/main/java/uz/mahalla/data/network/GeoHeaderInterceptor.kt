@@ -7,6 +7,7 @@ import okhttp3.Response
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.location.DeviceLocation
 import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.feature.onboarding.domain.City
 import java.time.Clock
 import java.util.Locale
 import javax.inject.Inject
@@ -65,18 +66,24 @@ class GeoHeaderInterceptor @Inject constructor(
      * `runBlocking` здесь уместен по той же причине, что и в [AuthInterceptor]:
      * интерцептор уже работает на пуле OkHttp, а не на Main.
      *
-     * Отказ хранилища не должен ронять запрос: без координат он получит
-     * понятный 403 от бэкенда, а исключение из интерцептора превратилось бы в
-     * «сеть недоступна».
+     * Отказ хранилища не должен ронять запрос и не должен оставлять его вовсе
+     * без координат: `RequestLocationProvider.current()` падает только в
+     * исключительном случае (битый DataStore и т.п.) — обычный отказ
+     * разрешения он уже сам разворачивает в город или Ташкент. Пустой кэш
+     * вдобавок к такому падению раньше отправлял запрос без заголовков и ловил
+     * 403 `GEO_PERMISSION_REQUIRED` (issue #348); центр [City.Default] —
+     * тот же запасной путь, что и у самого провайдера.
      */
     private fun location(): DeviceLocation? {
         val now = clock.instant().epochSecond
         cached?.let { if (now - it.atEpochSeconds < CACHE_TTL_SECONDS) return it.location }
 
         val fresh = runBlocking { runCatchingCancellable { locationProvider.current() }.getOrNull() }
-            ?: return cached?.location
-        cached = Cached(fresh, now)
-        return fresh
+        if (fresh != null) {
+            cached = Cached(fresh, now)
+            return fresh
+        }
+        return cached?.location ?: DeviceLocation(City.Default.latitude, City.Default.longitude)
     }
 
     private fun Request.hasGeoHeaders(): Boolean =

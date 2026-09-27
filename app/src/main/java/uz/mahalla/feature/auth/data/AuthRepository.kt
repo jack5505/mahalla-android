@@ -9,6 +9,7 @@ import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.device.DeviceInfoProvider
 import uz.mahalla.data.location.RequestLocationProvider
+import uz.mahalla.data.network.TokenAuthenticator
 import uz.mahalla.data.network.auth.AuthApi
 import uz.mahalla.data.network.auth.PinLoginRequest
 import uz.mahalla.data.network.auth.SendOtpRequest
@@ -27,6 +28,7 @@ import uz.mahalla.data.prefs.SessionStore
 import uz.mahalla.data.prefs.UserProfile
 import uz.mahalla.data.prefs.UserProfileStore
 import uz.mahalla.data.security.PinStorage
+import uz.mahalla.data.session.LocalUserDataCleaner
 import uz.mahalla.feature.auth.domain.LoginResult
 import uz.mahalla.feature.auth.domain.OtpChallenge
 import uz.mahalla.feature.auth.domain.PhoneIdentity
@@ -117,6 +119,8 @@ class DefaultAuthRepository @Inject constructor(
     private val deviceInfoProvider: DeviceInfoProvider,
     private val locationProvider: RequestLocationProvider,
     private val clock: Clock,
+    private val tokenAuthenticator: TokenAuthenticator,
+    private val localUserDataCleaner: LocalUserDataCleaner,
 ) : AuthRepository {
 
     override val isAuthorized: Flow<Boolean> = sessionStore.session.map { it != null }
@@ -355,17 +359,22 @@ class DefaultAuthRepository @Inject constructor(
     }
 
     /**
-     * Сессия, профиль и локальный PIN — всё, чем устройство помнит вошедшего.
+     * Сессия, профиль, локальный PIN и локальные данные вошедшего — всё, чем
+     * устройство помнит его. Без последнего шага ([LocalUserDataCleaner]) на
+     * этом же устройстве оставались бы кэш заказов, черновик корзины и токен
+     * пушей прежнего аккаунта (issue #341) — следующий вход видел бы чужие
+     * заказы и получал бы чужие пуши, пока сервер не перепривяжет токен.
      *
      * Каждая запись умеет отказать (DataStore недоступен, Keystore потерял
      * ключ), и ни один отказ не должен уронить вход: это уборка по дороге, а
-     * не то, ради чего пользователь нажал кнопку. Поэтому три независимых
+     * не то, ради чего пользователь нажал кнопку. Поэтому независимые
      * попытки, а не одна цепочка.
      */
     private suspend fun clearLocalIdentity() {
         runCatchingCancellable { sessionStore.clear() }.reportSwallowed("auth.clearSession")
         runCatchingCancellable { userProfileStore.clear() }.reportSwallowed("auth.clearProfile")
         runCatchingCancellable { pinStorage.clear() }.reportSwallowed("auth.clearPin")
+        runCatchingCancellable { localUserDataCleaner.clear() }.reportSwallowed("auth.clearLocalData")
     }
 
     /**
@@ -383,6 +392,12 @@ class DefaultAuthRepository @Inject constructor(
         runCatchingCancellable { formOwnership.claimFor(user?.id) }
             .reportSwallowed("auth.claimForm")
         sessionStore.save(session)
+        // Счётчик неоднозначных провалов refresh (issue #198) живёт в
+        // `TokenAuthenticator`, а сессию сюда пишет этот класс — мимо него.
+        // Без сброса счёт из прежней сессии (1–2, порог не достигнут)
+        // переживал бы logout/смену номера и первый же неоднозначный ответ в
+        // новой сессии добивал бы его до порога мгновенно (issue #309).
+        tokenAuthenticator.reset()
         saveProfile(user)
     }
 
@@ -541,6 +556,10 @@ class DefaultAuthRepository @Inject constructor(
         // PIN защищает именно эту сессию — оставлять его от прошлого
         // пользователя нельзя.
         pinStorage.clear()
+        // Кэш заказов, черновик корзины и токен пушей — тоже личные данные
+        // этой сессии (issue #341): без уборки следующий человек на этом же
+        // устройстве видел бы их в офлайне и получал бы чужие пуши.
+        runCatchingCancellable { localUserDataCleaner.clear() }.reportSwallowed("auth.clearLocalData")
     }
 
     /**

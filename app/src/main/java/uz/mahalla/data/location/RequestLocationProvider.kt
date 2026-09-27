@@ -13,6 +13,8 @@ import kotlinx.coroutines.withContext
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.feature.onboarding.domain.City
+import java.time.Clock
+import java.time.Duration
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -71,6 +73,7 @@ class DefaultRequestLocationProvider @Inject constructor(
 @Singleton
 class AndroidLocationSource @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val clock: Clock,
 ) : LocationSource {
 
     /**
@@ -79,7 +82,10 @@ class AndroidLocationSource @Inject constructor(
      *
      * Провайдеры перебираются все, потому что доступность у них разная:
      * `gps` молчит в помещении, `network` требует сети, `passive` отдаёт то,
-     * что намерил кто-то другой. Берём самое свежее значение.
+     * что намерил кто-то другой. Берём самое свежее значение — но не старше
+     * [MAX_AGE]: фикс недельной давности из другого города не координаты
+     * пользователя, а координаты того места, где телефон в последний раз
+     * поймал сигнал (issue #348).
      */
     // Разрешение проверяется строкой ниже (hasPermission), а отзыв прямо между
     // проверкой и вызовом закрыт runCatchingCancellable: SecurityException
@@ -88,6 +94,7 @@ class AndroidLocationSource @Inject constructor(
     override suspend fun lastKnown(): DeviceLocation? = withContext(Dispatchers.IO) {
         if (!hasPermission()) return@withContext null
         val manager = context.getSystemService<LocationManager>() ?: return@withContext null
+        val now = clock.millis()
 
         runCatchingCancellable {
             manager.getProviders(/* enabledOnly = */ true)
@@ -96,6 +103,7 @@ class AndroidLocationSource @Inject constructor(
                     // пользователь может отозвать его между вызовами.
                     runCatchingCancellable { manager.getLastKnownLocation(provider) }.getOrNull()
                 }
+                .filter { now - it.time <= MAX_AGE.toMillis() }
                 .maxByOrNull { it.time }
                 ?.let { DeviceLocation(latitude = it.latitude, longitude = it.longitude) }
         }.getOrNull()
@@ -108,4 +116,9 @@ class AndroidLocationSource @Inject constructor(
 
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+
+    companion object {
+        /** Фикс старше этого — не текущая позиция, а случайный прошлый город. */
+        internal val MAX_AGE: Duration = Duration.ofHours(2)
+    }
 }

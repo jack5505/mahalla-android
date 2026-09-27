@@ -32,6 +32,8 @@ import uz.mahalla.R
 import uz.mahalla.core.ui.components.MahallaIconButton
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.PlaceCard
+import uz.mahalla.core.ui.permission.canRequestPermissionAgain
+import uz.mahalla.core.ui.permission.findActivity
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
@@ -75,7 +77,15 @@ fun MapScreen(
         // приблизительных координат, поэтому просим обе и радуемся любой.
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
-        viewModel.onEvent(MapEvent.LocationPermissionResult(granted.values.any { it }))
+        val anyGranted = granted.values.any { it }
+        // shouldShowRequestPermissionRationale — только после того, как диалог
+        // уже был показан: до этого он тоже вернул бы false и не отличался бы
+        // от «Больше не спрашивать».
+        val permanentlyDenied = !anyGranted &&
+            context.findActivity()?.canRequestPermissionAgain(LOCATION_PERMISSIONS) == false
+        viewModel.onEvent(
+            MapEvent.LocationPermissionResult(granted = anyGranted, permanentlyDenied = permanentlyDenied),
+        )
     }
 
     // Разрешение могли выдать в онбординге (3.6) или в настройках устройства,
@@ -205,10 +215,10 @@ private fun MapFallback(
         if (notice != null) {
             item {
                 MapBannerSurface {
-                    MapBannerRow(
-                        text = locationNoticeText(notice),
-                        actionLabel = stringResource(R.string.action_close),
-                        onAction = { onEvent(MapEvent.NoticeDismissed) },
+                    LocationNoticeBannerRow(
+                        notice = notice,
+                        permanentlyDenied = state.locationPermissionPermanentlyDenied,
+                        onDismiss = { onEvent(MapEvent.NoticeDismissed) },
                     )
                 }
             }
@@ -274,10 +284,10 @@ private fun MapBanner(
         // Отказ геолокации важнее состояния выдачи: это ответ на действие
         // пользователя, случившееся только что.
         notice != null -> MapBannerSurface(modifier = modifier) {
-            MapBannerRow(
-                text = locationNoticeText(notice),
-                actionLabel = stringResource(R.string.action_close),
-                onAction = { onEvent(MapEvent.NoticeDismissed) },
+            LocationNoticeBannerRow(
+                notice = notice,
+                permanentlyDenied = state.locationPermissionPermanentlyDenied,
+                onDismiss = { onEvent(MapEvent.NoticeDismissed) },
             )
         }
 

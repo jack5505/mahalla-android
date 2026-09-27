@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNames
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
@@ -162,6 +163,31 @@ interface BusinessApi {
         @Path("placeId") placeId: String,
         @Body body: CreateMenuItemRequest,
     ): ApiResponse<MenuItemDto>
+
+    /**
+     * Правка позиции меню (issue #288, задача 12.4 бэкенда — #221). ⚠️ Путь
+     * не сверен живым запросом: `/v3/api-docs` теперь отвечает `401` даже с
+     * гео-заголовками, а `CONTRACT_REFRESH_TOKEN` не задан. Взят по аналогии
+     * с уже слитым и точно таким же случаем — правкой услуги мастера
+     * (`PUT freelancers/me/services/{id}`, issue #71): тот же контроллер,
+     * что и у [createItem] и [toggleItem] (`food/items/...`), тело как у
+     * создания. Сверить при первом расхождении — `docs/API-CONTRACT.md`.
+     */
+    @PUT("food/items/{itemId}")
+    suspend fun updateItem(
+        @Path("itemId") itemId: String,
+        @Body body: UpdateMenuItemRequest,
+    ): ApiResponse<MenuItemDto>
+
+    /**
+     * Удаление позиции меню (issue #288, задача 12.4 бэкенда — #221). ⚠️ Тоже
+     * не сверено — см. [updateItem]. Возвращает `ApiResponseVoid`, как и
+     * [toggleItem]: удаляет ли бэкенд строку или ставит стоп-лист — контракт
+     * не говорит, и приложение на это не закладывается, список перечитывается
+     * у сервера (тот же приём, что у `deleteMyService`, issue #71).
+     */
+    @DELETE("food/items/{itemId}")
+    suspend fun deleteItem(@Path("itemId") itemId: String): ApiResponse<JsonElement>
 }
 
 /**
@@ -271,6 +297,21 @@ data class MenuItemDto(
  */
 @Serializable
 data class CreateMenuItemRequest(
+    @SerialName("menuId") val menuId: String,
+    @SerialName("name") val name: String,
+    @SerialName("price") val price: Long,
+    @SerialName("description") val description: String? = null,
+    @SerialName("prepMinutes") val prepMinutes: Int? = null,
+    @SerialName("isHalal") val isHalal: Boolean? = null,
+)
+
+/**
+ * Тело [BusinessApi.updateItem]. ⚠️ Схема не сверена (см. KDoc там) — поля
+ * взяты те же, что у [CreateMenuItemRequest]: обе ручки правят одну и ту же
+ * позицию, и разводить их по разным телам до первого расхождения незачем.
+ */
+@Serializable
+data class UpdateMenuItemRequest(
     @SerialName("menuId") val menuId: String,
     @SerialName("name") val name: String,
     @SerialName("price") val price: Long,

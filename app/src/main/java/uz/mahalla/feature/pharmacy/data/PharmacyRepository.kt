@@ -5,6 +5,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
+import uz.mahalla.data.network.ensureSuccess
 import uz.mahalla.data.network.payload
 import uz.mahalla.feature.pharmacy.domain.NewPharmacyProductDraft
 import uz.mahalla.feature.pharmacy.domain.PharmacyProduct
@@ -53,6 +54,23 @@ interface PharmacyRepository {
         productId: String,
         quantity: Int,
     ): ApiResult<PharmacyProduct>
+
+    /**
+     * Правка товара (issue #288, задача 12.4 бэкенда — #221). Остаток здесь не
+     * трогается — у него своя ручка и своя форма ([updateStock]): дублировать
+     * поле значило бы завести два места, откуда «наличие» может разойтись.
+     * Описание тоже не входит: `ProductResponse` его не отдаёт вовсе, и правка
+     * невидимого поля тем же телом, что и создание, молча стёрла бы то, что
+     * человек не может увидеть и подтвердить.
+     */
+    suspend fun updateProduct(
+        placeId: String,
+        productId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<PharmacyProduct>
+
+    /** Удаление товара (issue #288, задача 12.4 бэкенда — #221). */
+    suspend fun deleteProduct(placeId: String, productId: String): ApiResult<Unit>
 
     companion object {
         /** Код отказа, когда спрашивать нечего ещё до запроса. */
@@ -157,6 +175,58 @@ class DefaultPharmacyRepository @Inject constructor(
                 // или id был бы дефектом бэкенда, а не поводом промолчать.
                 ?: ApiResult.Failure(ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE))
         }
+    }
+
+    /**
+     * Правка товара (issue #288). Остаток и описание не уходят — см. KDoc
+     * интерфейса. Ответ разбирается тем же приёмом, что и у [updateStock]:
+     * товар только что обновлён по своему id, ответ без него — дефект
+     * бэкенда, а не повод промолчать.
+     */
+    override suspend fun updateProduct(
+        placeId: String,
+        productId: String,
+        draft: NewPharmacyProductDraft,
+    ): ApiResult<PharmacyProduct> {
+        val price = draft.priceSum
+        if (placeId.isBlank() || productId.isBlank() || !draft.isNameValid || price == null) {
+            return ApiResult.Failure(
+                ApiError.Business(NewPharmacyProductDraft.INVALID_CODE),
+            )
+        }
+
+        val result = apiCall {
+            api.update(
+                placeId = placeId,
+                productId = productId,
+                body = CreateProductRequest(
+                    name = draft.name.trim(),
+                    manufacturer = draft.manufacturer.trim().takeIf(String::isNotEmpty),
+                    dosageForm = draft.dosageForm.trim().takeIf(String::isNotEmpty),
+                    strength = draft.strength.trim().takeIf(String::isNotEmpty),
+                    price = Money.somToTiyin(price),
+                    requiresPrescription = draft.requiresPrescription,
+                ),
+            ).payload()
+        }
+        return when (result) {
+            is ApiResult.Failure -> result
+            is ApiResult.Success -> result.data.toDomain()?.let { ApiResult.Success(it) }
+                ?: ApiResult.Failure(ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE))
+        }
+    }
+
+    /**
+     * Удаление товара (issue #288). Пустой `productId` в сеть не уходит — тот
+     * же приём, что и у [updateStock].
+     */
+    override suspend fun deleteProduct(placeId: String, productId: String): ApiResult<Unit> {
+        if (placeId.isBlank() || productId.isBlank()) {
+            return ApiResult.Failure(
+                ApiError.Business(PharmacyRepository.INVALID_REQUEST_CODE),
+            )
+        }
+        return apiCall { api.delete(placeId = placeId, productId = productId).ensureSuccess() }
     }
 
     private companion object {

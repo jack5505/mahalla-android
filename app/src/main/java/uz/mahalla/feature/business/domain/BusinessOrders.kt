@@ -17,10 +17,13 @@ data class BusinessOrderLine(
 /**
  * Входящий заказ **глазами заведения** (задача 12.3).
  *
- * Приезжает из `GET food/places/{placeId}/orders` — схема `FoodOrderResponse`.
- * Это не `OrderView`, который читает клиент (`orders/{orderId}`): полей почти
- * столько же, но заведению видны `staffId` и состав сразу в списке, а имени
- * заведения нет — оно и так своё.
+ * Приезжает из `GET food/places/{placeId}/orders` («Еда», схема
+ * `FoodOrderResponse`) или `GET fashion/stores/{storeId}/orders` («Одежда»,
+ * `FashionOrderResponse`, issue #187) — модель общая, разные вертикали
+ * маппятся в неё каждая своим DTO (`BusinessMappers.kt`). Это не `OrderView`,
+ * который читает клиент (`orders/{orderId}`): полей почти столько же, но
+ * заведению виден состав сразу в списке, а имени заведения нет — оно и так
+ * своё.
  *
  * @param number номер для человека («F-2026-0042»): его называют по телефону.
  */

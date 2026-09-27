@@ -14,8 +14,12 @@ import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.ServerError
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.feature.subscription.domain.ChargeProvider
+import uz.mahalla.feature.subscription.domain.ChargeStatus
 import uz.mahalla.feature.subscription.domain.Subscription
 import uz.mahalla.feature.subscription.domain.SubscriptionStatus
+import uz.mahalla.feature.wallet.domain.PaymentTransaction
+import uz.mahalla.feature.wallet.domain.PaymentTransactionPage
 import uz.mahalla.feature.wallet.domain.TopUpError
 import uz.mahalla.feature.wallet.domain.TopUpOrder
 import uz.mahalla.feature.wallet.domain.TopUpProvider
@@ -23,6 +27,7 @@ import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.feature.wallet.domain.WalletStatus
 import uz.mahalla.feature.wallet.domain.WalletTransaction
 import uz.mahalla.feature.wallet.domain.WalletTransactionPage
+import uz.mahalla.testutil.FakePaymentsRepository
 import uz.mahalla.testutil.FakeSubscriptionRepository
 import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
@@ -38,9 +43,10 @@ class WalletViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(UnconfinedTestDispatcher())
 
     private val subscriptions = FakeSubscriptionRepository()
+    private val payments = FakePaymentsRepository()
 
     private fun viewModel(repository: FakeWalletRepository) =
-        WalletViewModel(repository, subscriptions)
+        WalletViewModel(repository, subscriptions, payments)
 
     @Test
     fun `balance and history are loaded on open`() = runTest {
@@ -435,11 +441,180 @@ class WalletViewModelTest {
         assertEquals(WalletEffect.OpenSubscription, viewModel.effects.first())
     }
 
+    // --- Вкладка «Платежи» (issue #184) ---
+
+    @Test
+    fun `payments are loaded together with the balance`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.defaultPage = paymentPage(listOf(payment("p-1")), hasMore = false)
+
+        val state = viewModel(repository).state.value
+
+        assertEquals(
+            listOf("p-1"),
+            (state.payments as ScreenState.Content).data.map(PaymentTransaction::id),
+        )
+        assertFalse(state.hasMorePayments)
+        assertEquals(WalletTab.Transactions, state.selectedTab)
+    }
+
+    @Test
+    fun `switching tabs does not ask the network again`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.defaultPage = paymentPage(listOf(payment("p-1")), hasMore = false)
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(WalletEvent.TabSelected(WalletTab.Payments))
+
+        assertEquals(WalletTab.Payments, viewModel.state.value.selectedTab)
+        // Обе истории приехали при первой же загрузке — переключение вкладки
+        // не должно вызвать вторую страницу.
+        assertEquals(listOf(0), payments.requestedPages)
+    }
+
+    @Test
+    fun `an empty payment history is not an error`() = runTest {
+        val repository = FakeWalletRepository()
+
+        val state = viewModel(repository).state.value
+
+        assertTrue(state.payments is ScreenState.Empty)
+    }
+
+    @Test
+    fun `a broken payment history does not hide the balance`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.defaultPage = ApiResult.Failure(ApiError.Timeout)
+
+        val state = viewModel(repository).state.value
+
+        assertTrue(state.wallet is ScreenState.Content)
+        assertEquals(ApiError.Timeout, (state.payments as ScreenState.Error).error)
+    }
+
+    @Test
+    fun `a failed payment carries the provider status and the reason`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.defaultPage = paymentPage(
+            listOf(
+                payment(
+                    id = "p-1",
+                    provider = ChargeProvider.Payme,
+                    status = ChargeStatus.Failed,
+                    errorMessage = "Karta bloklangan",
+                ),
+            ),
+            hasMore = false,
+        )
+
+        val state = viewModel(repository).state.value
+
+        val loaded = (state.payments as ScreenState.Content).data.single()
+        assertEquals(ChargeProvider.Payme, loaded.provider)
+        assertEquals(ChargeStatus.Failed, loaded.status)
+        assertEquals("Karta bloklangan", loaded.errorMessage)
+    }
+
+    @Test
+    fun `payments retry asks the payments endpoint only`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.defaultPage = ApiResult.Failure(ApiError.Timeout)
+        val viewModel = viewModel(repository)
+
+        payments.defaultPage = paymentPage(listOf(payment("p-1")), hasMore = false)
+        viewModel.onEvent(WalletEvent.PaymentsRetry)
+
+        assertTrue(viewModel.state.value.payments is ScreenState.Content)
+        // Баланс уже на экране — дёргать его повтором истории платежей незачем.
+        assertEquals(1, repository.walletCount)
+        assertEquals(listOf(0, 0), payments.requestedPages)
+    }
+
+    @Test
+    fun `load more payments appends the next page and stops at the last one`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.pages[0] = paymentPage(listOf(payment("p-1")), hasMore = true)
+        payments.pages[1] = paymentPage(listOf(payment("p-2")), hasMore = false)
+        val viewModel = viewModel(repository)
+
+        assertTrue(viewModel.state.value.hasMorePayments)
+        viewModel.onEvent(WalletEvent.LoadMorePayments)
+
+        val state = viewModel.state.value
+        assertEquals(
+            listOf("p-1", "p-2"),
+            (state.payments as ScreenState.Content).data.map(PaymentTransaction::id),
+        )
+        assertFalse(state.hasMorePayments)
+        assertFalse(state.isLoadingMorePayments)
+
+        // Дальше догружать нечего: повторное событие в сеть не идёт.
+        viewModel.onEvent(WalletEvent.LoadMorePayments)
+        assertEquals(listOf(0, 1), payments.requestedPages)
+    }
+
+    @Test
+    fun `a payment seen twice does not break the list`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.pages[0] = paymentPage(listOf(payment("p-1")), hasMore = true)
+        // История пополнилась между запросами — тот же платёж уехал на вторую
+        // страницу. Дубликат ключа уронил бы LazyColumn.
+        payments.pages[1] = paymentPage(listOf(payment("p-1"), payment("p-2")), hasMore = false)
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(WalletEvent.LoadMorePayments)
+
+        assertEquals(
+            listOf("p-1", "p-2"),
+            (viewModel.state.value.payments as ScreenState.Content).data
+                .map(PaymentTransaction::id),
+        )
+    }
+
+    @Test
+    fun `a failed load more of payments keeps the list and offers a retry`() = runTest {
+        val repository = FakeWalletRepository()
+        payments.pages[0] = paymentPage(listOf(payment("p-1")), hasMore = true)
+        payments.pages[1] = ApiResult.Failure(ApiError.NoConnection)
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(WalletEvent.LoadMorePayments)
+
+        val state = viewModel.state.value
+        assertEquals(1, (state.payments as ScreenState.Content).data.size)
+        assertEquals(ApiError.NoConnection, state.loadMorePaymentsFailure?.error)
+        assertFalse(state.isLoadingMorePayments)
+
+        payments.pages[1] = paymentPage(listOf(payment("p-2")), hasMore = false)
+        viewModel.onEvent(WalletEvent.LoadMorePayments)
+
+        assertEquals(2, (viewModel.state.value.payments as ScreenState.Content).data.size)
+    }
+
     private fun page(
         items: List<WalletTransaction>,
         hasMore: Boolean,
     ): ApiResult<WalletTransactionPage> =
         ApiResult.Success(WalletTransactionPage(items = items, hasMore = hasMore))
+
+    private fun paymentPage(
+        items: List<PaymentTransaction>,
+        hasMore: Boolean,
+    ): ApiResult<PaymentTransactionPage> =
+        ApiResult.Success(PaymentTransactionPage(items = items, hasMore = hasMore))
+
+    private fun payment(
+        id: String,
+        provider: ChargeProvider = ChargeProvider.Unknown,
+        status: ChargeStatus = ChargeStatus.Paid,
+        errorMessage: String? = null,
+    ) = PaymentTransaction(
+        id = id,
+        provider = provider,
+        amountSum = 1_000,
+        status = status,
+        errorMessage = errorMessage,
+    )
 
     private fun transaction(id: String) = WalletTransaction(id = id, amountSum = 1_000)
 }

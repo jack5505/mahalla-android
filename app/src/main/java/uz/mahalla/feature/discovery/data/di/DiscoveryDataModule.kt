@@ -8,8 +8,11 @@ import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import uz.mahalla.feature.discovery.data.CatalogApi
 import uz.mahalla.feature.discovery.data.CatalogRepository
+import uz.mahalla.feature.discovery.data.CategoriesApi
+import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.data.DataStoreSearchHistoryStore
 import uz.mahalla.feature.discovery.data.DefaultCatalogRepository
+import uz.mahalla.feature.discovery.data.DefaultCategoryRepository
 import uz.mahalla.feature.discovery.data.SearchHistoryStore
 import javax.inject.Singleton
 
@@ -22,6 +25,11 @@ object DiscoveryDataModule {
     @Singleton
     fun provideCatalogApi(retrofit: Retrofit): CatalogApi =
         retrofit.create(CatalogApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideCategoriesApi(retrofit: Retrofit): CategoriesApi =
+        retrofit.create(CategoriesApi::class.java)
 }
 
 /**
@@ -34,6 +42,9 @@ interface DiscoveryBindingsModule {
 
     @Binds
     fun bindCatalogRepository(impl: DefaultCatalogRepository): CatalogRepository
+
+    @Binds
+    fun bindCategoryRepository(impl: DefaultCategoryRepository): CategoryRepository
 
     @Binds
     fun bindSearchHistoryStore(impl: DataStoreSearchHistoryStore): SearchHistoryStore

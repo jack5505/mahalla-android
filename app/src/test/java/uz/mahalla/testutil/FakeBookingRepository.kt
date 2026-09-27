@@ -45,6 +45,11 @@ class FakeBookingRepository : BookingRepository {
     /** Исход отмены; `null` — вернуть ту же запись со статусом «отменена». */
     var cancelResult: ApiResult<Appointment>? = null
 
+    var appointmentResult: ApiResult<Appointment> = ApiResult.Success(Appointment(id = "a-1"))
+
+    /** Записи, у которых спрашивали карточку по id (issue #183), — по порядку запросов. */
+    val requestedAppointments = mutableListOf<String>()
+
     /**
      * Пока задан и не завершён, `cancel` не отвечает. Нужен там, где
      * проверяется поведение экрана **во время** отмены: с обычным фейком она
@@ -131,6 +136,11 @@ class FakeBookingRepository : BookingRepository {
     override suspend fun myAppointments(page: Int, size: Int): ApiResult<AppointmentPage> {
         requestedPages += page
         return pages[page] ?: defaultPage
+    }
+
+    override suspend fun appointment(appointmentId: String): ApiResult<Appointment> {
+        requestedAppointments += appointmentId
+        return appointmentResult
     }
 
     override suspend fun cancel(appointment: Appointment): ApiResult<Appointment> {

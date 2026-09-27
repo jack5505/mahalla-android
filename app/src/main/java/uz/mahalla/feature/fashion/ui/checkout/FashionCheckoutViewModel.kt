@@ -47,6 +47,28 @@ class FashionCheckoutViewModel @Inject constructor(
     FashionCheckoutState(),
 ) {
 
+    /**
+     * `?: ""`, а не Robolectric + `toRoute()` (issue #228, п. 5): пустой
+     * `storeId` из аргумента маршрута не топит `ORDER` молча —
+     * `FashionCart.store(storeId)` ищет точное совпадение, и на пустом id
+     * вернёт `null` раньше, чем дело дойдёт до отправки, при условии что в
+     * корзине нет строки с таким же пустым `storeId`. Тогда [loadCart]
+     * оставит `items` пустым, `CheckoutValidator` заведёт
+     * `CheckoutError.EmptyCart`, и [submit] выйдет по проверке
+     * `errors.isNotEmpty()`, не дойдя до `orderRepository.create` и события
+     * аналитики.
+     *
+     * Оговорка: `FashionMappers.CartItemDto.toDomain` тоже пишет
+     * `storeId.orEmpty()` — то есть строка с пустым `storeId` в принципе
+     * возможна, если сервер прислал бы `storeId: null` в ответе `fashion/cart`.
+     * Тогда оба условия совпали бы и заказ ушёл бы с пустым `storeId`
+     * (аналитика при этом не потеряется молча:
+     * `DefaultAnalyticsRepository.track` отбивает пустой `placeId` до сети).
+     * В реальной навигации аргумент маршрута типобезопасен и пустым не
+     * бывает, так что для человека этот путь недостижим — но он не invariant
+     * уровня компилятора, поэтому `savedStateHandle[FashionArgs.STORE_ID]`
+     * не заменён `!!`.
+     */
     private val storeId: String = savedStateHandle[FashionArgs.STORE_ID] ?: ""
 
     init {
