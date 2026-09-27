@@ -141,7 +141,9 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Hilt-раннер (issue #347): подменяет Application на HiltTestApplication
+        // до создания графа, иначе @HiltAndroidTest не находит компонент.
+        testInstrumentationRunner = "uz.mahalla.HiltTestRunner"
         buildConfigField("String", "MAPKIT_API_KEY", stringLiteral(mapkitApiKey()))
         buildConfigField("String", "SENTRY_DSN", stringLiteral(sentryDsn()))
         // Пуши (эпик 11): без google-services.json Firebase не поднимается, и
@@ -364,4 +366,15 @@ dependencies {
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Инструментальный smoke-тест (issue #347): job `emulator` в ci.yml, по
+    // метке "emulator", раньше гонял connectedDebugAndroidTest без единого
+    // файла в androidTest.
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

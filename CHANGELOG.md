@@ -3636,3 +3636,44 @@ Robolectric: Room в памяти + MockWebServer через `NetworkFactory` �
 делать. Вместо флага — прямое удаление выбора, как и просил заголовок
 issue («убрать выбор Wallet»): дешевле в коде и не создаёт полуживую
 ветку с неопределённым поведением при `PAYMENTS_ENABLED=true`.
+
+## Этап: инструментальный smoke-тест, Compose-тесты критичных флоу (issue #347)
+
+`app/src/androidTest` не существовал вовсе (0 файлов), при этом job
+`emulator` в `ci.yml` держал `connectedDebugAndroidTest` — задача не
+ошибалась, ей просто нечего было проверять. Эмулятора нет ни в CI по
+умолчанию (job — по метке `emulator` на PR), ни в песочнице агента, поэтому
+новый код в `app/src/androidTest` проверен только сборкой
+(`assembleDebugAndroidTest`, `BUILD SUCCESSFUL`), не прогоном.
+
+- **`HiltTestRunner`** (`app/src/androidTest/java/uz/mahalla/HiltTestRunner.kt`)
+  подменяет `Application` на `HiltTestApplication` до первого
+  `onCreate()` — без этого `@HiltAndroidTest` не находит тестовый граф.
+  `testInstrumentationRunner` в `defaultConfig` указывает на него.
+- **`MainActivitySmokeTest`** запускает `MainActivity` через
+  `createAndroidComposeRule` и проверяет, что граф Hilt собрался и
+  композиция прошла без падения. Экран, на котором окажется свежий запуск
+  (адрес бэкенда, онбординг или уже авторизованные табы — зависит от
+  `RootViewModel.resolveStart`), тест не фиксирует: авторизованный смоук до
+  четырёх табов требует фейковых Hilt-модулей `AuthRepository` и
+  `OnboardingRepository`, которых в этой задаче нет — открытый пункт.
+- `robolectric.properties`: `sdk=34` → `sdk=35`, вслед за `targetSdk`.
+  Robolectric 4.14.1 API 35 поддерживает.
+- Новые Robolectric-Compose тесты — `PinScreenTest`, `AppLockScreenTest`,
+  `CheckoutScreenTest` (регресс на «только наличные», issue #334): экраны,
+  где ошибка дороже всего — вход, замок и деньги — не имели покрытия
+  композиции вовсе, только ViewModel и нампад отдельно.
+- `AppLockObserverTest` — впервые проверена связка `onStop`/`onStart` с
+  `AppLockManager` через собственный `LifecycleRegistry` (наблюдатель
+  раньше проверялся только руками, реальным приложением).
+- `DeviceInfoMapperTest`, `ActivityMappersTest` — у обоих не было ни одной
+  прямой ссылки из тестов, только сквозное покрытие через сеть
+  (`ActivityRepositoryTest`), которое не добирается до мягких случаев вроде
+  записи без `id` или без даты.
+- `MahallaDatabaseTest`: `CartDraftDao.items/line/upsertAll/replaceAll/clearAll`
+  были не покрыты, хотя сам DAO проверялся давно.
+- `AnalyticsTrackerTest.Thread.sleep`, упомянутый в issue, к 2026-09-27 уже
+  не существовал — заменён на `CountDownLatch` в issue #228 (`0607609`).
+- `AGENTS.md`: счётчик тестов — `2061 в 190 классах` → `3016 в 260 классах`
+  (реальный прогон на момент этой задачи; расхождение с 2853/242 из issue
+  — чужие PR за прошедшую неделю).
