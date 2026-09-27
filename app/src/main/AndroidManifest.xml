@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Баннер «Нет сети» и быстрый отказ без коннект-таймаута (issue #350). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Геолокация (эпик 3.6): «рядом со мной» и время доставки. Отказ не
          блокирует приложение — город выбирается вручную. -->

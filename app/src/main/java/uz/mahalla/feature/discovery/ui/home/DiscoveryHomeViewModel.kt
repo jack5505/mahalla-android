@@ -5,9 +5,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.state.errorOrNull
+import uz.mahalla.data.network.ConnectivityObserver
+import uz.mahalla.data.network.retryOnReconnect
 import uz.mahalla.feature.discovery.data.CatalogRepository
 import uz.mahalla.feature.discovery.data.CategoryRepository
 import uz.mahalla.feature.discovery.data.PlacePage
@@ -45,6 +49,7 @@ class DiscoveryHomeViewModel @Inject constructor(
     private val tickets: WalkInTicketStore,
     private val categories: CategoryRepository,
     private val clock: Clock,
+    private val connectivity: ConnectivityObserver,
 ) : MviViewModel<DiscoveryHomeState, DiscoveryHomeEvent, DiscoveryHomeEffect>(
     DiscoveryHomeState(),
 ) {
@@ -58,6 +63,14 @@ class DiscoveryHomeViewModel @Inject constructor(
         }
         load(refreshing = false)
         readTicket()
+        // Главная — первый экран после старта, и именно на ней быстрый фейл
+        // (issue #350) чаще всего срабатывает раньше, чем человек успел нажать
+        // «повторить» сам.
+        viewModelScope.retryOnReconnect(
+            connectivity = connectivity,
+            shouldRetry = { currentState.content.errorOrNull() == ApiError.NoConnection },
+            retry = { load(refreshing = false) },
+        )
     }
 
     override fun onEvent(event: DiscoveryHomeEvent) {

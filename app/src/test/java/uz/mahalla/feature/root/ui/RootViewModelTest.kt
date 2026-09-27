@@ -43,6 +43,7 @@ import uz.mahalla.feature.update.domain.AppUpdate
 import uz.mahalla.feature.update.domain.UpdateDecision
 import uz.mahalla.testutil.FakeAppVersionRepository
 import uz.mahalla.testutil.FakeAuthRepository
+import uz.mahalla.testutil.FakeConnectivityObserver
 import uz.mahalla.testutil.FakePinStorage
 import uz.mahalla.testutil.FakePushTokenProvider
 import uz.mahalla.testutil.FakeSessionStore
@@ -223,6 +224,23 @@ class RootViewModelTest {
     }
 
     @Test
+    fun `the offline banner flag follows the connectivity observer`() = runTest {
+        // Баннер в MahallaApp читает именно это поле (issue #350).
+        val connectivity = FakeConnectivityObserver(initiallyConnected = true)
+        val viewModel = viewModel(SettingsDataStore(newDataStore()), connectivityObserver = connectivity)
+        viewModel.awaitReady()
+        assertFalse(viewModel.isOffline.value)
+
+        connectivity.setConnected(false)
+        runCurrent()
+        assertTrue(viewModel.isOffline.value)
+
+        connectivity.setConnected(true)
+        runCurrent()
+        assertFalse(viewModel.isOffline.value)
+    }
+
+    @Test
     fun `changing settings does not move the start destination`() = runTest {
         val settings = SettingsDataStore(newDataStore())
         val viewModel = viewModel(settings)
@@ -346,6 +364,7 @@ class RootViewModelTest {
             pinStorage = FakePinStorage(),
             clock = java.time.Clock.systemUTC(),
         ),
+        connectivityObserver: FakeConnectivityObserver = FakeConnectivityObserver(),
     ) = RootViewModel(
         settings,
         DataStoreOnboardingRepository(settings),
@@ -365,6 +384,7 @@ class RootViewModelTest {
             settings = SettingsDataStore(newDataStore()),
         ),
         sessionExpiry,
+        connectivityObserver,
     ).also { viewModelStore.put("root-${viewModelKeySeq++}", it) }
 
     private suspend fun RootViewModel.awaitReady(): RootUiState.Ready =

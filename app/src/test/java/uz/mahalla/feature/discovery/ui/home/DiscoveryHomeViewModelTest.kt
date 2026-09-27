@@ -21,6 +21,7 @@ import uz.mahalla.feature.queue.domain.WalkInStatus
 import uz.mahalla.feature.queue.domain.WalkInTicket
 import uz.mahalla.testutil.FakeCatalogRepository
 import uz.mahalla.testutil.FakeCategoryRepository
+import uz.mahalla.testutil.FakeConnectivityObserver
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeWalkInTicketStore
 import uz.mahalla.testutil.MainDispatcherRule
@@ -46,6 +47,8 @@ class DiscoveryHomeViewModelTest {
     private val tickets = FakeWalkInTicketStore()
 
     private val categories = FakeCategoryRepository()
+
+    private val connectivity = FakeConnectivityObserver()
 
     @Test
     fun `category tiles come from the cache and are refreshed on every load`() = runTest {
@@ -134,6 +137,35 @@ class DiscoveryHomeViewModelTest {
         viewModel.onEvent(DiscoveryHomeEvent.Retry)
 
         assertTrue(viewModel.state.value.content is ScreenState.Content)
+    }
+
+    @Test
+    fun `a reconnect reloads a screen stuck on a connection error`() = runTest {
+        repository.failWith(ApiError.NoConnection)
+        connectivity.setConnected(false)
+        val viewModel = viewModel()
+        assertEquals(ScreenState.Error(ApiError.NoConnection), viewModel.state.value.content)
+        repository.respondWith(listOf(place("p")))
+
+        connectivity.setConnected(true)
+
+        assertTrue(viewModel.state.value.content is ScreenState.Content)
+    }
+
+    @Test
+    fun `a reconnect does not reload a screen that is not on a connection error`() = runTest {
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel()
+        val loadedFilters = repository.requestedFilters.size
+
+        connectivity.setConnected(false)
+        connectivity.setConnected(true)
+
+        assertEquals(
+            "нет ошибки — перезагружать нечего",
+            loadedFilters,
+            repository.requestedFilters.size,
+        )
     }
 
     @Test
@@ -404,6 +436,7 @@ class DiscoveryHomeViewModelTest {
         tickets = tickets,
         categories = categories,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        connectivity = connectivity,
     )
 
     private companion object {

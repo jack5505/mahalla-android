@@ -75,11 +75,14 @@ object NetworkFactory {
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
         logger: HttpLoggingInterceptor.Logger = HttpLoggingInterceptor.Logger.DEFAULT,
+        connectivityInterceptor: Interceptor? = null,
     ): OkHttpClient.Builder = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .allowPinnedCertificate(certificatePin)
+        // Первым: без сети остальные интерцепторы не должны увидеть запрос вовсе.
+        .apply { connectivityInterceptor?.let(::addInterceptor) }
         .apply {
             if (logBodies) addInterceptor(loggingInterceptor(logger))
         }
@@ -153,7 +156,8 @@ object NetworkFactory {
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
-    ): OkHttpClient = clientBuilder(logBodies, certificatePin)
+        connectivityInterceptor: Interceptor? = null,
+    ): OkHttpClient = clientBuilder(logBodies, certificatePin, connectivityInterceptor = connectivityInterceptor)
         .addInterceptor(backendUrlInterceptor)
         .apply { geoHeaderInterceptor?.let(::addInterceptor) }
         .apply { languageHeaderInterceptor?.let(::addInterceptor) }
@@ -176,7 +180,8 @@ object NetworkFactory {
         inspector: Interceptor? = null,
         logBodies: Boolean = false,
         certificatePin: CertificatePinSource? = null,
-    ): OkHttpClient = clientBuilder(logBodies, certificatePin)
+        connectivityInterceptor: Interceptor? = null,
+    ): OkHttpClient = clientBuilder(logBodies, certificatePin, connectivityInterceptor = connectivityInterceptor)
         .addInterceptor(backendUrlInterceptor)
         .apply { geoHeaderInterceptor?.let(::addInterceptor) }
         .apply { languageHeaderInterceptor?.let(::addInterceptor) }

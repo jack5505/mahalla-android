@@ -55,7 +55,7 @@ list`, иначе напишешь второй раз (так уже вышло
 ## Команды
 
 ```bash
-./gradlew testDebugUnitTest     # юнит-тесты (3016 в 260 классах)
+./gradlew testDebugUnitTest     # юнит-тесты (3036 в 261 классе)
 ./gradlew assembleDebug         # сборка
 ./gradlew lintDebug             # lint, warningsAsErrors включён
 ```
