@@ -17,7 +17,12 @@ package uz.mahalla.feature.notifications.domain
  */
 sealed interface NotificationTarget {
 
-    /** Статус заказа — `OrderStatusRoute(entityId)` вертикали «Еда» (эпик 5). */
+    /**
+     * Заказ — `OrderDeepLinkRoute(entityId)` (эпик 5, issue #343). Вертикаль
+     * здесь не известна: и пуш, и уведомление несут только id, а заказ может
+     * быть «Еды», «Одежды» или «Аптеки» — резолвит маршрут по `GET
+     * orders/{id}`, а не эта цель.
+     */
     data class Order(val orderId: String) : NotificationTarget
 
     /**

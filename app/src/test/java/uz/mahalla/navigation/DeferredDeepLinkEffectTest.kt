@@ -21,14 +21,17 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Отложенный deep link из пуша, пока стартовый пункт — гейт (issue #160).
+ * Отложенный deep link из пуша, пока стартовый пункт — гейт (issue #160) или
+ * ещё непройденный онбординг/вход (issue #343).
  *
  * `NavHost.setGraph` сам разбирает `activity.intent` сразу после построения
  * графа и уходит `popUpTo(graph){inclusive=true}` — без отсрочки ссылка из
  * пуша вытеснила бы `BackendUrlRoute`/`UpdateRoute` раньше, чем человек до них
- * дошёл. Тест на композицию с настоящим `NavHost` и настоящими маршрутами, как
- * `SessionExpiryEffectTest`: `pendingDeepLink` здесь играет роль интента,
- * который `MainActivity` забрала бы у `NavHost`.
+ * дошёл, либо у невошедшего человека собрала бы стек `OnboardingGraph → …`
+ * мимо PIN, и первый же запрос за ссылкой упал бы в 401. Тест на композицию с
+ * настоящим `NavHost` и настоящими маршрутами, как `SessionExpiryEffectTest`:
+ * `pendingDeepLink` здесь играет роль интента, который `MainActivity` забрала
+ * бы у `NavHost`.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class)
@@ -57,6 +60,23 @@ class DeferredDeepLinkEffectTest {
         assertRoute<UpdateRoute>()
 
         leaveGate(gate = UpdateRoute, appStart = MainGraph)
+
+        assertRoute<PlaceRoute>()
+    }
+
+    /**
+     * Невошедший человек (issue #343): граф стартует с `OnboardingGraph`, а не
+     * с гейтом `BackendUrlRoute`/`UpdateRoute` — ссылка ждёт ровно так же,
+     * иначе `OrderDeepLinkRoute` собрался бы в стек мимо PIN, и запрос за ним
+     * ушёл бы без сессии.
+     */
+    @Test
+    fun `a deep link is held back while onboarding has not finished`() {
+        setContent(startDestination = OnboardingGraph, pendingDeepLink = placeDeepLink("42"))
+
+        assertRoute<WelcomeRoute>()
+
+        leaveGate(gate = OnboardingGraph, appStart = MainGraph)
 
         assertRoute<PlaceRoute>()
     }

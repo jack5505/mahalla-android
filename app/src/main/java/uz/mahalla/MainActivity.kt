@@ -82,14 +82,18 @@ class MainActivity : FragmentActivity() {
             // Зафиксировано во ViewModel: пересчёт на каждой эмиссии настроек
             // сбрасывал бы back stack (см. RootViewModel).
             val appStart = if (ready.startWithOnboarding) OnboardingGraph else MainGraph
-            // Стартовый пункт — гейт (issue #160): `NavHost.setGraph` разбирает
-            // `activity.intent` сам сразу после построения графа, и ссылка из
-            // пуша вытеснила бы `BackendUrlRoute`/`UpdateRoute` раньше, чем
-            // человек до них дошёл. `remember` без ключей — единственный раз за
-            // жизнь композиции, ровно на первой эмиссии `Ready`: `needsBackendUrl`
-            // и `showUpdate` дальше не меняются (см. `RootViewModel.start`).
+            // Стартовый пункт — гейт (issue #160, #343): `NavHost.setGraph`
+            // разбирает `activity.intent` сам сразу после построения графа, и
+            // ссылка из пуша вытеснила бы `BackendUrlRoute`/`UpdateRoute`, а не
+            // пройденный онбординг — само собой ещё непройденный вход: у
+            // невошедшего человека граф стартует с `OnboardingGraph`, и ссылка
+            // собрала бы стек `OnboardingGraph → OrderDeepLinkRoute`, минуя PIN,
+            // а первый же запрос за неё упал бы в 401 (issue #343). `remember`
+            // без ключей — единственный раз за жизнь композиции, ровно на первой
+            // эмиссии `Ready`: `needsBackendUrl`, `showUpdate` и
+            // `startWithOnboarding` дальше не меняются (см. `RootViewModel.start`).
             val pendingDeepLink = remember {
-                val gated = ready.needsBackendUrl || ready.showUpdate
+                val gated = ready.needsBackendUrl || ready.showUpdate || ready.startWithOnboarding
                 val hasDeepLink = intent.data != null
                 (if (gated && hasDeepLink) Intent(intent) else null).also {
                     if (gated) intent.data = null

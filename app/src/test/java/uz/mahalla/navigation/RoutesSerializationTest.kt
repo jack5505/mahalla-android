@@ -47,6 +47,15 @@ class RoutesSerializationTest {
         val order = OrderStatusRoute(orderId = "o-42")
         assertEquals(order, json.decodeFromString<OrderStatusRoute>(json.encodeToString(order)))
 
+        // Deep link заказа (issue #343): вертикаль резолвится после этого
+        // маршрута, а не входит в него, поэтому у него тот же единственный
+        // аргумент, что и у `OrderStatusRoute`.
+        val orderDeepLink = OrderDeepLinkRoute(orderId = "o-42")
+        assertEquals(
+            orderDeepLink,
+            json.decodeFromString<OrderDeepLinkRoute>(json.encodeToString(orderDeepLink)),
+        )
+
         // Анкеты (issue #84): флаг «пришли из регистрации» решает, чем
         // кончается заполнение, — терять его при сериализации нельзя.
         val role = RoleRoute(onboarding = true)
@@ -137,6 +146,10 @@ class RoutesSerializationTest {
             serializer<CartRoute>().descriptor.serialName,
             serializer<CheckoutRoute>().descriptor.serialName,
             serializer<OrderStatusRoute>().descriptor.serialName,
+            // Deep link заказа (issue #343): тот же единственный аргумент,
+            // что и у `OrderStatusRoute` — склеенный serialName увёл бы
+            // резолвер прямо на экран статуса еды, воспроизводя баг заново.
+            serializer<OrderDeepLinkRoute>().descriptor.serialName,
             serializer<PlaceRoute>().descriptor.serialName,
             // Очередь (issue #96): аргументы те же, что у меню, — склеенный
             // serialName увёл бы человека не на тот экран.
@@ -242,10 +255,14 @@ class RoutesSerializationTest {
      * Ссылки пуша (эпик 11). Placeholder обязан совпадать с именем поля
      * маршрута: расхождение не ломает сборку, а тихо открывает приложение на
      * главной вместо нужного экрана.
+     *
+     * Ссылку несёт `OrderDeepLinkRoute`, а не `OrderStatusRoute` (issue #343):
+     * вертикаль заказа не известна заранее, и `mahalla://order/{id}` сначала
+     * приземляется на резолвер.
      */
     @Test
     fun `order deep link placeholder matches the route argument`() {
-        val descriptor = serializer<OrderStatusRoute>().descriptor
+        val descriptor = serializer<OrderDeepLinkRoute>().descriptor
         assertEquals(1, descriptor.elementsCount)
         assertEquals("orderId", descriptor.getElementName(0))
         assertTrue(DeepLinks.ORDER_PATTERN.endsWith("{orderId}"))

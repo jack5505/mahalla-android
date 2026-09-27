@@ -654,9 +654,25 @@ data class CheckoutRoute(val placeId: String)
 /**
  * Статус заказа. Экран достижим и сразу после оформления, и из списка заказов,
  * поэтому знает только id — всё остальное грузит сам.
+ *
+ * Вертикаль заказа здесь уже известна — на этот маршрут ведут только оформление
+ * «Еды» и список её заказов. Deep link и пуш, где вертикаль заранее не
+ * известна, идут через [OrderDeepLinkRoute] (issue #343).
  */
 @Serializable
 data class OrderStatusRoute(val orderId: String)
+
+/**
+ * Deep link заказа `mahalla://order/{orderId}` (пуш `ORDER_STATUS_UPDATED`,
+ * issue #343). У ссылки и у пуша нет вертикали — только id, а заказ может быть
+ * «Еды», «Одежды» или «Аптеки». Экран за этим маршрутом ничего не рисует: он
+ * читает `GET orders/{orderId}` (общая ручка на все вертикали, подтверждено
+ * `docs/API-CONTRACT.md`) и сам уходит дальше — на [OrderStatusRoute] (еда),
+ * список заказов «Одежды» или общий список «мои активности», когда своего
+ * экрана у вертикали ещё нет.
+ */
+@Serializable
+data class OrderDeepLinkRoute(val orderId: String)
 
 // --- Бизнес-панель (эпик #16) ---
 
