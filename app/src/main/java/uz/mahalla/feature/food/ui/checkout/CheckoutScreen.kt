@@ -26,16 +26,14 @@ import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.ButtonState
 import uz.mahalla.core.ui.components.MahallaButton
-import uz.mahalla.core.ui.components.MahallaButtonVariant
+import uz.mahalla.core.ui.components.MahallaChoiceCard
 import uz.mahalla.core.ui.components.MahallaSegmentedControl
 import uz.mahalla.core.ui.components.MahallaTextField
 import uz.mahalla.core.ui.components.MahallaTopBar
 import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.onboarding.ui.OnboardingApiError
-import uz.mahalla.feature.wallet.ui.pay.PaymentConfirmSheet
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -50,7 +48,6 @@ import uz.mahalla.ui.theme.TabularNums
 @Composable
 fun CheckoutScreen(
     onOrderCreated: (String) -> Unit,
-    onOpenWallet: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: CheckoutViewModel = hiltViewModel(),
@@ -61,7 +58,6 @@ fun CheckoutScreen(
         viewModel.effects.collect { effect ->
             when (effect) {
                 is CheckoutEffect.OrderCreated -> onOrderCreated(effect.orderId)
-                CheckoutEffect.OpenWallet -> onOpenWallet()
                 CheckoutEffect.NavigateBack -> onBack()
             }
         }
@@ -132,7 +128,7 @@ fun CheckoutContent(
             }
 
             item(key = "payment") {
-                PaymentBlock(state = state, onEvent = onEvent)
+                PaymentBlock()
             }
 
             state.submitError?.let { failure ->
@@ -144,72 +140,19 @@ fun CheckoutContent(
 
         SubmitBar(state = state, currency = currency, onEvent = onEvent)
     }
-
-    // Подтверждение оплаты кошельком (8.3): шторка поверх формы, чтобы итог и
-    // состав остались видны за ней.
-    state.payment?.let { payment ->
-        PaymentConfirmSheet(
-            state = payment,
-            onPinChanged = { onEvent(CheckoutEvent.PaymentPinChanged(it)) },
-            onBiometricConfirmed = { onEvent(CheckoutEvent.PaymentBiometricConfirmed) },
-            onBiometricRejected = { onEvent(CheckoutEvent.PaymentBiometricRejected) },
-            onRetry = { onEvent(CheckoutEvent.PaymentRetried) },
-            onTopUp = { onEvent(CheckoutEvent.TopUpClicked) },
-            onDismiss = { onEvent(CheckoutEvent.PaymentDismissed) },
-        )
-    }
 }
 
+/** Оплата — только наличные на этом релизе (issue #334): выбора нет, карточка одна. */
 @Composable
-private fun PaymentBlock(
-    state: CheckoutState,
-    onEvent: (CheckoutEvent) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val currency = stringResource(R.string.currency_uzs)
+private fun PaymentBlock(modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
         SectionHeader(title = stringResource(R.string.checkout_payment))
-        MahallaSegmentedControl(
-            options = listOf(
-                stringResource(R.string.checkout_payment_wallet),
-                stringResource(R.string.checkout_payment_cash),
-            ),
-            selectedIndex = if (state.form.payment == PaymentMethod.Cash) 1 else 0,
-            onSelect = { index ->
-                onEvent(
-                    CheckoutEvent.PaymentSelected(
-                        if (index == 1) PaymentMethod.Cash else PaymentMethod.Wallet,
-                    ),
-                )
-            },
+        MahallaChoiceCard(
+            title = stringResource(R.string.checkout_payment_cash),
+            selected = true,
+            onClick = {},
+            enabled = false,
         )
-        if (state.form.payment == PaymentMethod.Wallet && state.balanceKnown) {
-            Text(
-                text = stringResource(
-                    R.string.checkout_wallet_balance,
-                    MoneyFormatter.withCurrency(state.walletBalanceSum, currency),
-                ),
-                style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
-                color = LocalMahallaColors.current.fgMuted,
-            )
-        }
-        val missing = state.insufficientFunds
-        if (missing != null && state.validationShown) {
-            Text(
-                text = stringResource(
-                    R.string.checkout_error_insufficient_funds,
-                    MoneyFormatter.withCurrency(missing.missingSum, currency),
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            MahallaButton(
-                text = stringResource(R.string.checkout_top_up),
-                onClick = { onEvent(CheckoutEvent.TopUpClicked) },
-                variant = MahallaButtonVariant.Secondary,
-                fillWidth = false,
-            )
-        }
     }
 }
 
@@ -265,7 +208,7 @@ private fun SubmitBar(
             MahallaButton(
                 text = stringResource(R.string.checkout_submit),
                 onClick = { onEvent(CheckoutEvent.SubmitClicked) },
-                state = ButtonState(enabled = !state.isEmpty, loading = state.isBusy),
+                state = ButtonState(enabled = !state.isEmpty, loading = state.isSubmitting),
             )
         }
     }

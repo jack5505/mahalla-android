@@ -476,12 +476,10 @@
     <string name="checkout_payment">Оплата</string>
     <string name="checkout_payment_wallet">Кошелёк</string>
     <string name="checkout_payment_cash">Наличные</string>
-    <string name="checkout_wallet_balance">Баланс кошелька: %1$s</string>
     <string name="checkout_top_up">Пополнить кошелёк</string>
     <string name="checkout_delivery_fee">Доставка</string>
     <string name="checkout_submit">Заказать</string>
     <string name="checkout_error_address">Укажите адрес доставки</string>
-    <string name="checkout_error_insufficient_funds">На кошельке не хватает %1$s</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Заказ</string>

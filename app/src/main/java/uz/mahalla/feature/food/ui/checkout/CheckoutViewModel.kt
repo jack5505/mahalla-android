@@ -18,43 +18,31 @@ import uz.mahalla.feature.food.domain.CartCalculator
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.CheckoutValidator
 import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.food.ui.DeliveryFeeLoader
 import uz.mahalla.feature.role.data.RoleRepository
-import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.feature.wallet.domain.IdempotencyKey
-import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlow
-import uz.mahalla.feature.wallet.ui.pay.WalletPaymentFlowFactory
 import uz.mahalla.navigation.CheckoutRoute
 import javax.inject.Inject
 
 /**
  * Оформление заказа (эпик 5.3).
  *
- * Баланс кошелька запрашивается один раз при открытии. Не приехал — оплату
- * кошельком не блокируем: отказать в оформлении из-за неотвеченного запроса
- * хуже, чем получить отказ на стороне сервера, который всё равно проверит
- * деньги повторно.
+ * Оплата — только наличные (issue #334, релиз только `CASH`): бэкенд `WALLET`
+ * отклоняет, поэтому баланс кошелька здесь больше не запрашивается и оплата
+ * не подтверждается шторкой — заказ уходит в сеть сразу.
  *
  * Стоимость доставки (issue #179) запрашивается по сумме позиций и только при
  * доставке: у самовывоза её в заказе нет, и строка исчезает вместе с ней.
  * Итог при этом остаётся оценкой — окончательные суммы называет сервер в
  * ответе о созданном заказе.
- *
- * Оплата кошельком с задачи 8.3 (эпик #12) идёт через общий
- * [WalletPaymentFlow]: он перечитывает баланс, спрашивает PIN или биометрию,
- * отправляет **один** запрос на одно подтверждение и разбирает отказ. Наличные
- * им не проходят — подтверждать нечего, деньги кошелька не касаются.
  */
 @HiltViewModel
 class CheckoutViewModel @Inject constructor(
     private val cartRepository: CartRepository,
     private val orderRepository: OrderRepository,
-    private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
     deliveryFeeRepository: DeliveryFeeRepository,
     private val analytics: AnalyticsTracker,
-    paymentFlows: WalletPaymentFlowFactory,
     savedStateHandle: SavedStateHandle,
 ) : MviViewModel<CheckoutState, CheckoutEvent, CheckoutEffect>(CheckoutState()) {
 
@@ -70,33 +58,13 @@ class CheckoutViewModel @Inject constructor(
     )
 
     /**
-     * Оплата кошельком. Состав и форма читаются в момент отправки, а не при
-     * создании flow: между нажатием «оформить» и подтверждением человек мог
-     * поправить адрес.
-     */
-    private val payment: WalletPaymentFlow<String> = paymentFlows.create(viewModelScope) { key ->
-        orderRepository.create(
-            cart = cart.copy(lines = currentState.lines),
-            form = currentState.form,
-            idempotencyKey = key,
-        )
-    }
-
-    /**
-     * Ключ наличного заказа. Тоже нужен: двойное нажатие «оформить» создаёт два
-     * заказа независимо от способа оплаты, а повтор после отказа — это тот же
-     * заказ, а не новый.
+     * Ключ идемпотентности заказа: двойное нажатие «оформить» не должно
+     * создавать два заказа, а повтор после отказа — это тот же заказ, а не
+     * новый.
      */
     private var cashIdempotencyKey: String? = null
 
     init {
-        viewModelScope.launch {
-            payment.state.collect { paymentState -> updateState { copy(payment = paymentState) } }
-        }
-        viewModelScope.launch {
-            // Заказ создан и оплачен: черновик корзины уже почистил репозиторий.
-            payment.paid.collect { orderId -> onOrderCreated(orderId) }
-        }
         updateState { copy(placeId = placeId).revalidated() }
         viewModelScope.launch {
             cartRepository.cart(placeId).collect { updated ->
@@ -105,7 +73,6 @@ class CheckoutViewModel @Inject constructor(
                 refreshDeliveryFee()
             }
         }
-        loadBalance()
         prefillAddress()
     }
 
@@ -119,25 +86,10 @@ class CheckoutViewModel @Inject constructor(
                 refreshDeliveryFee()
             }
             is CheckoutEvent.AddressChanged -> updateForm { copy(address = event.address) }
-            is CheckoutEvent.PaymentSelected -> updateForm { copy(payment = event.payment) }
 
             CheckoutEvent.SubmitClicked -> submit()
 
-            // Пополнение открывается вместо шторки, а не под ней: возвращаться
-            // человек будет на экран кошелька, и подтверждение прошлой попытки
-            // за ним висеть не должно.
-            CheckoutEvent.TopUpClicked -> {
-                payment.dismiss()
-                emitEffect(CheckoutEffect.OpenWallet)
-            }
-
             CheckoutEvent.BackClicked -> emitEffect(CheckoutEffect.NavigateBack)
-
-            is CheckoutEvent.PaymentPinChanged -> payment.pinChanged(event.pin)
-            CheckoutEvent.PaymentBiometricConfirmed -> payment.biometricConfirmed()
-            CheckoutEvent.PaymentBiometricRejected -> payment.biometricRejected()
-            CheckoutEvent.PaymentRetried -> payment.retry()
-            CheckoutEvent.PaymentDismissed -> payment.dismiss()
         }
     }
 
@@ -166,21 +118,13 @@ class CheckoutViewModel @Inject constructor(
     }
 
     /**
-     * Итог и ошибки считаются вместе: от суммы зависит проверка баланса, и
+     * Итог и ошибки считаются вместе: от суммы зависит проверка адреса, и
      * считать их по отдельности значит однажды показать итог, не совпадающий с
      * причиной отказа.
      *
      * Доставка входит в сумму, когда её назвал `food/delivery-fee` и заказ
      * действительно доставляют (issue #179): именно эту сумму человек и увидит
-     * списанной, поэтому баланс кошелька проверяется против неё, а не против
-     * одних позиций — иначе «денег хватает» на экране кончалось бы отказом
-     * сервера после нажатия кнопки.
-     *
-     * **Цена этого решения**: если `food/delivery-fee` завысит доставку
-     * относительно расчёта в `POST food/orders`, оформление кошельком
-     * заблокируется у человека, которому денег на самом деле хватало. Оценке
-     * доверяем потому, что её называет тот же сервер; неизвестная доставка,
-     * наоборот, ничего не блокирует.
+     * при оплате курьеру.
      */
     private fun CheckoutState.revalidated(): CheckoutState {
         val delivery = if (form.method == DeliveryMethod.Delivery) deliverySum ?: 0 else 0
@@ -191,7 +135,6 @@ class CheckoutViewModel @Inject constructor(
                 form = form,
                 totals = totals,
                 cartIsEmpty = lines.isEmpty(),
-                walletBalanceSum = walletBalanceSum,
             ),
         )
     }
@@ -217,49 +160,15 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 
-    private fun loadBalance() {
-        viewModelScope.launch {
-            when (val result = walletRepository.wallet()) {
-                is ApiResult.Failure -> updateState {
-                    // Баланс неизвестен — считаем его достаточным: решающее
-                    // слово всё равно за сервером при создании заказа.
-                    copy(balanceKnown = false, walletBalanceSum = Long.MAX_VALUE).revalidated()
-                }
-
-                // Сравнивать с суммой заказа нужно именно «доступно»:
-                // заморозка под другую незавершённую операцию потратить себя
-                // не даст (issue #62).
-                is ApiResult.Success -> updateState {
-                    copy(
-                        balanceKnown = true,
-                        walletBalanceSum = result.data.availableSum,
-                    ).revalidated()
-                }
-            }
-        }
-    }
-
-    /**
-     * Оформление. Кошелёк уходит в подтверждение (8.3), наличные — сразу в
-     * сеть: спрашивать PIN за заказ, который оплатят курьеру, незачем.
-     */
+    /** Оформление. Оплата только наличными — заказ уходит в сеть сразу, без подтверждения. */
     private fun submit() {
         val state = currentState.revalidated()
         if (state.errors.isNotEmpty()) {
             updateState { state.copy(validationShown = true) }
             return
         }
-        if (state.isSubmitting || state.payment != null) return
+        if (state.isSubmitting) return
 
-        if (state.form.payment == PaymentMethod.Wallet) {
-            updateState { copy(submitError = null) }
-            payment.start(state.totals.totalSum)
-            return
-        }
-        submitCash(state)
-    }
-
-    private fun submitCash(state: CheckoutState) {
         val key = cashIdempotencyKey ?: IdempotencyKey.random().also { cashIdempotencyKey = it }
         updateState { copy(isSubmitting = true, submitError = null) }
         viewModelScope.launch {
@@ -283,7 +192,6 @@ class CheckoutViewModel @Inject constructor(
         }
     }
 
-    /** Общий финал обоих способов оплаты: событие `ordered` не зависит от того, чем платили. */
     private fun onOrderCreated(orderId: String) {
         analytics.track(AnalyticsEvents.ordered(placeId, AnalyticsVertical.Food))
         emitEffect(CheckoutEffect.OrderCreated(orderId))

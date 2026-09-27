@@ -24,19 +24,20 @@ import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.role.data.RoleProfile
 import uz.mahalla.feature.role.domain.CustomerForm
-import uz.mahalla.feature.wallet.domain.Wallet
 import uz.mahalla.navigation.FashionArgs
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeFashionCartRepository
 import uz.mahalla.testutil.FakeFashionOrderRepository
 import uz.mahalla.testutil.FakePromotionsRepository
 import uz.mahalla.testutil.FakeRoleRepository
-import uz.mahalla.testutil.FakeWalletRepository
 import uz.mahalla.testutil.MainDispatcherRule
 
 /**
- * Оформление заказа одежды (issue #108): состав одного магазина, форма,
- * баланс и отправка.
+ * Оформление заказа одежды (issue #108): состав одного магазина, форма и
+ * отправка.
+ *
+ * Оплата — только наличные (issue #334, релиз только `CASH`): баланс кошелька
+ * больше не запрашивается при открытии.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FashionCheckoutViewModelTest {
@@ -46,7 +47,6 @@ class FashionCheckoutViewModelTest {
 
     private val cartRepository = FakeFashionCartRepository()
     private val orderRepository = FakeFashionOrderRepository()
-    private val walletRepository = FakeWalletRepository()
     private val roleRepository = FakeRoleRepository()
     private val promotionsRepository = FakePromotionsRepository()
 
@@ -77,7 +77,6 @@ class FashionCheckoutViewModelTest {
         val viewModel = FashionCheckoutViewModel(
             cartRepository = cartRepository,
             orderRepository = orderRepository,
-            walletRepository = walletRepository,
             roleRepository = FakeRoleRepository(
                 RoleProfile(customer = CustomerForm(address = "Amir Temur 1")),
             ),
@@ -106,24 +105,25 @@ class FashionCheckoutViewModelTest {
     }
 
     @Test
-    fun `a finished form goes to the repository with the store and the lines`() = runTest {
-        cartRepository.cartResult = ApiResult.Success(
-            FashionCart(listOf(item("v-1", quantity = 2))),
-        )
-        val viewModel = viewModel()
-        viewModel.onEvent(FashionCheckoutEvent.AddressChanged("Amir Temur 1"))
+    fun `a finished form goes to the repository with the store, the lines and cash payment`() =
+        runTest {
+            cartRepository.cartResult = ApiResult.Success(
+                FashionCart(listOf(item("v-1", quantity = 2))),
+            )
+            val viewModel = viewModel()
+            viewModel.onEvent(FashionCheckoutEvent.AddressChanged("Amir Temur 1"))
 
-        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
+            viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
 
-        val created = orderRepository.created.single()
-        assertEquals(STORE, created.storeId)
-        assertEquals(listOf("v-1" to 2), created.items)
-        assertEquals(DeliveryMethod.Delivery, created.form.method)
-        assertEquals(PaymentMethod.Wallet, created.form.payment)
-        // Экран не уходит сам: молчаливый переход читается как «ничего не
-        // произошло» (issue #49).
-        assertTrue(viewModel.state.value.orderCreated)
-    }
+            val created = orderRepository.created.single()
+            assertEquals(STORE, created.storeId)
+            assertEquals(listOf("v-1" to 2), created.items)
+            assertEquals(DeliveryMethod.Delivery, created.form.method)
+            assertEquals(PaymentMethod.Cash, created.form.payment)
+            // Экран не уходит сам: молчаливый переход читается как «ничего не
+            // произошло» (issue #49).
+            assertTrue(viewModel.state.value.orderCreated)
+        }
 
     @Test
     fun `a second tap does not create a second order`() = runTest {
@@ -153,38 +153,6 @@ class FashionCheckoutViewModelTest {
     }
 
     @Test
-    fun `wallet without enough money blocks the order and says how much is missing`() = runTest {
-        cartRepository.cartResult = ApiResult.Success(
-            FashionCart(listOf(item("v-1", quantity = 2))),
-        )
-        walletRepository.wallet = ApiResult.Success(
-            Wallet(balanceSum = 100_000, availableSum = 100_000),
-        )
-        val viewModel = viewModel()
-        viewModel.onEvent(FashionCheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
-
-        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
-
-        assertEquals(200_000L, viewModel.state.value.insufficientFunds?.missingSum)
-        assertTrue(orderRepository.created.isEmpty())
-    }
-
-    @Test
-    fun `an unknown balance does not block the order`() = runTest {
-        // Отказать в оформлении из-за неотвеченного запроса хуже, чем
-        // получить отказ на сервере, который всё равно проверит деньги.
-        cartRepository.cartResult = ApiResult.Success(FashionCart(listOf(item("v-1"))))
-        walletRepository.wallet = ApiResult.Failure(ApiError.Timeout)
-        val viewModel = viewModel()
-        viewModel.onEvent(FashionCheckoutEvent.MethodSelected(DeliveryMethod.Pickup))
-
-        viewModel.onEvent(FashionCheckoutEvent.SubmitClicked)
-
-        assertFalse(viewModel.state.value.balanceKnown)
-        assertEquals(1, orderRepository.created.size)
-    }
-
-    @Test
     fun `an empty store cart offers nothing to submit`() = runTest {
         // Корзину могли забрать в заказ на другом устройстве, пока человек
         // шёл сюда.
@@ -206,7 +174,6 @@ class FashionCheckoutViewModelTest {
         val viewModel = FashionCheckoutViewModel(
             cartRepository = cartRepository,
             orderRepository = orderRepository,
-            walletRepository = walletRepository,
             roleRepository = roleRepository,
             promotionsRepository = promotionsRepository,
             analytics = analytics,
@@ -344,7 +311,6 @@ class FashionCheckoutViewModelTest {
     private fun viewModel() = FashionCheckoutViewModel(
         cartRepository = cartRepository,
         orderRepository = orderRepository,
-        walletRepository = walletRepository,
         roleRepository = roleRepository,
         promotionsRepository = promotionsRepository,
         analytics = analytics,
