@@ -218,13 +218,13 @@ class BusinessDashboardViewModelTest {
     @Test
     fun `a failed pause keeps the flag and shows the server message`() = runTest {
         val repository = FakeBusinessRepository()
-        repository.pauseResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.pauseResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessDashboardEvent.PauseToggled)
 
         val state = viewModel.state.value
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertTrue((state.access as ScreenState.Content).data.isAvailable)
     }
 

@@ -285,6 +285,7 @@
     <string name="error_timeout">Server javob bermadi</string>
     <string name="error_unauthorized">Sessiya tugadi, qaytadan kiring</string>
     <string name="error_forbidden">Bu amal uchun ruxsat yo\'q</string>
+    <string name="error_geo_required">Bu amal uchun joylashuvga ruxsat bering</string>
     <string name="error_not_found">Ma\'lumot topilmadi</string>
     <string name="error_server">Serverda xatolik yuz berdi</string>
     <string name="error_unknown">Nimadir xato ketdi</string>

@@ -314,13 +314,13 @@ class PlaceDetailsViewModelTest {
     fun `saving works the same way and rolls back too`() = runTest {
         repository.details = ApiResult.Success(details())
         social.status = ApiResult.Success(PlaceSocialStatus(saved = false, likes = 3))
-        social.saveResult = ApiResult.Failure(ApiError.Forbidden)
+        social.saveResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel()
 
         viewModel.onEvent(PlaceDetailsEvent.SaveClicked)
 
         assertFalse(viewModel.state.value.social!!.saved)
-        assertEquals(ApiError.Forbidden, viewModel.state.value.socialFailure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.socialFailure?.error)
     }
 
     @Test
@@ -667,13 +667,13 @@ class PlaceDetailsViewModelTest {
     fun `a failed deletion is explained by the words of the server`() = runTest {
         val mine = review("r-1", authorId = USER_ID)
         repository.details = ApiResult.Success(details(reviews = listOf(mine)))
-        repository.deleteReviewResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.deleteReviewResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel()
 
         viewModel.onEvent(PlaceDetailsEvent.ReviewDeleteRequested(mine))
         viewModel.onEvent(PlaceDetailsEvent.ReviewDeleteConfirmed)
 
-        assertEquals(ApiError.Forbidden, viewModel.state.value.reviewDeleteFailure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.reviewDeleteFailure?.error)
         assertNull("диалог закрыт", viewModel.state.value.reviewPendingDelete)
         assertFalse(viewModel.state.value.deletingReview)
     }
@@ -750,7 +750,7 @@ class PlaceDetailsViewModelTest {
     fun `a failed deletion puts the photo back and explains why`() = runTest {
         val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
         repository.details = ApiResult.Success(details(photos = listOf(photo)))
-        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel()
 
         viewModel.onEvent(PlaceDetailsEvent.GalleryPhotoDeleteRequested(photo))
@@ -758,7 +758,7 @@ class PlaceDetailsViewModelTest {
 
         // Откат: файл остался на сервере — карточка должна показывать то же самое.
         assertEquals(listOf(photo), viewModel.state.value.data!!.photos)
-        assertEquals(ApiError.Forbidden, viewModel.state.value.galleryDeleteFailure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.galleryDeleteFailure?.error)
         assertNull("диалог закрыт", viewModel.state.value.galleryDeletePending)
     }
 
@@ -769,7 +769,7 @@ class PlaceDetailsViewModelTest {
         // Грубый откат «на снимок до удаления» стёр бы эту догрузку.
         val photo = MediaFile(id = "m-1", url = "mine.jpg", ownerId = USER_ID)
         repository.details = ApiResult.Success(details(photos = listOf(photo)))
-        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.deleteMediaResult = ApiResult.Failure(ApiError.Forbidden())
         val gate = CompletableDeferred<Unit>()
         repository.deleteMediaGate = gate
         val viewModel = viewModel()
@@ -898,7 +898,7 @@ class PlaceDetailsViewModelTest {
     @Test
     fun `a review becomes an event only after the server accepted it`() = runTest {
         repository.details = ApiResult.Success(details())
-        repository.addReviewResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.addReviewResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel()
 
         viewModel.onEvent(PlaceDetailsEvent.AddReviewClicked)

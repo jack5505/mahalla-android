@@ -486,6 +486,63 @@ class CatalogRepositoryTest {
     }
 
     @Test
+    fun `a forbidden without a code is treated as gone, same as 404`() = runTest {
+        // Историческое поведение: 403 без кода — это «вам конкретно это место
+        // не видно», и его копию из Room показывать так же нечестно, как и
+        // удалённое место (issue #344).
+        dao.seed(listOf(entity("p-1")))
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(ApiError.Forbidden(), (result as ApiResult.Failure).error)
+        assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
+    }
+
+    @Test
+    fun `a geo-gated forbidden keeps its cached copy, unlike a plain 403`() = runTest {
+        // Без гео-заголовков 403 приходит на любой запрос, а не из-за этого
+        // конкретного места (issue #344): удалять его из кэша значило бы
+        // стереть всю офлайн-выдачу при первой же попытке без гео.
+        dao.seed(listOf(entity("p-1", name = "Osh markazi")))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody(
+                    """{"success":false,"error":{"code":"GEO_PERMISSION_REQUIRED",
+                       "message":"Joylashuv ruxsatini yoqing"}}""",
+                ),
+        )
+
+        val result = repository().placeDetails("p-1")
+
+        assertTrue((result as ApiResult.Success).data.fromCache)
+        assertTrue("запись остаётся в офлайн-выдаче", dao.byId("p-1") != null)
+    }
+
+    @Test
+    fun `a forbidden with an unrelated code is still treated as gone`() = runTest {
+        // Тот же код бэкенд вешает и на «это не ваше заведение»
+        // (см. PharmacyRepositoryTest) — контракт не даёт признака, по
+        // которому это место можно было бы отличить от гейта или блокировки,
+        // так что за пределы подтверждённого гео (issue #344) список
+        // исключений не расширяется.
+        dao.seed(listOf(entity("p-1")))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"PLACE_FORBIDDEN"}}"""),
+        )
+
+        val result = repository().placeDetails("p-1")
+
+        assertEquals(ApiError.Forbidden("PLACE_FORBIDDEN"), (result as ApiResult.Failure).error)
+        assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
+    }
+
+    @Test
     fun `details without a cached copy report the error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(404))
 
@@ -529,6 +586,22 @@ class CatalogRepositoryTest {
 
         assertEquals(ApiError.NotFound, (result as ApiResult.Failure).error)
         assertNull("запись должна уйти и из офлайн-выдачи", dao.byId("p-1"))
+    }
+
+    @Test
+    fun `a geo-gated card keeps its cached copy too`() = runTest {
+        dao.seed(listOf(entity("p-1", name = "Osh markazi")))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("Content-Type", NetworkFactory.CONTENT_TYPE)
+                .setBody("""{"success":false,"error":{"code":"GEO_INVALID_COORDINATES"}}"""),
+        )
+
+        val result = repository().placeCard("p-1")
+
+        assertEquals("Osh markazi", (result as ApiResult.Success).data.name)
+        assertTrue("запись остаётся в офлайн-выдаче", dao.byId("p-1") != null)
     }
 
     // --- Отзывы: оставить и удалить (issue #76) ---
@@ -617,7 +690,7 @@ class CatalogRepositoryTest {
 
         val result = repository().deleteReview("r-1")
 
-        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+        assertEquals(ApiError.Forbidden(), (result as ApiResult.Failure).error)
     }
 
     @Test

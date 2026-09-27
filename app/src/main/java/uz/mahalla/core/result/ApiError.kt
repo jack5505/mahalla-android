@@ -14,8 +14,25 @@ sealed interface ApiError {
     /** 401 — токен невалиден и refresh не помог. */
     data object Unauthorized : ApiError
 
-    /** 403 — доступ запрещён (нет роли/подписки). */
-    data object Forbidden : ApiError
+    /**
+     * 403 — доступ запрещён. [code] — машинный код бэкенда, если он был в
+     * теле ответа (issue #344): `GEO_PERMISSION_REQUIRED`/
+     * `GEO_INVALID_COORDINATES` — гео обязательно для запроса, это
+     * единственные коды с отдельной обработкой ([isGeo]). Бэкенд вешает код и
+     * на другие причины отказа — «не ваше заведение» (`PLACE_FORBIDDEN`),
+     * блокировку кошелька (`WALLET_BLOCKED`) — их здесь по отдельности не
+     * разбираем: подробности и почему — `docs/API-CONTRACT.md`. `null` —
+     * сервер не объяснил ничего, это и есть «нет прав на это действие».
+     */
+    data class Forbidden(val code: String? = null) : ApiError {
+        /** Гео обязательно для запроса — включить и попробовать снова. */
+        val isGeo: Boolean get() = code == GEO_PERMISSION_REQUIRED || code == GEO_INVALID_COORDINATES
+
+        companion object {
+            const val GEO_PERMISSION_REQUIRED = "GEO_PERMISSION_REQUIRED"
+            const val GEO_INVALID_COORDINATES = "GEO_INVALID_COORDINATES"
+        }
+    }
 
     /** 404 — ресурс не найден. */
     data object NotFound : ApiError
@@ -37,11 +54,12 @@ sealed interface ApiError {
     data class Unexpected(val cause: Throwable?) : ApiError
 
     companion object {
-        fun fromHttpCode(code: Int, message: String? = null): ApiError = when (code) {
-            401 -> Unauthorized
-            403 -> Forbidden
-            404 -> NotFound
-            else -> Http(code, message)
-        }
+        fun fromHttpCode(code: Int, serverCode: String? = null, message: String? = null): ApiError =
+            when (code) {
+                401 -> Unauthorized
+                403 -> Forbidden(serverCode)
+                404 -> NotFound
+                else -> Http(code, message)
+            }
     }
 }

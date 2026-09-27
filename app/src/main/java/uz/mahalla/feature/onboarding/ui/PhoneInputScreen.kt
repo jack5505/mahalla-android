@@ -147,7 +147,7 @@ private fun PhoneInputScreenPreview() {
                 // Тот самый случай из issue #34: бэкенд объяснил причину, а
                 // экран показывал «нет прав на это действие».
                 apiFailure = ApiFailure(
-                    error = ApiError.Forbidden,
+                    error = ApiError.Forbidden("GEO_PERMISSION_REQUIRED"),
                     server = ServerError(
                         httpCode = 403,
                         code = "GEO_PERMISSION_REQUIRED",

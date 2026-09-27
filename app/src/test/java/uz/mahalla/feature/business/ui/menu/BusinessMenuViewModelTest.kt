@@ -75,13 +75,13 @@ class BusinessMenuViewModelTest {
     fun `a failed toggle keeps the flag and shows the server message`() = runTest {
         val repository = FakeBusinessRepository()
         repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
-        repository.toggleStopListResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.toggleStopListResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessMenuEvent.StopListToggled("i-1"))
 
         val state = viewModel.state.value
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertTrue((state.menu as ScreenState.Content).data.item("i-1")!!.isAvailable)
     }
 
@@ -188,7 +188,7 @@ class BusinessMenuViewModelTest {
     fun `a refusal keeps the form open with the server message`() = runTest {
         val repository = FakeBusinessRepository()
         repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
-        repository.createItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.createItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
         viewModel.onEvent(BusinessMenuEvent.AddItemClicked)
         viewModel.onEvent(BusinessMenuEvent.NameChanged("Osh"))
@@ -198,7 +198,7 @@ class BusinessMenuViewModelTest {
 
         val state = viewModel.state.value
         assertTrue(state.isFormVisible)
-        assertEquals(ApiError.Forbidden, state.formFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.formFailure?.error)
         assertFalse(state.isSaving)
     }
 
@@ -288,7 +288,7 @@ class BusinessMenuViewModelTest {
     fun `a refused edit keeps the form open with the server message`() = runTest {
         val repository = FakeBusinessRepository()
         repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
-        repository.updateItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.updateItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
         viewModel.onEvent(BusinessMenuEvent.EditItemClicked("i-1"))
 
@@ -296,7 +296,7 @@ class BusinessMenuViewModelTest {
 
         val state = viewModel.state.value
         assertTrue(state.isFormVisible)
-        assertEquals(ApiError.Forbidden, state.formFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.formFailure?.error)
         assertFalse(state.isSaving)
     }
 
@@ -351,14 +351,14 @@ class BusinessMenuViewModelTest {
     fun `a forbidden delete shows the server message and keeps the item`() = runTest {
         val repository = FakeBusinessRepository()
         repository.menuResult = ApiResult.Success(menu(item("i-1", available = true)))
-        repository.deleteItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.deleteItemResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
         viewModel.onEvent(BusinessMenuEvent.DeleteClicked("i-1"))
 
         viewModel.onEvent(BusinessMenuEvent.DeleteConfirmed)
 
         val state = viewModel.state.value
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertEquals(null, state.deletingItemId)
         assertTrue((state.menu as ScreenState.Content).data.item("i-1") != null)
     }

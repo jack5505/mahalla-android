@@ -761,7 +761,7 @@ class NetworkStackTest {
 
         val result = apiCall { catalogApi().place("p-1") } as ApiResult.Failure
 
-        assertEquals(ApiError.Forbidden, result.error)
+        assertEquals(ApiError.Forbidden("GEO_PERMISSION_REQUIRED"), result.error)
         val payload = result.failure.server
         assertEquals("Joylashuv ruxsatini yoqing", payload?.message)
         assertEquals("GEO_PERMISSION_REQUIRED", payload?.code)

@@ -267,7 +267,7 @@ class MediaRepositoryTest {
 
         val result = repository().deleteMedia("m-1")
 
-        assertEquals(ApiError.Forbidden, (result as ApiResult.Failure).error)
+        assertEquals(ApiError.Forbidden(), (result as ApiResult.Failure).error)
     }
 
     /**

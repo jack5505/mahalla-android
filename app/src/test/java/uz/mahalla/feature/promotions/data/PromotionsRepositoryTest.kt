@@ -255,7 +255,7 @@ class PromotionsRepositoryTest {
 
         val failure = (repository().placePromotions("p-1") as ApiResult.Failure).failure
 
-        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals(ApiError.Forbidden("GEO_PERMISSION_REQUIRED"), failure.error)
         assertEquals("Joylashuv ruxsatini yoqing", failure.serverMessage)
     }
 

@@ -292,7 +292,7 @@ class PharmacyRepositoryTest {
 
         val failure = (repository().products(PLACE) as ApiResult.Failure).failure
 
-        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals(ApiError.Forbidden("GEO_PERMISSION_REQUIRED"), failure.error)
         assertEquals("Joylashuv ruxsatini yoqing", failure.serverMessage)
     }
 
@@ -508,7 +508,7 @@ class PharmacyRepositoryTest {
 
         val failure = (repository().deleteProduct(PLACE, "p-1") as ApiResult.Failure).failure
 
-        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals(ApiError.Forbidden("FORBIDDEN"), failure.error)
         assertEquals("Bu joyning egasi emassiz", failure.serverMessage)
     }
 

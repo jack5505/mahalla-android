@@ -188,14 +188,14 @@ class MyPlacesViewModelTest {
         repository.defaultPage = page(
             listOf(place("p-1", PlaceModerationStatus.Active).copy(isAvailable = true)),
         )
-        repository.toggleResult = ApiResult.Failure(failure(ApiError.Forbidden))
+        repository.toggleResult = ApiResult.Failure(failure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(MyPlacesEvent.AvailabilityToggled("p-1"))
 
         val state = viewModel.state.value
         assertTrue((state.places as ScreenState.Content).data.single().isAvailable)
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertNull(state.pendingPlaceId)
     }
 
@@ -414,7 +414,7 @@ class MyPlacesViewModelTest {
         val repository = FakeProviderRepository()
         repository.defaultPage = page(listOf(place("p-1")))
         val promotions = FakePromotionsRepository()
-        promotions.createResult = ApiResult.Failure(failure(ApiError.Forbidden))
+        promotions.createResult = ApiResult.Failure(failure(ApiError.Forbidden()))
         val viewModel = viewModel(repository, promotions)
         viewModel.onEvent(MyPlacesEvent.AddPromotionClicked("p-1"))
         viewModel.onEvent(MyPlacesEvent.PromotionTitleChanged("Aksiya"))
@@ -422,7 +422,7 @@ class MyPlacesViewModelTest {
 
         viewModel.onEvent(MyPlacesEvent.PromotionSubmitted)
 
-        assertEquals(ApiError.Forbidden, viewModel.state.value.promotionForm?.failure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.promotionForm?.failure?.error)
     }
 
     @Test

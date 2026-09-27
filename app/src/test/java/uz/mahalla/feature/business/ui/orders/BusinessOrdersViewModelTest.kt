@@ -159,13 +159,13 @@ class BusinessOrdersViewModelTest {
     fun `a refusal keeps the list and shows the server message`() = runTest {
         val repository = FakeBusinessRepository()
         repository.defaultOrderPage = page(listOf(order("o-1", OrderStatus.Created)))
-        repository.updateOrderResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden))
+        repository.updateOrderResult = ApiResult.Failure(ApiFailure(ApiError.Forbidden()))
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(BusinessOrdersEvent.StatusSelected("o-1", OrderStatus.Confirmed))
 
         val state = viewModel.state.value
-        assertEquals(ApiError.Forbidden, state.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), state.actionFailure?.error)
         assertEquals(
             OrderStatus.Created,
             (state.orders as ScreenState.Content).data.single().status,

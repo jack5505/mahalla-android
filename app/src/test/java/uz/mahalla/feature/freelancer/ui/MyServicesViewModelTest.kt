@@ -207,7 +207,7 @@ class MyServicesViewModelTest {
     fun `rejected toggle keeps the value and shows the failure`() =
         runTest(mainDispatcherRule.dispatcher) {
             repository.myProfileResult = ApiResult.Success(freelancer(available = true))
-            repository.toggleResult = ApiResult.Failure(ApiError.Forbidden)
+            repository.toggleResult = ApiResult.Failure(ApiError.Forbidden())
 
             val viewModel = viewModel()
             runCurrent()
@@ -216,7 +216,7 @@ class MyServicesViewModelTest {
 
             val state = viewModel.state.value
             assertTrue(state.freelancer?.isAvailable ?: false)
-            assertEquals(ApiError.Forbidden, state.availabilityFailure?.error)
+            assertEquals(ApiError.Forbidden(), state.availabilityFailure?.error)
         }
 
     /** Выставленная услуга закрывает форму, а список перечитывается. */

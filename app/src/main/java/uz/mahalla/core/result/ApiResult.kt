@@ -20,7 +20,7 @@ sealed interface ApiResult<out T> {
      *
      * **Сравнивать по значению можно только [error], а не `Failure` целиком.**
      * `equals` учитывает и [ApiFailure.server], а тело ответа парсер заполняет
-     * всегда: `assertEquals(ApiResult.Failure(ApiError.Forbidden), result)`
+     * всегда: `assertEquals(ApiResult.Failure(ApiError.Forbidden()), result)`
      * ложно для любого настоящего HTTP-отказа, потому что справа приедет ещё и
      * [ServerError]. В логике по той же причине ветвиться нужно по
      * `result.error` (`when`, `==`), а не по варианту `Failure`.
@@ -73,11 +73,14 @@ suspend fun <T> apiCall(block: suspend () -> T): ApiResult<T> =
         )
     } catch (http: HttpException) {
         // Тело ответа разбирается здесь, потому что дальше его уже никто не
-        // увидит: HttpException до UI не доезжает (issue #34).
+        // увидит: HttpException до UI не доезжает (issue #34). Код бэкенда
+        // достаём из уже разобранного тела — он же уходит в ApiError.Forbidden
+        // (issue #344), а не разбирается заново.
+        val server = ServerErrorParser.parse(http)
         ApiResult.Failure(
             ApiFailure(
-                error = ApiError.fromHttpCode(http.code(), http.message()),
-                server = ServerErrorParser.parse(http),
+                error = ApiError.fromHttpCode(http.code(), server.code, http.message()),
+                server = server,
             ),
         )
     } catch (serialization: SerializationException) {

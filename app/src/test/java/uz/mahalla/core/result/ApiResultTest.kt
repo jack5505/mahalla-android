@@ -37,7 +37,7 @@ class ApiResultTest {
     @Test
     fun `http codes are mapped to domain errors`() = runTest {
         assertEquals(ApiError.Unauthorized, apiCall { throw httpException(401) }.errorOrNull())
-        assertEquals(ApiError.Forbidden, apiCall { throw httpException(403) }.errorOrNull())
+        assertEquals(ApiError.Forbidden(), apiCall { throw httpException(403) }.errorOrNull())
         assertEquals(ApiError.NotFound, apiCall { throw httpException(404) }.errorOrNull())
 
         val serverFailure = apiCall { throw httpException(500) }
@@ -48,7 +48,8 @@ class ApiResultTest {
     @Test
     fun `the body of an http error reaches the caller`() = runTest {
         // Ровно случай из issue #34: классификация говорит «нет доступа», а
-        // причину знает только бэкенд.
+        // причину знает только бэкенд. Код из тела при этом уходит в саму
+        // классификацию (issue #344) — это и разводит GEO_* от прочих 403.
         val body = """
             {"success":false,"error":{"code":"GEO_PERMISSION_REQUIRED",
             "message":"Joylashuv ruxsatini yoqing"}}
@@ -56,7 +57,7 @@ class ApiResultTest {
 
         val failure = apiCall { throw httpException(403, body) } as ApiResult.Failure
 
-        assertEquals(ApiError.Forbidden, failure.error)
+        assertEquals(ApiError.Forbidden("GEO_PERMISSION_REQUIRED"), failure.error)
         assertEquals("GEO_PERMISSION_REQUIRED", failure.failure.server?.code)
         assertEquals("Joylashuv ruxsatini yoqing", failure.failure.serverMessage)
     }
