@@ -389,7 +389,7 @@ releaseDate, posterUrl, trailerUrl, isActive, rating}` — совпадение 
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`.
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`; issue #387 — `search` (форма ответа, 2026-09-27).
 
 | Метод | Путь |
 |---|---|
@@ -417,6 +417,29 @@ GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
 список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
 ограничение длины запроса на сервере — это не подтверждено ручкой, только
 предосторожность.
+
+**`GET search`** — поиск по индексу (issue #387, до этого контракт снят до
+смены ответа бэкенда jack5505/mahalla#204 и разбор списком тихо падал в
+`ApiError.Serialization`, а `CatalogRepository` маскировал это кэшем):
+
+```
+GET /api/v1/search?query=<строка>&category=<enum>   (403 GEO_PERMISSION_REQUIRED без X-Geo-*)
+→ ApiResponse<PageResponse<PlaceDocument>>
+  {content: [{id, name, category, description, city, lat, lng, ratingAvg,
+              isActive, createdAt}], page, size, totalElements, totalPages,
+   first, last}
+```
+
+**Сверено живым ответом** 2026-09-27: `contract/search.sh` снимает три пробы
+в `app/src/test/resources/contract/search/` (пустой `content`, непустой,
+отказ без гео-заголовков), разбирает их `SearchContractTest`. `data` —
+объект страницы, а не голый список: `CatalogApi.search` разбирает его как
+`PageDto<PlaceDocumentDto>`, тем же `PageDto`, что и у `reviews`. Пагинацию
+сервера (`page`/`totalPages`) клиент не использует — `search` и так пока
+отдаёт всё найденное одной страницей. Выключенная в дашборде категория
+(`category=<код>`) отвечает `200` с пустым `content`, как и `places/nearby`.
+`createdAt` в ответе есть, но всегда `null` в снятых пробах и клиенту не
+нужен — не разбирается.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
