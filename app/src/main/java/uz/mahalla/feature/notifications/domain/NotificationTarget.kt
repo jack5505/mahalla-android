@@ -1,5 +1,7 @@
 package uz.mahalla.feature.notifications.domain
 
+import uz.mahalla.BuildConfig
+
 /**
  * Куда ведёт уведомление (issue #81, эпик 11).
  *
@@ -47,7 +49,12 @@ sealed interface NotificationTarget {
          * Пустой `entityId` для целей, которым он нужен, даёт [None].
          */
         fun of(type: NotificationType, entityId: String?): NotificationTarget {
-            if (type == NotificationType.SubscriptionExpires) return Subscription
+            // Скоуп релиза (issue #333): подписки нет в этой сборке — экран
+            // недостижим, значит и цель для него не заводим, иначе push и
+            // список уведомлений вели бы на маршрут, которого нет в графе.
+            if (type == NotificationType.SubscriptionExpires) {
+                return if (BuildConfig.PAYMENTS_ENABLED) Subscription else None
+            }
             val id = entityId?.trim()?.takeIf { it.isNotEmpty() } ?: return None
             return when (type) {
                 NotificationType.OrderPlaced,

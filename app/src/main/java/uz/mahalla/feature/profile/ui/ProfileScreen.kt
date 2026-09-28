@@ -127,7 +127,8 @@ import java.time.Instant
  * таба у вертикали нет.
  * @param onOpenSubscription открыть подписку (issue #103). Строка видна всем:
  * тарифы бэкенд отдаёт и покупателю, и продавцу — набор у них разный, а
- * пробный период и отмена нужны обоим.
+ * пробный период и отмена нужны обоим. `null` — подписки нет в скоупе сборки
+ * (issue #333), строка не рисуется.
  * @param onOpenNotificationSettings открыть настройки уведомлений (эпик 11).
  * Строка в профиле, а не только в центре уведомлений: выключить маркетинг
  * человек идёт в настройки приложения, а не в список пришедших сообщений.
@@ -146,11 +147,11 @@ fun ProfileScreen(
     onOpenMyServices: () -> Unit,
     onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
-    onOpenSubscription: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
+    onOpenSubscription: (() -> Unit)? = null,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -215,11 +216,11 @@ fun ProfileScreen(
         onOpenMyServices = onOpenMyServices,
         onOpenMyFreelancerIncomingOrders = onOpenMyFreelancerIncomingOrders,
         onOpenMyFashionOrders = onOpenMyFashionOrders,
-        onOpenSubscription = onOpenSubscription,
         onOpenNotificationSettings = onOpenNotificationSettings,
         modifier = modifier,
         onOpenSavedPlaces = onOpenSavedPlaces,
         onChangeServer = onChangeServer,
+        onOpenSubscription = onOpenSubscription,
         onPickAvatar = pickAvatar,
     )
 }
@@ -240,11 +241,11 @@ fun ProfileContentScreen(
     onOpenMyServices: () -> Unit,
     onOpenMyFreelancerIncomingOrders: () -> Unit,
     onOpenMyFashionOrders: () -> Unit,
-    onOpenSubscription: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenSavedPlaces: (() -> Unit)? = null,
     onChangeServer: (() -> Unit)? = null,
+    onOpenSubscription: (() -> Unit)? = null,
     onPickAvatar: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxSize()) {
@@ -370,13 +371,15 @@ fun ProfileContentScreen(
             )
 
             // Подписка (issue #103): тарифы, пробный период, отмена и
-            // автопродление. Строка — всем: набор тарифов зависит от роли, но
-            // сама подписка есть у обеих.
-            MahallaListItem(
-                title = stringResource(R.string.subscription_profile_entry),
-                subtitle = stringResource(R.string.subscription_profile_subtitle),
-                onClick = onOpenSubscription,
-            )
+            // автопродление. `null` — подписки нет в скоупе релиза
+            // (issue #333), строки в профиле нет вовсе.
+            if (onOpenSubscription != null) {
+                MahallaListItem(
+                    title = stringResource(R.string.subscription_profile_entry),
+                    subtitle = stringResource(R.string.subscription_profile_subtitle),
+                    onClick = onOpenSubscription,
+                )
+            }
 
             // Уведомления (эпик 11): категории и тихие часы. Тот же экран
             // открывается из центра уведомлений — второго набора настроек не

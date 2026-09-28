@@ -100,7 +100,13 @@
             <!-- Deep links (эпик 1.2, расширены в эпике 11). Хосты перечислены
                  в одном фильтре: у них общие action и категории, а разные
                  фильтры на ту же схему отличались бы только строкой хоста.
-                 Шаблоны и их соответствие маршрутам — в DeepLinks. -->
+                 Шаблоны и их соответствие маршрутам — в DeepLinks.
+
+                 Хоста `subscription` здесь нет: скоуп релиза (issue #333,
+                 BuildConfig.PAYMENTS_ENABLED = false) — маршрута для него нет
+                 в NavHost, а незарегистрированный host система откроет как
+                 «нет приложения», а не пустым экраном. Подписка вернётся —
+                 вернуть строку сюда же. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -109,7 +115,6 @@
                 <data android:host="place" />
                 <data android:host="order" />
                 <data android:host="notifications" />
-                <data android:host="subscription" />
             </intent-filter>
         </activity>
     </application>

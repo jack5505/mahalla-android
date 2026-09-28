@@ -150,6 +150,11 @@ android {
         // экран настроек уведомлений говорит об этом прямо, вместо того чтобы
         // предлагать разрешение, от которого ничего не изменится.
         buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
+        // Скоуп релиза (issue #333, эпик #353): пилот и публичный запуск идут
+        // без кошелька и подписок — заказы только paymentMethod=CASH
+        // (issue #334). Один флаг фильтрует таб, маршруты, строку профиля,
+        // deep link и push-цель, а не разбросанные проверки по коду.
+        buildConfigField("boolean", "PAYMENTS_ENABLED", "false")
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
