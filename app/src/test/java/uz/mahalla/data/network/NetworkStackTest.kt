@@ -5,12 +5,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -45,7 +48,10 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Сетевой стек целиком (эпик 1.3): успех, Bearer, 401 + refresh, провалившийся
@@ -190,6 +196,84 @@ class NetworkStackTest {
         assertEquals("сессия перезаписана один раз", 2, sessionStore.saveCount)
         assertEquals("сессия жива — на вход выгонять некого", 0, expiryEvents.size)
     }
+
+    @Test
+    fun `N concurrent 401s produce exactly one auth refresh`() {
+        // Несколько экранов с протухшим токеном на холодном старте бьют в
+        // сеть одновременно (issue #395). Диспетчер сервера решает по
+        // содержимому запроса, а не по очереди enqueue: реальные потоки не
+        // гарантируют, в каком порядке запросы доедут до сервера, а второй
+        // `auth/refresh` с уже погашенным refresh-токеном стёр бы живую
+        // сессию.
+        runBlocking { sessionStore.save(Session("stale", "refresh-1")) }
+        val requestCount = 5
+        val refreshCalls = AtomicInteger(0)
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path == "/auth/refresh") {
+                    refreshCalls.incrementAndGet()
+                    jsonResponse(REFRESHED_TOKENS_BODY)
+                } else if (request.getHeader(AuthInterceptor.HEADER_AUTHORIZATION) == "Bearer fresh") {
+                    jsonResponse(PLACE_BODY)
+                } else {
+                    MockResponse().setResponseCode(401)
+                }
+        }
+
+        val api = catalogApi()
+        val saveCountBeforeBurst = sessionStore.saveCount
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(requestCount)
+        val results = CopyOnWriteArrayList<ApiResult<*>>()
+        val pool = Executors.newFixedThreadPool(requestCount)
+        try {
+            repeat(requestCount) {
+                pool.execute {
+                    start.await()
+                    results += runBlocking { apiCall { api.place("p-1") } }
+                    done.countDown()
+                }
+            }
+            start.countDown()
+            assertTrue("запросы зависли", done.await(10, TimeUnit.SECONDS))
+        } finally {
+            pool.shutdownNow()
+        }
+
+        assertEquals(requestCount, results.size)
+        assertTrue("все запросы должны завершиться успехом", results.all { it is ApiResult.Success })
+        assertEquals(
+            "ровно один POST auth/refresh на N параллельных 401",
+            1,
+            refreshCalls.get(),
+        )
+        assertEquals(
+            "сессия перезаписана один раз",
+            1,
+            sessionStore.saveCount - saveCountBeforeBurst,
+        )
+        assertEquals("сессия жива — на вход выгонять некого", 0, expiryEvents.size)
+    }
+
+    @Test
+    fun `a 401 that lost the race to another thread's refresh replays without a new refresh`() =
+        runTest {
+            // Пока один поток ждал ответа сервера на устаревший токен, другой
+            // уже успел обновить сессию: `session.accessToken != staleToken`
+            // должно перехватить это и переиграть запрос с новым токеном, не
+            // трогая `auth/refresh` второй раз (issue #395).
+            sessionStore.save(Session("new-access", "new-refresh"))
+            val auth = authenticator()
+            val staleRequest = staleRequest()
+
+            val retry = auth.authenticate(route = null, response = unauthorized(staleRequest))
+
+            assertEquals(
+                "Bearer new-access",
+                retry?.header(AuthInterceptor.HEADER_AUTHORIZATION),
+            )
+            assertEquals("без обращения к auth/refresh", 0, server.requestCount)
+        }
 
     @Test
     fun `failed refresh clears the session and reports unauthorized`() = runTest {
