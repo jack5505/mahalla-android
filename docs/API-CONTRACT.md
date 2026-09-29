@@ -408,7 +408,7 @@ releaseDate, posterUrl, trailerUrl, isActive, rating}` — совпадение 
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`; issue #387 — `search` (форма ответа, 2026-09-27).
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`; issue #387 — `search` (форма ответа, 2026-09-27); issue #398 — `search` (пагинация, 2026-09-29).
 
 | Метод | Путь |
 |---|---|
@@ -442,20 +442,32 @@ GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
 `ApiError.Serialization`, а `CatalogRepository` маскировал это кэшем):
 
 ```
-GET /api/v1/search?query=<строка>&category=<enum>   (403 GEO_PERMISSION_REQUIRED без X-Geo-*)
+GET /api/v1/search?query=<строка>&category=<enum>&page=<int>&size=<int>
+                                                      (403 GEO_PERMISSION_REQUIRED без X-Geo-*)
 → ApiResponse<PageResponse<PlaceDocument>>
   {content: [{id, name, category, description, city, lat, lng, ratingAvg,
               isActive, createdAt}], page, size, totalElements, totalPages,
    first, last}
 ```
 
-**Сверено живым ответом** 2026-09-27: `contract/search.sh` снимает три пробы
-в `app/src/test/resources/contract/search/` (пустой `content`, непустой,
-отказ без гео-заголовков), разбирает их `SearchContractTest`. `data` —
-объект страницы, а не голый список: `CatalogApi.search` разбирает его как
-`PageDto<PlaceDocumentDto>`, тем же `PageDto`, что и у `reviews`. Пагинацию
-сервера (`page`/`totalPages`) клиент не использует — `search` и так пока
-отдаёт всё найденное одной страницей. Выключенная в дашборде категория
+**Сверено живым ответом** 2026-09-27, пагинация — 2026-09-29 (issue #398):
+`contract/search.sh` снимает пять проб в `app/src/test/resources/contract/search/`
+(пустой `content`, непустой, отказ без гео-заголовков, страница 0 и страница 1
+одного запроса), разбирает их `SearchContractTest`. `data` — объект страницы,
+а не голый список: `CatalogApi.search` разбирает его как
+`PageDto<PlaceDocumentDto>`, тем же `PageDto`, что и у `reviews`.
+
+`page`/`size` — обычный `Pageable` Spring, **0-based**, подтверждено живым
+запросом (`page=0&size=1` и `page=1&size=1` на запросе с двумя совпадениями):
+`size` меняет длину `content` и попадает в ответ тем же значением, `page=1`
+возвращает другую запись без пересечения со страницей 0, `last`/`totalPages`/
+`first` отражают реальное состояние выдачи. `CatalogRepository.places()`
+шлёт `page` в `search` и считает `PlacePage.hasMore` как `!last`; догрузка
+следующих страниц идёт через тот же путь, что и раньше у `SearchViewModel`
+(`loadMore`, номер страницы копится на клиенте). На сидовых данных стенда
+(9 заведений) ни одно слово не даёт больше 20 совпадений, поэтому обрезание
+на 20-й записи руками не воспроизвести — пагинация подтверждена на `size=1`,
+где две записи дают две настоящих страницы. Выключенная в дашборде категория
 (`category=<код>`) отвечает `200` с пустым `content`, как и `places/nearby`.
 `createdAt` в ответе есть, но всегда `null` в снятых пробах и клиенту не
 нужен — не разбирается.
