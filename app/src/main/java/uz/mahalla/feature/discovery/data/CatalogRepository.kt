@@ -86,9 +86,12 @@ interface CatalogRepository {
  * поиск по индексу (`search`). Своего `GET places` у бэкенда нет вовсе, и
  * ровно поэтому главная отвечала 403.
  *
- * Пагинации у обоих нет: сервер отдаёт всё найденное одним списком, поэтому
- * [PlacePage.hasMore] всегда `false`, а страницы старше нулевой не
- * запрашиваются.
+ * `nearby` не пагинирует: сервер отдаёт всё, что попало в радиус, одним
+ * списком, поэтому для него [PlacePage.hasMore] всегда `false`, а страницы
+ * старше нулевой не запрашиваются. `search`, наоборот, пагинирует по-честному
+ * (issue #398, снято живым ответом `contract/search.sh`): [PlacePage.hasMore]
+ * — это `!last` ответа, а догрузка следующих страниц уходит с тем же `page`,
+ * что запросил вызывающий (`SearchViewModel.loadMore`).
  *
  * Правила фоллбэка:
  *
@@ -123,39 +126,43 @@ class DefaultCatalogRepository @Inject constructor(
 ) : CatalogRepository {
 
     override suspend fun places(filters: DiscoveryFilters, page: Int): ApiResult<PlacePage> {
-        // Сервер не пагинирует: догружать нечего, а сходить за той же первой
-        // страницей значило бы дописать её в список второй раз.
-        if (page > 0) return ApiResult.Success(PlacePage(emptyList(), page, hasMore = false))
-
         val location = location()
         val query = filters.query.trim()
+
+        // `nearby` не пагинирует: сходить за той же первой страницей значило бы
+        // дописать её в список второй раз.
+        if (query.isEmpty() && page > 0) {
+            return ApiResult.Success(PlacePage(emptyList(), page, hasMore = false))
+        }
+
         val response = apiCall {
             if (query.isEmpty()) {
-                api.nearby(
+                val items = api.nearby(
                     latitude = location.latitude,
                     longitude = location.longitude,
                     radiusMeters = filters.maxDistanceMeters ?: CatalogApi.DEFAULT_RADIUS_METERS,
                     category = filters.apiCategory(),
                 ).payload().map { it.toDomain(location) }
+                RemotePage(items, hasMore = false)
             } else {
-                api.search(query = query, category = filters.apiCategory())
+                val remote = api.search(query = query, category = filters.apiCategory(), page = page)
                     .payload()
-                    .content
-                    .map { it.toDomain(location) }
+                RemotePage(remote.content.map { it.toDomain(location) }, hasMore = !remote.last)
             }
         }
 
         return when (response) {
             is ApiResult.Success -> {
-                if (filters.isUnfiltered) cache(response.data)
+                val remote = response.data
+                if (filters.isUnfiltered) cache(remote.items)
                 ApiResult.Success(
                     PlacePage(
                         // Порядок задаём сами — он должен совпадать с офлайновым.
                         // А вот фильтровать ответ повторно нельзя: критерии у
                         // сервера шире (см. PlaceFilterEngine.applyRemote).
-                        items = PlaceFilterEngine.applyRemote(response.data, filters),
-                        page = 0,
-                        hasMore = false,
+                        items = PlaceFilterEngine.applyRemote(remote.items, filters),
+                        page = page,
+                        hasMore = remote.hasMore,
                     ),
                 )
             }
@@ -174,6 +181,9 @@ class DefaultCatalogRepository @Inject constructor(
             }
         }
     }
+
+    /** Выдача одной страницы до применения фильтров и кэша — общий разбор `nearby`/`search`. */
+    private data class RemotePage(val items: List<Place>, val hasMore: Boolean)
 
     /**
      * Ответ по области не фильтруется повторно и не сортируется по расстоянию:

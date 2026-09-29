@@ -29,6 +29,14 @@ contract_init "$SAMPLES"
 SEARCH_EMPTY_QUERY="${CONTRACT_SEARCH_EMPTY_QUERY:-ox}"
 SEARCH_HIT_QUERY="${CONTRACT_SEARCH_HIT_QUERY:-Bog}"
 
+# `Club` — единственное слово в сидовых данных, совпадающее ровно с двумя
+# заведениями («PlayZone PS5 Club», «Jakhongir Game Club», issue #398): на
+# стенде их всего девять, и ни одно слово не набирает 21+ совпадений, чтобы
+# проверить обрезание на 20-й записи буквально. `size=1` — единственный
+# способ получить на этих данных настоящую вторую непустую страницу и
+# убедиться, что `page`/`size` работают, а не просто присутствуют в ответе.
+SEARCH_PAGED_QUERY="${CONTRACT_SEARCH_PAGED_QUERY:-Club}"
+
 echo "── стенд: $CONTRACT_BASE_URL"
 
 # 1. Пустая выдача — ровно симптом issue #387: запрос без единого совпадения
@@ -44,5 +52,12 @@ _geo_before="$CONTRACT_GEO_HEADERS"
 CONTRACT_GEO_HEADERS=0
 probe search_without_geo 403 GET "search?query=$SEARCH_HIT_QUERY" || true
 CONTRACT_GEO_HEADERS="$_geo_before"
+
+# 4. Пагинация (issue #398): страница 0 из двух, `last=false`, `totalPages=2`.
+probe search_page0 200 GET "search?query=$SEARCH_PAGED_QUERY&page=0&size=1" || true
+
+# 5. Страница 1 — другая запись, `first=false`, `last=true`. Сверка в
+#    SearchContractTest, что `content` двух страниц не пересекается.
+probe search_page1 200 GET "search?query=$SEARCH_PAGED_QUERY&page=1&size=1" || true
 
 contract_summary
