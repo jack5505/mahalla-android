@@ -462,6 +462,31 @@ class PinViewModelTest {
     }
 
     @Test
+    fun `a login session lost in memory restarts instead of blaming the pin`() = runTest(
+        mainDispatcherRule.dispatcher,
+    ) {
+        // Репозиторий не отправил `pin-login` вовсе: номер, под которым шёл
+        // вход, не пережил процесс (issue #403). Отказ клиентский — сервер
+        // ничего не ответил, — и показывать его текстом сервера или списывать
+        // попытку было бы неверно: дело не в PIN.
+        authRepository.pendingServerPin = ServerPinChallenge(ServerPinStep.Enter)
+        authRepository.completeServerPinResult = ApiResult.Failure(ApiError.Unauthorized)
+        val storage = FakePinStorage()
+        val viewModel = viewModel(storage)
+        advanceUntilIdle()
+
+        viewModel.onEvent(PinEvent.PinChanged("654321"))
+        val effect = viewModel.effects.first()
+
+        assertEquals(PinEffect.AuthRestartRequired, effect)
+        val state = viewModel.state.value
+        assertNull("отказ клиентский — текста сервера нет, выдумывать не из чего", state.apiFailure)
+        assertNull("это не неверный PIN — своего текста тоже нет", state.error)
+        assertNull("чужой/несостоявшийся код локальным PIN'ом не становится", storage.storedPin)
+        assertNull("испытание выброшено — восстанавливать нечего", state.serverStep)
+    }
+
+    @Test
     fun `a rejected setup starts over instead of asking to repeat`() = runTest(
         mainDispatcherRule.dispatcher,
     ) {
