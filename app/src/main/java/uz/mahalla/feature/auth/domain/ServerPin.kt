@@ -1,5 +1,8 @@
 package uz.mahalla.feature.auth.domain
 
+import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
+
 /**
  * PIN на стороне бэкенда (issue #51).
  *
@@ -28,6 +31,18 @@ data class ServerPinChallenge(
     val step: ServerPinStep,
     val sessionId: String? = null,
 )
+
+/**
+ * `completeServerPin` отказал, не дойдя до сети (issue #403): либо испытания
+ * не было вовсе (`pendingServerPin == null`), либо оно было, но номер, под
+ * которым шёл вход, не пережил процесс (`pendingPhone == null`) — отправлять
+ * `pin-login` без него бессмысленно, бэкенд ответит `VALIDATION_ERROR` любому
+ * PIN. Оба случая client-only: `error` выставлен конструктором без тела
+ * ответа, и это единственная комбинация, где `Unauthorized` приходит с
+ * пустым [ApiFailure.server] — настоящий 401 от сервера его парсер заполняет
+ * всегда.
+ */
+fun ApiFailure.isMissingLoginChallenge(): Boolean = error == ApiError.Unauthorized && server == null
 
 /** Итог проверки SMS-кода. */
 sealed interface VerificationResult {

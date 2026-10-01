@@ -424,7 +424,8 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `pin login sends the device and finishes the login`() = runTest {
+    fun `pin login sends the phone, the device and finishes the login`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
         server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
         server.enqueue(
             envelope(
@@ -434,6 +435,7 @@ class AuthRepositoryTest {
         )
 
         val repository = repository()
+        repository.requestCode("+998901234567")
         repository.verifyCode("otp-1", "123456")
         val result = repository.completeServerPin("654321")
 
@@ -441,15 +443,20 @@ class AuthRepositoryTest {
         assertEquals("a-2", sessionStore.current()?.accessToken)
 
         server.takeRequest()
+        server.takeRequest()
         val request = server.takeRequest()
         assertEquals("/auth/pin-login", request.path)
         val body = request.bodyJson()
+        // Без этого поля бэкенд с 2026-09-07 отвечает 400 VALIDATION_ERROR на
+        // любой PIN, не посмотрев на него (issue #403).
+        assertEquals("+998901234567", body["phone"]?.jsonPrimitive?.content)
         assertEquals("654321", body["pin"]?.jsonPrimitive?.content)
         assertEquals("device-1", body["device"]!!.jsonObject["deviceId"]?.jsonPrimitive?.content)
     }
 
     @Test
     fun `a rejected pin keeps the challenge so the next attempt can be sent`() = runTest {
+        server.enqueue(envelope("""{"otpToken":"otp-1"}"""))
         server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
         server.enqueue(
             MockResponse()
@@ -462,6 +469,7 @@ class AuthRepositoryTest {
         )
 
         val repository = repository()
+        repository.requestCode("+998901234567")
         repository.verifyCode("otp-1", "123456")
         val result = repository.completeServerPin("000000")
 
@@ -474,6 +482,24 @@ class AuthRepositoryTest {
             ServerPinChallenge(ServerPinStep.Enter, sessionId = "s-1"),
             repository.pendingServerPin,
         )
+    }
+
+    @Test
+    fun `pin login is not sent when the login phone did not survive the process`() = runTest {
+        // Тот же `ENTER_PIN`, но без предшествующего `requestCode` — ровно
+        // так выглядел бы `pendingPhone`, не переживший перезапуск процесса
+        // (issue #403). Отправлять `pin-login` без номера бессмысленно: это
+        // гарантированный `VALIDATION_ERROR`, а не вопрос к самому PIN.
+        server.enqueue(envelope("""{"sessionId":"s-1","nextStep":"ENTER_PIN"}"""))
+
+        val repository = repository()
+        repository.verifyCode("otp-1", "123456")
+        val result = repository.completeServerPin("654321")
+
+        assertEquals(ApiError.Unauthorized, (result as ApiResult.Failure).error)
+        // Один запрос — verify-otp; pin-login на сервер не ушёл вовсе.
+        assertEquals(1, server.requestCount)
+        assertNull(repository.pendingServerPin)
     }
 
     @Test
@@ -964,11 +990,12 @@ class AuthRepositoryTest {
 
     // --- Чужой аккаунт на устройстве (issue #86) -------------------------
     //
-    // `pin-login` ищет пользователя по устройству: тело — `{pin, device, lat,
-    // lng}`, ни номера, ни `otpToken`, ни `sessionId`. На телефоне, где раньше
-    // входил другой человек, шаг PIN отдаёт **его** токены — какой бы номер ни
-    // ввели в форму. Проверено на стенде: с незнакомого устройства тот же
-    // запрос отвечает `DEVICE_UNKNOWN`.
+    // `pin-login` ищет пользователя по устройству, а не по `phone` в теле
+    // (issue #403: поле там есть с 2026-09-07, но это лишь дополнительная
+    // защита бэкенда — сессию на устройстве оно не выбирает). На телефоне,
+    // где раньше входил другой человек, шаг PIN отдаёт **его** токены — какой
+    // бы номер ни ввели в форму. Проверено на стенде: с незнакомого
+    // устройства тот же запрос отвечает `DEVICE_UNKNOWN`.
 
     @Test
     fun `pin login answering about another account does not authorize`() = runTest {

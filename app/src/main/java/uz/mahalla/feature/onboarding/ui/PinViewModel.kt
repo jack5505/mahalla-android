@@ -15,6 +15,7 @@ import uz.mahalla.feature.auth.data.AuthRepository
 import uz.mahalla.feature.auth.domain.ServerPin
 import uz.mahalla.feature.auth.domain.ServerPinStep
 import uz.mahalla.feature.auth.domain.isForeignAccount
+import uz.mahalla.feature.auth.domain.isMissingLoginChallenge
 
 /**
  * PIN-код (3.4): установка с повтором либо ввод уже сохранённого.
@@ -174,6 +175,21 @@ class PinViewModel @Inject constructor(
                             pin = pin(),
                             serverStep = null,
                             error = PinError.FOREIGN_ACCOUNT,
+                        )
+                    }
+                    emitEffect(PinEffect.AuthRestartRequired)
+                } else if (result.failure.isMissingLoginChallenge()) {
+                    // Номер, под которым шёл вход, не пережил процесс
+                    // (issue #403) — `pin-login` не отправлен вовсе, а не
+                    // просто отказал. PIN здесь ни при чём, отправлять его
+                    // некуда: вход начинается заново, как и при пустой
+                    // сессии на старте экрана (см. init).
+                    updateState {
+                        copy(
+                            stage = PinStage.Create,
+                            busy = false,
+                            pin = pin(),
+                            serverStep = null,
                         )
                     }
                     emitEffect(PinEffect.AuthRestartRequired)
