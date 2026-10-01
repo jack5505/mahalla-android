@@ -1,6 +1,7 @@
 package uz.mahalla.navigation
 
 import android.content.Intent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -24,6 +25,7 @@ import uz.mahalla.core.ui.components.MahallaBottomNav
 import uz.mahalla.core.ui.components.MahallaSnackbarHost
 import uz.mahalla.core.ui.components.MahallaTone
 import uz.mahalla.core.ui.components.NavItemUi
+import uz.mahalla.core.ui.components.NetworkStatusBanner
 import uz.mahalla.core.ui.components.rememberSnackbarController
 import uz.mahalla.core.ui.snackbar.SnackbarLength
 import uz.mahalla.core.ui.snackbar.SnackbarMessage
@@ -39,6 +41,8 @@ import uz.mahalla.core.ui.snackbar.SnackbarMessage
  * `MainActivity` уже забрала ссылку из `activity.intent`, чтобы автоматический
  * разбор в `NavHost.setGraph` не вытеснил гейт. Разбирается здесь же, как
  * только гейт пройден.
+ * @param isOffline баннер «Нет сети» (issue #350): общий для всего приложения,
+ * поэтому живёт здесь, а не на каждом экране.
  */
 @Composable
 fun MahallaApp(
@@ -51,6 +55,7 @@ fun MahallaApp(
     backendUrlOverrideEnabled: Boolean = false,
     sessionExpired: Flow<Unit> = emptyFlow(),
     pendingDeepLink: Intent? = null,
+    isOffline: Boolean = false,
     navController: NavHostController = rememberNavController(),
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
@@ -101,16 +106,19 @@ fun MahallaApp(
             }
         },
     ) { innerPadding ->
-        MahallaNavHost(
-            navController = navController,
-            startDestination = startDestination,
-            onOnboardingFinished = onOnboardingFinished,
-            modifier = Modifier.padding(innerPadding),
-            onboardingStartDestination = onboardingStartDestination,
-            afterBackendUrl = afterBackendUrl,
-            afterUpdate = afterUpdate,
-            backendUrlOverrideEnabled = backendUrlOverrideEnabled,
-        )
+        Column(modifier = Modifier.padding(innerPadding)) {
+            NetworkStatusBanner(visible = isOffline)
+            MahallaNavHost(
+                navController = navController,
+                startDestination = startDestination,
+                onOnboardingFinished = onOnboardingFinished,
+                modifier = Modifier.weight(1f),
+                onboardingStartDestination = onboardingStartDestination,
+                afterBackendUrl = afterBackendUrl,
+                afterUpdate = afterUpdate,
+                backendUrlOverrideEnabled = backendUrlOverrideEnabled,
+            )
+        }
     }
 }
 

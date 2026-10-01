@@ -96,6 +96,7 @@ class MainActivity : FragmentActivity() {
                 }
             }
             val locked by viewModel.locked.collectAsStateWithLifecycle()
+            val isOffline by viewModel.isOffline.collectAsStateWithLifecycle()
             val controller = rememberNavController()
             // Ссылка держится только пока композиция жива: разобрать deep link
             // мёртвым контроллером нельзя, а `onNewIntent` приходит и после
@@ -126,6 +127,7 @@ class MainActivity : FragmentActivity() {
                     // уводить на вход умеет только корень.
                     sessionExpired = viewModel.sessionExpired,
                     pendingDeepLink = pendingDeepLink,
+                    isOffline = isOffline,
                     // Вход уже пройден, а онбординг — нет: продолжаем с PIN,
                     // иначе пользователь получит второй платный SMS-код.
                     onboardingStartDestination = if (ready.resumeOnboardingAtPin) {

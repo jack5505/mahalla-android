@@ -11,6 +11,7 @@ import retrofit2.Converter
 import retrofit2.Retrofit
 import uz.mahalla.BuildConfig
 import uz.mahalla.data.network.AndroidCleartextPolicy
+import uz.mahalla.data.network.AndroidConnectivityObserver
 import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendReachability
@@ -18,6 +19,8 @@ import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlOverride
 import uz.mahalla.data.network.BaseUrl
 import uz.mahalla.data.network.CleartextPolicy
+import uz.mahalla.data.network.ConnectivityInterceptor
+import uz.mahalla.data.network.ConnectivityObserver
 import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.LanguageHeaderInterceptor
 import uz.mahalla.data.network.NetworkFactory
@@ -81,6 +84,7 @@ object NetworkModule {
         languageHeaderInterceptor: LanguageHeaderInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
+        connectivityInterceptor: ConnectivityInterceptor,
         @BackendUrlOverride overrideEnabled: Boolean,
     ): OkHttpClient = NetworkFactory.refreshClient(
         backendUrlInterceptor = backendUrlInterceptor,
@@ -89,6 +93,7 @@ object NetworkModule {
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
         certificatePin = certificatePin.takeIf { overrideEnabled },
+        connectivityInterceptor = connectivityInterceptor,
     )
 
     @Provides
@@ -115,6 +120,7 @@ object NetworkModule {
         languageHeaderInterceptor: LanguageHeaderInterceptor,
         httpInspector: HttpInspector,
         certificatePin: BackendCertificatePin,
+        connectivityInterceptor: ConnectivityInterceptor,
         @BackendUrlOverride overrideEnabled: Boolean,
     ): OkHttpClient = NetworkFactory.mainClient(
         backendUrlInterceptor = backendUrlInterceptor,
@@ -125,6 +131,7 @@ object NetworkModule {
         inspector = httpInspector.interceptor,
         logBodies = BuildConfig.DEBUG,
         certificatePin = certificatePin.takeIf { overrideEnabled },
+        connectivityInterceptor = connectivityInterceptor,
     )
 
     @Provides
@@ -156,4 +163,8 @@ interface NetworkBindingsModule {
     /** Инспектор трафика (issue #30). В release реализация отвечает «нет». */
     @Binds
     fun bindHttpInspector(impl: ChuckerHttpInspector): HttpInspector
+
+    /** Есть ли сеть прямо сейчас (issue #350): баннер и автоповтор. */
+    @Binds
+    fun bindConnectivityObserver(impl: AndroidConnectivityObserver): ConnectivityObserver
 }

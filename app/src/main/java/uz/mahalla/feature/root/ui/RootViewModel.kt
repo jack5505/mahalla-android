@@ -18,6 +18,7 @@ import uz.mahalla.core.crash.reportSwallowed
 import uz.mahalla.core.result.runCatchingCancellable
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.ConnectivityObserver
 import uz.mahalla.data.network.SessionExpiry
 import uz.mahalla.data.prefs.AppSettings
 import uz.mahalla.data.prefs.SettingsDataStore
@@ -73,6 +74,7 @@ class RootViewModel @Inject constructor(
     private val pushTokenRegistrar: PushTokenRegistrar,
     private val notificationChannels: NotificationChannels,
     sessionExpiry: SessionExpiry,
+    connectivityObserver: ConnectivityObserver,
 ) : ViewModel() {
 
     init {
@@ -100,6 +102,17 @@ class RootViewModel @Inject constructor(
      * с любого экрана.
      */
     val sessionExpired: Flow<Unit> = sessionExpiry.expired
+
+    /**
+     * Баннер «Нет сети» в `MahallaApp` (issue #350).
+     *
+     * `Eagerly`, а не `WhileSubscribed`: баннер обязан появиться, даже если
+     * сеть пропала за то мгновение, пока `MahallaApp` ещё не подписалась
+     * (например, между пересозданием Activity на смене языка/темы).
+     */
+    val isOffline: StateFlow<Boolean> = connectivityObserver.isConnected
+        .map { connected -> !connected }
+        .stateIn(scope = viewModelScope, started = SharingStarted.Eagerly, initialValue = false)
 
     /**
      * Показывать ли экран блокировки поверх всего (issue #102).

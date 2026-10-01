@@ -3677,3 +3677,55 @@ issue («убрать выбор Wallet»): дешевле в коде и не �
 - `AGENTS.md`: счётчик тестов — `2061 в 190 классах` → `3016 в 260 классах`
   (реальный прогон на момент этой задачи; расхождение с 2853/242 из issue
   — чужие PR за прошедшую неделю).
+
+## Этап: офлайн-детекция и баннер «Нет сети» (issue #350)
+
+Офлайна не существовало как состояния: `ConnectivityManager`/`NetworkCallback`
+нигде не использовались, а отказ без сети виден был только через общий
+`ApiError.NoConnection` после полного `CONNECT_TIMEOUT_SECONDS` (15 с) — и то
+только на экранах, что вообще ходят в сеть на старте.
+
+- **`ConnectivityObserver`** (`data/network/ConnectivityObserver.kt`) —
+  интерфейс `Flow<Boolean>` вокруг `ConnectivityManager.NetworkCallback`
+  (`callbackFlow`, `distinctUntilChanged`), в графе — `AndroidConnectivityObserver`
+  (`@Binds` в `NetworkBindingsModule`). Синхронная часть (`isCurrentlyConnected`)
+  вынесена в `internal fun ConnectivityManager.isCurrentlyConnected()` — её же
+  читает интерцептор ниже, с потока OkHttp, где `Flow` не подписать.
+- **`ConnectivityInterceptor`** — быстрый отказ без коннект-таймаута: без сети
+  бросает `IOException` немедленно, `apiCall` превращает его в то же самое
+  `ApiError.NoConnection`, что и раньше, только без ожидания. Первый в цепочке
+  интерцепторов (`NetworkFactory.clientBuilder`, новый параметр
+  `connectivityInterceptor`) — адрес бэкенда, гео и авторизация не должны
+  трогать запрос, который заведомо никуда не уйдёт.
+- **Баннер «Нет сети»** — `NetworkStatusBanner` в ките (`core/ui/components/Bars.kt`),
+  показывается в `MahallaApp` поверх `MahallaNavHost` (не на каждом экране:
+  состояние общее для приложения). Источник — `RootViewModel.isOffline`
+  (`StateFlow<Boolean>`, `SharingStarted.Eagerly` — баннер обязан появиться,
+  даже если сеть пропала между пересозданиями `Activity`), `MainActivity`
+  прокидывает его в `MahallaApp` тем же способом, что и `sessionExpired`/`locked`.
+  Текст — существующий `error_no_connection`, второй строки под баннер не
+  заводили.
+- **Автоповтор при возврате сети** — `CoroutineScope.retryOnReconnect`
+  (`data/network/RetryOnReconnect.kt`): экран сам решает через `shouldRetry`,
+  считать ли текущее состояние сетевой ошибкой, функция только подписывается
+  на `ConnectivityObserver.isConnected` и зовёт `retry()`, когда сеть
+  вернулась и проверка всё ещё верна. Применён на главной
+  (`DiscoveryHomeViewModel`, проверка — `ScreenState.Error(ApiError.NoConnection)`);
+  остальные экраны с той же проблемой могут переиспользовать ту же функцию —
+  отдельной issue не заводили, т.к. общего списка таких экранов в задаче не
+  было.
+- **Тесты**: `ConnectivityObserverTest`/`ConnectivityInterceptorTest` — под
+  Robolectric, `ShadowConnectivityManager`/`ShadowNetworkCapabilities` (по
+  умолчанию у шедоу активная сеть есть, а возможностей нет — то есть «не
+  подключено», пока тест явно не позовёт `setNetworkCapabilities`).
+  `DiscoveryHomeViewModelTest`/`RootViewModelTest` — новые кейсы через
+  `FakeConnectivityObserver` (`testutil/`, обычный `MutableStateFlow`).
+- `AndroidManifest.xml`: добавлено `ACCESS_NETWORK_STATE` — без него
+  `ConnectivityManager.getActiveNetwork()`/`registerNetworkCallback` ничего не
+  скажут.
+- **Не сделано из чек-листа issue буквально**: пункт «баннер в `MahallaApp`»
+  и «автоповтор на экранах с `ScreenState.Error(NoConnection)`» выполнены не
+  на каждом экране приложения, а на входной точке (баннер общий для всех
+  экранов сам по себе, автоповтор — на главной). Расширение на остальные
+  экраны со своими `ScreenState.Error` — по мере необходимости, помощник
+  (`retryOnReconnect`) для этого уже общий.

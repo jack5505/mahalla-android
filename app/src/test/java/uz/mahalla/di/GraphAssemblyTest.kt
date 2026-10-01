@@ -28,6 +28,7 @@ import uz.mahalla.data.network.AuthInterceptor
 import uz.mahalla.data.network.BackendCertificatePin
 import uz.mahalla.data.network.BackendUrlInterceptor
 import uz.mahalla.data.network.BackendUrlStore
+import uz.mahalla.data.network.ConnectivityInterceptor
 import uz.mahalla.data.network.GeoHeaderInterceptor
 import uz.mahalla.data.network.LanguageHeaderInterceptor
 import uz.mahalla.data.network.SessionExpiry
@@ -142,6 +143,7 @@ class GraphAssemblyTest {
                 languageHeaderInterceptor = languageHeaderInterceptor(),
                 httpInspector = inspector(),
                 certificatePin = certificatePin(),
+                connectivityInterceptor = ConnectivityInterceptor(context),
                 overrideEnabled = true,
             )
             val retrofit = NetworkModule.provideRetrofit(client, converterFactory, baseUrl)
@@ -762,6 +764,7 @@ class GraphAssemblyTest {
         languageHeaderInterceptor = languageHeaderInterceptor(),
         httpInspector = inspector(),
         certificatePin = certificatePin(),
+        connectivityInterceptor = ConnectivityInterceptor(context),
         overrideEnabled = overrideEnabled,
     )
 
