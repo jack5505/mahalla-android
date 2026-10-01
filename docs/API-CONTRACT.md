@@ -208,7 +208,7 @@ TrackEventRequest: {
 
 ## AuthApi ✅
 
-`app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram).
+`app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram), #403 (`pin-login` → `phone`).
 
 | Метод | Путь |
 |---|---|
@@ -220,6 +220,38 @@ TrackEventRequest: {
 | POST | `auth/telegram/check` |
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
+
+### `auth/pin-login` — тело запроса (issue #403)
+
+Бэкенд с **2026-09-07** (jack5505/mahalla `d6d2c73`, jack5505/mahalla#170)
+требует `phone`; без него — `400 VALIDATION_ERROR` ещё до проверки PIN. Три
+недели приложение его не слало (`PinLoginRequest` заводился по старой форме
+тела), вход по PIN был сломан целиком.
+
+```json
+{
+  "phone": "+998901234567",
+  "pin": "654321",
+  "device": { "deviceId": "…", "platform": "ANDROID", "deviceName": "…", "osVersion": "…", "appVersion": "…" },
+  "lat": 41.2820199,
+  "lng": 69.3084654
+}
+```
+
+- `phone` — E.164, `@NotBlank`, судя по формату ошибки — маска `^\+998[0-9]{9}$`, как у `send-otp`;
+- `pin` — шесть цифр, как и раньше;
+- `device`/`lat`/`lng` — как у остальных анонимных ручек входа.
+
+**Не снято с живого `/v3/api-docs`** — это восстановлено по перехвату
+реального запроса/ответа приложения, приложенному в issue #403 (комментарий
+от 2026-10-01); схему стоит досверить следующим прогоном с поднятым
+бэкендом (`claude-dev.yml` + `BACKEND_IMAGE`) и обновить эту пометку.
+
+Сессию `pin-login` по-прежнему ищет по устройству (`DEVICE_UNKNOWN`, если оно
+незнакомо) — `phone` сверяется с найденным аккаунтом уже после, как
+дополнительная защита от входа в чужой аккаунт на том же устройстве (issue
+#86, #200). Клиент на всякий случай продолжает сверять `user.phone` из ответа
+сам (`PhoneIdentity`, защита по ответу не отменяется защитой по запросу).
 
 ## users/me ✅ — `feature/profile/data/ProfileApi.kt`
 
