@@ -791,9 +791,35 @@ UTC.
 curl'ами по стенду 2026-09-04 (issue #98), тела под токеном — нет: `401`
 приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
 
+**Зоны и места — повторно curl'ом 2026-10-02** (issue #406), после выката
+бэкенда jack5505/mahalla#363 (`feat/gaming-units`, V41). Зона — не «число мест
+оценкой», а группа нумерованных мест:
+
+```
+$ curl .../gaming/places/22222222-…-10/zones
+{"id":"91…03","name":"PC Zona","zoneType":"PC","pricePerHour":2500000,
+ "totalUnits":12,"isAvailable":true}
+$ curl .../gaming/places/22222222-…-10/zones/91…03/units
+[{"id":"11c…","zoneId":"91…03","number":1,"seats":1}, … 12 штук]
+```
+
+`totalSeats` ушёл, вместо него `totalUnits` — число реальных мест, не оценка
+вместимости. `zoneType` — закрытый справочник (`PC`, `CONSOLE`, `VR`,
+`BILLIARDS`, `TABLE_TENNIS`, `OTHER`; на стенде встретились `PC`, `CONSOLE`,
+`OTHER`), разбор неизвестного значения в `OTHER` — в мапере
+(`GamingZoneType.fromApi`), не в сериализаторе. `seats > 1` у места — кабина на
+несколько человек, бронируется целиком; в тестовых данных стенда такой пока
+нет (все places дают `seats: 1`), только `totalUnits` зон-кабин (`VIP xona`,
+`totalUnits: 4`).
+
+Бронь по месту (`unitId`) бэкенд пока не отдаёт — `POST gaming/bookings`
+по-прежнему уходит `zoneId`. Второй бэкенд-шаг (V42: `freeUnitsNow`, бронь по
+`unitId`) — отдельная задача.
+
 | Метод | Путь | |
 |---|---|---|
-| GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, отдала `data: []` |
+| GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, `totalUnits`/`zoneType` сверены 2026-10-02 |
+| GET | `gaming/places/{placeId}/zones/{zoneId}/units` | ✅ ручка анонимна, `{id,zoneId,number,seats}` сверены 2026-10-02 |
 | POST | `gaming/bookings` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
 

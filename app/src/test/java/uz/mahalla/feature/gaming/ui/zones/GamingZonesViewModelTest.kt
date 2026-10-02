@@ -27,6 +27,7 @@ import uz.mahalla.feature.gaming.domain.GamingBookingError
 import uz.mahalla.testutil.FakeAnalyticsTracker
 import uz.mahalla.testutil.FakeGamingRepository
 import uz.mahalla.testutil.MainDispatcherRule
+import uz.mahalla.testutil.gamingUnit
 import uz.mahalla.testutil.gamingZone
 import java.time.Clock
 import java.time.Instant
@@ -102,6 +103,59 @@ class GamingZonesViewModelTest {
             assertEquals(state.slots.first(), state.draft?.startTime)
             assertEquals(GamingBookingDraft.DEFAULT_HOURS, state.draft?.durationHours)
             assertTrue(state.canBook)
+        }
+
+    @Test
+    fun `units of the zone load when the sheet opens`() = runTest(mainDispatcherRule.dispatcher) {
+        repository.unitsResults["z-1"] = ApiResult.Success(
+            listOf(gamingUnit(id = "u-1", number = 1), gamingUnit(id = "u-2", number = 2)),
+        )
+
+        val viewModel = viewModel()
+        runCurrent()
+        viewModel.onEvent(GamingZonesEvent.ZoneClicked("z-1"))
+        runCurrent()
+
+        assertEquals("p-1" to "z-1", repository.requestedUnits.single())
+        assertEquals(listOf("u-1", "u-2"), viewModel.state.value.units.map { it.id })
+    }
+
+    @Test
+    fun `a failure to load units does not block booking the zone`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Мест может не быть по любой причине сети — бронь всё равно уходит
+            // `zoneId`, а не местом (issue #406, второй бэкенд-шаг ещё не сделан).
+            repository.unitsResults["z-1"] = ApiResult.Failure(ApiError.NoConnection)
+
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(GamingZonesEvent.ZoneClicked("z-1"))
+            runCurrent()
+
+            assertTrue(viewModel.state.value.units.isEmpty())
+            assertTrue(viewModel.state.value.canBook)
+
+            viewModel.onEvent(GamingZonesEvent.BookClicked)
+            runCurrent()
+
+            assertEquals(1, repository.booked.size)
+            assertNotNull(viewModel.state.value.confirmed)
+        }
+
+    @Test
+    fun `closing the sheet drops the units of the previous zone`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.unitsResults["z-1"] = ApiResult.Success(listOf(gamingUnit()))
+
+            val viewModel = viewModel()
+            runCurrent()
+            viewModel.onEvent(GamingZonesEvent.ZoneClicked("z-1"))
+            runCurrent()
+            assertTrue(viewModel.state.value.units.isNotEmpty())
+
+            viewModel.onEvent(GamingZonesEvent.SheetDismissed)
+
+            assertTrue(viewModel.state.value.units.isEmpty())
         }
 
     @Test

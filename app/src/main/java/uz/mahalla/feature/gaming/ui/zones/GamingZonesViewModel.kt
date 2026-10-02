@@ -122,12 +122,35 @@ class GamingZonesViewModel @Inject constructor(
         updateState {
             copy(
                 selectedZone = zone,
+                units = emptyList(),
                 draft = draft,
                 slots = slots,
                 validationShown = false,
                 bookingFailure = null,
                 confirmed = null,
             ).revalidated()
+        }
+        loadUnits(zone)
+    }
+
+    /**
+     * Места зоны — справочник в уже открытой шторке (issue #406). Отказ
+     * загрузки не ломает бронь: список остаётся пустым, а бронь по-прежнему
+     * уходит `zoneId`, не местом — тот же приём, что у свободных мест в
+     * `GamingApi`, которых бэкенд не отдаёт вовсе.
+     */
+    private fun loadUnits(zone: GamingZone) {
+        viewModelScope.launch {
+            when (val result = repository.units(route.placeId, zone.id)) {
+                is ApiResult.Success -> updateState {
+                    // Шторку могли уже закрыть или открыть другую зону, пока
+                    // шёл запрос: ответ применяется, только если это всё ещё
+                    // те места, которых ждали.
+                    if (selectedZone?.id == zone.id) copy(units = result.data) else this
+                }
+
+                is ApiResult.Failure -> Unit
+            }
         }
     }
 
@@ -177,6 +200,7 @@ class GamingZonesViewModel @Inject constructor(
 
     private fun GamingZonesState.closedSheet(): GamingZonesState = copy(
         selectedZone = null,
+        units = emptyList(),
         draft = null,
         slots = emptyList(),
         errors = emptyList(),

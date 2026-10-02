@@ -2,6 +2,7 @@ package uz.mahalla.feature.gaming.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Duration
@@ -35,6 +36,38 @@ class GamingTest {
         assertTrue(GamingBookingStatus.Confirmed.isActive)
         assertTrue(GamingBookingStatus.Active.isActive)
         assertFalse(GamingBookingStatus.Completed.isActive)
+    }
+
+    @Test
+    fun `known zone types of the backend are recognised`() {
+        assertEquals(GamingZoneType.Pc, GamingZoneType.fromApi("PC"))
+        assertEquals(GamingZoneType.Console, GamingZoneType.fromApi("console"))
+        assertEquals(GamingZoneType.Vr, GamingZoneType.fromApi(" VR "))
+        assertEquals(GamingZoneType.Billiards, GamingZoneType.fromApi("BILLIARDS"))
+        assertEquals(GamingZoneType.TableTennis, GamingZoneType.fromApi("TABLE_TENNIS"))
+        assertEquals(GamingZoneType.Other, GamingZoneType.fromApi("OTHER"))
+    }
+
+    @Test
+    fun `billiards and table tennis share one label - one word for both tables`() {
+        assertEquals(GamingZoneType.Billiards.labelRes, GamingZoneType.TableTennis.labelRes)
+    }
+
+    @Test
+    fun `an unknown zone type is read as OTHER, a missing one as nothing`() {
+        // Новый тип справочника в будущем не должен падать на `enumValueOf`
+        // (issue #406) — он уже существует как `OTHER`.
+        assertEquals(GamingZoneType.Other, GamingZoneType.fromApi("HOLOGRAM"))
+        // Сервер ничего не прислал — это не то же самое, что «прочее»: карточка
+        // просто не покажет бейдж типа.
+        assertNull(GamingZoneType.fromApi(null))
+        assertNull(GamingZoneType.fromApi(" "))
+    }
+
+    @Test
+    fun `a unit with more than one seat is a cabin, a single one is not`() {
+        assertFalse(GamingUnit(id = "u", zoneId = "z", number = 1, seats = 1).isCabin)
+        assertTrue(GamingUnit(id = "u", zoneId = "z", number = 1, seats = 4).isCabin)
     }
 
     @Test

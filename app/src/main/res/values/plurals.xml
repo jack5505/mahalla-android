@@ -183,7 +183,7 @@
         <item quantity="other">%1$d dona qoldi</item>
     </plurals>
 
-    <!-- Игровые зоны (issue #98): места в зоне, часы брони, границы длительности. -->
+    <!-- Игровые зоны (issue #98): места в зоне (с #406 — из totalUnits), часы брони, границы длительности. -->
     <plurals name="gaming_zone_seats">
         <item quantity="one">%1$d joy</item>
         <item quantity="other">%1$d joy</item>
