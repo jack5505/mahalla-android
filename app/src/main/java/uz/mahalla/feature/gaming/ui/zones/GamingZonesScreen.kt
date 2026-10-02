@@ -53,7 +53,9 @@ import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingError
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
+import uz.mahalla.feature.gaming.domain.GamingUnit
 import uz.mahalla.feature.gaming.domain.GamingZone
+import uz.mahalla.feature.gaming.domain.GamingZoneType
 import uz.mahalla.feature.onboarding.ui.OnboardingNotice
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
@@ -227,11 +229,10 @@ private fun ZoneCard(
         }
 
         zone.zoneType?.let { type ->
-            Text(
-                text = type,
+            MahallaBadge(
+                text = stringResource(type.labelRes),
                 modifier = Modifier.padding(top = Spacing.item),
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.fgMuted,
+                icon = type.icon,
             )
         }
 
@@ -255,9 +256,9 @@ private fun ZoneCard(
             )
         }
 
-        zone.totalSeats?.let { seats ->
+        zone.totalUnits?.let { units ->
             Text(
-                text = pluralStringResource(R.plurals.gaming_zone_seats, seats, seats),
+                text = pluralStringResource(R.plurals.gaming_zone_seats, units, units),
                 modifier = Modifier.padding(top = Spacing.item),
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.fgMuted,
@@ -294,6 +295,18 @@ private fun BookingSheet(
         title = zone.name.takeIf { it.isNotBlank() }
             ?: stringResource(R.string.gaming_zone_unnamed),
     ) {
+        // Справочник, не выбор: бронь по-прежнему уходит `zoneId`, а не местом
+        // (следующий бэкенд-шаг, issue #406). Пустой список — молчание сервера
+        // или отказ загрузки, и то и другое не должно мешать брони зоны целиком.
+        if (state.units.isNotEmpty()) {
+            Text(
+                text = stringResource(R.string.gaming_zone_units_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            UnitRow(units = state.units, zoneType = zone.zoneType)
+        }
+
         Text(
             text = stringResource(R.string.gaming_sheet_time),
             style = MaterialTheme.typography.titleSmall,
@@ -389,6 +402,47 @@ private fun SlotRow(
                 enabled = !state.isBooking,
             )
         }
+    }
+}
+
+/**
+ * Места зоны — справочник, не выбор (issue #406): карточка без `onClick`,
+ * ничего не подсвечивается. Бронь по-прежнему уходит `zoneId` целиком, выбор
+ * конкретного места появится вместе со вторым бэкенд-шагом (V42).
+ */
+@Composable
+private fun UnitRow(
+    units: List<GamingUnit>,
+    zoneType: GamingZoneType?,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.item),
+    ) {
+        items(units, key = GamingUnit::id) { unit ->
+            MahallaBadge(text = unitLabel(unit = unit, zoneType = zoneType))
+        }
+    }
+}
+
+/**
+ * Подпись места: «Kompyuter №1» для обычного, «Kabina №1 · 4 joy» для кабины
+ * на несколько человек ([GamingUnit.isCabin]) — бэкенд не заводит отдельных
+ * мест внутри кабины, поэтому вместо номеров внутри неё показывается, сколько
+ * их там.
+ */
+@Composable
+private fun unitLabel(unit: GamingUnit, zoneType: GamingZoneType?): String {
+    val noun = stringResource((zoneType ?: GamingZoneType.Other).labelRes)
+    return if (unit.isCabin) {
+        stringResource(
+            R.string.gaming_unit_cabin,
+            unit.number,
+            pluralStringResource(R.plurals.gaming_zone_seats, unit.seats, unit.seats),
+        )
+    } else {
+        stringResource(R.string.gaming_unit_number, noun, unit.number)
     }
 }
 
@@ -503,15 +557,16 @@ private fun GamingZonesPreview() {
                             id = "z-1",
                             placeId = "p-1",
                             name = "PlayStation 5",
-                            zoneType = "CONSOLE",
+                            zoneType = GamingZoneType.Console,
                             pricePerHour = 35_000,
-                            totalSeats = 4,
+                            totalUnits = 4,
                             isAvailable = true,
                         ),
                         GamingZone(
                             id = "z-2",
                             placeId = "p-1",
                             name = "VR",
+                            zoneType = GamingZoneType.Vr,
                             pricePerHour = 60_000,
                             isAvailable = false,
                         ),

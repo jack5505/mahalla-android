@@ -1154,6 +1154,15 @@
     <string name="gaming_status_completed">Tugadi</string>
     <string name="gaming_status_cancelled">Bekor qilindi</string>
     <string name="gaming_status_unknown">Holati aniq emas</string>
+    <!-- Типы зон и места зоны (issue #406, бэкенд jack5505/mahalla#363). -->
+    <string name="gaming_zone_type_pc">Kompyuter</string>
+    <string name="gaming_zone_type_console">Konsol</string>
+    <string name="gaming_zone_type_table">Stol</string>
+    <string name="gaming_zone_type_vr">VR joy</string>
+    <string name="gaming_zone_type_other">Joy</string>
+    <string name="gaming_zone_units_title">Zonadagi joylar</string>
+    <string name="gaming_unit_number">%1$s №%2$d</string>
+    <string name="gaming_unit_cabin">Kabina №%1$d · %2$s</string>
 
     <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
     <string name="notification_channel_orders">Buyurtmalar</string>

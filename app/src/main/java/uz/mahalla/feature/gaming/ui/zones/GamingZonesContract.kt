@@ -8,6 +8,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingError
+import uz.mahalla.feature.gaming.domain.GamingUnit
 import uz.mahalla.feature.gaming.domain.GamingZone
 import java.time.Instant
 
@@ -17,6 +18,9 @@ import java.time.Instant
  *
  * @param selectedZone открытая шторка. Зона держится целиком, а не одним id:
  * шторке нужны имя и цена, а список под ней может успеть перезагрузиться.
+ * @param units места выбранной зоны (issue #406) — справочник в шторке, грузится
+ * при её открытии. Отказ загрузки не ломает бронь: список просто остаётся
+ * пустым, бронь по-прежнему уходит `zoneId`, а не местом.
  * @param slots время начала. Считается на клиенте (расписания зоны бэкенд не
  * отдаёт) и пересчитывается при каждом открытии шторки: слоты, посчитанные
  * час назад, уже в прошлом.
@@ -34,6 +38,7 @@ data class GamingZonesState(
     val zones: ScreenState<List<GamingZone>> = ScreenState.Loading,
     val isRefreshing: Boolean = false,
     val selectedZone: GamingZone? = null,
+    val units: List<GamingUnit> = emptyList(),
     val draft: GamingBookingDraft? = null,
     val slots: List<Instant> = emptyList(),
     val errors: List<GamingBookingError> = emptyList(),

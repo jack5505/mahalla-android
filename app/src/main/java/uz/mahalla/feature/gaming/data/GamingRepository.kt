@@ -9,6 +9,7 @@ import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingValidator
+import uz.mahalla.feature.gaming.domain.GamingUnit
 import uz.mahalla.feature.gaming.domain.GamingZone
 import java.time.Clock
 import javax.inject.Inject
@@ -27,6 +28,12 @@ interface GamingRepository {
 
     /** Зоны заведения. Ручка анонимна — список виден и до входа. */
     suspend fun zones(placeId: String): ApiResult<List<GamingZone>>
+
+    /**
+     * Места выбранной зоны (issue #406) — справочник для шторки брони.
+     * Ручка анонимна, как и [zones].
+     */
+    suspend fun units(placeId: String, zoneId: String): ApiResult<List<GamingUnit>>
 
     /**
      * Забронировать зону.
@@ -60,6 +67,10 @@ class DefaultGamingRepository @Inject constructor(
     override suspend fun zones(placeId: String): ApiResult<List<GamingZone>> =
         apiCall { api.zones(placeId).payload() }
             .map { zones -> zones.mapNotNull { it.toDomain(placeId) } }
+
+    override suspend fun units(placeId: String, zoneId: String): ApiResult<List<GamingUnit>> =
+        apiCall { api.units(placeId, zoneId).payload() }
+            .map { units -> units.mapNotNull { it.toDomain(zoneId) } }
 
     /**
      * Незаполненный черновик в сеть не уходит: 400 от сервера сказал бы то же

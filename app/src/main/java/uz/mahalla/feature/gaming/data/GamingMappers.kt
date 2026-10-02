@@ -9,7 +9,9 @@ import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
+import uz.mahalla.feature.gaming.domain.GamingUnit
 import uz.mahalla.feature.gaming.domain.GamingZone
+import uz.mahalla.feature.gaming.domain.GamingZoneType
 
 /**
  * Разбор мягкий, как в каталоге (issue #53): зона **без `id`** отбрасывается —
@@ -31,13 +33,33 @@ internal fun GamingZoneDto.toDomain(placeId: String): GamingZone? {
         placeId = this.placeId?.takeIf { it.isNotBlank() } ?: placeId,
         name = name?.takeIf { it.isNotBlank() }.orEmpty(),
         description = description?.takeIf { it.isNotBlank() },
-        zoneType = zoneType?.takeIf { it.isNotBlank() },
+        // Неизвестное значение справочника — `OTHER`, а не падение на
+        // `enumValueOf` (issue #406): разбор нарочно в мапере, а не в
+        // сериализаторе, см. KDoc у `GamingZoneDto.zoneType`.
+        zoneType = GamingZoneType.fromApi(zoneType),
         // Отрицательная цена — не «скидка», а мусор.
         pricePerHour = pricePerHour.tiyinToSom()?.takeIf { it > 0 } ?: 0,
-        totalSeats = totalSeats?.takeIf { it > 0 },
+        totalUnits = totalUnits?.takeIf { it > 0 }?.toInt(),
         // Молчание сервера — «закрыта»: обещать бронь зоны, про которую ничего
         // не известно, хуже, чем её не обещать.
         isAvailable = isAvailable ?: available ?: false,
+    )
+}
+
+/**
+ * Место зоны (issue #406). Без `id` или без номера отбрасывается: без `id`
+ * список был бы с дубликатом ключа, а без номера показывать нечего — вся
+ * ценность строки в её номере («Kompyuter №…»), и подставленный `0` выглядел
+ * бы настоящим местом, которого на самом деле нет.
+ */
+internal fun GamingUnitDto.toDomain(zoneId: String): GamingUnit? {
+    val unitId = id?.takeIf { it.isNotBlank() } ?: return null
+    val unitNumber = number?.takeIf { it > 0 } ?: return null
+    return GamingUnit(
+        id = unitId,
+        zoneId = this.zoneId?.takeIf { it.isNotBlank() } ?: zoneId,
+        number = unitNumber,
+        seats = seats?.takeIf { it > 0 } ?: 1,
     )
 }
 

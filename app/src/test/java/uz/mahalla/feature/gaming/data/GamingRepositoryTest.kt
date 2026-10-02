@@ -15,6 +15,7 @@ import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.NetworkFactory
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
+import uz.mahalla.feature.gaming.domain.GamingZoneType
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -29,6 +30,10 @@ import java.time.ZoneOffset
  * `GET gaming/bookings/my` (обе `401 UNAUTHORIZED` без токена). Тело
  * `POST` в схеме перекрыто коллизией springdoc, поэтому его форма — решение
  * приложения (см. [GamingApi]), и эти тесты её и закрепляют.
+ *
+ * `totalUnits`, закрытый `zoneType` и `GET .../units` (issue #406) — повторно
+ * curl'ом 2026-10-02 после выката jack5505/mahalla#363: `zones` анонимна
+ * по-прежнему, `units` — тоже (тот же curl, тот же `placeId`).
  */
 class GamingRepositoryTest {
 
@@ -50,7 +55,7 @@ class GamingRepositoryTest {
         server.enqueue(
             envelope(
                 """[{"id":"z-1","placeId":"p-1","name":"PlayStation 5","zoneType":"CONSOLE",
-                    "pricePerHour":3500000,"totalSeats":4,"isAvailable":true}]""",
+                    "pricePerHour":3500000,"totalUnits":4,"isAvailable":true}]""",
             ),
         )
 
@@ -63,11 +68,81 @@ class GamingRepositoryTest {
         val zone = (result as ApiResult.Success).data.single()
         assertEquals("z-1", zone.id)
         assertEquals("PlayStation 5", zone.name)
-        assertEquals("CONSOLE", zone.zoneType)
+        assertEquals(GamingZoneType.Console, zone.zoneType)
         // Бэкенд шлёт тийины: 3 500 000 — это 35 000 сум за час (issue #149).
         assertEquals(35_000L, zone.pricePerHour)
-        assertEquals(4, zone.totalSeats)
+        assertEquals(4, zone.totalUnits)
         assertTrue(zone.isBookable)
+    }
+
+    /**
+     * Бэкенд завёл закрытый справочник вместо произвольной строки (issue #406,
+     * jack5505/mahalla#363). Новый тип в будущем не должен ронять зону —
+     * `OTHER` уже существует как настоящее значение, и неизвестная строка
+     * ложится туда же.
+     */
+    @Test
+    fun `an unknown zone type is read as OTHER, a known one keeps its value`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"z-1","zoneType":"PC","isAvailable":true},
+                    {"id":"z-2","zoneType":"HOLOGRAM","isAvailable":true},
+                    {"id":"z-3","isAvailable":true}]""",
+            ),
+        )
+
+        val zones = (repository().zones("p-1") as ApiResult.Success).data
+
+        assertEquals(
+            listOf(GamingZoneType.Pc, GamingZoneType.Other, null),
+            zones.map { it.zoneType },
+        )
+    }
+
+    @Test
+    fun `units of a zone come from the zone path`() = runTest {
+        server.enqueue(
+            envelope(
+                """[{"id":"u-1","zoneId":"z-1","number":1,"seats":1},
+                    {"id":"u-2","zoneId":"z-1","number":2,"seats":4}]""",
+            ),
+        )
+
+        val result = repository().units("p-1", "z-1")
+
+        val request = server.takeRequest()
+        assertEquals("/gaming/places/p-1/zones/z-1/units", request.path)
+        assertEquals("GET", request.method)
+
+        val units = (result as ApiResult.Success).data
+        assertEquals(listOf(1, 2), units.map { it.number })
+        assertFalse(units[0].isCabin)
+        assertTrue(units[1].isCabin)
+        assertEquals(4, units[1].seats)
+    }
+
+    @Test
+    fun `a unit without an id is dropped and the rest survive`() = runTest {
+        server.enqueue(envelope("""[{"number":1},{"id":"u-2","number":2}]"""))
+
+        val units = (repository().units("p-1", "z-1") as ApiResult.Success).data
+
+        assertEquals(listOf("u-2"), units.map { it.id })
+    }
+
+    /**
+     * Весь смысл строки — её номер («Kompyuter №…»): без него место неотличимо
+     * от мусора, а подставленный `0` выглядел бы настоящим местом.
+     */
+    @Test
+    fun `a unit without a number is dropped too`() = runTest {
+        server.enqueue(
+            envelope("""[{"id":"u-1"},{"id":"u-2","number":0},{"id":"u-3","number":1}]"""),
+        )
+
+        val units = (repository().units("p-1", "z-1") as ApiResult.Success).data
+
+        assertEquals(listOf("u-3"), units.map { it.id })
     }
 
     /** Без пересчёта час стоил бы «5 000 000 so'm»; без цены зона не бронируется. */
