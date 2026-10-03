@@ -19,11 +19,13 @@ import uz.mahalla.feature.gaming.data.GamingApi
 import uz.mahalla.feature.gaming.data.GamingBookingDto
 import uz.mahalla.feature.hospital.data.HospitalApi
 import uz.mahalla.feature.hospital.data.HospitalRepository
+import uz.mahalla.feature.queue.data.WalkInTicketStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * «Мои активности» (issue #73, задача T7): один список из пяти источников.
+ * «Мои активности» (issue #73, задача T7; шестой источник — issue #287): один
+ * список из пяти сетевых источников и локального талона очереди.
  *
  * Кэша нет намеренно: статус заказа и состояние брони меняются на сервере, и
  * устаревшая запись из Room — это «ваш заказ готовится» у заказа, который
@@ -75,6 +77,7 @@ class DefaultActivityRepository @Inject constructor(
     private val hospitalRepository: HospitalRepository,
     private val cinemaApi: CinemaApi,
     private val placeNameResolver: PlaceNameResolver,
+    private val walkInTicketStore: WalkInTicketStore,
 ) : ActivityRepository {
 
     /**
@@ -87,6 +90,10 @@ class DefaultActivityRepository @Inject constructor(
         coroutineScope {
             val requested = pages.keys.toSet()
             val pageSize = size.coerceAtLeast(1)
+            // Локальный, но не бесплатный (DataStore) — читается тем же
+            // `async`, что и пять сетевых источников, а не после них: иначе
+            // он добавлял бы к ответу ещё одну последовательную задержку.
+            val walkInTicket = async { walkInTicketStore.activeAny()?.toActivity() }
             val loaded = requested
                 .map { source ->
                     val page = pages.getValue(source).coerceAtLeast(0)
@@ -108,6 +115,18 @@ class DefaultActivityRepository @Inject constructor(
                     }
                 }
             }
+
+            // Талон очереди (issue #287) — не участвует в `pages`/`requested`/
+            // `failures` наравне с пятью сетевыми источниками (см. KDoc
+            // `ActivitySource.WalkIn`), а дописывается в каждый ответ
+            // отдельно. Дедуп по `Activity.key` в `ActivityMerge.append`
+            // склеивает повторные дозаписи, когда `feed()` вызывается ещё раз
+            // за той же страницей другого источника (догрузка, повтор,
+            // возврат на экран) — но не подхватывает смену статуса между
+            // такими вызовами: свежее состояние приходит только с полной
+            // перезагрузкой (`load()`) или с возвратом на экран (`replay()`),
+            // которые строят список заново, а не дописывают к старому.
+            walkInTicket.await()?.let(items::add)
 
             ActivityFeed(
                 items = withPlaceNames(items),
@@ -191,6 +210,16 @@ class DefaultActivityRepository @Inject constructor(
                 hasMore = hasMorePages(page, dto.totalPages, dto.last),
             )
         }
+
+        // Недостижимо через обычный `feed()`: `WalkIn` не входит в
+        // `ActivityFeed.FIRST_PAGES`, и никакой курсор его сюда не приведёт
+        // (см. KDoc `ActivitySource.WalkIn`) — талон читается один раз в
+        // начале `feed()` и дописывается в `items` отдельной строкой. Ветка
+        // здесь нужна только для исчерпывающего `when` и обязана возвращать
+        // пусто: верни она талон ещё раз (например, для явного вызова
+        // `feed(pages = mapOf(WalkIn to ...))`), он попал бы в список дважды
+        // с одинаковым `Activity.key` — а это дубликат ключа `LazyColumn`.
+        ActivitySource.WalkIn -> ApiResult.Success(SourcePage(items = emptyList(), hasMore = false))
     }
 
     private data class SourcePage(val items: List<Activity>, val hasMore: Boolean)

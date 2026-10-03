@@ -93,5 +93,11 @@ sealed interface ActivityEffect : UiEffect {
      */
     data class OpenAppointment(val appointmentId: String, val vertical: String) : ActivityEffect
 
+    /**
+     * Экран очереди заведения, где взят талон (issue #287) — тот же
+     * `QueueRoute`, что и у фокус-карточки главной.
+     */
+    data class OpenQueue(val placeId: String, val placeName: String) : ActivityEffect
+
     data object OpenDiscovery : ActivityEffect
 }

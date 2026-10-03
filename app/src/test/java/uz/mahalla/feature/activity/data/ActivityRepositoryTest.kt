@@ -29,6 +29,9 @@ import uz.mahalla.feature.fashion.data.FashionApi
 import uz.mahalla.feature.gaming.data.GamingApi
 import uz.mahalla.feature.hospital.data.DefaultHospitalRepository
 import uz.mahalla.feature.hospital.data.HospitalApi
+import uz.mahalla.feature.queue.domain.WalkInStatus
+import uz.mahalla.feature.queue.domain.WalkInTicket
+import uz.mahalla.testutil.FakeWalkInTicketStore
 import java.time.Clock
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
@@ -465,7 +468,7 @@ class ActivityRepositoryTest {
     }
 
     @Test
-    fun `all five sources merge into one list`() = runTest {
+    fun `all six sources merge into one list`() = runTest {
         respond("/orders", """{"content":[{"id":"o-1","vertical":"FOOD","status":"NEW"}],"last":true}""")
         respond(
             "/gaming/bookings/my",
@@ -477,15 +480,19 @@ class ActivityRepositoryTest {
             """{"content":[{"id":"h-1","status":"PENDING"}],"last":true}""",
         )
         respond("/cinema/tickets/my", """{"content":[{"id":"t-1","status":"ACTIVE"}],"last":true}""")
+        val walkIn = FakeWalkInTicketStore()
+        walkIn.put(WalkInTicket(id = "w-1", placeId = "p-9", status = WalkInStatus.Waiting, receivedAt = Instant.now()))
 
-        val feed = repository().feed()
+        val feed = repository(walkIn).feed()
 
         assertEquals(
             ActivitySource.entries.toSet(),
             feed.items.map(Activity::source).toSet(),
         )
-        assertEquals(5, feed.items.size)
-        assertEquals(ActivitySource.entries.toSet(), feed.requested)
+        assertEquals(6, feed.items.size)
+        // Талон — не сетевой источник (issue #287): в `requested` его нет,
+        // хотя строка в списке есть.
+        assertEquals(ActivitySource.entries.toSet() - ActivitySource.WalkIn, feed.requested)
     }
 
     @Test
@@ -687,16 +694,117 @@ class ActivityRepositoryTest {
         assertEquals(setOf(ActivitySource.Orders), feed.requested)
     }
 
+    // --- Талон очереди (issue #287) ---
+
+    @Test
+    fun `a live walk-in ticket is added to the feed as its own source`() = runTest {
+        // Резолвер имён заведений (issue #182) видит и талон: `placeId` у него
+        // есть, а `PlaceNameResolver` не различает источники.
+        respond("/places", """[{"id":"p-9","name":"Ustaxona","logoUrl":"https://x/2.png"}]""")
+        val walkIn = FakeWalkInTicketStore()
+        walkIn.put(
+            WalkInTicket(
+                id = "w-1",
+                placeId = "p-9",
+                placeName = "Ustaxona (kesh)",
+                serviceName = "Soch olish",
+                status = WalkInStatus.Waiting,
+                createdAt = Instant.parse("2026-09-19T08:00:00Z"),
+                receivedAt = Instant.parse("2026-09-19T08:00:00Z"),
+            ),
+        )
+
+        val ticket = repository(walkIn).feed().items.single()
+
+        assertEquals("w-1", ticket.id)
+        assertEquals(ActivitySource.WalkIn, ticket.source)
+        assertEquals(ActivityKind.WalkInTicket, ticket.kind)
+        assertEquals(ActivityStatus.InProgress, ticket.status)
+        assertEquals("Soch olish", ticket.note)
+        // Дорезолвленное имя перекрывает то, что уже знал сам талон.
+        assertEquals("Ustaxona", ticket.placeName)
+        assertEquals("https://x/2.png", ticket.placeLogoUrl)
+        assertEquals(Instant.parse("2026-09-19T08:00:00Z"), ticket.occurredAt)
+        // Цель — заведение талона, а не дорезолвленное имя: `walkin/send` его
+        // не отдаёт, и на экран очереди едет то, что знает сам талон.
+        assertEquals(ActivityTarget.WalkInTicket("p-9", "Ustaxona (kesh)"), ticket.target)
+    }
+
+    @Test
+    fun `no ticket means no extra row`() = runTest {
+        assertTrue(repository().feed().items.isEmpty())
+    }
+
+    @Test
+    fun `the ticket does not count toward requested sources or the cursor`() = runTest {
+        val walkIn = FakeWalkInTicketStore()
+        walkIn.put(
+            WalkInTicket(
+                id = "w-1",
+                placeId = "p-9",
+                status = WalkInStatus.Pending,
+                receivedAt = Instant.parse("2026-09-19T08:00:00Z"),
+            ),
+        )
+
+        val feed = repository(walkIn).feed()
+
+        // Пять сетевых источников, не шесть: у талона нет ни курсора, ни
+        // отказа, который стоило бы отмечать баннером раздела (ADR 0012).
+        assertEquals(ActivitySource.entries.toSet() - ActivitySource.WalkIn, feed.requested)
+        assertTrue(feed.nextPages.isEmpty())
+        assertFalse(feed.failures.containsKey(ActivitySource.WalkIn))
+    }
+
+    @Test
+    fun `a live ticket still shows even when every network source has failed`() = runTest {
+        // Осознанное следствие того, что талон не входит в `requested`
+        // (issue #287): если показать вообще нечего, кроме локального талона,
+        // это не тот же смысл, что и «нет вообще ничего» у пяти сетевых
+        // источников, — сессия истекла, но человек всё ещё стоит в очереди, и
+        // это стоит показать, а не спрятать за общим экраном ошибки.
+        ALL_PATHS.forEach { bodies[it] = MockResponse().setResponseCode(401) }
+        val walkIn = FakeWalkInTicketStore()
+        walkIn.put(
+            WalkInTicket(id = "w-1", placeId = "p-9", status = WalkInStatus.Waiting, receivedAt = Instant.now()),
+        )
+
+        val feed = repository(walkIn).feed()
+
+        assertFalse(feed.isTotalFailure)
+        assertTrue(feed.isPartial)
+        assertEquals(listOf("w-1"), feed.items.map(Activity::id))
+        assertEquals(5, feed.failures.size)
+    }
+
+    @Test
+    fun `explicitly asking WalkIn for a page does not duplicate the ticket`() = runTest {
+        // `load(ActivitySource.WalkIn, ...)` обязана возвращать пусто: талон
+        // уже дописан в `items` безусловно (выше по файлу), и верни она его
+        // ещё раз — список получил бы два элемента с одним и тем же
+        // `Activity.key`, а это дубликат ключа `LazyColumn`.
+        val walkIn = FakeWalkInTicketStore()
+        walkIn.put(WalkInTicket(id = "w-1", placeId = "p-9", status = WalkInStatus.Waiting, receivedAt = Instant.now()))
+
+        val feed = repository(walkIn).feed(pages = mapOf(ActivitySource.WalkIn to 0))
+
+        assertEquals(listOf("w-1"), feed.items.map(Activity::id))
+    }
+
     private fun respond(path: String, data: String) {
         bodies[path] = envelope(data)
     }
 
     /**
-     * Своего `Api` у фичи нет (issue #142) — пять источников читаются теми же
-     * интерфейсами, что и их вертикали. Retrofit один: пять ручек живут на
-     * одном бэкенде.
+     * Своего `Api` у фичи нет (issue #142) — пять сетевых источников читаются
+     * теми же интерфейсами, что и их вертикали. Retrofit один: пять ручек
+     * живут на одном бэкенде. Талон очереди (issue #287) сетевой ручки не
+     * имеет вовсе — [walkInTicketStore] по умолчанию пуст, как у человека без
+     * живого талона.
      */
-    private fun repository(): DefaultActivityRepository {
+    private fun repository(
+        walkInTicketStore: FakeWalkInTicketStore = FakeWalkInTicketStore(),
+    ): DefaultActivityRepository {
         val retrofit = NetworkFactory.retrofit(
             server.url("/").toString(),
             NetworkFactory.clientBuilder().build(),
@@ -711,6 +819,7 @@ class ActivityRepositoryTest {
             hospitalRepository = DefaultHospitalRepository(api = hospitalApi, clock = Clock.systemUTC()),
             cinemaApi = retrofit.create(CinemaApi::class.java),
             placeNameResolver = DefaultPlaceNameResolver(retrofit.create(CatalogApi::class.java)),
+            walkInTicketStore = walkInTicketStore,
         )
     }
 

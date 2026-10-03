@@ -1,10 +1,11 @@
 package uz.mahalla.feature.activity.domain
 
+import uz.mahalla.feature.queue.domain.WalkInStatus
 import java.time.Instant
 import java.util.Locale
 
 /**
- * Источник активности (issue #73, задача T7).
+ * Источник активности (issue #73, задача T7; шестой — issue #287).
  *
  * Пять независимых ручек бэкенда, каждая со своей пагинацией и своим набором
  * статусов. Перечисление нужно не для красоты: по нему экран отмечает
@@ -18,6 +19,14 @@ import java.util.Locale
  * взять нельзя. То же решение уже принято для чтения одного заказа (issue #9).
  * Заодно один запрос вместо нескольких: `GET orders` отдаёт все вертикали
  * сразу, включая `CLOTHING` и `PHARMACY`.
+ *
+ * [WalkIn] — не такой, как остальные пять: у него нет ни ручки чтения на
+ * бэкенде (`WalkInTicketStore`, ADR 0009), ни страниц, ни своего отказа. Он
+ * **не** участвует в курсоре/`requested`/`failures` наравне с пятью сетевыми
+ * источниками (см. `ActivityFeed.FIRST_PAGES` и
+ * `DefaultActivityRepository.feed()`) — иначе гарантированно успешный
+ * локальный источник смазывал бы «отказали все пять» (истёкшая сессия) до
+ * «отказали не все».
  */
 enum class ActivitySource {
     Orders,
@@ -25,6 +34,7 @@ enum class ActivitySource {
     MasterAppointments,
     DoctorAppointments,
     CinemaTickets,
+    WalkIn,
 }
 
 /**
@@ -47,6 +57,7 @@ enum class ActivityKind {
     MasterAppointment,
     DoctorAppointment,
     CinemaTicket,
+    WalkInTicket,
     ;
 
     companion object {
@@ -177,6 +188,34 @@ enum class ActivityStatus {
             "REFUNDED" -> Refunded
             else -> Unknown
         }
+
+        /**
+         * [uz.mahalla.feature.queue.domain.WalkInStatus] талона очереди
+         * (issue #287).
+         *
+         * На практике сюда почти всегда приходят только «живые» статусы:
+         * `WalkInTicketStore` (ADR 0009) сам выбрасывает финальные и
+         * просроченные талоны при чтении, то есть [Completed], [Cancelled],
+         * [Declined] и [NoShow]/[Expired] здесь — не мёртвый код, а честная
+         * обработка контракта на случай, если это правило хранилища когда-то
+         * изменится.
+         *
+         * `WAITING` и `IN_CHAIR` — оба [InProgress]: разница между «стоит в
+         * очереди» и «его обслуживают прямо сейчас» здесь не нужна, подробности
+         * — на самом экране очереди, куда ведёт строка списка.
+         * `COUNTER_OFFERED` — [Placed]: мастер предложил другое время, и ответ
+         * ждут от человека, а не от заведения — тот же смысл, что у
+         * ожидающего подтверждения запроса.
+         */
+        fun ofWalkIn(status: WalkInStatus): ActivityStatus = when (status) {
+            WalkInStatus.Pending, WalkInStatus.CounterOffered -> Placed
+            WalkInStatus.Accepted -> Confirmed
+            WalkInStatus.Waiting, WalkInStatus.InChair -> InProgress
+            WalkInStatus.Completed -> Completed
+            WalkInStatus.Declined, WalkInStatus.Cancelled, WalkInStatus.Expired -> Cancelled
+            WalkInStatus.NoShow -> Missed
+            WalkInStatus.Unknown -> Unknown
+        }
     }
 }
 
@@ -207,6 +246,18 @@ sealed interface ActivityTarget {
 
     /** Карточка записи к врачу (issue #183): `GET hospitals/appointments/{id}`. */
     data class DoctorAppointment(val appointmentId: String) : ActivityTarget
+
+    /**
+     * Экран очереди того заведения, где взят талон (issue #287) — тот же
+     * `QueueRoute`, что и у фокус-карточки главной
+     * ([uz.mahalla.feature.discovery.ui.home.DiscoveryHomeEffect.OpenTicket]).
+     * Своего экрана «карточка талона» нет: очередь целиком живёт на экране
+     * заведения, а не отдельной сущностью с id.
+     *
+     * @param placeName едет вместе с [placeId] по той же причине, что и у
+     * `QueueRoute`: `walkin/send` названия заведения не отдаёт.
+     */
+    data class WalkInTicket(val placeId: String, val placeName: String) : ActivityTarget
 
     /** Экрана для этой активности пока нет — строка не кликабельна. */
     data object None : ActivityTarget

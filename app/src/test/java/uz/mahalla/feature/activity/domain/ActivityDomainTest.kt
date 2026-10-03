@@ -6,6 +6,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiFailure
+import uz.mahalla.feature.queue.domain.WalkInStatus
 import java.time.Instant
 
 /**
@@ -64,6 +65,32 @@ class ActivityDomainTest {
         assertEquals(ActivityStatus.Refunded, ActivityStatus.ofTicket("REFUNDED"))
         assertTrue(ActivityStatus.ofTicket("ACTIVE").isActive)
         assertFalse(ActivityStatus.ofTicket("USED").isActive)
+    }
+
+    @Test
+    fun `walk-in ticket statuses map onto the shared statuses`() {
+        assertEquals(ActivityStatus.Placed, ActivityStatus.ofWalkIn(WalkInStatus.Pending))
+        assertEquals(ActivityStatus.Placed, ActivityStatus.ofWalkIn(WalkInStatus.CounterOffered))
+        assertEquals(ActivityStatus.Confirmed, ActivityStatus.ofWalkIn(WalkInStatus.Accepted))
+        assertEquals(ActivityStatus.InProgress, ActivityStatus.ofWalkIn(WalkInStatus.Waiting))
+        assertEquals(ActivityStatus.InProgress, ActivityStatus.ofWalkIn(WalkInStatus.InChair))
+        assertEquals(ActivityStatus.Completed, ActivityStatus.ofWalkIn(WalkInStatus.Completed))
+        assertEquals(ActivityStatus.Cancelled, ActivityStatus.ofWalkIn(WalkInStatus.Declined))
+        assertEquals(ActivityStatus.Cancelled, ActivityStatus.ofWalkIn(WalkInStatus.Cancelled))
+        assertEquals(ActivityStatus.Cancelled, ActivityStatus.ofWalkIn(WalkInStatus.Expired))
+        assertEquals(ActivityStatus.Missed, ActivityStatus.ofWalkIn(WalkInStatus.NoShow))
+        assertEquals(ActivityStatus.Unknown, ActivityStatus.ofWalkIn(WalkInStatus.Unknown))
+
+        // Все статусы, которые `WalkInTicketStore` реально отдаёт живыми
+        // (issue #96, ADR 0009), считаются активными — талон не должен
+        // молча уйти в историю до своего завершения.
+        listOf(
+            WalkInStatus.Pending,
+            WalkInStatus.CounterOffered,
+            WalkInStatus.Accepted,
+            WalkInStatus.Waiting,
+            WalkInStatus.InChair,
+        ).forEach { status -> assertTrue(status.name, ActivityStatus.ofWalkIn(status).isActive) }
     }
 
     @Test
@@ -307,8 +334,13 @@ class ActivityDomainTest {
     }
 
     @Test
-    fun `the first load asks every source`() {
-        assertEquals(ActivitySource.entries.toSet(), ActivityFeed.FIRST_PAGES.keys)
+    fun `the first load asks every paginated source`() {
+        // WalkIn — не постраничный (issue #287): у него нет курсора, талон
+        // дописывается в `DefaultActivityRepository.feed()` отдельно.
+        assertEquals(
+            ActivitySource.entries.toSet() - ActivitySource.WalkIn,
+            ActivityFeed.FIRST_PAGES.keys,
+        )
         assertTrue(ActivityFeed.FIRST_PAGES.values.all { it == 0 })
     }
 

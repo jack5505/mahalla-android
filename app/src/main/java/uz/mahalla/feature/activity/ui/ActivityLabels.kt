@@ -29,6 +29,7 @@ internal fun ActivityKind.labelRes(): Int = when (this) {
     ActivityKind.MasterAppointment -> R.string.activity_kind_master_appointment
     ActivityKind.DoctorAppointment -> R.string.activity_kind_doctor_appointment
     ActivityKind.CinemaTicket -> R.string.activity_kind_cinema_ticket
+    ActivityKind.WalkInTicket -> R.string.activity_kind_walkin_ticket
 }
 
 @StringRes
@@ -62,7 +63,13 @@ internal fun ActivityStatus.tone(): MahallaTone = when (this) {
     ActivityStatus.Cancelled, ActivityStatus.Missed -> MahallaTone.Neutral
 }
 
-/** Название сбойного раздела для отметки частичного отказа. */
+/**
+ * Название сбойного раздела для отметки частичного отказа.
+ *
+ * [ActivitySource.WalkIn] сюда на практике не попадает — талон не участвует в
+ * `failures` (issue #287, см. KDoc `ActivitySource.WalkIn`), но ветка нужна
+ * для исчерпывающего `when`.
+ */
 @StringRes
 internal fun ActivitySource.labelRes(): Int = when (this) {
     ActivitySource.Orders -> R.string.activity_source_orders
@@ -70,4 +77,5 @@ internal fun ActivitySource.labelRes(): Int = when (this) {
     ActivitySource.MasterAppointments -> R.string.activity_source_master_appointments
     ActivitySource.DoctorAppointments -> R.string.activity_source_doctor_appointments
     ActivitySource.CinemaTickets -> R.string.activity_source_cinema_tickets
+    ActivitySource.WalkIn -> R.string.activity_source_walkin
 }
