@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import uz.mahalla.data.security.AndroidBiometricAvailability
 import uz.mahalla.data.security.AndroidKeystorePinCipher
+import uz.mahalla.data.security.AndroidKeystoreSessionCipher
 import uz.mahalla.data.security.BiometricAvailability
 import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.DefaultPaymentConfirmationPolicy
@@ -14,6 +15,7 @@ import uz.mahalla.data.security.PaymentConfirmationPolicy
 import uz.mahalla.data.security.PinAttemptStore
 import uz.mahalla.data.security.PinCipher
 import uz.mahalla.data.security.PinStorage
+import uz.mahalla.data.security.SessionCipher
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -21,6 +23,9 @@ interface SecurityModule {
 
     @Binds
     fun bindPinCipher(impl: AndroidKeystorePinCipher): PinCipher
+
+    @Binds
+    fun bindSessionCipher(impl: AndroidKeystoreSessionCipher): SessionCipher
 
     @Binds
     fun bindPinStorage(impl: KeystorePinStorage): PinStorage
