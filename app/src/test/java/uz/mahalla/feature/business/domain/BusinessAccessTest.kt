@@ -20,33 +20,45 @@ import uz.mahalla.feature.role.domain.PlaceStaffRole
 class BusinessAccessTest {
 
     @Test
-    fun `a barbershop has a queue and no food sections`() {
+    fun `a barbershop has a queue, no food sections, and earnings`() {
         val access = access(category = PlaceCategory.Master)
 
-        assertEquals(listOf(BusinessSection.Queue), access.sections)
+        assertEquals(
+            listOf(BusinessSection.Queue, BusinessSection.Earnings),
+            access.sections,
+        )
     }
 
     @Test
     fun `a food place has orders and a menu, but no queue`() {
         val access = access(category = PlaceCategory.Food)
 
-        assertEquals(listOf(BusinessSection.Orders, BusinessSection.Menu), access.sections)
+        assertEquals(
+            listOf(BusinessSection.Orders, BusinessSection.Menu, BusinessSection.Earnings),
+            access.sections,
+        )
     }
 
+    /**
+     * У бэкенда нет ручек ни для очереди, ни для заказов этой категории — но
+     * `wallet/business` общий для всех, и заработок виден в любом случае
+     * (issue #290).
+     */
     @Test
-    fun `a pharmacy has no sections at all - the backend has no handles for it`() {
+    fun `a pharmacy has no category-specific sections, only earnings`() {
         val access = access(category = PlaceCategory.Pharmacy)
 
-        assertTrue(access.sections.isEmpty())
+        assertEquals(listOf(BusinessSection.Earnings), access.sections)
     }
 
     @Test
-    fun `a staff member sees the orders but cannot edit the menu`() {
+    fun `a staff member sees the orders but cannot edit the menu or earnings`() {
         val access = access(category = PlaceCategory.Food, role = PlaceStaffRole.Staff)
 
         assertEquals(listOf(BusinessSection.Orders), access.sections)
         assertFalse(access.canManageMenu)
         assertFalse(access.canOpen(BusinessSection.Menu))
+        assertFalse(access.canOpen(BusinessSection.Earnings))
     }
 
     @Test
@@ -81,7 +93,7 @@ class BusinessAccessTest {
      * очереди быть не может — и открывать разделы незачем.
      */
     @Test
-    fun `sections of a place under moderation do not open`() {
+    fun `sections of a place under moderation do not open, except earnings`() {
         val access = access(
             category = PlaceCategory.Food,
             status = PlaceModerationStatus.Pending,
@@ -92,7 +104,14 @@ class BusinessAccessTest {
         assertFalse(access.canPause)
         // Сам список разделов при этом остаётся — экран показывает их
         // недоступными вместе с объяснением, а не прячет.
-        assertEquals(listOf(BusinessSection.Orders, BusinessSection.Menu), access.sections)
+        assertEquals(
+            listOf(BusinessSection.Orders, BusinessSection.Menu, BusinessSection.Earnings),
+            access.sections,
+        )
+        // Заработок — исключение: бизнес-кошелёк общий для всех заведений
+        // владельца, а не для этого конкретного, и уже заработанные деньги не
+        // должны запираться модерацией именно этой карточки (issue #290).
+        assertTrue(access.canOpen(BusinessSection.Earnings))
     }
 
     @Test
@@ -120,7 +139,10 @@ class BusinessAccessTest {
         assertEquals("Barber Studio", access.placeName)
         assertEquals(PlaceStaffRole.Manager, access.role)
         assertTrue(access.isAvailable)
-        assertEquals(listOf(BusinessSection.Queue), access.sections)
+        assertEquals(
+            listOf(BusinessSection.Queue, BusinessSection.Earnings),
+            access.sections,
+        )
     }
 
     private fun access(

@@ -10,12 +10,15 @@ import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderPage
 import uz.mahalla.feature.business.domain.NewMenuItemForm
+import uz.mahalla.feature.business.domain.Payout
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
+import uz.mahalla.feature.wallet.domain.Wallet
+import uz.mahalla.feature.wallet.domain.WalletTransactionPage
 
 /**
  * Бизнес-панель в памяти (эпик #16): экраны проверяются без MockWebServer.
@@ -58,6 +61,15 @@ class FakeBusinessRepository : BusinessRepository {
     var createItemResult: ApiResult<BusinessMenu>? = null
     var updateItemResult: ApiResult<BusinessMenu>? = null
     var deleteItemResult: ApiResult<BusinessMenu>? = null
+
+    var earningsWalletResult: ApiResult<Wallet> = ApiResult.Success(Wallet())
+    val earningsHistoryPages: MutableMap<Int, ApiResult<WalletTransactionPage>> = mutableMapOf()
+    var defaultEarningsHistoryPage: ApiResult<WalletTransactionPage> =
+        ApiResult.Success(WalletTransactionPage())
+    var payoutResult: ApiResult<Payout>? = null
+
+    val earningsHistoryRequests = mutableListOf<Int>()
+    val payoutRequests = mutableListOf<Pair<Long, String>>()
 
     val accessRequests = mutableListOf<String>()
     val dashboardRequests = mutableListOf<String>()
@@ -169,6 +181,18 @@ class FakeBusinessRepository : BusinessRepository {
     override suspend fun deleteItem(placeId: String, itemId: String): ApiResult<BusinessMenu> {
         deletedItemIds += itemId
         return deleteItemResult ?: menuResult
+    }
+
+    override suspend fun earningsWallet(): ApiResult<Wallet> = earningsWalletResult
+
+    override suspend fun earningsHistory(page: Int, size: Int): ApiResult<WalletTransactionPage> {
+        earningsHistoryRequests += page
+        return earningsHistoryPages[page] ?: defaultEarningsHistoryPage
+    }
+
+    override suspend fun requestPayout(amountSum: Long, cardNumber: String): ApiResult<Payout> {
+        payoutRequests += amountSum to cardNumber
+        return payoutResult ?: ApiResult.Failure(ApiError.Business("NOT_STUBBED"))
     }
 
     companion object {

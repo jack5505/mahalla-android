@@ -10,6 +10,7 @@ import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.ApiResponse
 import uz.mahalla.feature.business.domain.NewMenuItemForm
+import uz.mahalla.feature.business.domain.PayoutStatus
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.fashion.data.AddToCartRequestDto
@@ -34,6 +35,14 @@ import uz.mahalla.feature.role.domain.MyPlace
 import uz.mahalla.feature.role.domain.MyPlacePage
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
+import uz.mahalla.feature.wallet.data.PayoutCreateRequest
+import uz.mahalla.feature.wallet.data.PayoutDto
+import uz.mahalla.feature.wallet.data.TopUpDto
+import uz.mahalla.feature.wallet.data.TopUpRequest
+import uz.mahalla.feature.wallet.data.TransactionDto
+import uz.mahalla.feature.wallet.data.TransactionPageDto
+import uz.mahalla.feature.wallet.data.WalletApi
+import uz.mahalla.feature.wallet.data.WalletDto
 import uz.mahalla.testutil.FakeProviderRepository
 
 /**
@@ -605,13 +614,102 @@ class BusinessRepositoryTest {
         assertEquals(1, entries.single().queuePosition)
     }
 
+    // --- «Заработок» (issue #290) ---
+
+    @Test
+    fun `the business balance is converted from tiyin`() = runTest {
+        val wallet = RecordingWalletApi()
+        wallet.businessWalletResponse = WalletDto(availableBalance = 48_000_000)
+
+        val result = repository(walletApi = wallet).earningsWallet()
+
+        assertEquals(480_000L, (result as ApiResult.Success).data.availableSum)
+    }
+
+    @Test
+    fun `the earnings history asks the same wallet-transactions endpoint as the personal wallet`() =
+        runTest {
+            val wallet = RecordingWalletApi()
+            wallet.transactionsResponse = TransactionPageDto(
+                content = listOf(TransactionDto(id = "t-1", amount = 1_850_000, direction = "OUT")),
+            )
+
+            val result = repository(walletApi = wallet).earningsHistory(page = 2, size = 10)
+
+            assertEquals(listOf(2 to 10), wallet.transactionsRequests)
+            assertEquals(listOf("t-1"), (result as ApiResult.Success).data.items.map { it.id })
+        }
+
+    @Test
+    fun `a payout request converts the amount to tiyin and strips the card formatting`() = runTest {
+        val wallet = RecordingWalletApi()
+        wallet.payoutResponse = PayoutDto(
+            id = "p-1",
+            amount = 25_000_000,
+            cardNumber = "4400123456789012",
+            status = "PENDING",
+        )
+
+        val result = repository(walletApi = wallet)
+            .requestPayout(amountSum = 250_000, cardNumber = "4400 1234 5678 9012")
+
+        assertEquals(
+            PayoutCreateRequest(amount = 25_000_000, cardNumber = "4400123456789012"),
+            wallet.payoutBody,
+        )
+        val payout = (result as ApiResult.Success).data
+        assertEquals(250_000L, payout.amountSum)
+        assertEquals("•••• 9012", payout.cardMasked)
+        assertEquals(PayoutStatus.Pending, payout.status)
+    }
+
+    /**
+     * `PayoutResponse.amount` необязателен (`docs/API-CONTRACT.md`) — молчание
+     * сервера не повод показать «0 so'm» вместо суммы, которую человек только
+     * что отправил (нашло ревью).
+     */
+    @Test
+    fun `a payout response without an amount falls back to the submitted sum`() = runTest {
+        val wallet = RecordingWalletApi()
+        wallet.payoutResponse = PayoutDto(id = "p-1", amount = null, status = "PENDING")
+
+        val result = repository(walletApi = wallet)
+            .requestPayout(amountSum = 100_000, cardNumber = "4400123456789012")
+
+        assertEquals(100_000L, (result as ApiResult.Success).data.amountSum)
+    }
+
+    /** `amount = 0` — то же молчание сервера, что и `null` (нашло ревью). */
+    @Test
+    fun `a payout response with a zero amount falls back to the submitted sum`() = runTest {
+        val wallet = RecordingWalletApi()
+        wallet.payoutResponse = PayoutDto(id = "p-1", amount = 0, status = "PENDING")
+
+        val result = repository(walletApi = wallet)
+            .requestPayout(amountSum = 100_000, cardNumber = "4400123456789012")
+
+        assertEquals(100_000L, (result as ApiResult.Success).data.amountSum)
+    }
+
+    @Test
+    fun `an invalid payout draft never reaches the network`() = runTest {
+        val wallet = RecordingWalletApi()
+
+        val result = repository(walletApi = wallet).requestPayout(amountSum = 0, cardNumber = "123")
+
+        assertEquals(ApiError.Business(BusinessRepository.INVALID_FORM_CODE), (result as ApiResult.Failure).error)
+        assertNull(wallet.payoutBody)
+    }
+
     private fun repository(
         provider: FakeProviderRepository = FakeProviderRepository(),
         api: BusinessApi = RecordingBusinessApi(),
         fashionApi: FashionApi = FakeFashionApi(),
+        walletApi: WalletApi = RecordingWalletApi(),
     ): BusinessRepository = DefaultBusinessRepository(
         api = api,
         fashionApi = fashionApi,
+        walletApi = walletApi,
         providerRepository = provider,
     )
 
@@ -675,6 +773,36 @@ private class FailingDeleteApi : BusinessApi by RecordingBusinessApi() {
  * API панели в памяти: MockWebServer тут не нужен — проверяются тела запросов
  * и разбор ответов, а не сам HTTP (он общий и покрыт в `data/network`).
  */
+/**
+ * `wallet`/`topUp` здесь не используются — репозиторий панели зовёт только
+ * бизнес-кошелёк и общую историю ([earningsHistory], issue #290); методы
+ * реализованы только затем, чтобы фейк удовлетворял интерфейсу.
+ */
+private class RecordingWalletApi : WalletApi {
+
+    var businessWalletResponse: WalletDto = WalletDto()
+    var transactionsResponse: TransactionPageDto = TransactionPageDto()
+    var payoutResponse: PayoutDto = PayoutDto(id = "p-1", status = "PENDING")
+    var payoutBody: PayoutCreateRequest? = null
+    val transactionsRequests = mutableListOf<Pair<Int, Int>>()
+
+    override suspend fun wallet() = ApiResponse(data = WalletDto())
+
+    override suspend fun transactions(page: Int, size: Int): ApiResponse<TransactionPageDto> {
+        transactionsRequests += page to size
+        return ApiResponse(data = transactionsResponse)
+    }
+
+    override suspend fun topUp(request: TopUpRequest) = ApiResponse(data = TopUpDto())
+
+    override suspend fun businessWallet() = ApiResponse(data = businessWalletResponse)
+
+    override suspend fun requestPayout(request: PayoutCreateRequest): ApiResponse<PayoutDto> {
+        payoutBody = request
+        return ApiResponse(data = payoutResponse)
+    }
+}
+
 private class RecordingBusinessApi : BusinessApi {
 
     var dashboardResponse: Map<String, Long?> = emptyMap()

@@ -21,6 +21,14 @@ enum class BusinessSection {
 
     /** Меню, стоп-лист, новые позиции. */
     Menu,
+
+    /**
+     * Баланс бизнес-кошелька, история начислений и заявка на вывод (issue
+     * #290). В отличие от остальных разделов не зависит от категории —
+     * `wallet/business` общий для всех заведений владельца, а не привязан к
+     * конкретному, поэтому раздел есть у любой категории.
+     */
+    Earnings,
 }
 
 /**
@@ -80,19 +88,24 @@ data class BusinessAccess(
      * успеет бэкенд.
      */
     val sections: List<BusinessSection>
-        get() = when (category) {
-            PlaceCategory.Food -> buildList {
-                add(BusinessSection.Orders)
-                if (canManageMenu) add(BusinessSection.Menu)
+        get() = buildList {
+            when (category) {
+                PlaceCategory.Food -> {
+                    add(BusinessSection.Orders)
+                    if (canManageMenu) add(BusinessSection.Menu)
+                }
+
+                PlaceCategory.Fashion -> add(BusinessSection.Orders)
+
+                PlaceCategory.Master -> add(BusinessSection.Queue)
+
+                PlaceCategory.Pharmacy, PlaceCategory.Hospital, PlaceCategory.Cinema,
+                PlaceCategory.Playground, PlaceCategory.Other,
+                -> Unit
             }
-
-            PlaceCategory.Fashion -> listOf(BusinessSection.Orders)
-
-            PlaceCategory.Master -> listOf(BusinessSection.Queue)
-
-            PlaceCategory.Pharmacy, PlaceCategory.Hospital, PlaceCategory.Cinema,
-            PlaceCategory.Playground, PlaceCategory.Other,
-            -> emptyList()
+            // Деньги — решение владельца, не рядового сотрудника (то же
+            // правило, что у canManageMenu).
+            if (role != PlaceStaffRole.Staff) add(BusinessSection.Earnings)
         }
 
     /** Стоп-лист и новые позиции — не работа рядового сотрудника. */
@@ -107,9 +120,19 @@ data class BusinessAccess(
      */
     val canPause: Boolean get() = isOperational && role != PlaceStaffRole.Staff
 
-    /** Открыт ли раздел прямо сейчас: и существует у заведения, и разрешён. */
-    fun canOpen(section: BusinessSection): Boolean =
-        isOperational && section in sections
+    /**
+     * Открыт ли раздел прямо сейчас: и существует у заведения, и разрешён.
+     *
+     * «Заработок» — исключение из требования [isOperational]: бизнес-кошелёк
+     * общий для всех заведений владельца, а не для этого конкретного, и уже
+     * заработанные деньги не становятся недоступны из-за модерации именно
+     * этой карточки (issue #290) — иначе кнопка на панели была бы нажимаемой
+     * на вид и мёртвой по факту.
+     */
+    fun canOpen(section: BusinessSection): Boolean = when (section) {
+        BusinessSection.Earnings -> section in sections
+        else -> isOperational && section in sections
+    }
 
     companion object {
         /**
