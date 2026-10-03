@@ -44,7 +44,7 @@ fun PinScreen(
 }
 
 @Composable
-private fun PinContent(
+fun PinContent(
     state: PinState,
     onEvent: (PinEvent) -> Unit,
     modifier: Modifier = Modifier,

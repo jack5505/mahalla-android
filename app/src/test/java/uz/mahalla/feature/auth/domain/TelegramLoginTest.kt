@@ -124,7 +124,7 @@ class TelegramLoginTest {
         assertTrue(ApiFailure(ApiError.Http(503, null)).isTelegramPollRecoverable())
 
         assertFalse(ApiFailure(ApiError.Http(400, null)).isTelegramPollRecoverable())
-        assertFalse(ApiFailure(ApiError.Forbidden).isTelegramPollRecoverable())
+        assertFalse(ApiFailure(ApiError.Forbidden()).isTelegramPollRecoverable())
         assertFalse(ApiFailure(ApiError.Business("TG_EXPIRED")).isTelegramPollRecoverable())
     }
 

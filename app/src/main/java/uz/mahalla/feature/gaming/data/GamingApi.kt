@@ -10,20 +10,22 @@ import retrofit2.http.Query
 import uz.mahalla.data.network.ApiResponse
 
 /**
- * Игровые зоны и брони (эпик #11, issue #98).
+ * Игровые зоны и брони (эпик #11, issue #98, #406).
  *
- * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы 2026-09-04). В
- * `gaming-controller` пять путей, и клиенту принадлежат **три**: зоны
- * заведения, создание брони и свои брони. Оставшиеся два
- * (`POST places/{placeId}/zones`, `PUT places/{placeId}/bookings/{id}/complete`)
- * ведёт заведение из бизнес-панели (эпик #16).
+ * Контракт снят со стенда (`/v3/api-docs` + прямые curl'ы 2026-09-04,
+ * зоны и места — повторно curl'ом 2026-10-02 после выката бэкенда
+ * jack5505/mahalla#363). В `gaming-controller` ручки, и клиенту принадлежат
+ * **четыре**: зоны заведения, места зоны, создание брони и свои брони.
+ * Оставшиеся два (`POST places/{placeId}/zones`,
+ * `PUT places/{placeId}/bookings/{id}/complete`) ведёт заведение из
+ * бизнес-панели (эпик #16).
  *
  * **Отмены брони у бэкенда нет вовсе** — ни в этом контроллере, ни в общем
  * `orders` (там для `GAMING` есть только `GET`). Поэтому её нет и в
  * приложении: кнопка, которую нечем выполнить, хуже её отсутствия. Задача
  * заведена в отчёте по issue #98.
  *
- * Гео-заголовки обязательны на всех трёх (без них `403
+ * Гео-заголовки обязательны на всех путях (без них `403
  * GEO_PERMISSION_REQUIRED`), но их ставит `GeoHeaderInterceptor` (issue #53).
  */
 interface GamingApi {
@@ -34,10 +36,26 @@ interface GamingApi {
      * меню в «Еде» (issue #9), и это правильно: бронировать нельзя, а
      * посмотреть цены можно.
      *
-     * `placeId` в схеме — `uuid`.
+     * `placeId` в схеме — `uuid`. После jack5505/mahalla#363 (issue #406)
+     * `totalSeats` ушёл, вместо него `totalUnits` — число реальных мест зоны.
      */
     @GET("gaming/places/{placeId}/zones")
     suspend fun zones(@Path("placeId") placeId: String): ApiResponse<List<GamingZoneDto>>
+
+    /**
+     * Места зоны: нумерованные позиции, по которым бэкенд считает
+     * [GamingZoneDto.totalUnits] (issue #406). **Ручка анонимна** — тот же
+     * curl 2026-10-02 без токена дал `200` с местами зоны, как и у списка зон.
+     *
+     * Выбора места в этом шаге ещё нет: бронь по-прежнему уходит `zoneId`
+     * ([book]), а список здесь — только справочник, что именно в зоне (issue
+     * #406). Бронь по `unitId` — следующий бэкенд-шаг (V42), отдельная задача.
+     */
+    @GET("gaming/places/{placeId}/zones/{zoneId}/units")
+    suspend fun units(
+        @Path("placeId") placeId: String,
+        @Path("zoneId") zoneId: String,
+    ): ApiResponse<List<GamingUnitDto>>
 
     /**
      * Забронировать зону. Требует Bearer (`401 UNAUTHORIZED` без токена).
@@ -93,8 +111,15 @@ data class CreateGamingBookingRequest(
 )
 
 /**
- * `GamingZone`. Все поля необязательные: отсутствие любого из них — не повод
- * показать ошибку вместо списка зон.
+ * `GamingZoneResponse`. Все поля необязательные: отсутствие любого из них —
+ * не повод показать ошибку вместо списка зон.
+ *
+ * С jack5505/mahalla#363 (issue #406) `totalSeats` заменён на `totalUnits`
+ * (число реальных мест, не оценка вместимости), а `zoneType` — закрытый
+ * справочник; разбор неизвестного значения в `OTHER` — дело маппера
+ * ([uz.mahalla.feature.gaming.domain.GamingZoneType.fromApi]), не
+ * сериализатора: здесь поле остаётся сырой строкой, иначе `kotlinx.serialization`
+ * уронит всю зону на будущем значении справочника.
  */
 @Serializable
 data class GamingZoneDto(
@@ -104,7 +129,7 @@ data class GamingZoneDto(
     @SerialName("description") val description: String? = null,
     @SerialName("zoneType") val zoneType: String? = null,
     @SerialName("pricePerHour") val pricePerHour: Long? = null,
-    @SerialName("totalSeats") val totalSeats: Int? = null,
+    @SerialName("totalUnits") val totalUnits: Long? = null,
     /**
      * Jackson сериализует `boolean isAvailable` то как `isAvailable`, то как
      * `available` — принимаем оба имени. Ошибка здесь увела бы в «закрыто»
@@ -112,6 +137,22 @@ data class GamingZoneDto(
      */
     @SerialName("isAvailable") val isAvailable: Boolean? = null,
     @SerialName("available") val available: Boolean? = null,
+)
+
+/**
+ * `GamingUnitResponse` (issue #406) — одно нумерованное место зоны.
+ *
+ * `seats > 1` — кабина на несколько посадочных мест, бронируется целиком;
+ * отдельных мест внутри кабины у бэкенда нет. На стенде 2026-10-02 все места
+ * пришли с `seats: 1` — тестовые данные кабину не завели, но поле в схеме
+ * есть и задача прямо просит его разбирать.
+ */
+@Serializable
+data class GamingUnitDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("zoneId") val zoneId: String? = null,
+    @SerialName("number") val number: Int? = null,
+    @SerialName("seats") val seats: Int? = null,
 )
 
 /** `GamingBooking`. */

@@ -279,12 +279,23 @@ class DefaultAuthRepository @Inject constructor(
     }
 
     private suspend fun serverPinLogin(pin: String): ApiResult<LoginResult> {
+        // Без номера бэкенд с 2026-09-07 отвечает 400 VALIDATION_ERROR на
+        // любой PIN, не посмотрев на него (issue #403) — отправлять такой
+        // запрос незачем. `pendingPhone` живёт в памяти процесса ровно в паре
+        // с [pendingServerPin] (оба пишутся в requestCode/verifyCode и
+        // сбрасываются вместе в logout), так что здесь он пуст, только если
+        // испытание пережило процесс, — восстанавливать уже нечего.
+        val phone = pendingPhone ?: run {
+            pendingServerPin = null
+            return ApiResult.Failure(ApiError.Unauthorized)
+        }
         val device = deviceInfoProvider.current().toDto()
         val location = locationProvider.current()
 
         val result = apiCall {
             authApi.pinLogin(
                 PinLoginRequest(
+                    phone = phone,
                     pin = pin,
                     device = device,
                     lat = location.latitude,

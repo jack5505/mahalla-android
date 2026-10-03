@@ -2,6 +2,7 @@ package uz.mahalla.feature.role.data
 
 import uz.mahalla.core.paging.hasMorePages
 import uz.mahalla.core.result.ApiError
+import uz.mahalla.core.result.ApiFailure
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.result.apiCall
 import uz.mahalla.core.result.map
@@ -122,7 +123,29 @@ class DefaultProviderRepository @Inject constructor(
      */
     override suspend fun myPlaces(page: Int, size: Int): ApiResult<MyPlacePage> =
         apiCall { api.myPlaces(page = page.coerceAtLeast(0), size = size).payload() }
+            .recoverBareServerErrorAsUnauthorized()
             .map(MyPlacePageDto::toDomain)
+
+    /**
+     * `places/my` без токена отвечает `500` вместо `401` (issue #191 здесь,
+     * #256 у бэкенда). Когда стенд шлёт при этом код и текст —
+     * `MyPlacesRepositoryTest` фиксирует, что они доезжают до экрана как есть:
+     * сервер объяснил причину лучше, чем клиент бы догадался, а гадать, что
+     * именно означает частично пустое тело (код есть, текста нет, и наоборот),
+     * не стоит. Но когда тела нет вовсе — ни кода, ни текста, — «ошибка
+     * сервера» только вводит в заблуждение: до фикса бэкенда честнее показать
+     * «войдите заново», благо один из двух реальных отказов этой ручки без
+     * токена — ровно он.
+     */
+    private fun <T> ApiResult<T>.recoverBareServerErrorAsUnauthorized(): ApiResult<T> {
+        if (this !is ApiResult.Failure) return this
+        val error = failure.error
+        val bodiless = failure.server?.code == null && failure.serverMessage == null
+        if (error !is ApiError.Http || error.code != SERVER_ERROR_HTTP_CODE || !bodiless) {
+            return this
+        }
+        return ApiResult.Failure(ApiFailure(error = ApiError.Unauthorized, server = failure.server))
+    }
 
     override suspend fun toggleAvailability(
         placeId: String,
@@ -143,6 +166,10 @@ class DefaultProviderRepository @Inject constructor(
             response.ensureSuccess()
             response.data ?: !current
         }
+    }
+
+    private companion object {
+        const val SERVER_ERROR_HTTP_CODE = 500
     }
 }
 

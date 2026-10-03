@@ -10,6 +10,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import uz.mahalla.BuildConfig
 import uz.mahalla.feature.activity.ui.ActivityScreen
 import uz.mahalla.feature.booking.domain.AppointmentVertical
 import uz.mahalla.feature.booking.ui.BookingScreen
@@ -53,6 +54,8 @@ import uz.mahalla.feature.onboarding.ui.PhoneInputScreen
 import uz.mahalla.feature.onboarding.ui.PinScreen
 import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
+import uz.mahalla.feature.order.ui.OrderDeepLinkDestination
+import uz.mahalla.feature.order.ui.OrderDeepLinkScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
@@ -275,12 +278,16 @@ fun MahallaNavHost(
                     onDiscoveryClick = { navController.navigateToTab(BottomNavItem.Discovery) },
                 )
             }
-            composable<WalletRoute> {
-                // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
-                // строка в профиле (issue #103).
-                WalletScreen(
-                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
-                )
+            // Скоуп релиза (issue #333): пилот и публичный запуск идут без
+            // кошелька — маршрута в графе нет, как и таба (`BottomNavItem.visible`).
+            if (BuildConfig.PAYMENTS_ENABLED) {
+                composable<WalletRoute> {
+                    // Карточка «Mahalla+» ведёт на тот же экран подписки, что и
+                    // строка в профиле (issue #103).
+                    WalletScreen(
+                        onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    )
+                }
             }
             composable<ProfileRoute> {
                 ProfileScreen(
@@ -337,7 +344,13 @@ fun MahallaNavHost(
                         navController.navigate(MyFreelancerIncomingOrdersRoute)
                     },
                     // Подписка (issue #103): тарифы, пробный период и отмена.
-                    onOpenSubscription = { navController.navigate(SubscriptionRoute) },
+                    // `null` вне скоупа релиза (issue #333) — строка в профиле
+                    // не рисуется вовсе, а не ведёт в никуда.
+                    onOpenSubscription = if (BuildConfig.PAYMENTS_ENABLED) {
+                        { navController.navigate(SubscriptionRoute) }
+                    } else {
+                        null
+                    },
                     // Настройки уведомлений (эпик 11): тот же экран, что из
                     // центра уведомлений.
                     onOpenNotificationSettings = {
@@ -521,10 +534,18 @@ fun MahallaNavHost(
         // Deep link `mahalla://subscription` (эпик 11): «подписка
         // заканчивается» ведёт туда, где её продлевают. Аргументов у экрана
         // нет — какая подписка, бэкенд знает сам.
-        composable<SubscriptionRoute>(
-            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.SUBSCRIPTION_PATTERN }),
-        ) {
-            SubscriptionScreen(onBack = { navController.navigateUp() })
+        //
+        // Скоуп релиза (issue #333): вне флага маршрута в графе нет — ни
+        // строка профиля, ни deep link (манифест тоже не регистрирует хост
+        // `subscription`), ни push-цель (`NotificationTarget.of`) на него не
+        // попадают, так что оставлять composable недостижимым не пришлось бы,
+        // но лишний маршрут в графе — лишний повод для ошибки навигации.
+        if (BuildConfig.PAYMENTS_ENABLED) {
+            composable<SubscriptionRoute>(
+                deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.SUBSCRIPTION_PATTERN }),
+            ) {
+                SubscriptionScreen(onBack = { navController.navigateUp() })
+            }
         }
 
         // Поиск и карта — вне графа табов: нижняя навигация на них не нужна,
@@ -553,10 +574,12 @@ fun MahallaNavHost(
             deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.NOTIFICATIONS_PATTERN }),
         ) {
             NotificationsScreen(
-                // Уведомление о заказе ведёт на его статус. Экран уведомлений
-                // при этом остаётся в стеке: «назад» возвращает к списку, а не
-                // выбрасывает на главную посреди чтения.
-                onOrderClick = { orderId -> navController.navigate(OrderStatusRoute(orderId)) },
+                // Уведомление о заказе ведёт на его статус — через резолвер
+                // (issue #343): вертикаль в уведомлении не известна, так же
+                // как и в пуше. Экран уведомлений при этом остаётся в стеке:
+                // «назад» возвращает к списку, а не выбрасывает на главную
+                // посреди чтения.
+                onOrderClick = { orderId -> navController.navigate(OrderDeepLinkRoute(orderId)) },
                 onOpenSubscription = { navController.navigate(SubscriptionRoute) },
                 onOpenSettings = { navController.navigate(NotificationSettingsRoute) },
                 onBack = { navController.navigateUp() },
@@ -871,7 +894,6 @@ fun MahallaNavHost(
                         popUpTo<MenuRoute> { inclusive = true }
                     }
                 },
-                onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -915,7 +937,6 @@ fun MahallaNavHost(
                         popUpTo<FashionCartRoute> { inclusive = true }
                     }
                 },
-                onOpenWallet = { navController.navigate(WalletRoute) },
                 onBack = { navController.navigateUp() },
             )
         }
@@ -924,12 +945,7 @@ fun MahallaNavHost(
             FashionOrdersScreen(onBack = { navController.navigateUp() })
         }
 
-        // Deep link из пуша (эпик 11): `mahalla://order/{orderId}`. Пуш о
-        // заказе ведёт прямо на его статус — это единственная цель, у которой
-        // из контракта однозначно следует, чем является entityId.
-        composable<OrderStatusRoute>(
-            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.ORDER_PATTERN }),
-        ) {
+        composable<OrderStatusRoute> {
             OrderStatusScreen(
                 onOpenCart = { placeId ->
                     navController.navigate(CartRoute(placeId)) {
@@ -937,6 +953,27 @@ fun MahallaNavHost(
                     }
                 },
                 onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Deep link из пуша (эпик 11): `mahalla://order/{orderId}`. Вертикаль
+        // заранее не известна (issue #343) — экран резолвит её сам и уходит
+        // дальше, замещая себя в стеке: «назад» с найденного экрана не должен
+        // возвращаться на пустую крутилку.
+        composable<OrderDeepLinkRoute>(
+            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.ORDER_PATTERN }),
+        ) {
+            OrderDeepLinkScreen(
+                onResolved = { destination ->
+                    val target = when (destination) {
+                        is OrderDeepLinkDestination.Food -> OrderStatusRoute(destination.orderId)
+                        OrderDeepLinkDestination.Clothing -> FashionOrdersRoute
+                        OrderDeepLinkDestination.Activities -> ActivitiesRoute
+                    }
+                    navController.navigate(target) {
+                        popUpTo<OrderDeepLinkRoute> { inclusive = true }
+                    }
+                },
             )
         }
     }

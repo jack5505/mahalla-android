@@ -220,7 +220,7 @@
         <item quantity="other">Осталось %1$d упаковки</item>
     </plurals>
 
-    <!-- Игровые зоны (issue #98): места в зоне, часы брони, границы длительности. -->
+    <!-- Игровые зоны (issue #98): места в зоне (с #406 — из totalUnits), часы брони, границы длительности. -->
     <plurals name="gaming_zone_seats">
         <item quantity="one">%1$d место</item>
         <item quantity="few">%1$d места</item>

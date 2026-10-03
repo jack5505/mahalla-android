@@ -285,6 +285,7 @@
     <string name="error_timeout">Server javob bermadi</string>
     <string name="error_unauthorized">Sessiya tugadi, qaytadan kiring</string>
     <string name="error_forbidden">Bu amal uchun ruxsat yo\'q</string>
+    <string name="error_geo_required">Bu amal uchun joylashuvga ruxsat bering</string>
     <string name="error_not_found">Ma\'lumot topilmadi</string>
     <string name="error_server">Serverda xatolik yuz berdi</string>
     <string name="error_unknown">Nimadir xato ketdi</string>
@@ -482,12 +483,10 @@
     <string name="checkout_payment">To\'lov</string>
     <string name="checkout_payment_wallet">Hamyon</string>
     <string name="checkout_payment_cash">Naqd pul</string>
-    <string name="checkout_wallet_balance">Hamyon balansi: %1$s</string>
     <string name="checkout_top_up">Hamyonni to\'ldirish</string>
     <string name="checkout_delivery_fee">Yetkazib berish</string>
     <string name="checkout_submit">Buyurtma berish</string>
     <string name="checkout_error_address">Yetkazib berish uchun manzilni kiriting</string>
-    <string name="checkout_error_insufficient_funds">Hamyonda %1$s yetishmayapti</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Buyurtma</string>
@@ -1155,6 +1154,15 @@
     <string name="gaming_status_completed">Tugadi</string>
     <string name="gaming_status_cancelled">Bekor qilindi</string>
     <string name="gaming_status_unknown">Holati aniq emas</string>
+    <!-- Типы зон и места зоны (issue #406, бэкенд jack5505/mahalla#363). -->
+    <string name="gaming_zone_type_pc">Kompyuter</string>
+    <string name="gaming_zone_type_console">Konsol</string>
+    <string name="gaming_zone_type_table">Stol</string>
+    <string name="gaming_zone_type_vr">VR joy</string>
+    <string name="gaming_zone_type_other">Joy</string>
+    <string name="gaming_zone_units_title">Zonadagi joylar</string>
+    <string name="gaming_unit_number">%1$s №%2$d</string>
+    <string name="gaming_unit_cabin">Kabina №%1$d · %2$s</string>
 
     <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
     <string name="notification_channel_orders">Buyurtmalar</string>

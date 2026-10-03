@@ -35,10 +35,11 @@ import uz.mahalla.core.ui.snackbar.SnackbarMessage
  * @param sessionExpired сессия умерла, пока приложение работало (issue #138):
  * повод увести человека на вход с любого экрана.
  * @param pendingDeepLink ссылка, которую `NavHost` не должен разобрать сам
- * (issue #160): стартовый пункт — гейт (`BackendUrlRoute`/`UpdateRoute`), и
- * `MainActivity` уже забрала ссылку из `activity.intent`, чтобы автоматический
- * разбор в `NavHost.setGraph` не вытеснил гейт. Разбирается здесь же, как
- * только гейт пройден.
+ * (issue #160, #343): стартовый пункт — гейт (`BackendUrlRoute`/`UpdateRoute`)
+ * или ещё непройденный онбординг/вход, и `MainActivity` уже забрала ссылку из
+ * `activity.intent`, чтобы автоматический разбор в `NavHost.setGraph` не
+ * вытеснил гейт и не обошёл вход. Разбирается здесь же, как только назначение
+ * оказывается внутри основного графа.
  */
 @Composable
 fun MahallaApp(
@@ -55,7 +56,7 @@ fun MahallaApp(
 ) {
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentDestination = currentEntry?.destination
-    val selectedItem = BottomNavItem.entries.firstOrNull { it.matches(currentDestination) }
+    val selectedItem = BottomNavItem.visible.firstOrNull { it.matches(currentDestination) }
     val snackbarController = rememberSnackbarController()
     val expiredMessage = stringResource(R.string.error_unauthorized)
 
@@ -82,7 +83,7 @@ fun MahallaApp(
                 // Нижняя навигация — компонент UI-кита (эпик 2.2): цвета,
                 // подписи и цель нажатия 48dp заданы там, а не на каждом экране.
                 MahallaBottomNav(
-                    items = BottomNavItem.entries.map { item ->
+                    items = BottomNavItem.visible.map { item ->
                         NavItemUi(
                             id = item.name,
                             label = stringResource(item.labelRes),
@@ -93,7 +94,7 @@ fun MahallaApp(
                     onSelect = { selected ->
                         // Ищем по name, а не valueOf: неизвестный id — это баг
                         // сборки списка, а не повод уронить приложение.
-                        BottomNavItem.entries
+                        BottomNavItem.visible
                             .firstOrNull { it.name == selected.id }
                             ?.let(navController::navigateToTab)
                     },
@@ -149,14 +150,16 @@ internal fun SessionExpiryEffect(
 }
 
 /**
- * Отложенный deep link (issue #160).
+ * Отложенный deep link (issue #160, #343).
  *
- * Пока стартовый пункт — гейт (`BackendUrlRoute`/`UpdateRoute`), `NavHost` не
- * получает исходный `intent`: его разбор через `popUpTo(graph){inclusive}`
- * вытеснил бы гейт, и обязательное обновление или ненастроенный адрес бэкенда
- * можно было бы обойти нажатием на пуш. `MainActivity` забирает ссылку заранее
- * и передаёт её сюда; как только текущее назначение перестаёт быть гейтом
- * (человек прошёл его), она разбирается тем же `handleDeepLink`, что и
+ * Пока текущее назначение не внутри [MainGraph] — гейт бэкенд-урла или
+ * обновления, либо ещё непройденный онбординг/вход, — `NavHost` не получает
+ * исходный `intent`: его разбор через `popUpTo(graph){inclusive}` вытеснил бы
+ * гейт (обязательное обновление, ненастроенный адрес бэкенда) или обошёл бы
+ * вход (issue #343 — стек `OnboardingGraph → OrderDeepLinkRoute`, запрос без
+ * сессии падал бы в 401). `MainActivity` забирает ссылку заранее и передаёт
+ * её сюда; как только текущее назначение оказывается внутри `MainGraph`
+ * (человек прошёл все гейты), она разбирается тем же `handleDeepLink`, что и
  * `onNewIntent`.
  *
  * `consumed` нужен, чтобы не повторять разбор на каждой смене назначения
@@ -174,14 +177,24 @@ internal fun DeferredDeepLinkEffect(
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(currentEntry) {
         val destination = currentEntry?.destination ?: return@LaunchedEffect
-        if (destination.isGate()) return@LaunchedEffect
+        if (destination.isBeforeMain()) return@LaunchedEffect
         consumed = true
         navController.handleDeepLink(pendingDeepLink)
     }
 }
 
-private fun NavDestination.isGate(): Boolean =
-    hasRoute(BackendUrlRoute::class) || hasRoute(UpdateRoute::class)
+/**
+ * Назначение ещё не внутри основного графа — гейт, онбординг или вход.
+ *
+ * Держится на негласном правиле: каждый выход из гейта/онбординга ведёт
+ * прямиком в `MainGraph` (`afterBackendUrl`/`afterUpdate`/`finishOnboarding`)
+ * — ни один не приземляется сперва на маршрут вне обоих графов (вроде
+ * `RoleRoute` или `NotificationsRoute`). Если у выхода появится такой
+ * промежуточный экран, отложенная ссылка зависнет здесь навсегда: `hierarchy`
+ * до `MainGraph` не доберётся, а других способов проверить «гейт пройден» нет.
+ */
+private fun NavDestination.isBeforeMain(): Boolean =
+    hierarchy.none { it.hasRoute(MainGraph::class) }
 
 /**
  * Таб считается выбранным, если маршрут есть в иерархии текущего назначения:

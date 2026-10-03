@@ -3651,3 +3651,121 @@ to catch up`) подставляет DAO, чей `observeAll()` никогда �
 
 testDebugUnitTest: 2990 тестов, 0 падений, 6 пропущено (то же самое
 состояние, что и в `main`). assembleDebug и lintDebug зелёные.
+
+## Этап: чекаут «Еды» и «Одежды» — только наличные (issue #334, релиз, BLOCKER)
+
+Бэкенд на этом релизе принимает только `paymentMethod=CASH` — `WALLET`
+отклоняет, а оба чекаута по умолчанию выбирали кошелёк и показывали
+переключатель «Кошелёк | Наличные»: заказ падал бы с ошибкой сервера.
+
+`CheckoutForm.payment` по умолчанию — `PaymentMethod.Cash`. Выбор способа
+оплаты убран из обоих экранов целиком (не спрятан за флагом — его в
+кодовой базе нет): вместо переключателя — одна неактивная карточка
+«Наличные». Вместе с выбором ушли baланс кошелька при открытии чекаута
+(`WalletRepository.wallet()` в `FashionCheckoutViewModel`), сама оплата
+кошельком в «Еде» (`WalletPaymentFlow`, шторка подтверждения PIN/биометрией,
+`CheckoutEffect.OpenWallet` → экран кошелька) и связанные события/эффекты в
+обоих контрактах. `PaymentMethod.Wallet` в перечислении остался — старые
+заказы, оплаченные кошельком, всё ещё показывают это в истории и
+бизнес-панели.
+
+`CheckoutValidator` не тронут: он по-прежнему считает `InsufficientFunds`
+для `PaymentMethod.Wallet`, если он однажды вернётся — переписывать
+проверку баланса заново не придётся. Строки `checkout_wallet_balance` и
+`checkout_error_insufficient_funds` убраны как осиротевшие (были только в
+двух изменённых экранах); `checkout_payment_wallet` и `checkout_top_up`
+остались — их использует `BusinessOrdersScreen` и общий
+`PaymentConfirmSheet`.
+
+**Решено не делать.** Issue ссылался на флаг `PAYMENTS_ENABLED` из другой,
+ещё не существующей задачи о скрытии кошелька — в кодовой базе такого
+флага нет (`grep` по всему `app/` пуст), и заводить `BuildConfig`-поле под
+не описанное здесь поведение — угадывание контракта, которого просили не
+делать. Вместо флага — прямое удаление выбора, как и просил заголовок
+issue («убрать выбор Wallet»): дешевле в коде и не создаёт полуживую
+ветку с неопределённым поведением при `PAYMENTS_ENABLED=true`.
+
+## Этап: инструментальный smoke-тест, Compose-тесты критичных флоу (issue #347)
+
+`app/src/androidTest` не существовал вовсе (0 файлов), при этом job
+`emulator` в `ci.yml` держал `connectedDebugAndroidTest` — задача не
+ошибалась, ей просто нечего было проверять. Эмулятора нет ни в CI по
+умолчанию (job — по метке `emulator` на PR), ни в песочнице агента, поэтому
+новый код в `app/src/androidTest` проверен только сборкой
+(`assembleDebugAndroidTest`, `BUILD SUCCESSFUL`), не прогоном.
+
+- **`HiltTestRunner`** (`app/src/androidTest/java/uz/mahalla/HiltTestRunner.kt`)
+  подменяет `Application` на `HiltTestApplication` до первого
+  `onCreate()` — без этого `@HiltAndroidTest` не находит тестовый граф.
+  `testInstrumentationRunner` в `defaultConfig` указывает на него.
+- **`MainActivitySmokeTest`** запускает `MainActivity` через
+  `createAndroidComposeRule` и проверяет, что граф Hilt собрался и
+  композиция прошла без падения. Экран, на котором окажется свежий запуск
+  (адрес бэкенда, онбординг или уже авторизованные табы — зависит от
+  `RootViewModel.resolveStart`), тест не фиксирует: авторизованный смоук до
+  четырёх табов требует фейковых Hilt-модулей `AuthRepository` и
+  `OnboardingRepository`, которых в этой задаче нет — открытый пункт.
+- `robolectric.properties`: `sdk=34` → `sdk=35`, вслед за `targetSdk`.
+  Robolectric 4.14.1 API 35 поддерживает.
+- Новые Robolectric-Compose тесты — `PinScreenTest`, `AppLockScreenTest`,
+  `CheckoutScreenTest` (регресс на «только наличные», issue #334): экраны,
+  где ошибка дороже всего — вход, замок и деньги — не имели покрытия
+  композиции вовсе, только ViewModel и нампад отдельно.
+- `AppLockObserverTest` — впервые проверена связка `onStop`/`onStart` с
+  `AppLockManager` через собственный `LifecycleRegistry` (наблюдатель
+  раньше проверялся только руками, реальным приложением).
+- `DeviceInfoMapperTest`, `ActivityMappersTest` — у обоих не было ни одной
+  прямой ссылки из тестов, только сквозное покрытие через сеть
+  (`ActivityRepositoryTest`), которое не добирается до мягких случаев вроде
+  записи без `id` или без даты.
+- `MahallaDatabaseTest`: `CartDraftDao.items/line/upsertAll/replaceAll/clearAll`
+  были не покрыты, хотя сам DAO проверялся давно.
+- `AnalyticsTrackerTest.Thread.sleep`, упомянутый в issue, к 2026-09-27 уже
+  не существовал — заменён на `CountDownLatch` в issue #228 (`0607609`).
+- `AGENTS.md`: счётчик тестов — `2061 в 190 классах` → `3016 в 260 классах`
+  (реальный прогон на момент этой задачи; расхождение с 2853/242 из issue
+  — чужие PR за прошедшую неделю).
+
+## Этап: игровой клуб — тип зоны из справочника, `totalUnits`, места зоны (issue #406)
+
+Бэкенд переделал игровой клуб в два шага (jack5505/mahalla#363,
+`feat/gaming-units`, V41): зона — не «число мест оценкой», а группа
+нумерованных мест, у зоны появился тип из справочника. **Контракт снят
+прямым curl'ом по живому стенду 2026-10-02** (не из исходников бэкенда,
+которых агенту не видно): `totalSeats` ушёл, вместо него `totalUnits`;
+`zoneType` — закрытый список (`PC, CONSOLE, VR, BILLIARDS, TABLE_TENNIS,
+OTHER`, на стенде встретились `PC`, `CONSOLE`, `OTHER`); новая анонимная
+ручка `gaming/places/{id}/zones/{id}/units` отдаёт `{id, zoneId, number,
+seats}`. Подробности пробы — `docs/API-CONTRACT.md` → `GamingApi`.
+
+- `GamingZoneDto.totalSeats` → `totalUnits: Long?`; `GamingZone.totalSeats`
+  → `totalUnits: Int?`. Новый `GamingUnitDto`/`GamingUnit`, ручка
+  `GamingApi.units` и метод `GamingRepository.units` — анонимная, как и
+  `zones`.
+- `GamingZoneType` (`PC, CONSOLE, VR, BILLIARDS, TABLE_TENNIS, OTHER`) — по
+  образцу `PlaceCategory`: `apiValue` + `labelRes` + `icon` на самом
+  перечислении, разбор в мапере (`GamingZoneType.fromApi`), не в
+  сериализаторе — неизвестное значение справочника ложится в `OTHER`, а не
+  роняет зону. `Billiards` и `TableTennis` делят одну подпись («Stol» /
+  «Стол»): бэкенд развёл их как два вида стола, UI — нет.
+  `GamingUnit.isCabin` (`seats > 1`) — отдельных мест внутри кабины бэкенд
+  не заводит.
+- Карточка зоны: иконка и подпись типа (`MahallaBadge`), число мест — из
+  `totalUnits` (та же строка `gaming_zone_seats`, источник поля сменился).
+  Шторка брони: список мест зоны **до** выбора времени, как справочник —
+  грузится при открытии шторки (`GamingZonesViewModel.loadUnits`), отказ
+  загрузки не ломает бронь (список остаётся пустым, бронь по-прежнему
+  уходит `zoneId`). Выбора места нет — он появится вместе со вторым
+  бэкенд-шагом (V42, `freeUnitsNow` и бронь по `unitId`), отдельной
+  задачей.
+- Новые строки `gaming_zone_type_*`, `gaming_zone_units_title`,
+  `gaming_unit_number`, `gaming_unit_cabin` — сразу в `values/` и
+  `values-ru/`.
+
+**Решено не делать.** Пункт задачи про карточку зоны («для зоны-кабин —
+«1 kabina · 4 PK»») требует знать `seats` конкретных мест — а зона на
+карточке их не знает: `units` подтягиваются только при открытии шторки, а
+не для каждой карточки списка (догрузка на каждую зону — N+1 запросов на
+экран, которых в проекте нет ни у одной вертикали). Карточка показывает
+только `totalUnits` общей строкой; кабинное форматирование — только в
+списке мест открытой шторки, где `seats` уже есть.

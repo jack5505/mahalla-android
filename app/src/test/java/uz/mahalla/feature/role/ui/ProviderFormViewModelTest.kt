@@ -135,7 +135,7 @@ class ProviderFormViewModelTest {
         mainDispatcherRule.dispatcher,
     ) {
         categories.categories.value = listOf(PlaceCategory.Food, PlaceCategory.Master)
-        provider.result = ApiResult.Failure(ApiFailure(error = ApiError.Forbidden, server = null))
+        provider.result = ApiResult.Failure(ApiFailure(error = ApiError.Forbidden(), server = null))
         val viewModel = viewModel(phone = "+998901234567")
         advanceUntilIdle()
         fill(viewModel)
@@ -239,7 +239,7 @@ class ProviderFormViewModelTest {
         mainDispatcherRule.dispatcher,
     ) {
         provider.result = ApiResult.Failure(
-            ApiFailure(error = ApiError.Forbidden, server = null),
+            ApiFailure(error = ApiError.Forbidden(), server = null),
         )
         val viewModel = viewModel(phone = "+998901234567")
         advanceUntilIdle()
@@ -249,7 +249,7 @@ class ProviderFormViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.registered)
-        assertEquals(ApiError.Forbidden, viewModel.state.value.submitError?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.submitError?.error)
         // Заново набирать заявку из-за отказа сервера человек не должен.
         assertEquals("Osh Markazi", viewModel.state.value.form.name)
     }

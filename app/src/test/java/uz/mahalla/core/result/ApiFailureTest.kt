@@ -15,7 +15,7 @@ class ApiFailureTest {
         // Иначе на экране появилась бы пустая красная строка вместо
         // «нет доступа»: хуже, чем общий текст.
         val failure = ApiFailure(
-            error = ApiError.Forbidden,
+            error = ApiError.Forbidden(),
             server = ServerError(httpCode = 403, message = "   "),
         )
 
@@ -25,7 +25,7 @@ class ApiFailureTest {
     @Test
     fun `a real message wins over the classification`() {
         val failure = ApiFailure(
-            error = ApiError.Forbidden,
+            error = ApiError.Forbidden(),
             server = ServerError(httpCode = 403, message = "Joylashuv ruxsatini yoqing"),
         )
 

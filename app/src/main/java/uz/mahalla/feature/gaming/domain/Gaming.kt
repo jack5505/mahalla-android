@@ -1,5 +1,14 @@
 package uz.mahalla.feature.gaming.domain
 
+import androidx.annotation.StringRes
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.TableBar
+import androidx.compose.material.icons.outlined.Vrpano
+import androidx.compose.ui.graphics.vector.ImageVector
+import uz.mahalla.R
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
@@ -7,18 +16,19 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
- * Игровая зона заведения (эпик #11, issue #98).
+ * Игровая зона заведения (эпик #11, issue #98, #406).
  *
- * Схема `GamingZone` снята со стенда 2026-09-04 (`/v3/api-docs`):
- * `id, placeId, name, description, zoneType, pricePerHour, totalSeats,
- * isAvailable`. Коллизии springdoc у этого имени нет — в схеме оно
- * встречается один раз.
+ * Схема `GamingZoneResponse` снята со стенда 2026-09-04, поля `totalUnits` и
+ * закрытый `zoneType` — повторно curl'ом 2026-10-02 после выката
+ * jack5505/mahalla#363: `id, placeId, name, description, zoneType,
+ * pricePerHour, totalUnits, isAvailable`.
  *
  * @param pricePerHour цена часа в **сумах**. Бэкенд отдаёт её в тийинах,
  * пересчёт делает маппер (`Money.tiyinToSom`, issue #149); [totalPrice]
  * считается уже из сум, в тело брони деньги не уходят.
- * @param totalSeats мест в зоне. `null` — сервер не прислал: показывать
- * «0 мест» вместо молчания значило бы соврать.
+ * @param totalUnits реальных мест в зоне (было `totalSeats` — оценка
+ * вместимости, issue #406). `null` — сервер не прислал: показывать «0 мест»
+ * вместо молчания значило бы соврать.
  * @param isAvailable зона открыта для брони. Молчание сервера — «закрыта»
  * (правило `MyPlace`, issue #94): предложить бронь того, о чём ничего не
  * известно, хуже, чем не предложить.
@@ -28,9 +38,9 @@ data class GamingZone(
     val placeId: String,
     val name: String = "",
     val description: String? = null,
-    val zoneType: String? = null,
+    val zoneType: GamingZoneType? = null,
     val pricePerHour: Long = 0,
-    val totalSeats: Int? = null,
+    val totalUnits: Int? = null,
     val isAvailable: Boolean = false,
 ) {
 
@@ -43,6 +53,70 @@ data class GamingZone(
 
     /** Сумма брони: цена часа × часы. Считается и показывается до отправки. */
     fun totalPrice(hours: Int): Long = pricePerHour * hours.coerceAtLeast(0)
+}
+
+/**
+ * Тип зоны (`GamingZoneResponse.zoneType`, issue #406) — закрытый справочник
+ * с выката jack5505/mahalla#363. Раньше поле было произвольной строкой.
+ *
+ * [labelRes] и [icon] подписывают зону на карточке и место в шторке одной и
+ * той же строкой (issue #406, задача): «PC» → «Kompyuter», и то же слово у
+ * каждого места этой зоны в списке. [Billiards] и [TableTennis] делят одну
+ * подпись («Stol»/«Стол») — задача прямо требует разводить их только по
+ * `apiValue`, не по тексту: два вида стола, одно слово.
+ *
+ * [Other] — одновременно и настоящее значение справочника, и фоллбек для
+ * значения, которого приложение ещё не знает: новый тип в будущем не должен
+ * падать на `enumValueOf`, а должен выглядеть как «прочее» (то же решение,
+ * что у [GamingBookingStatus.Unknown], но здесь оно не отдельное значение —
+ * сервер сам завёл `OTHER` для не-технических зон).
+ */
+enum class GamingZoneType(
+    val apiValue: String,
+    @StringRes val labelRes: Int,
+    val icon: ImageVector,
+) {
+    Pc("PC", R.string.gaming_zone_type_pc, Icons.Outlined.Computer),
+    Console("CONSOLE", R.string.gaming_zone_type_console, Icons.Outlined.SportsEsports),
+    Vr("VR", R.string.gaming_zone_type_vr, Icons.Outlined.Vrpano),
+
+    // Бэкенд не отдаёт отдельного значка для бильярда — закрытого набора
+    // иконок на двенадцать типов спорта не напасёшься, а стол есть стол.
+    Billiards("BILLIARDS", R.string.gaming_zone_type_table, Icons.Outlined.TableBar),
+    TableTennis("TABLE_TENNIS", R.string.gaming_zone_type_table, Icons.Outlined.TableBar),
+    Other("OTHER", R.string.gaming_zone_type_other, Icons.Outlined.Category),
+    ;
+
+    companion object {
+        /** `null` — сервер не прислал тип; значения вне справочника — [Other]. */
+        fun fromApi(value: String?): GamingZoneType? {
+            val normalized = value?.trim()?.uppercase(Locale.ROOT)
+            if (normalized.isNullOrEmpty()) return null
+            return entries.firstOrNull { it.apiValue == normalized } ?: Other
+        }
+    }
+}
+
+/**
+ * Место зоны (`GamingUnitResponse`, issue #406) — нумерованная позиция, по
+ * которым бэкенд считает [GamingZone.totalUnits].
+ *
+ * Выбора места в этом шаге ещё нет (см. `GamingApi.units`): список — только
+ * справочник в шторке брони, бронь по-прежнему уходит `zoneId`.
+ *
+ * @param seats посадочных мест **в этом месте**. `1` — обычное место, больше —
+ * кабина на несколько человек (бронируется целиком, отдельных мест внутри
+ * бэкенд не заводит).
+ */
+data class GamingUnit(
+    val id: String,
+    val zoneId: String,
+    val number: Int,
+    val seats: Int = 1,
+) {
+
+    /** `seats > 1` — кабина, а не одиночное место; подпись за это и цепляется. */
+    val isCabin: Boolean get() = seats > 1
 }
 
 /**

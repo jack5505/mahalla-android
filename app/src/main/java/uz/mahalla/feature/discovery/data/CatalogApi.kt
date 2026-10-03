@@ -183,12 +183,20 @@ interface CatalogApi {
         @Query("category") category: String? = null,
     ): ApiResponse<List<PlaceSummaryDto>>
 
-    /** Поиск по индексу: описание, город и название, а не только имя. */
+    /**
+     * Поиск по индексу: описание, город и название, а не только имя.
+     *
+     * Ответ — страница (`PageResponse`), а не голый список (сверено со стендом
+     * issue #387, до этого контракт был снят до смены ответа бэкенда issue
+     * jack5505/mahalla#204 и разбор молча падал в [uz.mahalla.core.result.ApiError.Serialization]).
+     * Пагинацию сервера (`page`/`totalPages`) клиент пока не использует —
+     * `search` и так отдаёт всё найденное одной страницей на практике.
+     */
     @GET("search")
     suspend fun search(
         @Query("query") query: String?,
         @Query("category") category: String? = null,
-    ): ApiResponse<List<PlaceDocumentDto>>
+    ): ApiResponse<PageDto<PlaceDocumentDto>>
 
     @GET("places/{id}")
     suspend fun place(@Path("id") id: String): ApiResponse<PlaceDetailDto>

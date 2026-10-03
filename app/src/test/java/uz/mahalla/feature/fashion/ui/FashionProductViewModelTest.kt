@@ -192,7 +192,7 @@ class FashionProductViewModelTest {
     @Test
     fun `a refused creation keeps the form open with the server's reason`() = runTest {
         repository.productResult = ApiResult.Success(detail(variant("v-1")))
-        repository.createVariantResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.createVariantResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel(isOwner = true)
         viewModel.onEvent(FashionProductEvent.AddVariantClicked)
         viewModel.onEvent(FashionProductEvent.CreateColorNameChanged("Qora"))
@@ -202,7 +202,7 @@ class FashionProductViewModelTest {
         viewModel.onEvent(FashionProductEvent.CreateSubmitted)
 
         val form = viewModel.state.value.createForm
-        assertEquals(ApiError.Forbidden, form?.failure?.error)
+        assertEquals(ApiError.Forbidden(), form?.failure?.error)
         assertFalse(form?.submitting ?: true)
     }
 

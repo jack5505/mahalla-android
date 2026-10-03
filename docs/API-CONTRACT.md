@@ -36,6 +36,25 @@
 `403 GEO_PERMISSION_REQUIRED`, с мусором в значениях —
 `403 GEO_INVALID_COORDINATES`. Координаты в query-параметрах не дублировать.
 
+**Клиент различает 403 по `error.code`** (issue #344): `ApiError.Forbidden`
+несёт код целиком, а не только классификацию. `GEO_PERMISSION_REQUIRED`/
+`GEO_INVALID_COORDINATES` — единственные коды, которые получают отдельную
+обработку: подсказка про геолокацию вместо общего «нет прав» (когда сервер
+сам не прислал текст), плюс кнопка «повторить» остаётся доступной у оплаты
+кошельком (`WalletPayment.canRetry`) — включить геолокацию и правда можно
+успеть до повторного запроса. На кэш каталога (`CatalogRepository`) это тоже
+влияет: карточка места удаляется из Room на 404 и на любой 403, кроме
+гео-кодов — без гео-заголовков 403 приходит на любой запрос, а не из-за
+конкретного места, и раньше это стирало кэш при первой же попытке без гео.
+**Дальше эвристика не расширяется.** Кода «гейт вертикали» (сервис выключен в
+регионе) в контракте нет, а завести исключение по признаку «код есть, но это
+не гео» нельзя — бэкенд вешает код и на другие, уже встречавшиеся в тестах
+причины (`PLACE_FORBIDDEN` — не ваше заведение, `WALLET_BLOCKED` — блокировка
+кошелька), для которых и «повторить», и сохранение кэша были бы неверным
+решением. Такой 403 — по-прежнему обычное «нет прав» с сообщением сервера,
+если оно есть, и без повтора. Отдельная обработка гейта — только когда
+бэкенд заведёт для него свой код.
+
 **Авторизация.** `Authorization: Bearer <access>` вешает `AuthInterceptor`.
 На 401 `TokenAuthenticator` делает один refresh и повторяет запрос.
 Сессию заканчивает **только 401 на refresh** — стираются токены, приложение
@@ -189,7 +208,7 @@ TrackEventRequest: {
 
 ## AuthApi ✅
 
-`app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram).
+`app/src/main/java/uz/mahalla/data/network/auth/AuthApi.kt` — сверен: issue #42 (регистрация), #51 (PIN-шаг), #46/#49/#54 (Telegram), #403 (`pin-login` → `phone`).
 
 | Метод | Путь |
 |---|---|
@@ -201,6 +220,38 @@ TrackEventRequest: {
 | POST | `auth/telegram/check` |
 | POST | `auth/refresh` |
 | POST | `auth/logout` |
+
+### `auth/pin-login` — тело запроса (issue #403)
+
+Бэкенд с **2026-09-07** (jack5505/mahalla `d6d2c73`, jack5505/mahalla#170)
+требует `phone`; без него — `400 VALIDATION_ERROR` ещё до проверки PIN. Три
+недели приложение его не слало (`PinLoginRequest` заводился по старой форме
+тела), вход по PIN был сломан целиком.
+
+```json
+{
+  "phone": "+998901234567",
+  "pin": "654321",
+  "device": { "deviceId": "…", "platform": "ANDROID", "deviceName": "…", "osVersion": "…", "appVersion": "…" },
+  "lat": 41.2820199,
+  "lng": 69.3084654
+}
+```
+
+- `phone` — E.164, `@NotBlank`, судя по формату ошибки — маска `^\+998[0-9]{9}$`, как у `send-otp`;
+- `pin` — шесть цифр, как и раньше;
+- `device`/`lat`/`lng` — как у остальных анонимных ручек входа.
+
+**Не снято с живого `/v3/api-docs`** — это восстановлено по перехвату
+реального запроса/ответа приложения, приложенному в issue #403 (комментарий
+от 2026-10-01); схему стоит досверить следующим прогоном с поднятым
+бэкендом (`claude-dev.yml` + `BACKEND_IMAGE`) и обновить эту пометку.
+
+Сессию `pin-login` по-прежнему ищет по устройству (`DEVICE_UNKNOWN`, если оно
+незнакомо) — `phone` сверяется с найденным аккаунтом уже после, как
+дополнительная защита от входа в чужой аккаунт на том же устройстве (issue
+#86, #200). Клиент на всякий случай продолжает сверять `user.phone` из ответа
+сам (`PhoneIdentity`, защита по ответу не отменяется защитой по запросу).
 
 ## users/me ✅ — `feature/profile/data/ProfileApi.kt`
 
@@ -389,7 +440,7 @@ releaseDate, posterUrl, trailerUrl, isActive, rating}` — совпадение 
 
 ## CatalogApi ✅
 
-`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`.
+`app/src/main/java/uz/mahalla/feature/discovery/data/CatalogApi.kt` — сверен: issue #53 — реальные эндпоинты и координаты; issue #168 — `places/map-bounds`; issue #387 — `search` (форма ответа, 2026-09-27).
 
 | Метод | Путь |
 |---|---|
@@ -417,6 +468,29 @@ GET /api/v1/places?ids=<uuid>&ids=<uuid>…   (401 без токена)
 список на пачки по 50 сам (`PlaceNameResolver`), чтобы не упереться в
 ограничение длины запроса на сервере — это не подтверждено ручкой, только
 предосторожность.
+
+**`GET search`** — поиск по индексу (issue #387, до этого контракт снят до
+смены ответа бэкенда jack5505/mahalla#204 и разбор списком тихо падал в
+`ApiError.Serialization`, а `CatalogRepository` маскировал это кэшем):
+
+```
+GET /api/v1/search?query=<строка>&category=<enum>   (403 GEO_PERMISSION_REQUIRED без X-Geo-*)
+→ ApiResponse<PageResponse<PlaceDocument>>
+  {content: [{id, name, category, description, city, lat, lng, ratingAvg,
+              isActive, createdAt}], page, size, totalElements, totalPages,
+   first, last}
+```
+
+**Сверено живым ответом** 2026-09-27: `contract/search.sh` снимает три пробы
+в `app/src/test/resources/contract/search/` (пустой `content`, непустой,
+отказ без гео-заголовков), разбирает их `SearchContractTest`. `data` —
+объект страницы, а не голый список: `CatalogApi.search` разбирает его как
+`PageDto<PlaceDocumentDto>`, тем же `PageDto`, что и у `reviews`. Пагинацию
+сервера (`page`/`totalPages`) клиент не использует — `search` и так пока
+отдаёт всё найденное одной страницей. Выключенная в дашборде категория
+(`category=<код>`) отвечает `200` с пустым `content`, как и `places/nearby`.
+`createdAt` в ответе есть, но всегда `null` в снятых пробах и клиенту не
+нужен — не разбирается.
 
 **`GET places/map-bounds`** — маркеры для видимой области карты (issue #168),
 снят со стенда 2026-09-10 (`/v3/api-docs`, `operationId: mapBounds`, + живой
@@ -717,9 +791,35 @@ UTC.
 curl'ами по стенду 2026-09-04 (issue #98), тела под токеном — нет: `401`
 приходит до валидации, а `CONTRACT_REFRESH_TOKEN` пока нет.
 
+**Зоны и места — повторно curl'ом 2026-10-02** (issue #406), после выката
+бэкенда jack5505/mahalla#363 (`feat/gaming-units`, V41). Зона — не «число мест
+оценкой», а группа нумерованных мест:
+
+```
+$ curl .../gaming/places/22222222-…-10/zones
+{"id":"91…03","name":"PC Zona","zoneType":"PC","pricePerHour":2500000,
+ "totalUnits":12,"isAvailable":true}
+$ curl .../gaming/places/22222222-…-10/zones/91…03/units
+[{"id":"11c…","zoneId":"91…03","number":1,"seats":1}, … 12 штук]
+```
+
+`totalSeats` ушёл, вместо него `totalUnits` — число реальных мест, не оценка
+вместимости. `zoneType` — закрытый справочник (`PC`, `CONSOLE`, `VR`,
+`BILLIARDS`, `TABLE_TENNIS`, `OTHER`; на стенде встретились `PC`, `CONSOLE`,
+`OTHER`), разбор неизвестного значения в `OTHER` — в мапере
+(`GamingZoneType.fromApi`), не в сериализаторе. `seats > 1` у места — кабина на
+несколько человек, бронируется целиком; в тестовых данных стенда такой пока
+нет (все places дают `seats: 1`), только `totalUnits` зон-кабин (`VIP xona`,
+`totalUnits: 4`).
+
+Бронь по месту (`unitId`) бэкенд пока не отдаёт — `POST gaming/bookings`
+по-прежнему уходит `zoneId`. Второй бэкенд-шаг (V42: `freeUnitsNow`, бронь по
+`unitId`) — отдельная задача.
+
 | Метод | Путь | |
 |---|---|---|
-| GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, отдала `data: []` |
+| GET | `gaming/places/{placeId}/zones` | ✅ ручка анонимна, `totalUnits`/`zoneType` сверены 2026-10-02 |
+| GET | `gaming/places/{placeId}/zones/{zoneId}/units` | ✅ ручка анонимна, `{id,zoneId,number,seats}` сверены 2026-10-02 |
 | POST | `gaming/bookings` | ✅ тело сверено схемой (2026-09-10), ответ — нужен токен |
 | GET | `gaming/bookings/my` | ⚠️ путь есть (`401`), схема не проверена |
 
@@ -913,21 +1013,30 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 `MahallaMessagingService`, — тогда не работают ни каналы по категориям, ни
 тихие часы, ни переход по deep link'у на нужный экран.
 
-**NEEDS-PARTNER: `ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это
-заказ.** `NotificationTarget.Order` ведёт всякий такой пуш на
-`OrderStatusRoute(entityId)` → `GET orders/{orderId}` (`order-controller`,
-схема `OrderView`). Этот путь подтверждённо общий: та же ручка с фильтром
-`vertical=CLOTHING` уже читает заказы «Одежды» (`FashionOrderRepository`,
-issue #108) — то есть заказ еды и заказ одежды по одному и тому же `orderId`
-через неё резолвятся оба. А вот заказ мастера (issue #107,
-`FreelancerRepository`) через эту ручку **никогда не читался** — там свои
-`freelancers/{id}/orders` и `freelancers/orders/my`, `GET orders/{orderId}`
-для них не пробован ни разу. Если `ORDER_STATUS_UPDATED` уходит и по заказам
-мастеров (а `NotificationCategory.Orders` в клиенте объявляет и их тоже),
-нужно подтвердить: резолвит ли `order-controller` заказы вертикали мастеров
-тем же путём, что еду и одежду. Отслеживается issue #297: если да — можно
-ничего не делать; если нет — нужен `vertical` (или отдельный тип
-уведомления) в самом пуше, чтобы клиент не гадал.
+**`ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это заказ** — только
+id. Раньше `NotificationTarget.Order` вёл всякий такой пуш прямо на
+`OrderStatusRoute(entityId)`, то есть на экран заказа **еды**, даже когда
+заказ был «Одежды» или «Аптеки» (issue #343). С issue #343 между пушем/deep
+link'ом и экраном встал резолвер: `OrderDeepLinkRoute` читает
+`GET orders/{orderId}` (`order-controller`, схема `OrderView`) сам и уходит по
+`vertical` — `FOOD` на `OrderStatusRoute`, `CLOTHING` на список заказов
+«Одежды», остальное («Аптека» и любая вертикаль, которой ещё нет своего
+экрана заказа) — на «мои активности». Путь подтверждённо общий: та же ручка с
+фильтром `vertical=CLOTHING` уже читает заказы «Одежды»
+(`FashionOrderRepository`, issue #108) — то есть заказ еды и заказ одежды по
+одному и тому же `orderId` через неё резолвятся оба.
+
+**NEEDS-PARTNER (issue #297, не блокирует #343):** заказ мастера (issue #107,
+`FreelancerRepository`) через `GET orders/{orderId}` **никогда не читался** —
+там свои `freelancers/{id}/orders` и `freelancers/orders/my`. Если
+`ORDER_STATUS_UPDATED` уходит и по заказам мастеров (а
+`NotificationCategory.Orders` в клиенте объявляет и их тоже), нужно
+подтвердить: резолвит ли `order-controller` заказы вертикали мастеров тем же
+путём, что еду и одежду. Если да — резолвер `OrderDeepLinkRoute` их уже
+корректно уводит на «мои активности» (`ActivityKind.OtherOrder`, своего
+экрана заказа мастера в клиенте пока нет) и делать ничего не нужно; если
+`GET orders/{orderId}` на такой id отвечает не найдено — нужен `vertical` (или
+отдельный тип уведомления) в самом пуше, чтобы клиент не гадал.
 
 ## PharmacyApi ✅
 

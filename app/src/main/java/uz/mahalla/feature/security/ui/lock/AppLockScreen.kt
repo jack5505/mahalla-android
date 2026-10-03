@@ -115,7 +115,7 @@ fun AppLockScreen(
 }
 
 @Composable
-private fun AppLockContent(
+fun AppLockContent(
     state: AppLockState,
     onEvent: (AppLockEvent) -> Unit,
     modifier: Modifier = Modifier,

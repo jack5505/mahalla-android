@@ -90,7 +90,7 @@ class WalletViewModelTest {
         val repository = FakeWalletRepository()
         repository.wallet = ApiResult.Failure(
             ApiFailure(
-                error = ApiError.Forbidden,
+                error = ApiError.Forbidden("WALLET_BLOCKED"),
                 server = ServerError(httpCode = 403, code = "WALLET_BLOCKED", message = "Bloklangan"),
             ),
         )

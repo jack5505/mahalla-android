@@ -9,7 +9,6 @@ import uz.mahalla.feature.food.domain.CartTotals
 import uz.mahalla.feature.food.domain.CheckoutError
 import uz.mahalla.feature.food.domain.CheckoutForm
 import uz.mahalla.feature.food.domain.DeliveryMethod
-import uz.mahalla.feature.food.domain.PaymentMethod
 import uz.mahalla.feature.promotions.domain.PromoCheckResult
 
 /**
@@ -35,8 +34,6 @@ data class FashionCheckoutState(
     val loadFailure: ApiFailure? = null,
     val form: CheckoutForm = CheckoutForm(),
     val totals: CartTotals = CartTotals(),
-    val walletBalanceSum: Long = 0,
-    val balanceKnown: Boolean = false,
     val errors: List<CheckoutError> = emptyList(),
     val validationShown: Boolean = false,
     val isSubmitting: Boolean = false,
@@ -61,18 +58,13 @@ data class FashionCheckoutState(
 
     fun error(predicate: (CheckoutError) -> Boolean): CheckoutError? =
         visibleErrors.firstOrNull(predicate)
-
-    val insufficientFunds: CheckoutError.InsufficientFunds?
-        get() = errors.filterIsInstance<CheckoutError.InsufficientFunds>().firstOrNull()
 }
 
 sealed interface FashionCheckoutEvent : UiEvent {
     data object Retry : FashionCheckoutEvent
     data class MethodSelected(val method: DeliveryMethod) : FashionCheckoutEvent
     data class AddressChanged(val address: String) : FashionCheckoutEvent
-    data class PaymentSelected(val payment: PaymentMethod) : FashionCheckoutEvent
     data object SubmitClicked : FashionCheckoutEvent
-    data object TopUpClicked : FashionCheckoutEvent
     data object OrdersClicked : FashionCheckoutEvent
     data class PromoCodeChanged(val code: String) : FashionCheckoutEvent
     data object PromoCodeApplyClicked : FashionCheckoutEvent
@@ -81,5 +73,4 @@ sealed interface FashionCheckoutEvent : UiEvent {
 
 sealed interface FashionCheckoutEffect : UiEffect {
     data object OpenOrders : FashionCheckoutEffect
-    data object OpenWallet : FashionCheckoutEffect
 }

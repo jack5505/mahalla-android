@@ -153,7 +153,7 @@ class PhoneInputViewModelTest {
         // именно включить. Именно его текст и должен доехать до экрана.
         authRepository.requestCodeResult = ApiResult.Failure(
             ApiFailure(
-                error = ApiError.Forbidden,
+                error = ApiError.Forbidden("GEO_PERMISSION_REQUIRED"),
                 server = ServerError(
                     httpCode = 403,
                     code = "GEO_PERMISSION_REQUIRED",

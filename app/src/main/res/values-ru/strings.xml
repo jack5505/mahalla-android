@@ -279,6 +279,7 @@
     <string name="error_timeout">Сервер не ответил</string>
     <string name="error_unauthorized">Сессия истекла, войдите снова</string>
     <string name="error_forbidden">Нет доступа к этому действию</string>
+    <string name="error_geo_required">Разрешите доступ к геолокации для этого действия</string>
     <string name="error_not_found">Данные не найдены</string>
     <string name="error_server">Ошибка на сервере</string>
     <string name="error_unknown">Что-то пошло не так</string>
@@ -476,12 +477,10 @@
     <string name="checkout_payment">Оплата</string>
     <string name="checkout_payment_wallet">Кошелёк</string>
     <string name="checkout_payment_cash">Наличные</string>
-    <string name="checkout_wallet_balance">Баланс кошелька: %1$s</string>
     <string name="checkout_top_up">Пополнить кошелёк</string>
     <string name="checkout_delivery_fee">Доставка</string>
     <string name="checkout_submit">Заказать</string>
     <string name="checkout_error_address">Укажите адрес доставки</string>
-    <string name="checkout_error_insufficient_funds">На кошельке не хватает %1$s</string>
 
     <!-- Еда: статус заказа (эпик 5.4) -->
     <string name="order_title">Заказ</string>
@@ -1147,6 +1146,15 @@
     <string name="gaming_status_completed">Завершена</string>
     <string name="gaming_status_cancelled">Отменена</string>
     <string name="gaming_status_unknown">Состояние неизвестно</string>
+    <!-- Типы зон и места зоны (issue #406, бэкенд jack5505/mahalla#363). -->
+    <string name="gaming_zone_type_pc">Компьютер</string>
+    <string name="gaming_zone_type_console">Консоль</string>
+    <string name="gaming_zone_type_table">Стол</string>
+    <string name="gaming_zone_type_vr">VR-место</string>
+    <string name="gaming_zone_type_other">Место</string>
+    <string name="gaming_zone_units_title">Места в зоне</string>
+    <string name="gaming_unit_number">%1$s №%2$d</string>
+    <string name="gaming_unit_cabin">Кабина №%1$d · %2$s</string>
 
     <!-- Push-уведомления (эпик 11): каналы, разрешение, настройки. -->
     <string name="notification_channel_orders">Заказы</string>

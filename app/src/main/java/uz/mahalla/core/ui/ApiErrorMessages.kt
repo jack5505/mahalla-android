@@ -16,7 +16,7 @@ fun ApiError.messageRes(): Int = when (this) {
     ApiError.NoConnection -> R.string.error_no_connection
     ApiError.Timeout -> R.string.error_timeout
     ApiError.Unauthorized -> R.string.error_unauthorized
-    ApiError.Forbidden -> R.string.error_forbidden
+    is ApiError.Forbidden -> if (isGeo) R.string.error_geo_required else R.string.error_forbidden
     ApiError.NotFound -> R.string.error_not_found
     ApiError.Serialization -> R.string.error_unknown
     is ApiError.Http -> if (code >= SERVER_ERROR_CODE) {

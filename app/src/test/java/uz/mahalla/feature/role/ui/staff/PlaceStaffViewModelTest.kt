@@ -66,11 +66,11 @@ class PlaceStaffViewModelTest {
     @Test
     fun `a refusal is shown with the failure of the server`() = runTest {
         val repository = FakePlaceStaffRepository()
-        repository.listResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.listResult = ApiResult.Failure(ApiError.Forbidden())
 
         val state = viewModel(repository).state.value
 
-        assertEquals(ApiError.Forbidden, (state.staff as ScreenState.Error).failure.error)
+        assertEquals(ApiError.Forbidden(), (state.staff as ScreenState.Error).failure.error)
     }
 
     @Test
@@ -175,7 +175,7 @@ class PlaceStaffViewModelTest {
     fun `a refused role change keeps the old role and explains why`() = runTest {
         val repository = FakePlaceStaffRepository()
         repository.listResult = ApiResult.Success(listOf(member("u-1", PlaceStaffRole.Staff)))
-        repository.changeRoleResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.changeRoleResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(
@@ -184,7 +184,7 @@ class PlaceStaffViewModelTest {
 
         val staff = (viewModel.state.value.staff as ScreenState.Content).data
         assertEquals(PlaceStaffRole.Staff, staff.single().role)
-        assertEquals(ApiError.Forbidden, viewModel.state.value.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.actionFailure?.error)
     }
 
     @Test
@@ -231,7 +231,7 @@ class PlaceStaffViewModelTest {
     fun `a refused removal keeps the member and explains why`() = runTest {
         val repository = FakePlaceStaffRepository()
         repository.listResult = ApiResult.Success(listOf(member("u-1")))
-        repository.removeResult = ApiResult.Failure(ApiError.Forbidden)
+        repository.removeResult = ApiResult.Failure(ApiError.Forbidden())
         val viewModel = viewModel(repository)
 
         viewModel.onEvent(PlaceStaffEvent.RemoveRequested(member("u-1")))
@@ -239,7 +239,7 @@ class PlaceStaffViewModelTest {
 
         val staff = (viewModel.state.value.staff as ScreenState.Content).data
         assertEquals(listOf("u-1"), staff.map(PlaceStaffMember::userId))
-        assertEquals(ApiError.Forbidden, viewModel.state.value.actionFailure?.error)
+        assertEquals(ApiError.Forbidden(), viewModel.state.value.actionFailure?.error)
         // Провал не перечитывает список — иначе отказ выглядел бы как успех.
         assertEquals(listOf(PLACE_ID), repository.listedPlaceIds)
     }

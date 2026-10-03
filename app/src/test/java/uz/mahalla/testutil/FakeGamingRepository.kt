@@ -6,6 +6,7 @@ import uz.mahalla.feature.gaming.domain.GamingBooking
 import uz.mahalla.feature.gaming.domain.GamingBookingDraft
 import uz.mahalla.feature.gaming.domain.GamingBookingPage
 import uz.mahalla.feature.gaming.domain.GamingBookingStatus
+import uz.mahalla.feature.gaming.domain.GamingUnit
 import uz.mahalla.feature.gaming.domain.GamingZone
 
 /** Игровые зоны в памяти (issue #98): экраны проверяются без MockWebServer. */
@@ -13,6 +14,9 @@ class FakeGamingRepository : GamingRepository {
 
     /** Что вернёт `zones`. */
     var zonesResult: ApiResult<List<GamingZone>> = ApiResult.Success(listOf(gamingZone()))
+
+    /** Что вернёт `units` по id зоны; всё, чего нет, — одно обычное место (issue #406). */
+    val unitsResults = mutableMapOf<String, ApiResult<List<GamingUnit>>>()
 
     /** Что вернёт `book`; `null` — подтверждённая бронь из черновика. */
     var bookResult: ApiResult<GamingBooking>? = null
@@ -24,7 +28,14 @@ class FakeGamingRepository : GamingRepository {
 
     val requestedPages = mutableListOf<Int>()
 
+    val requestedUnits = mutableListOf<Pair<String, String>>()
+
     override suspend fun zones(placeId: String): ApiResult<List<GamingZone>> = zonesResult
+
+    override suspend fun units(placeId: String, zoneId: String): ApiResult<List<GamingUnit>> {
+        requestedUnits += placeId to zoneId
+        return unitsResults[zoneId] ?: ApiResult.Success(listOf(gamingUnit(zoneId = zoneId)))
+    }
 
     override suspend fun book(
         draft: GamingBookingDraft,
@@ -63,6 +74,14 @@ fun gamingZone(
     pricePerHour = pricePerHour,
     isAvailable = isAvailable,
 )
+
+/** Место зоны для тестов (issue #406): по умолчанию — обычное одноместное. */
+fun gamingUnit(
+    id: String = "u-1",
+    zoneId: String = "z-1",
+    number: Int = 1,
+    seats: Int = 1,
+): GamingUnit = GamingUnit(id = id, zoneId = zoneId, number = number, seats = seats)
 
 /** Бронь для тестов. */
 fun gamingBooking(

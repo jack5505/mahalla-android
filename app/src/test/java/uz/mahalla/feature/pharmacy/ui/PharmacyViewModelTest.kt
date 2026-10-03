@@ -229,14 +229,14 @@ class PharmacyViewModelTest {
     @Test
     fun `a failure of the whole showcase carries the server text`() =
         runTest(mainDispatcherRule.dispatcher) {
-            repository.defaultPage = ApiResult.Failure(ApiError.Forbidden)
+            repository.defaultPage = ApiResult.Failure(ApiError.Forbidden())
 
             val viewModel = viewModel()
             runCurrent()
 
             val products = viewModel.state.value.products
             assertTrue(products is ScreenState.Error)
-            assertEquals(ApiError.Forbidden, (products as ScreenState.Error).failure.error)
+            assertEquals(ApiError.Forbidden(), (products as ScreenState.Error).failure.error)
             assertFalse(viewModel.state.value.hasMore)
         }
 
@@ -355,7 +355,7 @@ class PharmacyViewModelTest {
     @Test
     fun `a refused creation keeps the form open with the server's reason`() =
         runTest(mainDispatcherRule.dispatcher) {
-            repository.createResult = ApiResult.Failure(ApiError.Forbidden)
+            repository.createResult = ApiResult.Failure(ApiError.Forbidden())
             val viewModel = viewModel(isOwner = true)
             runCurrent()
             viewModel.onEvent(PharmacyEvent.AddProductClicked)
@@ -366,7 +366,7 @@ class PharmacyViewModelTest {
             runCurrent()
 
             val form = viewModel.state.value.createForm
-            assertEquals(ApiError.Forbidden, form?.failure?.error)
+            assertEquals(ApiError.Forbidden(), form?.failure?.error)
             assertFalse(form?.submitting ?: true)
         }
 
@@ -551,7 +551,7 @@ class PharmacyViewModelTest {
             repository.defaultPage = ApiResult.Success(
                 PharmacyProductPage(items = listOf(product("p-1"))),
             )
-            repository.updateResult = { _, _ -> ApiResult.Failure(ApiError.Forbidden) }
+            repository.updateResult = { _, _ -> ApiResult.Failure(ApiError.Forbidden()) }
             val viewModel = viewModel(isOwner = true)
             runCurrent()
             viewModel.onEvent(PharmacyEvent.EditProductClicked(product("p-1")))
@@ -560,7 +560,7 @@ class PharmacyViewModelTest {
             runCurrent()
 
             val form = viewModel.state.value.editForm
-            assertEquals(ApiError.Forbidden, form?.failure?.error)
+            assertEquals(ApiError.Forbidden(), form?.failure?.error)
             assertFalse(form?.submitting ?: true)
         }
 

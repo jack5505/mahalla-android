@@ -164,6 +164,62 @@ class MahallaDatabaseTest {
     }
 
     @Test
+    fun `items reads the same rows as the observed flow, without a subscription`() = runTest {
+        val dao = database.cartDraftDao()
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 2))
+
+        assertEquals(listOf("osh"), dao.items("place-1").map { it.productId })
+    }
+
+    @Test
+    fun `line looks up one row by place and line id, not just product id`() = runTest {
+        val dao = database.cartDraftDao()
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(draft("place-1", "osh", priceSum = 40_000, quantity = 1, options = "large"))
+
+        assertEquals(30_000L, dao.line("place-1", "osh")?.priceSum)
+        assertEquals(40_000L, dao.line("place-1", "osh|large")?.priceSum)
+        assertNull(dao.line("place-1", "cola"))
+    }
+
+    @Test
+    fun `upsertAll writes every line in one call`() = runTest {
+        val dao = database.cartDraftDao()
+
+        dao.upsertAll(
+            listOf(
+                draft("place-1", "osh", priceSum = 30_000, quantity = 1),
+                draft("place-1", "cola", priceSum = 8_000, quantity = 2),
+            ),
+        )
+
+        assertEquals(46_000L, dao.total("place-1"))
+    }
+
+    @Test
+    fun `replaceAll swaps the whole draft, not just adds to it`() = runTest {
+        val dao = database.cartDraftDao()
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+
+        dao.replaceAll(listOf(draft("place-2", "somsa", priceSum = 12_000, quantity = 1)))
+
+        assertNull(dao.total("place-1"))
+        assertEquals(12_000L, dao.total("place-2"))
+    }
+
+    @Test
+    fun `clearAll empties every place, not just the active one`() = runTest {
+        val dao = database.cartDraftDao()
+        dao.upsert(draft("place-1", "osh", priceSum = 30_000, quantity = 1))
+        dao.upsert(draft("place-2", "somsa", priceSum = 12_000, quantity = 1))
+
+        dao.clearAll()
+
+        assertNull(dao.total("place-1"))
+        assertNull(dao.total("place-2"))
+    }
+
+    @Test
     fun `the active place is the one with a started draft`() = runTest {
         val dao = database.cartDraftDao()
         assertNull(dao.activePlaceId())

@@ -141,13 +141,20 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Hilt-раннер (issue #347): подменяет Application на HiltTestApplication
+        // до создания графа, иначе @HiltAndroidTest не находит компонент.
+        testInstrumentationRunner = "uz.mahalla.HiltTestRunner"
         buildConfigField("String", "MAPKIT_API_KEY", stringLiteral(mapkitApiKey()))
         buildConfigField("String", "SENTRY_DSN", stringLiteral(sentryDsn()))
         // Пуши (эпик 11): без google-services.json Firebase не поднимается, и
         // экран настроек уведомлений говорит об этом прямо, вместо того чтобы
         // предлагать разрешение, от которого ничего не изменится.
         buildConfigField("boolean", "PUSH_ENABLED", firebaseConfigured.toString())
+        // Скоуп релиза (issue #333, эпик #353): пилот и публичный запуск идут
+        // без кошелька и подписок — заказы только paymentMethod=CASH
+        // (issue #334). Один флаг фильтрует таб, маршруты, строку профиля,
+        // deep link и push-цель, а не разбросанные проверки по коду.
+        buildConfigField("boolean", "PAYMENTS_ENABLED", "false")
         // uz — язык по умолчанию (values/), ru — values-ru/. Список локалей для
         // per-app languages (API 33+) лежит в res/xml/locales_config.xml.
     }
@@ -364,4 +371,15 @@ dependencies {
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Инструментальный smoke-тест (issue #347): job `emulator` в ci.yml, по
+    // метке "emulator", раньше гонял connectedDebugAndroidTest без единого
+    // файла в androidTest.
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

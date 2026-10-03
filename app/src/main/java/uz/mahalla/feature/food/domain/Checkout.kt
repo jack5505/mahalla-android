@@ -25,9 +25,10 @@ enum class DeliveryMethod {
 }
 
 /**
- * Оплата. Кошелёк — основной способ по ТЗ; наличные остаются, потому что без
- * них самовывоз в первый же день упрётся в пустой баланс. Значения —
- * перечисление бэкенда `PaymentMethod` (`WALLET`, `CASH`).
+ * Оплата. На релизе (issue #334) сервер принимает только `CASH` — кошелёк
+ * ещё заводится в оформлении, но выбор к нему нигде не ведёт; значение
+ * остаётся в перечислении бэкенда `PaymentMethod` (`WALLET`, `CASH`) ради
+ * старых заказов, которые им уже оплачены (история, бизнес-панель).
  */
 enum class PaymentMethod {
     Wallet,
@@ -53,7 +54,7 @@ enum class PaymentMethod {
 data class CheckoutForm(
     val method: DeliveryMethod = DeliveryMethod.Delivery,
     val address: String = "",
-    val payment: PaymentMethod = PaymentMethod.Wallet,
+    val payment: PaymentMethod = PaymentMethod.Cash,
 ) {
     val needsAddress: Boolean get() = method == DeliveryMethod.Delivery
 
@@ -83,7 +84,7 @@ object CheckoutValidator {
         form: CheckoutForm,
         totals: CartTotals,
         cartIsEmpty: Boolean,
-        walletBalanceSum: Long,
+        walletBalanceSum: Long = Long.MAX_VALUE,
     ): List<CheckoutError> = buildList {
         if (cartIsEmpty) add(CheckoutError.EmptyCart)
         if (form.needsAddress && form.address.isBlank()) add(CheckoutError.AddressRequired)
@@ -98,6 +99,6 @@ object CheckoutValidator {
         form: CheckoutForm,
         totals: CartTotals,
         cartIsEmpty: Boolean,
-        walletBalanceSum: Long,
+        walletBalanceSum: Long = Long.MAX_VALUE,
     ): Boolean = validate(form, totals, cartIsEmpty, walletBalanceSum).isEmpty()
 }

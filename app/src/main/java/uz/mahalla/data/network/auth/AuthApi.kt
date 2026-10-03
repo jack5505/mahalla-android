@@ -111,11 +111,19 @@ data class SetupPinRequest(
 )
 
 /**
- * Вход по уже установленному PIN. Кто входит, бэкенд определяет по устройству
- * (`DEVICE_UNKNOWN`, если оно ему незнакомо) — номера телефона здесь нет.
+ * Вход по уже установленному PIN. Сессию бэкенд ищет по устройству
+ * (`DEVICE_UNKNOWN`, если оно ему незнакомо), но с 2026-09-07 дополнительно
+ * требует [phone] — защита от входа в чужой аккаунт на одном устройстве
+ * (jack5505/mahalla#170). Без него ответ — `400 VALIDATION_ERROR` ещё до
+ * проверки самого PIN (issue #403); разошедшийся контракт держал вход по PIN
+ * сломанным три недели.
+ *
+ * @param phone номер, под которым идёт вход (E.164) — тот же, что ввели на
+ * предыдущем шаге, не отдельное поле на этом экране.
  */
 @Serializable
 data class PinLoginRequest(
+    @SerialName("phone") val phone: String,
     @SerialName("pin") val pin: String,
     @SerialName("device") val device: DeviceInfoDto,
     @SerialName("lat") val lat: Double,
@@ -235,7 +243,8 @@ interface AuthApi {
 
     /**
      * Завершить вход вводом уже установленного PIN. Тоже анонимный — сессию
-     * бэкенд ищет по устройству.
+     * бэкенд ищет по устройству, а номер в [PinLoginRequest.phone] сверяет с
+     * найденным аккаунтом.
      */
     @POST("auth/pin-login")
     suspend fun pinLogin(@Body body: PinLoginRequest): ApiResponse<PinLoginResponse>

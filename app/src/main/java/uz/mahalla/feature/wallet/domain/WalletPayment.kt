@@ -50,11 +50,14 @@ sealed interface WalletPaymentRejection {
         /**
          * Стоит ли предлагать «повторить». Не предлагаем там, где повтор
          * заведомо повторит отказ: невалидный токен и запрет доступа сами не
-         * пройдут, а кнопка без последствий читается как сломанная.
+         * пройдут, а кнопка без последствий читается как сломанная. Исключение —
+         * гео (issue #344): его чинит сам человек (включить разрешение), и
+         * повтор того же запроса после этого пройдёт.
          */
         val canRetry: Boolean
-            get() = when (failure.error) {
-                ApiError.Unauthorized, ApiError.Forbidden, ApiError.NotFound -> false
+            get() = when (val error = failure.error) {
+                ApiError.Unauthorized, ApiError.NotFound -> false
+                is ApiError.Forbidden -> error.isGeo
                 else -> true
             }
     }

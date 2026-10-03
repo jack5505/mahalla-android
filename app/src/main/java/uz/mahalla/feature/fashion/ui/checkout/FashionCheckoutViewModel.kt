@@ -19,7 +19,6 @@ import uz.mahalla.feature.food.domain.CheckoutValidator
 import uz.mahalla.feature.promotions.data.PromotionsRepository
 import uz.mahalla.feature.promotions.domain.PromoCheckResult
 import uz.mahalla.feature.role.data.RoleRepository
-import uz.mahalla.feature.wallet.data.WalletRepository
 import uz.mahalla.navigation.FashionArgs
 import javax.inject.Inject
 
@@ -33,12 +32,14 @@ import javax.inject.Inject
  * Доставка в итог не входит: сколько она стоит, бэкенд сообщает только в
  * ответе о созданном заказе (`OrderView.deliveryAmount`) — до оформления её
  * не знает никто. То же самое было решено для «Еды» (issue #9).
+ *
+ * Оплата — только наличные (issue #334, релиз только `CASH`): баланс кошелька
+ * здесь больше не запрашивается.
  */
 @HiltViewModel
 class FashionCheckoutViewModel @Inject constructor(
     private val cartRepository: FashionCartRepository,
     private val orderRepository: FashionOrderRepository,
-    private val walletRepository: WalletRepository,
     private val roleRepository: RoleRepository,
     private val promotionsRepository: PromotionsRepository,
     private val analytics: AnalyticsTracker,
@@ -75,7 +76,6 @@ class FashionCheckoutViewModel @Inject constructor(
         val store = storeId
         updateState { copy(storeId = store).revalidated() }
         loadCart()
-        loadBalance()
         prefillAddress()
     }
 
@@ -84,9 +84,7 @@ class FashionCheckoutViewModel @Inject constructor(
             FashionCheckoutEvent.Retry -> loadCart()
             is FashionCheckoutEvent.MethodSelected -> updateForm { copy(method = event.method) }
             is FashionCheckoutEvent.AddressChanged -> updateForm { copy(address = event.address) }
-            is FashionCheckoutEvent.PaymentSelected -> updateForm { copy(payment = event.payment) }
             FashionCheckoutEvent.SubmitClicked -> submit()
-            FashionCheckoutEvent.TopUpClicked -> emitEffect(FashionCheckoutEffect.OpenWallet)
             FashionCheckoutEvent.OrdersClicked -> emitEffect(FashionCheckoutEffect.OpenOrders)
             is FashionCheckoutEvent.PromoCodeChanged -> updateState {
                 copy(promoCodeInput = event.code, promoInvalid = false, promoCheckFailure = null)
@@ -142,28 +140,8 @@ class FashionCheckoutViewModel @Inject constructor(
         }
     }
 
-    private fun loadBalance() {
-        viewModelScope.launch {
-            when (val result = walletRepository.wallet()) {
-                // Баланс неизвестен — считаем его достаточным: отказать в
-                // оформлении из-за неотвеченного запроса хуже, чем получить
-                // отказ на сервере, который всё равно проверит деньги.
-                is ApiResult.Failure -> updateState {
-                    copy(balanceKnown = false, walletBalanceSum = Long.MAX_VALUE).revalidated()
-                }
-
-                // Сравнивать нужно именно с «доступно»: заморозка под другую
-                // незавершённую операцию потратить себя не даст (issue #62).
-                is ApiResult.Success -> updateState {
-                    copy(balanceKnown = true, walletBalanceSum = result.data.availableSum)
-                        .revalidated()
-                }
-            }
-        }
-    }
-
     /**
-     * Итог и ошибки считаются вместе: от суммы зависит проверка баланса, и по
+     * Итог и ошибки считаются вместе: от суммы зависит проверка адреса, и по
      * отдельности они однажды разойдутся — на экране окажется итог, не
      * совпадающий с причиной отказа.
      */
@@ -180,7 +158,6 @@ class FashionCheckoutViewModel @Inject constructor(
                 form = form,
                 totals = totals,
                 cartIsEmpty = items.isEmpty(),
-                walletBalanceSum = walletBalanceSum,
             ),
         )
     }
