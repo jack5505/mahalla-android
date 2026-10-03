@@ -183,6 +183,44 @@ class CategoryRepositoryTest {
     }
 
     /**
+     * `confirmedCategories()` не должна ждать, пока `observeAll()` догонит
+     * запись: Room пересчитывает этот `Flow` асинхронно (`InvalidationTracker`
+     * уходит на отдельный executor), и раньше отметка «подтверждено» была
+     * синхронной, но не зависела от неё — окно гонки. Здесь `observeAll()`
+     * нарочно никогда не отражает запись, так что тест ловит саму гонку, а не
+     * совпадение таймингов Robolectric.
+     */
+    @Test
+    fun `confirmedCategories does not wait for observeAll to catch up`() = runTest {
+        server.enqueue(
+            envelope("""[{"code":"FOOD","sortOrder":10},{"code":"HOSPITAL","sortOrder":30}]"""),
+        )
+        val stale = DefaultCategoryRepository(
+            api = NetworkFactory
+                .retrofit(
+                    server.url("/").toString(),
+                    NetworkFactory.clientBuilder().build(),
+                    NetworkFactory.converterFactory(NetworkFactory.json()),
+                )
+                .create(CategoriesApi::class.java),
+            dao = object : PlaceCategoryDao() {
+                override fun observeAll(): Flow<List<PlaceCategoryEntity>> = flowOf(emptyList())
+                override suspend fun all(): List<PlaceCategoryEntity> = emptyList()
+                override suspend fun insert(items: List<PlaceCategoryEntity>) = Unit
+                override suspend fun clear() = Unit
+                override suspend fun replaceAll(items: List<PlaceCategoryEntity>) = Unit
+            },
+        )
+
+        assertTrue(stale.refresh() is ApiResult.Success)
+
+        assertEquals(
+            listOf(PlaceCategory.Food, PlaceCategory.Hospital),
+            stale.confirmedCategories().first(),
+        )
+    }
+
+    /**
      * Запись в кэш — фоновая работа главной: отказ базы обязан вернуться
      * `Failure`, а не исключением, которое отменит загрузку каталога.
      */

@@ -71,7 +71,10 @@ class ProviderFormViewModelTest {
         viewModel.onEvent(ProviderFormEvent.CategorySelected(PlaceCategory.Master))
         assertEquals(PlaceCategory.Master, viewModel.state.value.form.category)
 
+        // В реальном репозитории список меняется только записью с сервера —
+        // "выключили в дашборде" здесь тоже смоделировано новым refresh().
         categories.categories.value = listOf(PlaceCategory.Food)
+        categories.refresh()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.form.category)
@@ -143,6 +146,7 @@ class ProviderFormViewModelTest {
         // Дашборд выключил «еду» — выбор снялся, и прошлый отказ сервера
         // относится уже к другой заявке.
         categories.categories.value = listOf(PlaceCategory.Master)
+        categories.refresh()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.form.category)
