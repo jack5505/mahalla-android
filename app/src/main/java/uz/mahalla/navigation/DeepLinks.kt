@@ -19,7 +19,11 @@ object DeepLinks {
     /** Карточка заведения: `mahalla://place/{placeId}`. */
     const val PLACE_PATTERN = "$SCHEME://place/{placeId}"
 
-    /** Статус заказа еды: `mahalla://order/{orderId}` (эпик 11). */
+    /**
+     * Заказ: `mahalla://order/{orderId}` (эпик 11). Вертикаль не известна из
+     * ссылки — приземляется на `OrderDeepLinkRoute`, который резолвит её сам
+     * (issue #343), а не на конкретный экран.
+     */
     const val ORDER_PATTERN = "$SCHEME://order/{orderId}"
 
     /**

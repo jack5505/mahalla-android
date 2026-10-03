@@ -1013,21 +1013,30 @@ Retrofit, а не на `@RefreshClient`, где живёт остальная а
 `MahallaMessagingService`, — тогда не работают ни каналы по категориям, ни
 тихие часы, ни переход по deep link'у на нужный экран.
 
-**NEEDS-PARTNER: `ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это
-заказ.** `NotificationTarget.Order` ведёт всякий такой пуш на
-`OrderStatusRoute(entityId)` → `GET orders/{orderId}` (`order-controller`,
-схема `OrderView`). Этот путь подтверждённо общий: та же ручка с фильтром
-`vertical=CLOTHING` уже читает заказы «Одежды» (`FashionOrderRepository`,
-issue #108) — то есть заказ еды и заказ одежды по одному и тому же `orderId`
-через неё резолвятся оба. А вот заказ мастера (issue #107,
-`FreelancerRepository`) через эту ручку **никогда не читался** — там свои
-`freelancers/{id}/orders` и `freelancers/orders/my`, `GET orders/{orderId}`
-для них не пробован ни разу. Если `ORDER_STATUS_UPDATED` уходит и по заказам
-мастеров (а `NotificationCategory.Orders` в клиенте объявляет и их тоже),
-нужно подтвердить: резолвит ли `order-controller` заказы вертикали мастеров
-тем же путём, что еду и одежду. Отслеживается issue #297: если да — можно
-ничего не делать; если нет — нужен `vertical` (или отдельный тип
-уведомления) в самом пуше, чтобы клиент не гадал.
+**`ORDER_PLACED`/`ORDER_STATUS_UPDATED` не говорят, какой это заказ** — только
+id. Раньше `NotificationTarget.Order` вёл всякий такой пуш прямо на
+`OrderStatusRoute(entityId)`, то есть на экран заказа **еды**, даже когда
+заказ был «Одежды» или «Аптеки» (issue #343). С issue #343 между пушем/deep
+link'ом и экраном встал резолвер: `OrderDeepLinkRoute` читает
+`GET orders/{orderId}` (`order-controller`, схема `OrderView`) сам и уходит по
+`vertical` — `FOOD` на `OrderStatusRoute`, `CLOTHING` на список заказов
+«Одежды», остальное («Аптека» и любая вертикаль, которой ещё нет своего
+экрана заказа) — на «мои активности». Путь подтверждённо общий: та же ручка с
+фильтром `vertical=CLOTHING` уже читает заказы «Одежды»
+(`FashionOrderRepository`, issue #108) — то есть заказ еды и заказ одежды по
+одному и тому же `orderId` через неё резолвятся оба.
+
+**NEEDS-PARTNER (issue #297, не блокирует #343):** заказ мастера (issue #107,
+`FreelancerRepository`) через `GET orders/{orderId}` **никогда не читался** —
+там свои `freelancers/{id}/orders` и `freelancers/orders/my`. Если
+`ORDER_STATUS_UPDATED` уходит и по заказам мастеров (а
+`NotificationCategory.Orders` в клиенте объявляет и их тоже), нужно
+подтвердить: резолвит ли `order-controller` заказы вертикали мастеров тем же
+путём, что еду и одежду. Если да — резолвер `OrderDeepLinkRoute` их уже
+корректно уводит на «мои активности» (`ActivityKind.OtherOrder`, своего
+экрана заказа мастера в клиенте пока нет) и делать ничего не нужно; если
+`GET orders/{orderId}` на такой id отвечает не найдено — нужен `vertical` (или
+отдельный тип уведомления) в самом пуше, чтобы клиент не гадал.
 
 ## PharmacyApi ✅
 

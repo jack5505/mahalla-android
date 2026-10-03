@@ -54,6 +54,8 @@ import uz.mahalla.feature.onboarding.ui.PhoneInputScreen
 import uz.mahalla.feature.onboarding.ui.PinScreen
 import uz.mahalla.feature.onboarding.ui.TelegramLoginScreen
 import uz.mahalla.feature.onboarding.ui.WelcomeScreen
+import uz.mahalla.feature.order.ui.OrderDeepLinkDestination
+import uz.mahalla.feature.order.ui.OrderDeepLinkScreen
 import uz.mahalla.feature.pharmacy.ui.PharmacyScreen
 import uz.mahalla.feature.place.ui.PlaceDetailsScreen
 import uz.mahalla.feature.profile.ui.ProfileScreen
@@ -572,10 +574,12 @@ fun MahallaNavHost(
             deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.NOTIFICATIONS_PATTERN }),
         ) {
             NotificationsScreen(
-                // Уведомление о заказе ведёт на его статус. Экран уведомлений
-                // при этом остаётся в стеке: «назад» возвращает к списку, а не
-                // выбрасывает на главную посреди чтения.
-                onOrderClick = { orderId -> navController.navigate(OrderStatusRoute(orderId)) },
+                // Уведомление о заказе ведёт на его статус — через резолвер
+                // (issue #343): вертикаль в уведомлении не известна, так же
+                // как и в пуше. Экран уведомлений при этом остаётся в стеке:
+                // «назад» возвращает к списку, а не выбрасывает на главную
+                // посреди чтения.
+                onOrderClick = { orderId -> navController.navigate(OrderDeepLinkRoute(orderId)) },
                 onOpenSubscription = { navController.navigate(SubscriptionRoute) },
                 onOpenSettings = { navController.navigate(NotificationSettingsRoute) },
                 onBack = { navController.navigateUp() },
@@ -941,12 +945,7 @@ fun MahallaNavHost(
             FashionOrdersScreen(onBack = { navController.navigateUp() })
         }
 
-        // Deep link из пуша (эпик 11): `mahalla://order/{orderId}`. Пуш о
-        // заказе ведёт прямо на его статус — это единственная цель, у которой
-        // из контракта однозначно следует, чем является entityId.
-        composable<OrderStatusRoute>(
-            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.ORDER_PATTERN }),
-        ) {
+        composable<OrderStatusRoute> {
             OrderStatusScreen(
                 onOpenCart = { placeId ->
                     navController.navigate(CartRoute(placeId)) {
@@ -954,6 +953,27 @@ fun MahallaNavHost(
                     }
                 },
                 onBack = { navController.navigateUp() },
+            )
+        }
+
+        // Deep link из пуша (эпик 11): `mahalla://order/{orderId}`. Вертикаль
+        // заранее не известна (issue #343) — экран резолвит её сам и уходит
+        // дальше, замещая себя в стеке: «назад» с найденного экрана не должен
+        // возвращаться на пустую крутилку.
+        composable<OrderDeepLinkRoute>(
+            deepLinks = listOf(navDeepLink { uriPattern = DeepLinks.ORDER_PATTERN }),
+        ) {
+            OrderDeepLinkScreen(
+                onResolved = { destination ->
+                    val target = when (destination) {
+                        is OrderDeepLinkDestination.Food -> OrderStatusRoute(destination.orderId)
+                        OrderDeepLinkDestination.Clothing -> FashionOrdersRoute
+                        OrderDeepLinkDestination.Activities -> ActivitiesRoute
+                    }
+                    navController.navigate(target) {
+                        popUpTo<OrderDeepLinkRoute> { inclusive = true }
+                    }
+                },
             )
         }
     }
