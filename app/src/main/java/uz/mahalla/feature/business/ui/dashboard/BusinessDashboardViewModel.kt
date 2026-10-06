@@ -144,14 +144,26 @@ class BusinessDashboardViewModel @Inject constructor(
      *
      * Пустой словарь — это [ScreenState.Empty], а не пустой контент: у нового
      * заведения метрик ещё нет, и «ничего за сегодня» надо сказать словами.
+     *
+     * Запрос за период запоминается заранее и сверяется с [currentState] по
+     * возврату: `ScreenResumed`/`Refreshed` зовут `load(showLoading = false)`,
+     * который не переводит метрики в `Loading`, и пока такой «тихий» запрос в
+     * полёте, переключатель периода остаётся кликабельным и запускает второй,
+     * независимый запрос. Если отданный ответ придёт позже нового выбора,
+     * безусловная запись показала бы данные одного периода под чипом другого
+     * (нашло ревью) — ответ, переставший соответствовать выбранному периоду,
+     * просто отбрасывается.
      */
     private suspend fun fetchMetrics() {
-        val state = when (val result = repository.dashboard(placeId, currentState.period)) {
+        val requestedPeriod = currentState.period
+        val state = when (val result = repository.dashboard(placeId, requestedPeriod)) {
             is ApiResult.Failure -> ScreenState.Error(result.failure)
             is ApiResult.Success ->
                 if (result.data.isEmpty) ScreenState.Empty else ScreenState.Content(result.data)
         }
-        updateState { copy(metrics = state) }
+        if (currentState.period == requestedPeriod) {
+            updateState { copy(metrics = state) }
+        }
     }
 
     /**

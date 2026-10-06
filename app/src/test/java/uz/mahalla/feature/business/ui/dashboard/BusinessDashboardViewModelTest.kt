@@ -317,6 +317,50 @@ class BusinessDashboardViewModelTest {
         assertTrue(viewModel.state.value.metrics is ScreenState.Content)
     }
 
+    /**
+     * `ScreenResumed` шлёт свой запрос «тихо» (`showLoading = false`), поэтому
+     * метрики остаются в `Content` и переключатель периода не блокируется его
+     * гейтом. Человек успевает выбрать «Неделя» раньше, чем приедет тихий
+     * ответ за «День» — и этот более старый ответ не должен лечь под уже
+     * выбранным периодом (нашло ревью PR #411).
+     */
+    @Test
+    fun `a stale response from a silent reload does not overwrite a newer period`() = runTest {
+        val repository = FakeBusinessRepository()
+        repository.dashboardResultByPeriod = { period ->
+            ApiResult.Success(
+                when (period) {
+                    DashboardPeriod.Day -> BusinessDashboard(period = DashboardPeriod.Day, totalOrders = 1)
+                    DashboardPeriod.Week -> BusinessDashboard(period = DashboardPeriod.Week, totalOrders = 7)
+                    DashboardPeriod.Month -> BusinessDashboard(period = DashboardPeriod.Month, totalOrders = 30)
+                },
+            )
+        }
+        val viewModel = viewModel(repository)
+
+        val staleGate = CompletableDeferred<Unit>()
+        repository.dashboardGate = staleGate
+        // Вызов 0 — начальная загрузка за «День» при создании ViewModel, уже
+        // отработал. Вызов 1 — тихий запрос `ScreenResumed`, который и нужно
+        // задержать.
+        repository.dashboardGateCallIndex = 1
+
+        viewModel.onEvent(BusinessDashboardEvent.ScreenResumed)
+        // Пока «тихий» ответ за «День» в полёте, метрики не в `Loading` —
+        // именно поэтому переключатель периода остаётся кликабельным.
+        assertTrue(viewModel.state.value.metrics is ScreenState.Content)
+
+        viewModel.onEvent(BusinessDashboardEvent.PeriodSelected(DashboardPeriod.Week))
+        assertEquals(DashboardPeriod.Week, viewModel.state.value.period)
+        assertEquals(7L, (viewModel.state.value.metrics as ScreenState.Content).data.totalOrders)
+
+        staleGate.complete(Unit)
+
+        // Устаревший ответ за «День» не должен откатить ни период, ни метрики.
+        assertEquals(DashboardPeriod.Week, viewModel.state.value.period)
+        assertEquals(7L, (viewModel.state.value.metrics as ScreenState.Content).data.totalOrders)
+    }
+
     @Test
     fun `the title comes from the server once the access is loaded`() = runTest {
         val repository = FakeBusinessRepository()

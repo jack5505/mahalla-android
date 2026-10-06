@@ -65,7 +65,7 @@ internal fun SellerDashboardResponseDto.toDomain(requestedPeriod: DashboardPerio
         topItems = topItems.mapNotNull(TopItemStatDto::toDomain),
     )
 
-/** Строка без статуса не отбрасывается молча — её попросту нечем подписать. */
+/** Строка без статуса отбрасывается: её попросту нечем подписать. */
 private fun StatusOrderStatDto.toDomain(): BusinessOrderStatusStat? {
     val rawStatus = status?.trim()?.takeIf(String::isNotEmpty) ?: return null
     return BusinessOrderStatusStat(
@@ -75,7 +75,7 @@ private fun StatusOrderStatDto.toDomain(): BusinessOrderStatusStat? {
     )
 }
 
-/** Строка без имени позиции не отбрасывается по id — он нужен только как ключ списка. */
+/** Строка без имени позиции отбрасывается: id сам по себе годится лишь в ключ списка. */
 private fun TopItemStatDto.toDomain(): BusinessTopItem? {
     val title = itemName?.trim()?.takeIf(String::isNotEmpty) ?: return null
     return BusinessTopItem(

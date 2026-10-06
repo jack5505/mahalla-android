@@ -223,6 +223,78 @@ class BusinessRepositoryTest {
         assertEquals(3_500L, dashboard.topItems.single().totalAmountSum)
     }
 
+    /** Статус отсутствует — строку нечем подписать, она выпадает из списка. */
+    @Test
+    fun `a status row without a status is dropped`() = runTest {
+        val api = RecordingBusinessApi()
+        api.dashboardResponse = SellerDashboardResponseDto(
+            ordersByStatus = listOf(
+                StatusOrderStatDto(status = "DELIVERED", orderCount = 3L, totalAmountTiyin = 100_000L),
+                StatusOrderStatDto(status = null, orderCount = 5L, totalAmountTiyin = 200_000L),
+            ),
+        )
+
+        val dashboard = (
+            repository(api = api).dashboard("p-1", DashboardPeriod.Day) as ApiResult.Success
+            ).data
+
+        assertEquals(1, dashboard.ordersByStatus.size)
+        assertEquals(OrderStatus.Completed, dashboard.ordersByStatus.single().status)
+    }
+
+    /** Имя позиции отсутствует — её нечем подписать, id сам по себе не повод показывать строку. */
+    @Test
+    fun `a top item without a name is dropped`() = runTest {
+        val api = RecordingBusinessApi()
+        api.dashboardResponse = SellerDashboardResponseDto(
+            topItems = listOf(
+                TopItemStatDto(
+                    itemId = "i-1",
+                    itemType = "MENU_ITEM",
+                    itemName = "Osh",
+                    quantity = 1L,
+                    totalAmountTiyin = 10_000L,
+                ),
+                TopItemStatDto(
+                    itemId = "i-2",
+                    itemType = "MENU_ITEM",
+                    itemName = null,
+                    quantity = 2L,
+                    totalAmountTiyin = 20_000L,
+                ),
+            ),
+        )
+
+        val dashboard = (
+            repository(api = api).dashboard("p-1", DashboardPeriod.Day) as ApiResult.Success
+            ).data
+
+        assertEquals(listOf("Osh"), dashboard.topItems.map { it.name })
+    }
+
+    /** `itemType`, которого приложение ещё не знает, не роняет список — уходит в `Unknown`. */
+    @Test
+    fun `an unknown item type is mapped to Unknown`() = runTest {
+        val api = RecordingBusinessApi()
+        api.dashboardResponse = SellerDashboardResponseDto(
+            topItems = listOf(
+                TopItemStatDto(
+                    itemId = "i-1",
+                    itemType = "SOMETHING_NEW",
+                    itemName = "Osh",
+                    quantity = 1L,
+                    totalAmountTiyin = 10_000L,
+                ),
+            ),
+        )
+
+        val dashboard = (
+            repository(api = api).dashboard("p-1", DashboardPeriod.Day) as ApiResult.Success
+            ).data
+
+        assertEquals(BusinessItemType.Unknown, dashboard.topItems.single().itemType)
+    }
+
     /** Отрицательная выручка (возврат увёл период в минус) не прячется нулём. */
     @Test
     fun `a negative revenue is kept as is, not floored to zero`() = runTest {

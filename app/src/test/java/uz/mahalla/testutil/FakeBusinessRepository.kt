@@ -87,6 +87,20 @@ class FakeBusinessRepository : BusinessRepository {
     /** То же для `dashboard` — поймать «метрики уже грузятся» иначе нечем. */
     var dashboardGate: CompletableDeferred<Unit>? = null
 
+    /**
+     * Какой по счёту вызов `dashboard()` ждёт [dashboardGate] — `null` значит
+     * «каждый». Нужно тесту на гонку ответов: один запрос должен задержаться,
+     * а следующий за ним — отработать сразу.
+     */
+    var dashboardGateCallIndex: Int? = null
+    private var dashboardCallCount = 0
+
+    /**
+     * Переопределяет [dashboardResult] по периоду — нужно тому же тесту на
+     * гонку, чтобы отличить ответ за «День» от ответа за «Неделю».
+     */
+    var dashboardResultByPeriod: ((DashboardPeriod) -> ApiResult<BusinessDashboard>)? = null
+
     override suspend fun access(placeId: String): ApiResult<BusinessAccess> {
         accessRequests += placeId
         return accessResult
@@ -97,8 +111,11 @@ class FakeBusinessRepository : BusinessRepository {
         period: DashboardPeriod,
     ): ApiResult<BusinessDashboard> {
         dashboardRequests += placeId to period
-        dashboardGate?.await()
-        return dashboardResult
+        val index = dashboardCallCount++
+        if (dashboardGateCallIndex == null || dashboardGateCallIndex == index) {
+            dashboardGate?.await()
+        }
+        return dashboardResultByPeriod?.invoke(period) ?: dashboardResult
     }
 
     override suspend fun queue(placeId: String): ApiResult<List<QueueEntry>> {
