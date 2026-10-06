@@ -1155,7 +1155,7 @@ Bearer. Тела под токеном не проверены — секрет�
 
 | Метод | Путь | |
 |---|---|---|
-| GET | `analytics/places/{placeId}/dashboard` | ✅ путь есть (`401`) |
+| GET | `analytics/places/{placeId}/dashboard?period=` | ✅ путь и схема ответа сверены живым `/v3/api-docs` 2026-10-06 (issue #292) |
 | GET | `walkin/barber/dashboard?placeId=` | ✅ путь есть (`401`) |
 | PUT | `walkin/{id}/accept?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
 | PUT | `walkin/{id}/decline?placeId=` | ✅ путь есть (`401`), тело ⚠️ |
@@ -1172,12 +1172,52 @@ Bearer. Тела под токеном не проверены — секрет�
 Плюс две уже описанные ручки, которые панель переиспользует: `GET places/my`
 (права, см. ниже) и `PUT places/{id}/availability` («пауза»).
 
-**Дашборд отдаёт словарь без схемы.** `ApiResponseMapStringLong` —
-`additionalProperties: integer(int64)`, ни одного объявленного ключа. Клиент
-разбирает его как `Map<String, Long?>` и показывает **то, что приехало**:
-подписи переведены только у знакомых ключей, остальные выводятся из имени
-(`total_revenue` → «Total revenue»). Придумать фиксированные поля значило бы
-получить пустой дашборд на первом же расхождении.
+**Дашборд со схемой и периодом (issue #292, задача 12.1).** До 2026-10-06
+ручка отдавала `Map<String, Long?>` без схемы (`additionalProperties`,
+`ApiResponseMapStringLong`) — задача 12.1 на бэкенде ещё не была сделана
+(jack5505/mahalla#226). С её мержем ответ стал структурой
+`SellerDashboardResponse`, снятой и проверенной живым `/v3/api-docs`
+2026-10-06:
+
+```
+GET analytics/places/{placeId}/dashboard
+  ?period=DAY|WEEK|MONTH (необязателен, по умолчанию на сервере MONTH)
+  &date=YYYY-MM-DD        (необязателен, клиентом не используется)
+  &topLimit=int           (необязателен, по умолчанию на сервере 10)
+
+SellerDashboardResponse:
+  placeId: uuid
+  period: string
+  from, to: date-time
+  revenueTiyin: int64
+  totalOrders: int64
+  ordersByStatus: StatusOrderStat[]
+    status: string           (значения — `FoodOrderResponse.status`, те же восемь)
+    orderCount: int64
+    totalAmountTiyin: int64
+  topItems: TopItemStat[]
+    itemId: uuid
+    itemType: string         (не объявлен enum'ом в самой схеме; у соседнего
+                               `ItemView` того же контроллера — `MENU_ITEM`,
+                               `CLOTHING_VARIANT`, `DRUG`, `TICKET`)
+    itemName: string
+    quantity: int64
+    totalAmountTiyin: int64
+  events: Map<string, int64> (аналитика событий — клиентом не используется)
+```
+
+Клиент передаёт только `period` — `date` (конкретный день периода) и
+`topLimit` (размер топа) в задаче 12.1 не нужны: переключатель предлагает
+«День/Неделя/Месяц» от текущего момента, своего топа длиннее серверных
+`10` элементов экран не просит. `events` в ответе тоже не разбирается —
+это аналитика по типам событий (issue #226), к дашборду задачи 12.1
+отношения не имеет.
+
+`revenueTiyin` → `BusinessDashboard.revenueSum` **не** приводится к нулю
+снизу: возврат вполне может увести период в минус, а спрятать это значило бы
+показать владельцу неверный итог. Суммы по статусам и по товарам
+(`totalAmountTiyin` в `StatusOrderStat`/`TopItemStat`) — сложенные чеки,
+отрицательными не бывают.
 
 **Три ручки принимают безымянную `Map` — springdoc не знает имён ключей**,
 потому что контроллеры принимают голую `Map`:
