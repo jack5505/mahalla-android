@@ -1,6 +1,7 @@
 package uz.mahalla.feature.business.ui.dashboard
 
 import androidx.lifecycle.SavedStateHandle
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
@@ -19,6 +20,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessSection
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.discovery.domain.PlaceCategory
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
@@ -43,14 +45,14 @@ class BusinessDashboardViewModelTest {
     fun `the access is asked first and the metrics follow`() = runTest {
         val repository = FakeBusinessRepository()
         repository.dashboardResult = ApiResult.Success(
-            BusinessDashboard.from(mapOf("orders" to 42L, "revenue" to 4_850_000L)),
+            BusinessDashboard(period = DashboardPeriod.Day, totalOrders = 42, revenueSum = 48_500),
         )
 
         val state = viewModel(repository).state.value
 
         assertEquals(listOf(PLACE), repository.accessRequests)
-        assertEquals(listOf(PLACE), repository.dashboardRequests)
-        assertEquals(2, (state.metrics as ScreenState.Content).data.metrics.size)
+        assertEquals(listOf(PLACE to DashboardPeriod.Day), repository.dashboardRequests)
+        assertEquals(42L, (state.metrics as ScreenState.Content).data.totalOrders)
     }
 
     /**
@@ -108,7 +110,7 @@ class BusinessDashboardViewModelTest {
     @Test
     fun `an empty dashboard is an empty state, not an error`() = runTest {
         val repository = FakeBusinessRepository()
-        repository.dashboardResult = ApiResult.Success(BusinessDashboard())
+        repository.dashboardResult = ApiResult.Success(BusinessDashboard(period = DashboardPeriod.Day))
 
         assertTrue(viewModel(repository).state.value.metrics is ScreenState.Empty)
     }
@@ -236,7 +238,10 @@ class BusinessDashboardViewModelTest {
         viewModel.onEvent(BusinessDashboardEvent.ScreenResumed)
 
         assertEquals(listOf(PLACE, PLACE), repository.accessRequests)
-        assertEquals(listOf(PLACE, PLACE), repository.dashboardRequests)
+        assertEquals(
+            listOf(PLACE to DashboardPeriod.Day, PLACE to DashboardPeriod.Day),
+            repository.dashboardRequests,
+        )
     }
 
     /** Повтор метрик не трогает права: они уже подтверждены. */
@@ -247,12 +252,68 @@ class BusinessDashboardViewModelTest {
         val viewModel = viewModel(repository)
 
         repository.dashboardResult = ApiResult.Success(
-            BusinessDashboard.from(mapOf("orders" to 1L)),
+            BusinessDashboard(period = DashboardPeriod.Day, totalOrders = 1),
         )
         viewModel.onEvent(BusinessDashboardEvent.RetryMetrics)
 
         assertEquals(listOf(PLACE), repository.accessRequests)
-        assertEquals(listOf(PLACE, PLACE), repository.dashboardRequests)
+        assertEquals(
+            listOf(PLACE to DashboardPeriod.Day, PLACE to DashboardPeriod.Day),
+            repository.dashboardRequests,
+        )
+        assertTrue(viewModel.state.value.metrics is ScreenState.Content)
+    }
+
+    /** Переключатель периода (задача 12.1): меняет период и перезапрашивает метрики. */
+    @Test
+    fun `selecting a period re-requests the metrics with the new period`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.PeriodSelected(DashboardPeriod.Month))
+
+        assertEquals(DashboardPeriod.Month, viewModel.state.value.period)
+        assertEquals(
+            listOf(PLACE to DashboardPeriod.Day, PLACE to DashboardPeriod.Month),
+            repository.dashboardRequests,
+        )
+    }
+
+    /** Тот же период второй раз — лишний запрос, а не подтверждение выбора. */
+    @Test
+    fun `selecting the same period again does not re-request the metrics`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+
+        viewModel.onEvent(BusinessDashboardEvent.PeriodSelected(DashboardPeriod.Day))
+
+        assertEquals(listOf(PLACE to DashboardPeriod.Day), repository.dashboardRequests)
+    }
+
+    /**
+     * Пока метрики в полёте, второй переключатель периода молча отбрасывается
+     * — иначе выигравший последним ответ мог бы откатить уже выбранный
+     * человеком период (та же гонка, что `loadJob` решает для `load()`).
+     */
+    @Test
+    fun `while the metrics are in flight a second period switch is ignored`() = runTest {
+        val repository = FakeBusinessRepository()
+        val viewModel = viewModel(repository)
+        val gate = CompletableDeferred<Unit>()
+        repository.dashboardGate = gate
+
+        viewModel.onEvent(BusinessDashboardEvent.PeriodSelected(DashboardPeriod.Week))
+        assertTrue(viewModel.state.value.metrics is ScreenState.Loading)
+
+        viewModel.onEvent(BusinessDashboardEvent.PeriodSelected(DashboardPeriod.Month))
+        assertEquals(DashboardPeriod.Week, viewModel.state.value.period)
+        assertEquals(
+            listOf(PLACE to DashboardPeriod.Day, PLACE to DashboardPeriod.Week),
+            repository.dashboardRequests,
+        )
+
+        gate.complete(Unit)
+        assertEquals(DashboardPeriod.Week, viewModel.state.value.period)
         assertTrue(viewModel.state.value.metrics is ScreenState.Content)
     }
 

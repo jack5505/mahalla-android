@@ -13,6 +13,7 @@ import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.data.BusinessRepository
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessSection
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.navigation.BusinessArgs
 import javax.inject.Inject
 
@@ -65,6 +66,7 @@ class BusinessDashboardViewModel @Inject constructor(
             BusinessDashboardEvent.Refreshed -> load(showLoading = false, refreshing = true)
             BusinessDashboardEvent.Retry -> load()
             BusinessDashboardEvent.RetryMetrics -> retryMetrics()
+            is BusinessDashboardEvent.PeriodSelected -> selectPeriod(event.period)
             is BusinessDashboardEvent.SectionClicked -> open(event.section)
             BusinessDashboardEvent.PauseToggled -> togglePause()
         }
@@ -124,6 +126,16 @@ class BusinessDashboardViewModel @Inject constructor(
     }
 
     /**
+     * Переключатель периода (задача 12.1). Права уже подтверждены, поэтому
+     * перезапрашиваются только метрики — тот же приём, что у [retryMetrics].
+     */
+    private fun selectPeriod(period: DashboardPeriod) {
+        if (period == currentState.period || currentState.metrics.isLoading) return
+        updateState { copy(period = period, metrics = ScreenState.Loading) }
+        viewModelScope.launch { fetchMetrics() }
+    }
+
+    /**
      * Метрики отдельно от доступа: их отказ не прячет разделы.
      *
      * `suspend`, а не своя корутина: pull-to-refresh должен погаснуть тогда,
@@ -134,7 +146,7 @@ class BusinessDashboardViewModel @Inject constructor(
      * заведения метрик ещё нет, и «ничего за сегодня» надо сказать словами.
      */
     private suspend fun fetchMetrics() {
-        val state = when (val result = repository.dashboard(placeId)) {
+        val state = when (val result = repository.dashboard(placeId, currentState.period)) {
             is ApiResult.Failure -> ScreenState.Error(result.failure)
             is ApiResult.Success ->
                 if (result.data.isEmpty) ScreenState.Empty else ScreenState.Content(result.data)

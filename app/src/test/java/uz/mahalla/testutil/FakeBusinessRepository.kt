@@ -9,6 +9,7 @@ import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderPage
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.business.domain.QueueEntry
@@ -39,7 +40,7 @@ class FakeBusinessRepository : BusinessRepository {
     )
 
     var dashboardResult: ApiResult<BusinessDashboard> =
-        ApiResult.Success(BusinessDashboard.from(mapOf("orders" to 12L)))
+        ApiResult.Success(BusinessDashboard(period = DashboardPeriod.Day, totalOrders = 12))
 
     var queueResult: ApiResult<List<QueueEntry>> = ApiResult.Success(emptyList())
 
@@ -60,7 +61,7 @@ class FakeBusinessRepository : BusinessRepository {
     var deleteItemResult: ApiResult<BusinessMenu>? = null
 
     val accessRequests = mutableListOf<String>()
-    val dashboardRequests = mutableListOf<String>()
+    val dashboardRequests = mutableListOf<Pair<String, DashboardPeriod>>()
     val queueRequests = mutableListOf<String>()
     val actions = mutableListOf<Triple<String, String, QueueAction>>()
     val paused = mutableListOf<Pair<String, Boolean>>()
@@ -83,13 +84,20 @@ class FakeBusinessRepository : BusinessRepository {
      */
     var actGate: CompletableDeferred<Unit>? = null
 
+    /** То же для `dashboard` — поймать «метрики уже грузятся» иначе нечем. */
+    var dashboardGate: CompletableDeferred<Unit>? = null
+
     override suspend fun access(placeId: String): ApiResult<BusinessAccess> {
         accessRequests += placeId
         return accessResult
     }
 
-    override suspend fun dashboard(placeId: String): ApiResult<BusinessDashboard> {
-        dashboardRequests += placeId
+    override suspend fun dashboard(
+        placeId: String,
+        period: DashboardPeriod,
+    ): ApiResult<BusinessDashboard> {
+        dashboardRequests += placeId to period
+        dashboardGate?.await()
         return dashboardResult
     }
 

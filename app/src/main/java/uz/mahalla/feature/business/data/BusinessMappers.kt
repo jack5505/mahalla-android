@@ -2,12 +2,17 @@ package uz.mahalla.feature.business.data
 
 import uz.mahalla.core.format.parseServerInstant
 import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.feature.business.domain.BusinessDashboard
+import uz.mahalla.feature.business.domain.BusinessItemType
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessMenuItem
 import uz.mahalla.feature.business.domain.BusinessMenuSection
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderLine
 import uz.mahalla.feature.business.domain.BusinessOrderPage
+import uz.mahalla.feature.business.domain.BusinessOrderStatusStat
+import uz.mahalla.feature.business.domain.BusinessTopItem
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.business.domain.QueueEntry
 import uz.mahalla.feature.fashion.data.FashionStoreOrderDto
 import uz.mahalla.feature.fashion.data.FashionStoreOrderItemDto
@@ -39,6 +44,46 @@ internal fun QueueEntryDto.toDomain(): QueueEntry? {
         estimatedWaitMinutes = estimatedWaitMinutes?.takeIf { it >= 0 },
         note = barberNote?.trim()?.takeIf(String::isNotEmpty),
         createdAt = parseServerInstant(createdAt),
+    )
+}
+
+/**
+ * Дашборд с периодом (задача 12.1, issue #292).
+ *
+ * `period` запрошен клиентом явно — он же ложится в [BusinessDashboard.period]
+ * вместо значения из ответа: сервер эхом присылает то же самое, а запрошенный
+ * период уже известен и не нуждается в разборе строки обратно в [DashboardPeriod].
+ */
+internal fun SellerDashboardResponseDto.toDomain(requestedPeriod: DashboardPeriod): BusinessDashboard =
+    BusinessDashboard(
+        period = requestedPeriod,
+        // Выручка не приводится к нулю: возврат вполне может увести период в
+        // минус, и спрятать это значило бы соврать владельцу про итог.
+        revenueSum = revenueTiyin.tiyinToSom() ?: 0,
+        totalOrders = (totalOrders ?: 0).coerceAtLeast(0),
+        ordersByStatus = ordersByStatus.mapNotNull(StatusOrderStatDto::toDomain),
+        topItems = topItems.mapNotNull(TopItemStatDto::toDomain),
+    )
+
+/** Строка без статуса не отбрасывается молча — её попросту нечем подписать. */
+private fun StatusOrderStatDto.toDomain(): BusinessOrderStatusStat? {
+    val rawStatus = status?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    return BusinessOrderStatusStat(
+        status = OrderStatus.fromApi(rawStatus),
+        orderCount = (orderCount ?: 0).coerceAtLeast(0),
+        totalAmountSum = totalAmountTiyin.toSomOrZero(),
+    )
+}
+
+/** Строка без имени позиции не отбрасывается по id — он нужен только как ключ списка. */
+private fun TopItemStatDto.toDomain(): BusinessTopItem? {
+    val title = itemName?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    return BusinessTopItem(
+        itemId = itemId.orEmpty(),
+        itemType = BusinessItemType.fromApi(itemType),
+        name = title,
+        quantity = (quantity ?: 0).coerceAtLeast(0),
+        totalAmountSum = totalAmountTiyin.toSomOrZero(),
     )
 }
 

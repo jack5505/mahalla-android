@@ -3,12 +3,15 @@ package uz.mahalla.feature.business.data
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonElement
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import uz.mahalla.core.result.ApiError
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.data.network.ApiResponse
+import uz.mahalla.feature.business.domain.BusinessItemType
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.QueueAction
 import uz.mahalla.feature.discovery.domain.PlaceCategory
@@ -184,15 +187,56 @@ class BusinessRepositoryTest {
     }
 
     @Test
-    fun `a dashboard map is preserved key by key`() = runTest {
+    fun `a dashboard is parsed with revenue converted from tiyin and the requested period kept`() = runTest {
         val api = RecordingBusinessApi()
-        api.dashboardResponse = mapOf("totalOrders" to 12L, "revenue" to 500_000L, "bad" to null)
+        api.dashboardResponse = SellerDashboardResponseDto(
+            revenueTiyin = 500_000L,
+            totalOrders = 12L,
+            ordersByStatus = listOf(
+                StatusOrderStatDto(status = "DELIVERED", orderCount = 10L, totalAmountTiyin = 450_000L),
+            ),
+            topItems = listOf(
+                TopItemStatDto(
+                    itemId = "i-1",
+                    itemType = "MENU_ITEM",
+                    itemName = "Osh",
+                    quantity = 7L,
+                    totalAmountTiyin = 350_000L,
+                ),
+            ),
+        )
 
-        val dashboard = (repository(api = api).dashboard("p-1") as ApiResult.Success).data
+        val dashboard = (
+            repository(api = api).dashboard("p-1", DashboardPeriod.Week) as ApiResult.Success
+            ).data
 
-        assertEquals(listOf("totalOrders", "revenue"), dashboard.metrics.map { it.key })
-        // "revenue" — деньги (тийины бэкенда, issue #149): 500_000 → 5_000 сум.
-        assertEquals(listOf(12L, 5_000L), dashboard.metrics.map { it.value })
+        assertEquals("WEEK", api.dashboardPeriodRequested)
+        assertEquals(DashboardPeriod.Week, dashboard.period)
+        assertEquals(12L, dashboard.totalOrders)
+        // Тийины бэкенда (issue #149): 500_000 → 5_000 сум.
+        assertEquals(5_000L, dashboard.revenueSum)
+        assertEquals(OrderStatus.Completed, dashboard.ordersByStatus.single().status)
+        assertEquals(10L, dashboard.ordersByStatus.single().orderCount)
+        assertEquals(4_500L, dashboard.ordersByStatus.single().totalAmountSum)
+        assertEquals("Osh", dashboard.topItems.single().name)
+        assertEquals(BusinessItemType.MenuItem, dashboard.topItems.single().itemType)
+        assertEquals(3_500L, dashboard.topItems.single().totalAmountSum)
+    }
+
+    /** Отрицательная выручка (возврат увёл период в минус) не прячется нулём. */
+    @Test
+    fun `a negative revenue is kept as is, not floored to zero`() = runTest {
+        val api = RecordingBusinessApi()
+        api.dashboardResponse = SellerDashboardResponseDto(revenueTiyin = -20_000L)
+
+        val dashboard = (
+            repository(api = api).dashboard("p-1", DashboardPeriod.Day) as ApiResult.Success
+            ).data
+
+        assertEquals(-200L, dashboard.revenueSum)
+        // Возврат без заказов в периоде — не "показателей нет": сумма реальна
+        // и отрицательна, прятать её за пустым состоянием нельзя (нашло ревью).
+        assertFalse(dashboard.isEmpty)
     }
 
     @Test
@@ -677,7 +721,8 @@ private class FailingDeleteApi : BusinessApi by RecordingBusinessApi() {
  */
 private class RecordingBusinessApi : BusinessApi {
 
-    var dashboardResponse: Map<String, Long?> = emptyMap()
+    var dashboardResponse: SellerDashboardResponseDto = SellerDashboardResponseDto()
+    var dashboardPeriodRequested: String? = null
     var queueResponse: List<QueueEntryDto> = emptyList()
     var queueEntryResponse: QueueEntryDto = QueueEntryDto(id = "t-1", status = "WAITING")
     var ordersResponse: BusinessOrderPageDto = BusinessOrderPageDto()
@@ -693,7 +738,10 @@ private class RecordingBusinessApi : BusinessApi {
     var updatedItemId: String? = null
     var deletedItemId: String? = null
 
-    override suspend fun dashboard(placeId: String) = ApiResponse(data = dashboardResponse)
+    override suspend fun dashboard(placeId: String, period: String): ApiResponse<SellerDashboardResponseDto> {
+        dashboardPeriodRequested = period
+        return ApiResponse(data = dashboardResponse)
+    }
 
     override suspend fun queue(placeId: String) = ApiResponse(data = queueResponse)
 

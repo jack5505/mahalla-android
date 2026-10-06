@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.MenuBook
@@ -32,8 +33,10 @@ import uz.mahalla.R
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.ui.components.CardSkeleton
 import uz.mahalla.core.ui.components.EmptyState
+import uz.mahalla.core.ui.components.FilterChipUi
 import uz.mahalla.core.ui.components.ListSkeleton
 import uz.mahalla.core.ui.components.MahallaCard
+import uz.mahalla.core.ui.components.MahallaFilterRow
 import uz.mahalla.core.ui.components.MahallaListItem
 import uz.mahalla.core.ui.components.MahallaPullToRefresh
 import uz.mahalla.core.ui.components.MahallaSwitchRow
@@ -42,13 +45,18 @@ import uz.mahalla.core.ui.components.SectionHeader
 import uz.mahalla.core.ui.preview.PreviewSurface
 import uz.mahalla.core.ui.preview.ThemeLanguagePreviews
 import uz.mahalla.core.ui.state.ScreenState
+import uz.mahalla.core.ui.state.isLoading
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessDashboard
-import uz.mahalla.feature.business.domain.BusinessMetric
-import uz.mahalla.feature.business.domain.BusinessMetricKind
+import uz.mahalla.feature.business.domain.BusinessItemType
+import uz.mahalla.feature.business.domain.BusinessOrderStatusStat
 import uz.mahalla.feature.business.domain.BusinessSection
+import uz.mahalla.feature.business.domain.BusinessTopItem
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.business.ui.BusinessInlineFailure
+import uz.mahalla.feature.business.ui.orders.labelRes
 import uz.mahalla.feature.discovery.domain.PlaceCategory
+import uz.mahalla.feature.food.domain.OrderStatus
 import uz.mahalla.feature.role.domain.PlaceModerationStatus
 import uz.mahalla.feature.role.domain.PlaceStaffRole
 import uz.mahalla.ui.theme.LocalMahallaColors
@@ -234,9 +242,29 @@ private fun LazyListScope.metricItems(
     state: BusinessDashboardState,
     onEvent: (BusinessDashboardEvent) -> Unit,
 ) {
+    item(key = "period-switcher") {
+        MahallaFilterRow(
+            items = DashboardPeriod.entries.map { period ->
+                FilterChipUi(id = period.name, label = stringResource(period.labelRes()))
+            },
+            selectedId = state.period.name,
+            onSelect = { id ->
+                DashboardPeriod.entries.firstOrNull { it.name == id }?.let { period ->
+                    onEvent(BusinessDashboardEvent.PeriodSelected(period))
+                }
+            },
+            // Пока метрики грузятся, переключатель недоступен: иначе тап
+            // молча потеряется (ViewModel отбрасывает событие по тому же
+            // флагу), и человек решит, что ничего не нажалось.
+            enabled = !state.metrics.isLoading,
+        )
+    }
+
     when (val metrics = state.metrics) {
         is ScreenState.Loading -> item(key = "metrics-loading") { CardSkeleton() }
 
+        // Период без продаж — не ошибка: у нового заведения «День» пуст, пока
+        // «Месяц» уже не пуст. Переключатель при этом остаётся на месте.
         is ScreenState.Empty -> item(key = "metrics-empty") {
             Text(
                 text = stringResource(R.string.business_metrics_empty),
@@ -253,71 +281,114 @@ private fun LazyListScope.metricItems(
             )
         }
 
-        is ScreenState.Content -> item(key = "metrics") {
-            MahallaCard {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
-                    metrics.data.metrics.forEach { metric -> MetricRow(metric = metric) }
-                }
-            }
-        }
+        is ScreenState.Content -> dashboardContentItems(dashboard = metrics.data)
     }
 }
 
-/**
- * Строка метрики: подпись слева, число справа.
- *
- * Подпись берётся из ресурсов только у знакомых ключей — состав словаря задаёт
- * сервер, и перевести то, чего приложение не видело, нечем. Незнакомый ключ
- * показывается словами (`BusinessMetric.fallbackLabel`), а не прячется:
- * метрика, которой бэкенд научился раньше приложения, всё равно полезна.
- */
+private fun LazyListScope.dashboardContentItems(dashboard: BusinessDashboard) {
+    item(key = "metrics-summary") {
+        MahallaCard {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.item)) {
+                SummaryRow(
+                    label = stringResource(R.string.business_metric_revenue),
+                    value = MoneyFormatter.withCurrency(
+                        dashboard.revenueSum,
+                        stringResource(R.string.currency_uzs),
+                    ),
+                )
+                SummaryRow(
+                    label = stringResource(R.string.business_metric_orders),
+                    value = MoneyFormatter.amount(dashboard.totalOrders),
+                )
+            }
+        }
+    }
+
+    if (dashboard.ordersByStatus.isNotEmpty()) {
+        item(key = "orders-by-status-header") {
+            SectionHeader(title = stringResource(R.string.business_dashboard_orders_by_status_title))
+        }
+        // Индекс в ключе — страховка: сервер группирует по статусу и дублей не
+        // шлёт, но два незнакомых статуса схлопнутся в один и тот же
+        // `OrderStatus.Unknown`, и без индекса список упал бы на дублях ключа.
+        itemsIndexed(
+            dashboard.ordersByStatus,
+            key = { index, stat -> "status-$index-${stat.status.name}" },
+        ) { _, stat -> OrderStatusStatRow(stat = stat) }
+    }
+
+    if (dashboard.topItems.isNotEmpty()) {
+        item(key = "top-items-header") {
+            SectionHeader(title = stringResource(R.string.business_dashboard_top_items_title))
+        }
+        itemsIndexed(
+            dashboard.topItems,
+            key = { index, item -> "$index-${item.itemId.takeIf(String::isNotEmpty) ?: item.name}" },
+        ) { _, topItem -> TopItemRow(topItem = topItem) }
+    }
+}
+
+/** Строка сводки: подпись слева, число справа (выручка, число заказов). */
 @Composable
-private fun MetricRow(metric: BusinessMetric, modifier: Modifier = Modifier) {
-    val colors = LocalMahallaColors.current
+private fun SummaryRow(label: String, value: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.item),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = metric.labelRes()?.let { stringResource(it) } ?: metric.fallbackLabel,
+            text = label,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
-            color = colors.fgMuted,
+            color = LocalMahallaColors.current.fgMuted,
         )
         Text(
-            text = when (metric.kind) {
-                BusinessMetricKind.Money -> MoneyFormatter.withCurrency(
-                    metric.value,
-                    stringResource(R.string.currency_uzs),
-                )
-
-                BusinessMetricKind.Count -> MoneyFormatter.amount(metric.value)
-            },
+            text = value,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }
 
-/**
- * Знакомые ключи аналитики.
- *
- * Список короткий намеренно: имён схема не описывает вовсе
- * (`additionalProperties`), и это **догадки по самым вероятным написаниям**,
- * а не контракт. Промах стоит английской подписи вместо переведённой —
- * метрика при этом остаётся на экране. Как только придёт живой ответ, список
- * сверяется и правится вместе с `docs/API-CONTRACT.md`.
- */
-@StringRes
-private fun BusinessMetric.labelRes(): Int? = when (key.lowercase()) {
-    "orders", "totalorders", "total_orders", "orderscount", "orders_count" ->
-        R.string.business_metric_orders
+@Composable
+private fun OrderStatusStatRow(stat: BusinessOrderStatusStat, modifier: Modifier = Modifier) {
+    MahallaListItem(
+        modifier = modifier,
+        title = stringResource(stat.status.labelRes()),
+        subtitle = stringResource(
+            R.string.business_dashboard_status_orders_count,
+            stat.orderCount,
+        ),
+        trailingText = MoneyFormatter.withCurrency(
+            stat.totalAmountSum,
+            stringResource(R.string.currency_uzs),
+        ),
+        showChevron = false,
+    )
+}
 
-    "revenue", "totalrevenue", "total_revenue" -> R.string.business_metric_revenue
-    "views", "totalviews", "total_views" -> R.string.business_metric_views
-    "reviews", "reviewscount", "reviews_count" -> R.string.business_metric_reviews
-    else -> null
+@Composable
+private fun TopItemRow(topItem: BusinessTopItem, modifier: Modifier = Modifier) {
+    MahallaListItem(
+        modifier = modifier,
+        title = topItem.name,
+        subtitle = stringResource(
+            R.string.business_dashboard_top_item_quantity,
+            topItem.quantity,
+        ),
+        trailingText = MoneyFormatter.withCurrency(
+            topItem.totalAmountSum,
+            stringResource(R.string.currency_uzs),
+        ),
+        showChevron = false,
+    )
+}
+
+@StringRes
+private fun DashboardPeriod.labelRes(): Int = when (this) {
+    DashboardPeriod.Day -> R.string.business_dashboard_period_day
+    DashboardPeriod.Week -> R.string.business_dashboard_period_week
+    DashboardPeriod.Month -> R.string.business_dashboard_period_month
 }
 
 @StringRes
@@ -359,10 +430,29 @@ private fun BusinessDashboardScreenPreview() {
                 ),
                 metrics = ScreenState.Content(
                     BusinessDashboard(
-                        metrics = listOf(
-                            BusinessMetric("orders", 42),
-                            BusinessMetric("revenue", 4_850_000),
-                            BusinessMetric("newClients", 7),
+                        period = DashboardPeriod.Day,
+                        revenueSum = 4_850_000,
+                        totalOrders = 42,
+                        ordersByStatus = listOf(
+                            BusinessOrderStatusStat(
+                                status = OrderStatus.Completed,
+                                orderCount = 38,
+                                totalAmountSum = 4_600_000,
+                            ),
+                            BusinessOrderStatusStat(
+                                status = OrderStatus.Cancelled,
+                                orderCount = 4,
+                                totalAmountSum = 250_000,
+                            ),
+                        ),
+                        topItems = listOf(
+                            BusinessTopItem(
+                                itemId = "i-1",
+                                itemType = BusinessItemType.MenuItem,
+                                name = "Osh",
+                                quantity = 21,
+                                totalAmountSum = 2_100_000,
+                            ),
                         ),
                     ),
                 ),

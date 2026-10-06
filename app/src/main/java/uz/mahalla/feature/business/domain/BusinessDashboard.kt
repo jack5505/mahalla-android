@@ -1,119 +1,89 @@
 package uz.mahalla.feature.business.domain
 
-import uz.mahalla.core.format.tiyinToSom
+import uz.mahalla.feature.food.domain.OrderStatus
 import java.util.Locale
 
 /**
- * Метрика дня на дашборде (задача 12.1).
- *
- * **Состав метрик задаёт сервер, а не приложение.** `GET
- * analytics/places/{placeId}/dashboard` отдаёт `Map<String, Long>` —
- * в `/v3/api-docs` это `additionalProperties`, то есть имена ключей схема не
- * описывает вовсе. Придумать их и разложить ответ по фиксированным полям
- * значило бы получить пустой дашборд на первом же расхождении, поэтому
- * приложение показывает **то, что приехало**: ключ сервера + его значение.
- *
- * @param key ключ ровно как его прислал сервер — он же ключ строки списка.
- * @param value значение; отрицательные не отбрасываются (счётчик возвратов
- * вполне может быть со знаком), а приводятся к тексту как есть.
- * @param kind как это показать. Не утверждение о контракте, а **правило
- * показа**: по имени ключа видно, деньги это или счётчик, и сумма без разрядов
- * читается хуже, чем с ними. Ошибка тут стоит неудачного форматирования, а не
- * потерянной метрики.
+ * Период дашборда (задача 12.1): переключатель на экране, на сервере —
+ * `period` query-параметром `GET analytics/places/{placeId}/dashboard`
+ * (схема `SellerDashboardResponse` подтверждена живым `/v3/api-docs`
+ * 2026-10-06, issue #292). По умолчанию — «День»: задача называется «Дашборд
+ * — метрики дня».
  */
-data class BusinessMetric(
-    val key: String,
-    val value: Long,
-    val kind: BusinessMetricKind = BusinessMetricKind.of(key),
-) {
-
-    /**
-     * Подпись, когда ключ незнаком: `total_revenue` → «Total revenue».
-     *
-     * Перевода тут быть не может — слово придумал сервер, — но показать
-     * человеку сырой `total_revenue` хуже, чем то же самое словами.
-     */
-    val fallbackLabel: String
-        get() {
-            val words = key.replace('_', ' ')
-                .replace(CAMEL_HUMP, " ")
-                .trim()
-                .lowercase(Locale.ROOT)
-            if (words.isEmpty()) return key
-            return words.replaceFirstChar { it.uppercase(Locale.ROOT) }
-        }
-
-    private companion object {
-        val CAMEL_HUMP = Regex("(?<=[a-z0-9])(?=[A-Z])")
-    }
-}
-
-/** Как форматировать значение метрики. */
-enum class BusinessMetricKind {
-    /** Сумма в сумах — с разрядами и валютой. */
-    Money,
-
-    /** Счётчик: заказы, талоны, просмотры. */
-    Count,
-    ;
-
-    companion object {
-        /**
-         * Деньги узнаются по имени ключа. Список намеренно широкий и в обоих
-         * написаниях (`totalRevenue` и `total_revenue`): промах в сторону
-         * «счётчика» показывает сумму без разрядов, промах в другую сторону —
-         * приписывает «so'm» к числу заказов, и второе заметнее.
-         */
-        private val MONEY_HINTS = listOf("revenue", "amount", "sum", "income", "earning", "total")
-
-        /**
-         * `totalOrders` — счётчик, хотя и содержит «total». Поэтому явные
-         * счётные слова сильнее денежных: они стоят рядом с сущностью, а
-         * «total» — это только «за всё время».
-         */
-        private val COUNT_HINTS = listOf("count", "orders", "views", "tickets", "clients", "rating")
-
-        fun of(key: String): BusinessMetricKind {
-            val normalized = key.lowercase(Locale.ROOT)
-            if (COUNT_HINTS.any(normalized::contains)) return Count
-            if (MONEY_HINTS.any(normalized::contains)) return Money
-            return Count
-        }
-    }
+enum class DashboardPeriod(val apiValue: String) {
+    Day("DAY"),
+    Week("WEEK"),
+    Month("MONTH"),
 }
 
 /**
- * Дашборд заведения: метрики дня в том порядке, в каком их прислал сервер.
+ * Тип позиции в топе товаров/услуг. Значения — перечисление `itemType` того
+ * же стенда (`ItemView`, issue #292): `MENU_ITEM`, `CLOTHING_VARIANT`,
+ * `DRUG`, `TICKET`.
  *
- * Свой порядок приложение не наводит: сервер знает, что важнее для этой
- * категории заведений, а алфавитная сортировка перемешала бы выручку с
- * просмотрами при каждом новом ключе.
+ * [Unknown] обязателен: `TopItemStat.itemType` в схеме объявлен просто
+ * строкой — своего перечисления у поля нет, и пятое значение, которое бэкенд
+ * заведёт раньше приложения, не должно уронить список.
  */
-data class BusinessDashboard(
-    val metrics: List<BusinessMetric> = emptyList(),
-) {
-    val isEmpty: Boolean get() = metrics.isEmpty()
+enum class BusinessItemType {
+    MenuItem,
+    ClothingVariant,
+    Drug,
+    Ticket,
+    Unknown,
+    ;
 
     companion object {
-        /**
-         * Ключ без имени выбрасывается: показать пустую строку с числом
-         * нельзя — непонятно, что это за число, — а в `LazyColumn` пустой ключ
-         * ещё и станет дубликатом при втором таком же.
-         *
-         * `null`-значения (`Map<String, Long>` в JSON вполне может приехать с
-         * `null`) отбрасываются по той же причине: «—» вместо метрики
-         * читается как ноль, а это разные вещи.
-         */
-        fun from(raw: Map<String, Long?>): BusinessDashboard = BusinessDashboard(
-            metrics = raw.mapNotNull { (key, value) ->
-                val name = key.trim()
-                if (name.isEmpty() || value == null) return@mapNotNull null
-                val kind = BusinessMetricKind.of(name)
-                // Деньги сервер отдаёт в тийинах, как и весь остальной проект
-                // (issue #149) — счётчики (заказы, просмотры) делить не на что.
-                val amount = if (kind == BusinessMetricKind.Money) value.tiyinToSom() else value
-                BusinessMetric(key = name, value = amount, kind = kind)
-            },
-        )
+        fun fromApi(value: String?): BusinessItemType =
+            when (value?.trim()?.uppercase(Locale.ROOT)) {
+                "MENU_ITEM" -> MenuItem
+                "CLOTHING_VARIANT" -> ClothingVariant
+                "DRUG" -> Drug
+                "TICKET" -> Ticket
+                else -> Unknown
+            }
     }
+}
+
+/** Заказы в одном статусе за период: сколько и на какую сумму (`StatusOrderStat`). */
+data class BusinessOrderStatusStat(
+    val status: OrderStatus,
+    val orderCount: Long,
+    val totalAmountSum: Long,
+)
+
+/** Строка топа товаров/услуг за период (`TopItemStat`). */
+data class BusinessTopItem(
+    val itemId: String,
+    val itemType: BusinessItemType,
+    val name: String,
+    val quantity: Long,
+    val totalAmountSum: Long,
+)
+
+/**
+ * Дашборд заведения за период (задача 12.1, `SellerDashboardResponse`).
+ *
+ * Выручка — [revenueSum], **не** приводится к нулю снизу: возвраты вполне
+ * могут увести период в минус, и спрятать это значило бы показать владельцу
+ * неверную картину. Остальные суммы (по статусам, по товарам) — это сложенные
+ * чеки, отрицательными не бывают.
+ *
+ * [isEmpty] — период, в который ничего не продали: ни заказов, ни позиций в
+ * топе, ни ненулевой выручки. Последнее условие — не на всякий случай:
+ * возврат за заказ из прошлого периода может увести [revenueSum] в минус и
+ * при нуле заказов в этом периоде, и спрятать такую сумму за «показателей
+ * пока нет» значило бы ровно то, от чего предостерегает KDoc [revenueSum]
+ * выше. Это не ошибка и не повод прятать переключатель периода — пустой
+ * «День» рядом с полным «Месяцем» для нового заведения обычное дело.
+ */
+data class BusinessDashboard(
+    val period: DashboardPeriod,
+    val revenueSum: Long = 0,
+    val totalOrders: Long = 0,
+    val ordersByStatus: List<BusinessOrderStatusStat> = emptyList(),
+    val topItems: List<BusinessTopItem> = emptyList(),
+) {
+    val isEmpty: Boolean
+        get() = revenueSum == 0L && totalOrders == 0L && topItems.isEmpty()
 }

@@ -32,19 +32,24 @@ import uz.mahalla.data.network.ApiResponse
 interface BusinessApi {
 
     /**
-     * Метрики дня (задача 12.1).
+     * Дашборд с периодом (задача 12.1, issue #292).
      *
-     * Ответ — `ApiResponseMapStringLong`, то есть **словарь без схемы**:
-     * `additionalProperties: integer(int64)` и ни одного объявленного ключа.
-     * Разбираем как есть, `Map<String, Long?>` — придуманные поля дали бы
-     * пустой дашборд при первом же расхождении (см. [BusinessDashboard]).
+     * Ответ — `SellerDashboardResponse`, схема снята и подтверждена живым
+     * `/v3/api-docs` **2026-10-06**: `period`, `from`, `to`, `revenueTiyin`,
+     * `totalOrders`, `ordersByStatus[]` (`StatusOrderStat`), `topItems[]`
+     * (`TopItemStat`). До этого ручка отдавала `Map<String, Long?>` без схемы
+     * (`additionalProperties`) — с тех пор бэкенд доделал задачу 12.1 на своей
+     * стороне (jack5505/mahalla#226), и ответ стал структурой.
      *
-     * `Long?`, а не `Long`: `data` объявлена необязательной, и `null` внутри
-     * словаря контракт не запрещает — жёсткий `Long` уронил бы разбор всего
-     * ответа из-за одной метрики.
+     * `period` обязателен: без него сервер берёт `MONTH` по умолчанию, а
+     * экран должен явно спрашивать выбранный человеком период, а не угадывать
+     * совпадение с умолчанием бэкенда.
      */
     @GET("analytics/places/{placeId}/dashboard")
-    suspend fun dashboard(@Path("placeId") placeId: String): ApiResponse<Map<String, Long?>>
+    suspend fun dashboard(
+        @Path("placeId") placeId: String,
+        @Query("period") period: String,
+    ): ApiResponse<SellerDashboardResponseDto>
 
     /**
      * Живая очередь заведения (задача 12.2).
@@ -189,6 +194,39 @@ interface BusinessApi {
     @DELETE("food/items/{itemId}")
     suspend fun deleteItem(@Path("itemId") itemId: String): ApiResponse<JsonElement>
 }
+
+/**
+ * `SellerDashboardResponse` (задача 12.1, issue #292). Снято живым
+ * `/v3/api-docs` 2026-10-06 — см. KDoc [BusinessApi.dashboard].
+ *
+ * `period` в ответе не разбирается на клиенте отдельно: запрошенный период
+ * известен и так, а сервер эхом возвращает ровно то же значение запроса.
+ */
+@Serializable
+data class SellerDashboardResponseDto(
+    @SerialName("revenueTiyin") val revenueTiyin: Long? = null,
+    @SerialName("totalOrders") val totalOrders: Long? = null,
+    @SerialName("ordersByStatus") val ordersByStatus: List<StatusOrderStatDto> = emptyList(),
+    @SerialName("topItems") val topItems: List<TopItemStatDto> = emptyList(),
+)
+
+/** `StatusOrderStat`: заказы одного статуса за период. */
+@Serializable
+data class StatusOrderStatDto(
+    @SerialName("status") val status: String? = null,
+    @SerialName("orderCount") val orderCount: Long? = null,
+    @SerialName("totalAmountTiyin") val totalAmountTiyin: Long? = null,
+)
+
+/** `TopItemStat`: строка топа товаров/услуг за период. */
+@Serializable
+data class TopItemStatDto(
+    @SerialName("itemId") val itemId: String? = null,
+    @SerialName("itemType") val itemType: String? = null,
+    @SerialName("itemName") val itemName: String? = null,
+    @SerialName("quantity") val quantity: Long? = null,
+    @SerialName("totalAmountTiyin") val totalAmountTiyin: Long? = null,
+)
 
 /**
  * `WalkInResponse` — общая схема талона. Имена совпадают с клиентским
