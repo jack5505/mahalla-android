@@ -57,6 +57,41 @@ class ServerInstantTest {
     }
 
     @Test
+    fun `an explicit offset is accepted, not just Z`() {
+        // issue #176: Ташкент — это +05:00, ровно та форма, которую Jackson
+        // отдаёт для OffsetDateTime/ZonedDateTime-полей. `Instant.parse` на
+        // minSdk 26 берёт только `Z`, и без отдельного шага строка со
+        // смещением уезжала в "Дата не указана".
+        val withOffset = "2026-09-05T13:00:00+05:00"
+        val expected = Instant.parse("2026-09-05T08:00:00Z")
+
+        assertEquals(expected, parseServerInstant(withOffset))
+        assertEquals(expected, parseServerSlotInstant(withOffset))
+    }
+
+    @Test
+    fun `an explicit offset wins over the naive-zone rule`() {
+        // Смещение уже называет зону — предполагать UTC или Ташкент поверх
+        // него не нужно и не нужно разное поведение между функциями.
+        val withOffset = "2026-09-05T13:00:00-02:00"
+        val expected = Instant.parse("2026-09-05T15:00:00Z")
+
+        assertEquals(expected, parseServerInstant(withOffset))
+        assertEquals(expected, parseServerSlotInstant(withOffset))
+    }
+
+    @Test
+    fun `a bracketed zone id is accepted too`() {
+        // ZonedDateTime.toString()/Jackson с zone id в квадратных скобках —
+        // та же причина проваливаться в null, что и голое смещение.
+        val withZoneId = "2026-09-05T13:00:00+05:00[Asia/Tashkent]"
+        val expected = Instant.parse("2026-09-05T08:00:00Z")
+
+        assertEquals(expected, parseServerInstant(withZoneId))
+        assertEquals(expected, parseServerSlotInstant(withZoneId))
+    }
+
+    @Test
     fun `an unparsable value is null and not an exception`() {
         // Битое поле в одной записи не должно ронять весь список.
         listOf(null, "", "   ", "2026-09-05", "вчера").forEach { raw ->
