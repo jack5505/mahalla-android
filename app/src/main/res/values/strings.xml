@@ -1212,7 +1212,6 @@
     <string name="business_dashboard_orders_by_status_title">Holat bo\'yicha</string>
     <string name="business_dashboard_status_orders_count">Buyurtmalar: %1$d</string>
     <string name="business_dashboard_top_items_title">Mashhur tovarlar</string>
-    <string name="business_dashboard_top_item_quantity">Sotildi: %1$d dona</string>
     <string name="business_pause_title">Hozir ochiq</string>
     <string name="business_pause_description">O\'chirilsa, joy yangi buyurtma va navbat qabul qilmaydi.</string>
     <string name="business_sections_title">Bo\'limlar</string>

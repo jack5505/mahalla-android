@@ -1203,7 +1203,6 @@
     <string name="business_dashboard_orders_by_status_title">По статусам</string>
     <string name="business_dashboard_status_orders_count">Заказов: %1$d</string>
     <string name="business_dashboard_top_items_title">Топ товаров</string>
-    <string name="business_dashboard_top_item_quantity">Продано: %1$d шт.</string>
     <string name="business_pause_title">Открыто сейчас</string>
     <string name="business_pause_description">Если выключить, заведение не принимает новые заказы и записи.</string>
     <string name="business_sections_title">Разделы</string>

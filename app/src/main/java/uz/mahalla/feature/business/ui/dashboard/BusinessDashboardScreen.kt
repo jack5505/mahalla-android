@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -372,8 +373,9 @@ private fun TopItemRow(topItem: BusinessTopItem, modifier: Modifier = Modifier) 
     MahallaListItem(
         modifier = modifier,
         title = topItem.name,
-        subtitle = stringResource(
-            R.string.business_dashboard_top_item_quantity,
+        subtitle = pluralStringResource(
+            R.plurals.business_dashboard_top_item_quantity,
+            topItem.quantity.toInt(),
             topItem.quantity,
         ),
         trailingText = MoneyFormatter.withCurrency(
