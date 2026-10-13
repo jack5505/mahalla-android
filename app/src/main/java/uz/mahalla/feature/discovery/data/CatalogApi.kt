@@ -189,13 +189,16 @@ interface CatalogApi {
      * Ответ — страница (`PageResponse`), а не голый список (сверено со стендом
      * issue #387, до этого контракт был снят до смены ответа бэкенда issue
      * jack5505/mahalla#204 и разбор молча падал в [uz.mahalla.core.result.ApiError.Serialization]).
-     * Пагинацию сервера (`page`/`totalPages`) клиент пока не использует —
-     * `search` и так отдаёт всё найденное одной страницей на практике.
+     * `page`/`size` — обычный `Pageable` Spring: 0-based, снято живым ответом
+     * (issue #398, `contract/search.sh`) — `page=1` действительно отдаёт
+     * следующий срез, без дублей со страницей 0, `last` корректно отражает
+     * конец выдачи.
      */
     @GET("search")
     suspend fun search(
         @Query("query") query: String?,
         @Query("category") category: String? = null,
+        @Query("page") page: Int = 0,
     ): ApiResponse<PageDto<PlaceDocumentDto>>
 
     @GET("places/{id}")

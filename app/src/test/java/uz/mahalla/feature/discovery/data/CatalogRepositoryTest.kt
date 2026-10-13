@@ -338,15 +338,66 @@ class CatalogRepositoryTest {
     }
 
     @Test
-    fun `later pages are not requested at all`() = runTest {
-        // Пагинации у бэкенда нет: сходить за той же первой страницей значило
-        // бы дописать её в список второй раз.
+    fun `later pages of nearby are not requested at all`() = runTest {
+        // `nearby` не пагинирует: сходить за той же первой страницей значило
+        // бы дописать её в список второй раз. У search — наоборот, см. ниже.
         val result = repository().places(DiscoveryFilters(), page = 1)
 
         val page = (result as ApiResult.Success).data
         assertTrue(page.items.isEmpty())
         assertFalse(page.hasMore)
         assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `a search page with last false reports hasMore`() = runTest {
+        // issue #398: до этого клиент всегда ставил hasMore=false и обрезал
+        // выдачу на первой странице сервера, даже когда там было ещё что
+        // догружать.
+        server.enqueue(json(SEARCH_PAGE0_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "Club"), page = 0)
+
+        val page = (result as ApiResult.Success).data
+        assertTrue("last=false в ответе — есть что догружать", page.hasMore)
+        assertEquals(listOf("s-page0"), page.items.map(Place::id))
+    }
+
+    @Test
+    fun `the next search page is requested with the right page number`() = runTest {
+        server.enqueue(json(SEARCH_PAGE1_BODY))
+
+        repository().places(DiscoveryFilters(query = "Club"), page = 1)
+
+        val path = server.takeRequest().path.orEmpty()
+        assertTrue(path, path.startsWith("/search?"))
+        assertTrue(path, path.contains("page=1"))
+    }
+
+    @Test
+    fun `a search page with last true reports no more`() = runTest {
+        server.enqueue(json(SEARCH_PAGE1_BODY))
+
+        val result = repository().places(DiscoveryFilters(query = "Club"), page = 1)
+
+        val page = (result as ApiResult.Success).data
+        assertFalse("last=true — догружать больше нечего", page.hasMore)
+        assertEquals(listOf("s-page1"), page.items.map(Place::id))
+    }
+
+    @Test
+    fun `search pages do not duplicate items between requests`() = runTest {
+        // Симулируем догрузку хвоста: две последовательные страницы одного
+        // запроса не должны прислать один и тот же id дважды.
+        server.enqueue(json(SEARCH_PAGE0_BODY))
+        server.enqueue(json(SEARCH_PAGE1_BODY))
+        val filters = DiscoveryFilters(query = "Club")
+
+        val first = (repository().places(filters, page = 0) as ApiResult.Success).data
+        val second = (repository().places(filters, page = 1) as ApiResult.Success).data
+
+        val ids = (first.items + second.items).map(Place::id)
+        assertEquals(ids.distinct(), ids)
     }
 
     @Test
@@ -785,6 +836,23 @@ class CatalogRepositoryTest {
         const val SEARCH_EMPTY_BODY = """
             {"success":true,"data":{"content":[],
               "page":0,"size":20,"totalElements":0,"totalPages":0,"first":true,"last":true}}
+        """
+
+        // Форма — с живого стенда (issue #398, contract/search.sh,
+        // search_page0.json/search_page1.json): запрос с двумя совпадениями,
+        // size=1 — страница 0 не последняя, страница 1 последняя.
+        const val SEARCH_PAGE0_BODY = """
+            {"success":true,"data":{"content":[
+              {"id":"s-page0","name":"PlayZone PS5 Club","category":"GAMING",
+               "city":"Toshkent","lat":41.345,"lng":69.205,"ratingAvg":4.7,"isActive":true}
+              ],"page":0,"size":1,"totalElements":2,"totalPages":2,"first":true,"last":false}}
+        """
+
+        const val SEARCH_PAGE1_BODY = """
+            {"success":true,"data":{"content":[
+              {"id":"s-page1","name":"Jakhongir Game Club","category":"GAMING",
+               "city":"Toshkent","lat":41.2995,"lng":69.2401,"ratingAvg":0.0,"isActive":true}
+              ],"page":1,"size":1,"totalElements":2,"totalPages":2,"first":false,"last":true}}
         """
 
         /**
