@@ -126,7 +126,6 @@ class DefaultCatalogRepository @Inject constructor(
 ) : CatalogRepository {
 
     override suspend fun places(filters: DiscoveryFilters, page: Int): ApiResult<PlacePage> {
-        val location = location()
         val query = filters.query.trim()
 
         // `nearby` не пагинирует: сходить за той же первой страницей значило бы
@@ -135,6 +134,7 @@ class DefaultCatalogRepository @Inject constructor(
             return ApiResult.Success(PlacePage(emptyList(), page, hasMore = false))
         }
 
+        val location = location()
         val response = apiCall {
             if (query.isEmpty()) {
                 val items = api.nearby(
