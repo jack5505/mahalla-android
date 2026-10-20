@@ -843,6 +843,28 @@ class NetworkStackTest {
         }
 
     @Test
+    fun `the same endpoint with different order ids does not end the session`() = runTest {
+        // food/places/{placeId}/orders/{orderId}/status — одна и та же ручка
+        // бизнес-панели (docs/API-CONTRACT.md), дёрнутая на двух РАЗНЫХ
+        // заказах, не должна считаться двумя разными ручками: это та же
+        // одноручечная путаница 401/403, просто размазанная по id (issue #197).
+        sessionStore.save(Session("stale", "refresh-1"))
+        val auth = authenticator()
+        val orderA = requestTo("/food/places/11111111-1111-1111-1111-111111111111/orders/aaaaaaaa-0000-0000-0000-000000000000/status")
+        val orderB = requestTo("/food/places/11111111-1111-1111-1111-111111111111/orders/bbbbbbbb-0000-0000-0000-000000000000/status")
+
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(orderA, prior = unauthorized(orderA))),
+        )
+        assertNull(
+            auth.authenticate(route = null, response = unauthorized(orderB, prior = unauthorized(orderB))),
+        )
+
+        assertEquals(Session("stale", "refresh-1"), sessionStore.current())
+        assertEquals(0, expiryEvents.size)
+    }
+
+    @Test
     fun `two different endpoints rejecting a fresh token together end the session`() = runTest {
         // Оба отказа делят один и тот же свежий токен без своего успешного
         // refresh между ними — как у параллельных запросов, упёршихся в

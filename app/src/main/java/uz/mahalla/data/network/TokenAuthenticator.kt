@@ -2,6 +2,7 @@ package uz.mahalla.data.network
 
 import kotlinx.coroutines.runBlocking
 import okhttp3.Authenticator
+import okhttp3.HttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.Route
@@ -84,7 +85,8 @@ class TokenAuthenticator @Inject constructor(
     private var lastAmbiguousRefreshFailureAt: Instant? = null
 
     /**
-     * Разные ручки (`метод путь`), чей повтор с только что обновлённым
+     * Разные ручки (`метод путь`, см. [normalizedPath]) — а не разные
+     * запросы к одной и той же, — чей повтор с только что обновлённым
      * токеном (см. [attemptCount]) всё равно получил 401 — issue #197.
      * Читается и пишется только внутри `synchronized(this)`.
      *
@@ -317,6 +319,21 @@ class TokenAuthenticator @Inject constructor(
         .build()
 
     /**
+     * Путь с заменой переменных сегментов (uuid заказа/места/брони и т. п.) на
+     * `{id}` — чтобы `food/places/{placeId}/orders/{orderId}/status` для двух
+     * РАЗНЫХ заказов одной и той же ручки не считался двумя разными ручками в
+     * [pathsRejectingFreshToken]: это была бы ровно та одноручечная путаница
+     * 401/403, которую этот набор должен прощать, просто размазанная по
+     * нескольким id вместо одного и того же (issue #197). Статичные сегменты
+     * контракта (`food`, `places`, `orders`, `status`…) цифр не содержат —
+     * этого достаточно, чтобы отличить их от uuid и числовых id.
+     */
+    private fun HttpUrl.normalizedPath(): String =
+        encodedPathSegments.joinToString("/") { segment ->
+            if (segment.any(Char::isDigit)) "{id}" else segment
+        }
+
+    /**
      * Запрос со свежим токеном (см. [attemptCount]) всё равно получил 401.
      * Повторить нечем — этому конкретному запросу OkHttp здесь и так не даст
      * попытки, — но стоит понять, одна это неаккуратная ручка (403 вместо
@@ -324,7 +341,7 @@ class TokenAuthenticator @Inject constructor(
      * (issue #197). Вызывать только внутри `synchronized(this)`.
      */
     private fun onFreshTokenStillRejected(response: Response): Request? {
-        val path = response.request.let { "${it.method} ${it.url.encodedPath}" }
+        val path = response.request.let { "${it.method} ${it.url.normalizedPath()}" }
         pathsRejectingFreshToken.add(path)
         if (pathsRejectingFreshToken.size >= REJECTING_PATHS_LIMIT) {
             // Несколько разных ручек не приняли один и тот же свежий токен —
