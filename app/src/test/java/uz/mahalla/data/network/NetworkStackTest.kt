@@ -871,6 +871,9 @@ class NetworkStackTest {
         // общий только что обновлённый токен. Одна ручка простилась бы, а
         // сразу две разные подряд — уже отказ токена целиком (issue #197).
         sessionStore.save(Session("stale", "refresh-1"))
+        orderDao.upsert(listOf(order(id = "o-1")))
+        cartDraftDao.upsert(draft(placeId = "place-1", productId = "osh"))
+        pushTokenStore.save("fcm-1")
         val auth = authenticator()
         val pathA = requestTo("/business/orders")
         val pathB = requestTo("/wallet/topup")
@@ -887,6 +890,11 @@ class NetworkStackTest {
 
         assertNull("вторая другая ручка подряд — сессия кончена", sessionStore.current())
         assertEquals(1, expiryEvents.size)
+        // Не только токены: следующий человек на этом же устройстве не должен
+        // увидеть чужие заказы и корзину из офлайн-кэша (issue #341).
+        assertEquals(emptyList<OrderEntity>(), orderDao.observeAll().first())
+        assertEquals(emptyList<CartDraftItemEntity>(), cartDraftDao.observe("place-1").first())
+        assertNull(pushTokenStore.current())
     }
 
     @Test
