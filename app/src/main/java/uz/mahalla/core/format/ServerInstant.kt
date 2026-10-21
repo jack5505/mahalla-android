@@ -3,8 +3,10 @@ package uz.mahalla.core.format
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeParseException
 
 /**
@@ -46,13 +48,24 @@ fun parseServerInstant(value: String?): Instant? =
  * показ и отправка разъедутся.
  *
  * Строка с `Z` разбирается как есть, обеими функциями одинаково: начнёт
- * бэкенд отдавать слоты моментом — гадать будет не о чем. Строку со
- * смещением (`+05:00`) `Instant.parse` на minSdk 26 не берёт, и она даст
- * `null`; поводов её ждать нет — стенд отдаёт либо `Z`, либо ничего.
+ * бэкенд отдавать слоты моментом — гадать будет не о чем. Явное смещение
+ * (`+05:00`) тоже разбирается как есть, своей зоной, а не
+ * [DateTimeFormatters.AppZone] — это сильнее предположения о местных часах,
+ * раз сервер сам назвал зону.
  */
 fun parseServerSlotInstant(value: String?): Instant? =
     parseServerInstant(value, naiveZone = DateTimeFormatters.AppZone)
 
+/**
+ * `Instant.parse` на minSdk 26 — это Java-8 `ISO_INSTANT`, который берёт
+ * только хвостовой `Z`. Строку со смещением (`+05:00`, как у Ташкента) или с
+ * именем зоны в скобках (`[Asia/Tashkent]`) он молча не разбирает — не
+ * исключение, а `DateTimeParseException` уже на входе, так что без явного
+ * `OffsetDateTime`/`ZonedDateTime` шага такая строка проваливалась сразу в
+ * наивный разбор и трактовалась как [naiveZone], хотя зона была известна
+ * (issue #176). Наивный `LocalDateTime` — последний шаг именно поэтому: он
+ * единственный, кто готов разобрать строку без какой-либо зоны вообще.
+ */
 private fun parseServerInstant(value: String?, naiveZone: ZoneId): Instant? {
     val raw = value?.trim().orEmpty()
     if (raw.isEmpty()) return null
@@ -60,9 +73,17 @@ private fun parseServerInstant(value: String?, naiveZone: ZoneId): Instant? {
         Instant.parse(raw)
     } catch (invalid: DateTimeParseException) {
         try {
-            LocalDateTime.parse(raw).atZone(naiveZone).toInstant()
-        } catch (invalidLocal: DateTimeParseException) {
-            null
+            OffsetDateTime.parse(raw).toInstant()
+        } catch (invalidOffset: DateTimeParseException) {
+            try {
+                ZonedDateTime.parse(raw).toInstant()
+            } catch (invalidZoned: DateTimeParseException) {
+                try {
+                    LocalDateTime.parse(raw).atZone(naiveZone).toInstant()
+                } catch (invalidLocal: DateTimeParseException) {
+                    null
+                }
+            }
         }
     }
 }
