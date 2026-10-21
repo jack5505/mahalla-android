@@ -103,7 +103,7 @@ class ActivityViewModelTest {
     fun `nobody answered is the only real screen failure`() = runTest {
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
-            failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
+            failures = ActivityFeed.FIRST_PAGES.keys.associateWith { ApiFailure(ApiError.Unauthorized) },
         )
 
         val state = ActivityViewModel(repository).state.value
@@ -273,7 +273,7 @@ class ActivityViewModelTest {
         // шанс выйти из ScreenState.Error возвратом на таб.
         val repository = FakeActivityRepository()
         repository.defaultFeed = ActivityFeed(
-            failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
+            failures = ActivityFeed.FIRST_PAGES.keys.associateWith { ApiFailure(ApiError.Unauthorized) },
         )
         val viewModel = ActivityViewModel(repository)
         viewModel.onEvent(ActivityEvent.ScreenResumed)
@@ -783,7 +783,7 @@ class ActivityViewModelTest {
         viewModel.onEvent(ActivityEvent.ScreenResumed) // первый resume — открытие, не в счёт.
 
         repository.defaultFeed = ActivityFeed(
-            failures = ActivitySource.entries.associateWith { ApiFailure(ApiError.Unauthorized) },
+            failures = ActivityFeed.FIRST_PAGES.keys.associateWith { ApiFailure(ApiError.Unauthorized) },
         )
         viewModel.onEvent(ActivityEvent.ScreenResumed) // настоящий возврат.
         val state = viewModel.state.value

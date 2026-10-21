@@ -48,11 +48,15 @@ data class ActivityFeed(
 
     companion object {
         /**
-         * Первая загрузка: нулевая страница у каждого источника. Считается по
-         * перечислению, а не списком вручную — подключение новой вертикали не
-         * должно требовать правки в двух местах.
+         * Первая загрузка: нулевая страница у каждого сетевого источника.
+         * Считается по перечислению, а не списком вручную — подключение новой
+         * вертикали не должно требовать правки в двух местах.
+         *
+         * [ActivitySource.WalkIn] исключён явно (issue #287): у него нет
+         * страниц, и курсор ему не нужен — талон дописывается в каждый ответ
+         * `DefaultActivityRepository.feed()` отдельно, в обход `pages`.
          */
         val FIRST_PAGES: Map<ActivitySource, Int> =
-            ActivitySource.entries.associateWith { 0 }
+            ActivitySource.entries.filterNot { it == ActivitySource.WalkIn }.associateWith { 0 }
     }
 }

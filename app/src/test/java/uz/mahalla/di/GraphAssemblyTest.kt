@@ -624,6 +624,13 @@ class GraphAssemblyTest {
                 placeNameResolver = DefaultPlaceNameResolver(
                     DiscoveryDataModule.provideCatalogApi(retrofit),
                 ),
+                // Талон очереди (issue #287) — тот же `DataStoreWalkInTicketStore`,
+                // что и у самой вертикали «Очередь», см. тест ниже.
+                walkInTicketStore = DataStoreWalkInTicketStore(
+                    dataStore = sharedDataStore(context),
+                    profileStore = DataStoreUserProfileStore(sharedDataStore(context)),
+                    clock = AppModule.provideClock(),
+                ),
             ),
         )
     }
