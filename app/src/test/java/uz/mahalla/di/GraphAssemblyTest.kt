@@ -41,6 +41,7 @@ import uz.mahalla.data.prefs.SettingsDataStore
 import uz.mahalla.data.prefs.di.DataStoreModule
 import uz.mahalla.data.push.PushTokenRegistrar
 import uz.mahalla.data.security.AndroidKeystorePinCipher
+import uz.mahalla.data.security.AndroidKeystoreSessionCipher
 import uz.mahalla.data.security.DataStorePinAttemptStore
 import uz.mahalla.data.security.KeystorePinStorage
 import uz.mahalla.data.session.LocalUserDataCleaner
@@ -123,7 +124,7 @@ class GraphAssemblyTest {
             NetworkModule.provideRefreshRetrofit(refreshClient, converterFactory, baseUrl)
         val authApi = NetworkModule.provideAuthApi(refreshRetrofit)
 
-        val sessionStore = DataStoreSessionStore(sharedDataStore(context))
+        val sessionStore = DataStoreSessionStore(sharedDataStore(context), AndroidKeystoreSessionCipher())
         val database = DatabaseModule.provideDatabase(context)
         try {
             val client = NetworkModule.provideOkHttpClient(
@@ -319,7 +320,7 @@ class GraphAssemblyTest {
         val dataStore = sharedDataStore(context)
         val database = DatabaseModule.provideDatabase(context)
         try {
-            val sessionStore = DataStoreSessionStore(dataStore)
+            val sessionStore = DataStoreSessionStore(dataStore, AndroidKeystoreSessionCipher())
             val repository = DefaultAuthRepository(
                 authApi = authApi,
                 sessionStore = sessionStore,
@@ -699,7 +700,7 @@ class GraphAssemblyTest {
             DefaultSecurityRepository(
                 pinApi = pinApi,
                 sessionApi = sessionApi,
-                sessionStore = DataStoreSessionStore(dataStore),
+                sessionStore = DataStoreSessionStore(dataStore, AndroidKeystoreSessionCipher()),
                 onboardingRepository = DataStoreOnboardingRepository(settings),
                 pinStorage = KeystorePinStorage(dataStore, AndroidKeystorePinCipher()),
                 deviceInfoProvider = FakeDeviceInfoProvider(),
