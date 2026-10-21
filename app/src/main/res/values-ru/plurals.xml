@@ -256,4 +256,12 @@
         <item quantity="other">Не больше %1$d минут</item>
     </plurals>
 
+    <!-- Дашборд бизнес-панели (issue #292): количество проданного товара/услуги в топе. -->
+    <plurals name="business_dashboard_top_item_quantity">
+        <item quantity="one">Продано: %1$d шт.</item>
+        <item quantity="few">Продано: %1$d шт.</item>
+        <item quantity="many">Продано: %1$d шт.</item>
+        <item quantity="other">Продано: %1$d шт.</item>
+    </plurals>
+
 </resources>

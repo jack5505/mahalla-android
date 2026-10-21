@@ -8,6 +8,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.business.domain.BusinessAccess
 import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessSection
+import uz.mahalla.feature.business.domain.DashboardPeriod
 
 /**
  * Состояние бизнес-панели (задача 12.1).
@@ -25,6 +26,8 @@ data class BusinessDashboardState(
     val placeName: String = "",
     val access: ScreenState<BusinessAccess> = ScreenState.Loading,
     val metrics: ScreenState<BusinessDashboard> = ScreenState.Loading,
+    /** Выбранный период дашборда. По умолчанию — «День» (задача 12.1). */
+    val period: DashboardPeriod = DashboardPeriod.Day,
     val isRefreshing: Boolean = false,
     val pauseInProgress: Boolean = false,
     val actionFailure: ApiFailure? = null,
@@ -49,6 +52,9 @@ sealed interface BusinessDashboardEvent : UiEvent {
 
     /** Повтор только метрик: доступ уже подтверждён, перезапрашивать нечего. */
     data object RetryMetrics : BusinessDashboardEvent
+
+    /** Переключатель периода (задача 12.1): перезапрашивает только метрики. */
+    data class PeriodSelected(val period: DashboardPeriod) : BusinessDashboardEvent
 
     data class SectionClicked(val section: BusinessSection) : BusinessDashboardEvent
 
