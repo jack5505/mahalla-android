@@ -67,6 +67,32 @@ class SearchContractTest {
     }
 
     @Test
+    fun `page and size are honoured, not just echoed`() {
+        // issue #398: до этой пробы `page`/`size` были объявлены в контракте,
+        // но не подтверждены живым ответом — `search_page0`/`search_page1`
+        // сняты с `page=0&size=1` и `page=1&size=1` на запросе с двумя
+        // совпадениями (contract/search.sh). Если бы сервер их игнорировал,
+        // обе страницы вернули бы одну и ту же запись с `size=20`.
+        val page0 = json.decodeFromJsonElement<ApiResponse<PageDto<PlaceDocumentDto>>>(
+            sampleOrSkip("search_page0"),
+        ).data!!
+        val page1 = json.decodeFromJsonElement<ApiResponse<PageDto<PlaceDocumentDto>>>(
+            sampleOrSkip("search_page1"),
+        ).data!!
+
+        assertEquals(1, page0.content.size)
+        assertEquals(1, page1.content.size)
+        assertEquals(0, page0.page)
+        assertEquals(1, page1.page)
+        assertTrue("страница 0 из двух — last не должен быть true", !page0.last)
+        assertTrue("страница 1 из двух — последняя", page1.last)
+        assertTrue(
+            "обе страницы отдали одну и ту же запись — page/size не влияют на выдачу",
+            page0.content.single().id != page1.content.single().id,
+        )
+    }
+
+    @Test
     fun `the endpoint requires geo headers, unlike categories`() {
         // В отличие от `categories`, у `search` гео-заголовки обязательны —
         // без них 403 GEO_PERMISSION_REQUIRED (contract/search.sh снимает это
