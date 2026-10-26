@@ -65,6 +65,7 @@ fun ActivityScreen(
     onFoodOrderClick: (String) -> Unit,
     onTicketClick: (String) -> Unit,
     onAppointmentClick: (appointmentId: String, vertical: String) -> Unit,
+    onQueueClick: (placeId: String, placeName: String) -> Unit,
     onDiscoveryClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ActivityViewModel = hiltViewModel(),
@@ -78,6 +79,7 @@ fun ActivityScreen(
                 is ActivityEffect.OpenTicket -> onTicketClick(effect.ticketId)
                 is ActivityEffect.OpenAppointment ->
                     onAppointmentClick(effect.appointmentId, effect.vertical)
+                is ActivityEffect.OpenQueue -> onQueueClick(effect.placeId, effect.placeName)
                 ActivityEffect.OpenDiscovery -> onDiscoveryClick()
             }
         }

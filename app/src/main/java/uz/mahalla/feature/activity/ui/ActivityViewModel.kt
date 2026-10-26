@@ -474,6 +474,9 @@ class ActivityViewModel @Inject constructor(
                 ActivityEffect.OpenAppointment(target.appointmentId, AppointmentVertical.Doctor.name),
             )
 
+            is ActivityTarget.WalkInTicket ->
+                emitEffect(ActivityEffect.OpenQueue(target.placeId, target.placeName))
+
             ActivityTarget.None -> Unit
         }
     }
