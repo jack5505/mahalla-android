@@ -47,7 +47,7 @@ gh issue list --state open   # 47 открытых issue
 | feature-пакетов | 27 | `ls app/src/main/java/uz/mahalla/feature` |
 | Назначений в графе | **58** | `grep -c 'composable<' …/navigation/MahallaNavHost.kt` |
 | Экранов (`*Screen.kt`) | 59 | `find app/src/main -name '*Screen.kt' \| wc -l` |
-| ViewModel / репозиториев | 61 / 24 | `find … -name '*ViewModel.kt'` |
+| ViewModel / репозиториев | 61 / 25 | `find … -name '*ViewModel.kt'` (репозиториев на один больше: PR #383 добавил `CategoryRepository`, число не пересчитали) |
 | `*Api.kt` / эндпоинтов | 28 / **140** уникальных | `grep -rhoE '@(GET\|POST\|PUT\|DELETE)\("[^"]*"' --include='*Api.kt' app/src/main \| sort -u \| wc -l` (142 аннотации: `orders/{orderId}` объявлен в двух API). **Пересчитано 2026-09-26** (issue #382): на 2026-09-10 было «81 в 82 аннотациях» — таблица отстала на две недели чужих PR |
 | Эндпоинтов на стенде | **180** в 164 путях (счёт от 2026-09-10) | `/v3/api-docs` по хосту стенда с тех пор отдаёт `404` nginx — пересчитать нечем, цифра устарела и держится только как ориентир |
 | Тестов | **2989 в 253 классах**, 0 падений, 6 пропущено | `./gradlew testDebugUnitTest` (пересчёт 2026-09-26, issue #382; на 2026-09-10 было 2061 в 190). Пропущены — шесть отдельных кейсов в `OrdersContractTest`, `SecurityContractTest` и `BookingContractTest`, которым нужна проба под токеном: без `CONTRACT_REFRESH_TOKEN` она не снимается. Анонимные пробы этих же классов закоммичены и гоняются. Нет пробы — тест пропускается, а не краснеет |
