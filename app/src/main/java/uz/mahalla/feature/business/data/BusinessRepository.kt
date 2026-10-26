@@ -12,6 +12,7 @@ import uz.mahalla.feature.business.domain.BusinessDashboard
 import uz.mahalla.feature.business.domain.BusinessMenu
 import uz.mahalla.feature.business.domain.BusinessOrder
 import uz.mahalla.feature.business.domain.BusinessOrderPage
+import uz.mahalla.feature.business.domain.DashboardPeriod
 import uz.mahalla.feature.business.domain.NewMenuItemForm
 import uz.mahalla.feature.business.domain.NewMenuItemValidator
 import uz.mahalla.feature.business.domain.QueueAction
@@ -45,8 +46,8 @@ interface BusinessRepository {
      */
     suspend fun access(placeId: String): ApiResult<BusinessAccess>
 
-    /** Метрики дня (задача 12.1). */
-    suspend fun dashboard(placeId: String): ApiResult<BusinessDashboard>
+    /** Дашборд с периодом (задача 12.1, issue #292). */
+    suspend fun dashboard(placeId: String, period: DashboardPeriod): ApiResult<BusinessDashboard>
 
     /** Живая очередь (задача 12.2). */
     suspend fun queue(placeId: String): ApiResult<List<QueueEntry>>
@@ -183,8 +184,12 @@ class DefaultBusinessRepository @Inject constructor(
         return ApiResult.Failure(ApiError.Business(BusinessRepository.NO_ACCESS_CODE))
     }
 
-    override suspend fun dashboard(placeId: String): ApiResult<BusinessDashboard> =
-        apiCall { api.dashboard(placeId).payload() }.map(BusinessDashboard::from)
+    override suspend fun dashboard(
+        placeId: String,
+        period: DashboardPeriod,
+    ): ApiResult<BusinessDashboard> =
+        apiCall { api.dashboard(placeId, period.apiValue).payload() }
+            .map { it.toDomain(period) }
 
     override suspend fun queue(placeId: String): ApiResult<List<QueueEntry>> =
         apiCall { api.queue(placeId).payload() }

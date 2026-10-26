@@ -210,4 +210,10 @@
         <item quantity="other">%1$d daqiqadan oshmasin</item>
     </plurals>
 
+    <!-- Дашборд бизнес-панели (issue #292): количество проданного товара/услуги в топе. -->
+    <plurals name="business_dashboard_top_item_quantity">
+        <item quantity="one">Sotildi: %1$d dona</item>
+        <item quantity="other">Sotildi: %1$d dona</item>
+    </plurals>
+
 </resources>
