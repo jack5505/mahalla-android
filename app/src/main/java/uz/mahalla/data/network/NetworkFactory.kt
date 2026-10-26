@@ -35,6 +35,9 @@ object NetworkFactory {
      * `Level.BODY` печатает ответы так же, как запросы (issue #46).
      * `send-otp` — не токен, но номер телефона с точными координатами и
      * `otpToken` в ответе; в logcat это те же персональные данные.
+     * `wallet/business/payouts` (issue #290) несёт полный номер карты — и
+     * запросом (`PayoutCreateRequest.cardNumber`), и ответом
+     * (`PayoutResponse.cardNumber`) — тот же критерий «заплатить», что и у PIN.
      *
      * Сравнение по концу пути, а не целиком: базовый адрес несёт префикс
      * `/api/v1/`, и он же меняется на стенде (issue #26). Завершающий слэш
@@ -51,6 +54,7 @@ object NetworkFactory {
         "auth/refresh",
         "auth/telegram/init",
         "auth/telegram/check",
+        "wallet/business/payouts",
     )
 
     private const val CONNECT_TIMEOUT_SECONDS = 15L

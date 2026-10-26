@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.People
@@ -75,6 +76,7 @@ fun BusinessDashboardScreen(
     onOpenQueue: (String, String) -> Unit,
     onOpenOrders: (String, String, String) -> Unit,
     onOpenMenu: (String, String) -> Unit,
+    onOpenEarnings: (String, String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BusinessDashboardViewModel = hiltViewModel(),
@@ -93,6 +95,9 @@ fun BusinessDashboardScreen(
                     onOpenOrders(effect.placeId, effect.placeName, effect.category)
 
                 is BusinessDashboardEffect.OpenMenu -> onOpenMenu(effect.placeId, effect.placeName)
+
+                is BusinessDashboardEffect.OpenEarnings ->
+                    onOpenEarnings(effect.placeId, effect.placeName)
             }
         }
     }
@@ -398,6 +403,7 @@ private fun BusinessSection.labelRes(): Int = when (this) {
     BusinessSection.Queue -> R.string.business_section_queue
     BusinessSection.Orders -> R.string.business_section_orders
     BusinessSection.Menu -> R.string.business_section_menu
+    BusinessSection.Earnings -> R.string.business_section_earnings
 }
 
 @StringRes
@@ -405,12 +411,14 @@ private fun BusinessSection.descriptionRes(): Int = when (this) {
     BusinessSection.Queue -> R.string.business_section_queue_description
     BusinessSection.Orders -> R.string.business_section_orders_description
     BusinessSection.Menu -> R.string.business_section_menu_description
+    BusinessSection.Earnings -> R.string.business_section_earnings_description
 }
 
 private fun BusinessSection.icon(): ImageVector = when (this) {
     BusinessSection.Queue -> Icons.Outlined.People
     BusinessSection.Orders -> Icons.Outlined.ReceiptLong
     BusinessSection.Menu -> Icons.Outlined.MenuBook
+    BusinessSection.Earnings -> Icons.Outlined.AccountBalanceWallet
 }
 
 @ThemeLanguagePreviews

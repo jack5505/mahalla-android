@@ -60,6 +60,22 @@ class SecretBodyLoggingTest {
         assertFalse("refresh-токен уехал в logcat: $logged", logged.contains("RT-secret"))
     }
 
+    /**
+     * `PayoutResponse` возвращает тот же номер карты, что принял запрос
+     * (issue #290) — это PAN, а не PIN, но критерий списка тот же: «тем можно
+     * заплатить».
+     */
+    @Test
+    fun `card number in a payout never reaches the log`() {
+        val body = """{"amount":100000,"cardNumber":"4400123456789012"}"""
+        val response = """{"id":"p-1","cardNumber":"4400123456789012","status":"PENDING"}"""
+
+        val logged = exchange(path = "/api/v1/wallet/business/payouts", requestBody = body, response = response)
+
+        assertFalse("номер карты уехал в logcat: $logged", logged.contains("4400123456789012"))
+        assertTrue(logged.contains("/api/v1/wallet/business/payouts"))
+    }
+
     @Test
     fun `ordinary endpoints keep their body in the log`() {
         val response = """{"places":["bozor"]}"""

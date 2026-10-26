@@ -33,6 +33,30 @@ interface WalletApi {
 
     @POST("wallet/top-up")
     suspend fun topUp(@Body request: TopUpRequest): ApiResponse<TopUpDto>
+
+    /**
+     * Кошелёк заведения (issue #290, бэкенд jack5505/mahalla#223).
+     *
+     * Путь и тело сняты с живого `/v3/api-docs` **2026-09-22** (стенд отдал
+     * схему анонимно, без `CONTRACT_REFRESH_TOKEN`) — `ApiResponseWalletResponse`,
+     * тот же `WalletResponse`, что и у [wallet]: своей DTO под бизнес-кошелёк
+     * заводить незачем, схема слово в слово совпадает.
+     */
+    @GET("wallet/business")
+    suspend fun businessWallet(): ApiResponse<WalletDto>
+
+    /**
+     * Заявка на вывод (issue #290, бэкенд jack5505/mahalla#223). Схема — оттуда
+     * же, что и [businessWallet].
+     *
+     * ⚠️ Отдельной ручки для списка заявок и их статусов у бэкенда нет: в схеме
+     * — только эта, `POST`. Статус заявки виден только в её собственном ответе
+     * и, если появится там, в [transactions] (там же — разведённые начисление
+     * и комиссия, и разворот при возврате: своя схема их не выделяет, это
+     * обычные записи истории). Список заявок целиком — NEEDS-PARTNER.
+     */
+    @POST("wallet/business/payouts")
+    suspend fun requestPayout(@Body request: PayoutCreateRequest): ApiResponse<PayoutDto>
 }
 
 /**
@@ -96,6 +120,33 @@ data class TopUpDto(
     @SerialName("amount") val amount: Long? = null,
     @SerialName("provider") val provider: String? = null,
     @SerialName("expiresAt") val expiresAt: String? = null,
+)
+
+/**
+ * `PayoutCreateRequest`. Оба поля обязательны: `amount` — тийины, как и везде
+ * в кошельке ([uz.mahalla.core.format.Money.somToTiyin]), `cardNumber` — по
+ * схеме ровно 16 цифр (`\d{16}`), без пробелов и тире.
+ */
+@Serializable
+data class PayoutCreateRequest(
+    @SerialName("amount") val amount: Long,
+    @SerialName("cardNumber") val cardNumber: String,
+)
+
+/**
+ * `PayoutResponse` — ответ на заведённую заявку на вывод. Все поля
+ * необязательные, как и везде в этом API; полный номер карты сервер
+ * присылает обратно, но на экране он не показывается — только маска
+ * (issue #290).
+ */
+@Serializable
+data class PayoutDto(
+    @SerialName("id") val id: String? = null,
+    @SerialName("amount") val amount: Long? = null,
+    @SerialName("amountSom") val amountSom: Double? = null,
+    @SerialName("cardNumber") val cardNumber: String? = null,
+    @SerialName("status") val status: String? = null,
+    @SerialName("createdAt") val createdAt: String? = null,
 )
 
 /** `TransactionResponse`. */
