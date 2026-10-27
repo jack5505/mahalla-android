@@ -777,10 +777,13 @@ Asia/Tashkent, тот же случай, что `startTime` брони игро�
 подтверждена** — как и раньше, `401` на `POST freelancers/{id}/orders`
 приходит до валидации тела, `CONTRACT_REFRESH_TOKEN` в CI не задан; если
 бэкенд хранит поле как `Instant`/`OffsetDateTime`, а не зоне-менее
-`LocalDateTime`, эта правка — регресс. Проверить под токеном вместе с
-`startTime` игровой зоны (issue #232), когда появится `CONTRACT_REFRESH_TOKEN`.
-`createdAt` (отметка сервера) читается как и раньше — `parseServerInstant`,
-UTC.
+`LocalDateTime`, эта правка — регресс. `startTime` брони игровой зоны (issue
+#232) эту трактовку больше не проверяет: jack5505/mahalla#355/#358
+подтвердили только `gaming/bookings` (см. `GamingApi` ниже), на
+`scheduledAt` это не переносится — у бэкенда это разные поля/контроллеры.
+Проверить `scheduledAt` отдельно под токеном, когда появится
+`CONTRACT_REFRESH_TOKEN`. `createdAt` (отметка сервера) читается как и
+раньше — `parseServerInstant`, UTC.
 
 **Входящие заказы мастера подключены черновиком (issue #190):**
 `GET freelancers/me/orders` и `PUT freelancers/orders/{orderId}/status`
@@ -848,9 +851,24 @@ $ curl .../gaming/places/22222222-…-10/zones/91…03/units
 `parseServerSlotInstant`. Раньше здесь был UTC; переехали в issue #144, потому
 что запись к мастеру (`apptDate` + `startTime`) местная по построению, и две
 трактовки на один список «Моих активностей» расходились на пять часов.
-Трактовка не подтверждена стендом: **это первое, что надо проверить**, когда
-появится токен, — заодно с телом `POST gaming/bookings`. Отметки события
+
+**Трактовка подтверждена бэкендом (issue #232), без токена.**
+jack5505/mahalla#355 (закрыт 2026-09-30, PR jack5505/mahalla#358, влит
+2026-09-30) зафиксировал в коде бэкенда: зоне-менее строка вида
+`"2026-09-30T13:00:00"` трактуется как **Asia/Tashkent**
+(`clock.getZone()` в `PlatformInstantDeserializer`), `...Z` и `...+05:00`
+принимаются как раньше, мусор — `400 VALIDATION`; поведение закрыто
+регрессионным тестом `GamingBookStartTimeFormatRegressionTest` на все три
+формата. До этой правки зоне-менее строка давала `400`, поэтому тихого
+сдвига на пять часов в проде не было — брони с таким телом просто не
+создавались. Клиент шлёт ровно зоне-менее форму (`gamingRequestTime` в
+`GamingMappers.kt`), значит текущая реализация (issue #144) верна и менять
+её не нужно. Сам ответ `POST gaming/bookings` / `GET gaming/bookings/my`
+под токеном по-прежнему не снят — кандидат на пробу `contract/gaming.sh`,
+но для трактовки `startTime` это уже не требуется. Отметки события
 (`createdAt` и прочие) по-прежнему читаются как UTC (`parseServerInstant`).
+**Это подтверждение касается только `gaming/bookings`** — `scheduledAt`
+заказа мастера (issue #205) им не доказан, см. ниже в `FreelancerApi`.
 
 ## HospitalApi ⚠️ частично
 
