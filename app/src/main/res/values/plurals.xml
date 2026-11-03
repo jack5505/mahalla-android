@@ -26,6 +26,20 @@
         <item quantity="other">%1$d / %2$d raqam kiritildi</item>
     </plurals>
 
+    <!--
+        UI-кит: контентное описание поля OTP/PIN для TalkBack (issue #418).
+        Форма зависит от длины кода, как у otp_input_progress выше.
+    -->
+    <plurals name="otp_input_description">
+        <item quantity="one">Tasdiqlash kodi, %1$d ta raqam</item>
+        <item quantity="other">Tasdiqlash kodi, %1$d ta raqam</item>
+    </plurals>
+
+    <plurals name="pin_input_description">
+        <item quantity="one">PIN-kod, %1$d ta raqam</item>
+        <item quantity="other">PIN-kod, %1$d ta raqam</item>
+    </plurals>
+
     <!-- Центр уведомлений: подпись бейджа для TalkBack (issue #81). -->
     <plurals name="notifications_unread_count">
         <item quantity="one">%1$d ta o\'qilmagan</item>

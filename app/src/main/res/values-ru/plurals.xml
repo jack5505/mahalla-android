@@ -20,6 +20,20 @@
         <item quantity="other">Введено %1$d из %2$d цифр</item>
     </plurals>
 
+    <plurals name="otp_input_description">
+        <item quantity="one">Код подтверждения, %1$d цифра</item>
+        <item quantity="few">Код подтверждения, %1$d цифры</item>
+        <item quantity="many">Код подтверждения, %1$d цифр</item>
+        <item quantity="other">Код подтверждения, %1$d цифры</item>
+    </plurals>
+
+    <plurals name="pin_input_description">
+        <item quantity="one">PIN-код, %1$d цифра</item>
+        <item quantity="few">PIN-код, %1$d цифры</item>
+        <item quantity="many">PIN-код, %1$d цифр</item>
+        <item quantity="other">PIN-код, %1$d цифры</item>
+    </plurals>
+
     <plurals name="notifications_unread_count">
         <item quantity="one">%1$d непрочитанное</item>
         <item quantity="few">%1$d непрочитанных</item>

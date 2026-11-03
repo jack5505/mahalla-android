@@ -236,11 +236,6 @@ KDoc написано почему — на 2026-09-04 своей отмены �
 
 ### 5.1 В `main`
 
-- **Две a11y-строки не стали plural**: `otp_input_description` и
-  `pin_input_description` склеивают количество через `%1$d`
-  (`core/ui/components/TextFields.kt:179,181`). Остальные количества
-  переведены как надо — 26 `<plurals>` в каждой локали, правило есть в
-  `.claude/rules/i18n.md`.
 - **Скриншот-тестов в `main` нет** — Roborazzi приходит только с PR #164;
   соответствие макету проверяется глазами по `@ThemeLanguagePreviews`.
   `.claude/rules/compose-ui.md` про это говорит правду для `main`, но

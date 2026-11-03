@@ -203,9 +203,9 @@ fun MahallaOtpField(
     focusRequester: FocusRequester? = null,
 ) {
     val description = if (masked) {
-        stringResource(R.string.pin_input_description, state.length)
+        pluralStringResource(R.plurals.pin_input_description, state.length, state.length)
     } else {
-        stringResource(R.string.otp_input_description, state.length)
+        pluralStringResource(R.plurals.otp_input_description, state.length, state.length)
     }
     // Форма согласуется с длиной кода («введено 1 из 6 цифр»), поэтому
     // quantity — state.length, а оба числа уходят аргументами формата.

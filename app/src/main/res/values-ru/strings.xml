@@ -241,8 +241,6 @@
     <!-- UI-кит: поиск и OTP -->
     <string name="search_hint">Поиск</string>
     <string name="search_clear">Очистить поиск</string>
-    <string name="otp_input_description">Код подтверждения, %1$d цифр</string>
-    <string name="pin_input_description">PIN-код, %1$d цифр</string>
 
     <!-- UI-кит: состояния для TalkBack -->
     <string name="chip_state_selected">выбрано</string>
