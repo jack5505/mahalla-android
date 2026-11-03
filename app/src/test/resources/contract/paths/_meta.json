@@ -1,0 +1,7 @@
+{
+  "baseUrl": "https://157.173.109.181.nip.io/api/v1",
+  "takenAt": "2026-11-03T13:41:40Z",
+  "commit": "c48c873",
+  "synthetic": true,
+  "reason": "стенд отвечал 502 на все /api/v1/* (issue #417) — живую схему /v3/api-docs снять не удалось ни анонимно, ни с токеном. server в paths.json синтетический (client ∪ документированные admin/* и вебхуки платежей из docs/API-CONTRACT.md), не живой снимок. Обновить: contract/paths.sh --write app/src/test/resources/contract/paths/paths.json (нужен CONTRACT_REFRESH_TOKEN), когда стенд поднимется."
+}

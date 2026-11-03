@@ -21,17 +21,23 @@
 #   contract/paths.sh --write FILE     сверку сложить в FILE как JSON
 #
 # Переменные окружения:
-#   CONTRACT_DOCS_URL   адрес схемы; по умолчанию /v3/api-docs того же стенда,
-#                       что у CONTRACT_BASE_URL (contract/lib.sh)
-#   CONTRACT_INSECURE   1 (по умолчанию) — не проверять TLS: у стенда
-#                       самоподписанный сертификат (ADR 0005)
+#   CONTRACT_DOCS_URL      адрес схемы; по умолчанию /v3/api-docs того же
+#                          стенда, что у CONTRACT_BASE_URL (contract/lib.sh)
+#   CONTRACT_REFRESH_TOKEN refresh-токен живого аккаунта — обязателен для
+#                          сверки с сетью: с issue #358 (2026-09-19)
+#                          `/v3/api-docs` отдаёт 401 анонимно. Логин — тем же
+#                          `contract_login` из contract/lib.sh, что у проб.
+#                          Не нужен для `--client-only`.
+#   CONTRACT_INSECURE      1 (по умолчанию) — не проверять TLS: у стенда
+#                          самоподписанный сертификат (ADR 0005)
 #
 # Коды возврата — чтобы прогон по расписанию отличал находку от сбоя:
 #   0  выдуманных ручек нет
 #   1  находка: клиент зовёт то, чего у бэкенда нет, или путь в аннотации
 #      начинается с «/» (Retrofit тогда идёт от корня хоста, мимо /api/v1/)
-#   2  стенд недоступен или отдал не схему — сверять не с чем, шаг можно
-#      пропустить, не крася прогон
+#   2  схему снять не удалось: нет CONTRACT_REFRESH_TOKEN, токен не получен,
+#      `/v3/api-docs` ответил 401 или стенд недоступен — отказ авторизации
+#      это не находка, сверять не с чем, шаг можно пропустить, не крася прогон
 #   3  сломан сам прогон: не разобрался ни один вызов клиента, неверный
 #      аргумент, нет jq
 #
@@ -58,7 +64,7 @@ while [ $# -gt 0 ]; do
             # корня репозитория, куда скрипт сейчас перейдёт.
             case "$WRITE_TO" in /*) ;; *) WRITE_TO="$PWD/$WRITE_TO" ;; esac
             shift 2 ;;
-        -h|--help) sed -n '2,40p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,46p' "$0"; exit 0 ;;
         *) echo "неизвестный аргумент: $1" >&2; exit 3 ;;
     esac
 done
@@ -72,6 +78,11 @@ CONTRACT_DOCS_URL="${CONTRACT_DOCS_URL:-${CONTRACT_BASE_URL%/api/v1}/v3/api-docs
 CONTRACT_INSECURE="${CONTRACT_INSECURE:-1}"
 
 command -v jq >/dev/null || { echo "нужен jq: brew install jq (в CI уже есть)" >&2; exit 3; }
+
+# contract_login() — тот же логин, что у проб (CONTRACT_REFRESH_TOKEN →
+# ACCESS_TOKEN). --client-only его не вызывает: там сети нет вовсе.
+# shellcheck source=contract/lib.sh
+source contract/lib.sh
 
 # {placeId} и {id} — один и тот же путь с точки зрения сверки: имя параметра
 # у Retrofit и у springdoc совпадать не обязано.
@@ -95,14 +106,31 @@ client_paths() {
 }
 
 # Пути стенда. В схеме они с префиксом /api/v1 — у Retrofit он уже в baseUrl.
-server_paths() {
-    local args=(--silent --show-error --max-time 60)
+# Требует $ACCESS_TOKEN — вызывающий код логинится заранее и отличает отказ
+# авторизации (код 2) от находки: пустой ACCESS_TOKEN сюда не долетает.
+server_docs_paths() {
+    local args=(--silent --show-error --max-time 60 -H "Authorization: Bearer $ACCESS_TOKEN")
     [ "$CONTRACT_INSECURE" = "1" ] && args+=(--insecure)
-    curl "${args[@]}" "$CONTRACT_DOCS_URL" |
-        jq -r '.paths | to_entries[] as $p
-               | $p.value | keys[]
-               | select(test("^(get|post|put|delete|patch)$"))
-               | (. | ascii_upcase) + " " + ($p.key | sub("^/api/v1/?"; ""))' |
+    local tmp status
+    tmp=$(mktemp)
+    trap 'rm -f "$tmp"' RETURN
+    status=$(curl "${args[@]}" -o "$tmp" -w '%{http_code}' "$CONTRACT_DOCS_URL") || status="000"
+
+    if [ "$status" = "401" ]; then
+        echo "«$CONTRACT_DOCS_URL» ответил 401 с токеном в руках — отказ" \
+            "авторизации, а не находка (токен мог протухнуть или не хватает" \
+            "прав). Сверять не с чем." >&2
+        return 2
+    fi
+    if [ "$status" != "200" ]; then
+        echo "Схему со стенда получить не удалось (код $status, $CONTRACT_DOCS_URL) — сверять не с чем." >&2
+        return 2
+    fi
+
+    jq -r '.paths | to_entries[] as $p
+           | $p.value | keys[]
+           | select(test("^(get|post|put|delete|patch)$"))
+           | (. | ascii_upcase) + " " + ($p.key | sub("^/api/v1/?"; ""))' "$tmp" |
         normalize |
         sort -u
 }
@@ -129,8 +157,27 @@ if [ "$CLIENT_ONLY" = "1" ]; then
     exit 0
 fi
 
-if ! SERVER=$(server_paths) || [ -z "$SERVER" ]; then
-    echo "Схему со стенда получить не удалось ($CONTRACT_DOCS_URL) — сверять не с чем." >&2
+if [ -z "$CONTRACT_REFRESH_TOKEN" ]; then
+    echo "CONTRACT_REFRESH_TOKEN не задан — «$CONTRACT_DOCS_URL» отдаёт схему" \
+        "только с Bearer-токеном (issue #358), анонимно теперь 401. Сверять" \
+        "не с чем." >&2
+    exit 2
+fi
+
+contract_login
+if [ -z "$ACCESS_TOKEN" ]; then
+    echo "Токен не получен (см. причину выше) — без него «$CONTRACT_DOCS_URL»" \
+        "отвечает 401. Сверять не с чем." >&2
+    exit 2
+fi
+
+# server_docs_paths уже напечатал причину в stderr при отказе — здесь
+# второй раз не дублируем, кроме случая «200, но путей не нашлось».
+if ! SERVER=$(server_docs_paths); then
+    exit 2
+fi
+if [ -z "$SERVER" ]; then
+    echo "Схема стенда пустая ($CONTRACT_DOCS_URL) — путей не нашлось, сверять не с чем." >&2
     exit 2
 fi
 SERVER_N=$(printf '%s\n' "$SERVER" | grep -c . || true)
@@ -171,8 +218,16 @@ if [ -n "$WRITE_TO" ]; then
         --argjson invented "$(as_json_array "$INVENTED")" \
         '{takenAt: $date, docs: $url, client: $client, server: $server, invented: $invented}' \
         > "$WRITE_TO"
+    # _meta.json рядом — тот же формат, что у contract_summary() в lib.sh,
+    # чтобы фикстура паритетов выглядела как соседские (booking/, categories/…).
+    jq -n \
+        --arg url "$CONTRACT_BASE_URL" \
+        --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg sha "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+        '{baseUrl: $url, takenAt: $at, commit: $sha}' \
+        > "$(dirname "$WRITE_TO")/_meta.json"
     echo
-    echo "записано: $WRITE_TO"
+    echo "записано: $WRITE_TO и $(dirname "$WRITE_TO")/_meta.json"
 fi
 
 [ "$INVENTED_N" -eq 0 ]
