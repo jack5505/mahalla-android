@@ -318,6 +318,11 @@ fun MahallaSearchField(
     placeholder: String = stringResource(R.string.search_hint),
     enabled: Boolean = true,
     onSearch: (() -> Unit)? = null,
+    // По умолчанию очистка — это просто пустой onQueryChange, чтобы остальные
+    // вызывающие (без своего debounce) не поменяли поведение. Экрану с
+    // мгновенным поиском после очистки (issue #419) есть смысл передать
+    // отдельное событие.
+    onClear: (() -> Unit)? = null,
 ) {
     val clearLabel = stringResource(R.string.search_clear)
     OutlinedTextField(
@@ -340,7 +345,7 @@ fun MahallaSearchField(
                 MahallaIconButton(
                     icon = Icons.Outlined.Close,
                     contentDescription = clearLabel,
-                    onClick = { onQueryChange("") },
+                    onClick = onClear ?: { onQueryChange("") },
                 )
             }
         } else {

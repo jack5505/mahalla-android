@@ -193,6 +193,29 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun `clearing the query searches immediately, without waiting for the debounce`() = runTest {
+        // issue #419: крестик — мгновенное действие, а не правка набираемого
+        // текста, поэтому ждать SEARCH_DEBOUNCE_MS незачем.
+        repository.respondWith(listOf(place("p")))
+        val viewModel = viewModel()
+        advanceUntilIdle()
+        viewModel.onEvent(SearchEvent.QueryChanged("osh"))
+        advanceUntilIdle()
+        repository.requestedFilters.clear()
+
+        viewModel.onEvent(SearchEvent.QueryCleared)
+
+        assertEquals("", viewModel.state.value.query)
+        advanceTimeBy(DEBOUNCE_MS / 2)
+        assertEquals(
+            "очистка не должна ждать debounce",
+            1,
+            repository.requestedFilters.size,
+        )
+        assertEquals("", repository.requestedFilters.single().first.query)
+    }
+
+    @Test
     fun `changing a filter searches immediately`() = runTest {
         // Выбор фильтра — осознанное действие, ждать его незачем.
         repository.respondWith(listOf(place("p")))

@@ -94,6 +94,7 @@ fun SearchContent(
                 query = state.query,
                 onQueryChange = { onEvent(SearchEvent.QueryChanged(it)) },
                 onSearch = { onEvent(SearchEvent.QuerySubmitted) },
+                onClear = { onEvent(SearchEvent.QueryCleared) },
             )
             FilterBar(state = state, onEvent = onEvent)
             if (state.fromCache) {
