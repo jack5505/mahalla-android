@@ -247,8 +247,6 @@
     <!-- UI-кит: поиск и OTP -->
     <string name="search_hint">Qidirish</string>
     <string name="search_clear">Qidiruvni tozalash</string>
-    <string name="otp_input_description">Tasdiqlash kodi, %1$d ta raqam</string>
-    <string name="pin_input_description">PIN-kod, %1$d ta raqam</string>
 
     <!-- UI-кит: состояния для TalkBack -->
     <string name="chip_state_selected">tanlangan</string>

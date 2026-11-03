@@ -51,7 +51,7 @@ fun MahallaPinDots(
     modifier: Modifier = Modifier,
     isError: Boolean = false,
 ) {
-    val description = stringResource(R.string.pin_input_description, state.length)
+    val description = pluralStringResource(R.plurals.pin_input_description, state.length, state.length)
     val progress = pluralStringResource(
         R.plurals.otp_input_progress,
         state.length,

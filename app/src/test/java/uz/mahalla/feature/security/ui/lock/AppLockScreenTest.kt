@@ -95,7 +95,7 @@ class AppLockScreenTest {
     }
 
     private fun pinDescription(length: Int) =
-        compose.activity.getString(R.string.pin_input_description, length)
+        compose.activity.resources.getQuantityString(R.plurals.pin_input_description, length, length)
 
     private fun biometricLabel() = compose.activity.getString(R.string.app_lock_biometric)
     private fun forgotLabel() = compose.activity.getString(R.string.onboarding_pin_forgot)
