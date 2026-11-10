@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.res.Configuration
 import androidx.test.core.app.ApplicationProvider
 import java.util.Locale
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -71,6 +73,25 @@ class BottomNavItemTest {
                 val label = localized.getString(item.labelRes)
                 assertTrue("${item.name}.labelRes пуст в $language", label.isNotBlank())
             }
+        }
+    }
+
+    /**
+     * `route: TopLevelRoute` вместо `route: Any` (issue #426): маршрут таба —
+     * один из четырёх маршрутов графа табов, и он сериализуется, как и любой
+     * другой typed route (`RoutesSerializationTest`). `when` здесь
+     * исчерпывающий по сборке: маршрут не из этого списка не скомпилируется.
+     */
+    @Test
+    fun `every tab route is a typed top level route that serializes`() {
+        BottomNavItem.entries.forEach { item ->
+            val json = when (val route = item.route) {
+                is DiscoveryRoute -> Json.encodeToString(route)
+                is ActivitiesRoute -> Json.encodeToString(route)
+                is WalletRoute -> Json.encodeToString(route)
+                is ProfileRoute -> Json.encodeToString(route)
+            }
+            assertTrue("${item.name}.route не сериализуется", json.isNotBlank())
         }
     }
 }
