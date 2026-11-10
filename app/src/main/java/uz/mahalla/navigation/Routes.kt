@@ -106,17 +106,25 @@ data object GeoRoute
 
 // --- Основные разделы (bottom nav) ---
 
-@Serializable
-data object DiscoveryRoute
+/**
+ * Маркер маршрутов нижней навигации (issue #426). Ограничивает
+ * `BottomNavItem.route` четырьмя маршрутами табов — опечатка или маршрут не
+ * из графа табов не компилируются, а не падают в рантайме на `navigate`/
+ * `hasRoute`.
+ */
+sealed interface TopLevelRoute
 
 @Serializable
-data object ActivitiesRoute
+data object DiscoveryRoute : TopLevelRoute
 
 @Serializable
-data object WalletRoute
+data object ActivitiesRoute : TopLevelRoute
 
 @Serializable
-data object ProfileRoute
+data object WalletRoute : TopLevelRoute
+
+@Serializable
+data object ProfileRoute : TopLevelRoute
 
 // --- Discovery (эпик 4) ---
 

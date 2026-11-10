@@ -12,7 +12,7 @@ import uz.mahalla.R
 
 /** Разделы нижней навигации (эпик 1.2). Порядок = порядок в макете. */
 enum class BottomNavItem(
-    val route: Any,
+    val route: TopLevelRoute,
     @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
