@@ -26,6 +26,13 @@ class FakeNotificationsRepository : NotificationsRepository {
     /** Пока не завершён, [markRead] не отвечает. `null` — отвечает сразу. */
     var markReadGate: CompletableDeferred<Unit>? = null
 
+    /**
+     * Пока не завершён, [unreadCount] держит вызов в полёте (issue #429):
+     * нужно для проверки гонки с пушем, пришедшим во время активного запроса.
+     * `null` — отвечает сразу.
+     */
+    var unreadCountGate: CompletableDeferred<Unit>? = null
+
     val requestedPages = mutableListOf<Int>()
 
     /** Кого отмечали прочитанным — в порядке запросов. */
@@ -44,7 +51,12 @@ class FakeNotificationsRepository : NotificationsRepository {
 
     override suspend fun unreadCount(): ApiResult<Int> {
         unreadCalls++
-        return unreadCount
+        // Значение берётся до ожидания, а не после: запрос должен вернуть то,
+        // что было на сервере в момент отправки, а не то, что успело
+        // поменяться, пока ответ был в полёте.
+        val result = unreadCount
+        unreadCountGate?.await()
+        return result
     }
 
     override suspend fun markAllRead(): ApiResult<Unit> {
