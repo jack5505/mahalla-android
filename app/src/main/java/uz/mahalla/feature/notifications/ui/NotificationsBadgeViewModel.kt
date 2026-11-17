@@ -3,6 +3,7 @@ package uz.mahalla.feature.notifications.ui
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import uz.mahalla.core.result.ApiResult
 import uz.mahalla.core.ui.MviViewModel
@@ -10,6 +11,7 @@ import uz.mahalla.core.ui.UiEffect
 import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.feature.notifications.data.NotificationsRepository
+import uz.mahalla.feature.notifications.push.NotificationsBadgeSignal
 import javax.inject.Inject
 
 /**
@@ -37,14 +39,26 @@ sealed interface NotificationsBadgeEffect : UiEffect
 @HiltViewModel
 class NotificationsBadgeViewModel @Inject constructor(
     private val repository: NotificationsRepository,
+    private val badgeSignal: NotificationsBadgeSignal,
 ) : MviViewModel<NotificationsBadgeState, NotificationsBadgeEvent, NotificationsBadgeEffect>(
     NotificationsBadgeState(),
 ) {
 
     private var job: Job? = null
 
+    /**
+     * Пуш пришёл, пока запрос из предыдущего [refresh] ещё летел — тот может
+     * вернуть значение, устаревшее уже к моменту ответа. Флаг переживает до
+     * конца текущего запроса и перезапускает чтение внутри того же `job`
+     * (issue #429): второй параллельный запрос не нужен, нужен ещё один после.
+     */
+    private var pendingRefresh = false
+
     init {
         refresh()
+        viewModelScope.launch {
+            badgeSignal.pushReceived.collect { refresh() }
+        }
     }
 
     override fun onEvent(event: NotificationsBadgeEvent) {
@@ -59,12 +73,18 @@ class NotificationsBadgeViewModel @Inject constructor(
      * соврать, что непрочитанного нет.
      */
     private fun refresh() {
-        if (job?.isActive == true) return
+        if (job?.isActive == true) {
+            pendingRefresh = true
+            return
+        }
         job = viewModelScope.launch {
-            val result = repository.unreadCount()
-            if (result is ApiResult.Success) {
-                updateState { copy(unreadCount = result.data) }
-            }
+            do {
+                pendingRefresh = false
+                val result = repository.unreadCount()
+                if (result is ApiResult.Success) {
+                    updateState { copy(unreadCount = result.data) }
+                }
+            } while (pendingRefresh)
         }
     }
 }

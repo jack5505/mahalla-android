@@ -18,8 +18,9 @@ import javax.inject.Inject
  * сервисом ровно на середине записи в DataStore.
  *
  * Логики здесь нет намеренно — только склейка: разбор payload'а живёт в
- * [PushMessage], решение о показе в [PushGate], показ в [PushNotifier]. Всё
- * это проверяется JVM-тестами, а сам сервис проверить нечем: эмулятора в CI
+ * [PushMessage], решение о показе в [PushGate], показ в [PushNotifier],
+ * сигнал открытым экранам — в [NotificationsBadgeSignal]. Всё это
+ * проверяется JVM-тестами, а сам сервис проверить нечем: эмулятора в CI
  * нет (AGENTS.md).
  */
 @AndroidEntryPoint
@@ -30,6 +31,9 @@ class MahallaMessagingService : FirebaseMessagingService() {
 
     @Inject
     lateinit var tokenRegistrar: PushTokenRegistrar
+
+    @Inject
+    lateinit var badgeSignal: NotificationsBadgeSignal
 
     /**
      * Firebase зовёт это при первой регистрации и при каждой смене токена —
@@ -67,5 +71,9 @@ class MahallaMessagingService : FirebaseMessagingService() {
             runCatchingCancellable { notifier.show(push) }
                 .reportSwallowed("push.onMessageReceived")
         }
+        // После show(), а не внутри runCatchingCancellable: пуш пришёл и
+        // счётчик на сервере вырос независимо от того, упал ли локальный
+        // показ уведомления и спрятал ли его PushGate тихими часами.
+        badgeSignal.notifyPushReceived()
     }
 }
