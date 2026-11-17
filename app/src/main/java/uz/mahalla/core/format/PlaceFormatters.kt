@@ -49,7 +49,7 @@ object RatingFormatter {
     }
 
     /** Число отзывов в подписи: те же разряды, что у сумм. */
-    fun reviewCount(count: Int): String = MoneyFormatter.amount(count.coerceAtLeast(0).toLong())
+    fun reviewCount(count: Int): String = CountFormatter.count(count)
 }
 
 /**
