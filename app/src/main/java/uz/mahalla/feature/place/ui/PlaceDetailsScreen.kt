@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import uz.mahalla.R
+import uz.mahalla.core.format.CountFormatter
 import uz.mahalla.core.format.MoneyFormatter
 import uz.mahalla.core.format.DateTimeFormatters
 import uz.mahalla.core.format.RatingFormatter
@@ -402,7 +403,7 @@ private fun SocialRow(
                 },
             )
             Text(
-                text = social.likes.toString(),
+                text = CountFormatter.count(social.likes),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium.merge(TabularNums),
                 color = MaterialTheme.colorScheme.onBackground,
