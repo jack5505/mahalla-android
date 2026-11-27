@@ -49,9 +49,10 @@ internal object PreferenceKeys {
     val DeviceId = stringPreferencesKey("device_id")
 
     /**
-     * Профиль вошедшего пользователя (issue #61). Приезжает с ответом на вход;
-     * `GET /users/me` у бэкенда есть (см. `docs/API-CONTRACT.md`), но
-     * приложение его ещё не зовёт — issue #170. Шапка профиля читается отсюда.
+     * Профиль вошедшего пользователя (issue #61). Приезжает с ответом на вход
+     * и перечитывается через `GET /users/me` при открытии профиля и при
+     * возврате на него (`ProfileRepository.refresh()`, issue #170). Шапка
+     * профиля читается отсюда.
      */
     val ProfileUserId = stringPreferencesKey("profile_user_id")
     val ProfilePhone = stringPreferencesKey("profile_phone")
