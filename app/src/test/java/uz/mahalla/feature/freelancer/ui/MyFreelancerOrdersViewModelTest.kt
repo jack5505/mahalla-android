@@ -148,9 +148,64 @@ class MyFreelancerOrdersViewModelTest {
         assertEquals(listOf(0, 1, 0), repository.requestedMyOrderPages)
     }
 
+    /**
+     * Клиентской отмены у бэкенда нет (issue #436): пока в списке есть заказ,
+     * который ещё может понадобиться отменить, молчание экрана читалось бы
+     * как «отменить нельзя нигде».
+     */
+    @Test
+    fun `cancel note shows while an order is still pending`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultMyOrderPage = ApiResult.Success(
+                page(listOf(order("o-1", FreelancerOrderStatus.Pending))),
+            )
+            val viewModel = MyFreelancerOrdersViewModel(repository)
+            runCurrent()
+
+            assertTrue(viewModel.state.value.showCancelNote)
+        }
+
+    @Test
+    fun `cancel note shows while an order is accepted`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultMyOrderPage = ApiResult.Success(
+                page(listOf(order("o-1", FreelancerOrderStatus.Accepted))),
+            )
+            val viewModel = MyFreelancerOrdersViewModel(repository)
+            runCurrent()
+
+            assertTrue(viewModel.state.value.showCancelNote)
+        }
+
+    @Test
+    fun `cancel note is hidden once every order is final`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            repository.defaultMyOrderPage = ApiResult.Success(
+                page(
+                    listOf(
+                        order("o-1", FreelancerOrderStatus.Completed),
+                        order("o-2", FreelancerOrderStatus.Rejected),
+                    ),
+                ),
+            )
+            val viewModel = MyFreelancerOrdersViewModel(repository)
+            runCurrent()
+
+            assertFalse(viewModel.state.value.showCancelNote)
+        }
+
+    @Test
+    fun `cancel note is hidden on an empty list`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = MyFreelancerOrdersViewModel(repository)
+        runCurrent()
+
+        assertEquals(ScreenState.Empty, viewModel.state.value.orders)
+        assertFalse(viewModel.state.value.showCancelNote)
+    }
+
     private fun page(items: List<FreelancerOrder>, hasMore: Boolean = false) =
         FreelancerOrderPage(items = items, hasMore = hasMore)
 
-    private fun order(id: String) =
-        FreelancerOrder(id = id, status = FreelancerOrderStatus.Pending)
+    private fun order(id: String, status: FreelancerOrderStatus = FreelancerOrderStatus.Pending) =
+        FreelancerOrder(id = id, status = status)
 }

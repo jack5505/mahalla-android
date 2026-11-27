@@ -889,6 +889,7 @@
     <string name="my_freelancer_orders_profile_subtitle">Ustalarga bergan buyurtmalaringiz va ularning holati</string>
     <string name="my_freelancer_orders_empty_title">Buyurtmalar yo\'q</string>
     <string name="my_freelancer_orders_empty_description">Usta kartochkasidan xizmat buyurtma qilishingiz mumkin.</string>
+    <string name="my_freelancer_orders_cancel_note">Buyurtmani ilovadan bekor qilib bo\'lmaydi: bekor qilish uchun ustaga qo\'ng\'iroq qiling.</string>
 
     <!-- Входящие заказы мастера (issue #190) -->
     <string name="freelancer_incoming_orders_title">Kiruvchi buyurtmalar</string>

@@ -42,6 +42,7 @@ import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.booking.ui.InlineFailure
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
 import uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus
+import uz.mahalla.feature.onboarding.ui.OnboardingNotice
 import uz.mahalla.ui.theme.LocalMahallaColors
 import uz.mahalla.ui.theme.Spacing
 import uz.mahalla.ui.theme.TabularNums
@@ -128,6 +129,15 @@ private fun LazyListScope.orderItems(
 
         is ScreenState.Content -> {
             items(orders.data, key = FreelancerOrder::id) { order -> OrderCard(order = order) }
+            // Отменить заказ в приложении нечем: клиентской ручки отмены у
+            // бэкенда нет (issue #436). Пока в списке есть заказ, который
+            // ещё может понадобиться отменить, молчание экрана читалось бы
+            // как «отменить нельзя нигде».
+            if (state.showCancelNote) {
+                item(key = "cancel-note") {
+                    OnboardingNotice(text = stringResource(R.string.my_freelancer_orders_cancel_note))
+                }
+            }
             if (state.hasMore || state.loadMoreFailure != null) {
                 item(key = "load-more") {
                     LoadMoreAuto(

@@ -6,6 +6,7 @@ import uz.mahalla.core.ui.UiEvent
 import uz.mahalla.core.ui.UiState
 import uz.mahalla.core.ui.state.ScreenState
 import uz.mahalla.feature.freelancer.domain.FreelancerOrder
+import uz.mahalla.feature.freelancer.domain.FreelancerOrderStatus
 
 /**
  * «Мои заказы у мастеров» (issue #107).
@@ -22,7 +23,20 @@ data class MyFreelancerOrdersState(
     val hasMore: Boolean = false,
     val isLoadingMore: Boolean = false,
     val loadMoreFailure: ApiFailure? = null,
-) : UiState
+) : UiState {
+
+    /**
+     * Пояснение «отменить нечем» (issue #436) показывается, только пока есть
+     * заказ, который ещё может понадобиться отменить: завершённый или
+     * отклонённый уже не нуждается в предупреждении, а на пустом списке
+     * отменять нечего. [FreelancerOrderStatus.isFinal] не считает
+     * [FreelancerOrderStatus.Unknown] финальным по той же причине, что и
+     * здесь — незнакомое значение не повод молчать о заказе, который может
+     * быть ещё в силе.
+     */
+    val showCancelNote: Boolean
+        get() = (orders as? ScreenState.Content)?.data.orEmpty().any { !it.status.isFinal }
+}
 
 sealed interface MyFreelancerOrdersEvent : UiEvent {
     /**
