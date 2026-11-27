@@ -31,7 +31,7 @@ class MapKitLocationProviderTest {
         val provider = MapKitLocationProvider(
             initializer = MapKitInitializer(
                 apiKey = "",
-                locale = "ru_RU",
+                localeProvider = { "ru_RU" },
                 sdk = sdk,
                 mainDispatcher = UnconfinedTestDispatcher(),
             ),
@@ -52,7 +52,7 @@ class MapKitLocationProviderTest {
         val provider = MapKitLocationProvider(
             initializer = MapKitInitializer(
                 apiKey = "key",
-                locale = "ru_RU",
+                localeProvider = { "ru_RU" },
                 sdk = failing,
                 mainDispatcher = UnconfinedTestDispatcher(),
             ),

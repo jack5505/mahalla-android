@@ -41,9 +41,10 @@ class MapKitInitializerTest {
         sdk: FakeSdk,
         apiKey: String = "key-123",
         locale: String = "ru_RU",
+        localeProvider: () -> String = { locale },
     ) = MapKitInitializer(
         apiKey = apiKey,
-        locale = locale,
+        localeProvider = localeProvider,
         sdk = sdk,
         // Боевой диспетчер — Dispatchers.Main.immediate: MapKit живёт на
         // главном потоке. В тесте главного потока нет, подставляем свой.
@@ -135,13 +136,53 @@ class MapKitInitializerTest {
 
         val state = MapKitInitializer(
             apiKey = "key-123",
-            locale = "ru_RU",
+            localeProvider = { "ru_RU" },
             sdk = sdk,
             mainDispatcher = mainDispatcher,
         ).ensureInitialized()
 
         assertEquals(MapEngineState.Ready, state)
         assertEquals(listOf(true, true, true), seen)
+    }
+
+    /**
+     * issue #435: локаль раньше захватывалась в конструкторе (в момент
+     * создания `@Singleton`), а язык приложения меняется позже, без
+     * пересоздания процесса. Провайдер читается лениво — ровно в
+     * `ensureInitialized()`, поэтому видит смену языка, случившуюся после
+     * создания инициализатора, но до первого открытия карты.
+     */
+    @Test
+    fun `locale is read lazily, not captured at construction`() = runTest {
+        val sdk = FakeSdk()
+        var currentLocale = "ru_RU"
+        val initializer = initializer(sdk, localeProvider = { currentLocale })
+
+        currentLocale = "uz_UZ"
+        val state = initializer.ensureInitialized()
+
+        assertEquals(MapEngineState.Ready, state)
+        assertEquals(listOf("apiKey=key-123", "locale=uz_UZ", "initialize"), sdk.calls)
+    }
+
+    /**
+     * `MapKitFactory.setLocale` действует только до `initialize()` и один раз
+     * за процесс: сменить локаль уже поднятого MapKit нечем. Повторный
+     * `ensureInitialized()` не должен звать `setLocale` ещё раз, даже если
+     * провайдер к этому моменту отдаёт другое значение.
+     */
+    @Test
+    fun `locale change after initialize does not trigger a second setLocale`() = runTest {
+        val sdk = FakeSdk()
+        var currentLocale = "ru_RU"
+        val initializer = initializer(sdk, localeProvider = { currentLocale })
+
+        assertEquals(MapEngineState.Ready, initializer.ensureInitialized())
+
+        currentLocale = "uz_UZ"
+        assertEquals(MapEngineState.Ready, initializer.ensureInitialized())
+
+        assertEquals(listOf("apiKey=key-123", "locale=ru_RU", "initialize"), sdk.calls)
     }
 
     @Test

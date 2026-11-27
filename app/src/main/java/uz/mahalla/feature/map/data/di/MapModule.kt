@@ -28,16 +28,25 @@ object MapModule {
     fun provideMapKitSdk(@ApplicationContext context: Context): MapKitSdk = YandexMapKitSdk(context)
 
     /**
-     * Локаль берётся из `Locale.getDefault()`, а не из настроек приложения:
-     * `MapKitFactory.setLocale` вызывается один раз за процесс и до
-     * инициализации, то есть раньше, чем DataStore успеет ответить. Смена языка
-     * в приложении и так пересоздаёт процесс/активити (эпик 3.1).
+     * Локаль читается из `Locale.getDefault()` не здесь, а лениво — лямбдой,
+     * которую [MapKitInitializer] вызовет сам при первом показе карты.
+     * Причина: `MapKitFactory.setLocale` действует только до `initialize()` и
+     * один раз за процесс, а в момент создания этого `@Singleton` DataStore
+     * ещё не успел ответить про выбранный язык.
+     *
+     * Смена языка в приложении — `Activity.recreate()` (`ProfileScreen.kt`,
+     * `WelcomeScreen.kt`), она НЕ пересоздаёт процесс: этот синглтон и
+     * значение, которое вернула лямбда при первом вызове, переживают смену
+     * языка. Если к моменту смены языка карта уже поднята, её подписи
+     * останутся на старой локали до конца процесса — `setLocale` второй раз
+     * MapKit не зовёт. Честный перезапуск процесса ради подписей карты —
+     * отдельное продуктовое решение, не сделанное здесь.
      */
     @Provides
     @Singleton
     fun provideMapKitInitializer(sdk: MapKitSdk): MapKitInitializer = MapKitInitializer(
         apiKey = BuildConfig.MAPKIT_API_KEY,
-        locale = mapKitLocale(Locale.getDefault().language),
+        localeProvider = { mapKitLocale(Locale.getDefault().language) },
         sdk = sdk,
     )
 

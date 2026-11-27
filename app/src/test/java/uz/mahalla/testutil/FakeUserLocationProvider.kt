@@ -35,7 +35,7 @@ class FakeUserLocationProvider(
  */
 fun fakeMapKitInitializer(): MapKitInitializer = MapKitInitializer(
     apiKey = "test-key",
-    locale = "uz_UZ",
+    localeProvider = { "uz_UZ" },
     sdk = object : MapKitSdk {
         override fun setApiKey(apiKey: String) = Unit
         override fun setLocale(locale: String) = Unit
