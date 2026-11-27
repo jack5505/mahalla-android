@@ -12,7 +12,27 @@
 #   CONTRACT_BASE_URL     адрес стенда с /api/v1/ на конце
 #   CONTRACT_GEO_LAT/LNG  координаты (гео-заголовки обязательны на всех путях)
 #   CONTRACT_REFRESH_TOKEN  refresh-токен живого аккаунта; нет — пробы под
-#                           токеном пропускаются, анонимные всё равно идут
+#                           токеном пропускаются, анонимные всё равно идут.
+#                           Токен ОДНОРАЗОВЫЙ (issue #437): бэкенд ротирует
+#                           refresh на каждый удачный обмен — повторный прогон
+#                           тем же секретом получает TOKEN_INVALID — и
+#                           отзывает сессию, если отпечаток
+#                           deviceId|platform|osVersion отличается от того,
+#                           с которым токен выдан (TOKEN_HIJACK) —
+#                           docs/API-CONTRACT.md, «Авторизация». Провёрнутый
+#                           новый refresh из ответа сюда автоматически не
+#                           сохраняется: запись секрета (`gh secret set`)
+#                           нужен PAT с правами secrets:write, а у воркфлоу
+#                           есть только GITHUB_TOKEN. Получать токен нужно
+#                           именно под отпечаток харнесса: войти
+#                           (send-otp+verify-otp или pin-login) с телом
+#                           device, какое шлёт contract_login ниже —
+#                           {deviceId: "contract-harness", platform:
+#                           "ANDROID", deviceName: "ci-contract-check"},
+#                           без osVersion — и взять refreshToken из ответа.
+#                           Логин с телефона или другим deviceId даст
+#                           TOKEN_HIJACK уже на первом прогоне харнесса.
+#                           Секрет кладётся заново на один следующий прогон.
 #   CONTRACT_INSECURE     1 (по умолчанию) — не проверять TLS: у стенда
 #                         самоподписанный сертификат (ADR 0005)
 #   CONTRACT_GEO_HEADERS  1 (по умолчанию) — слать X-Geo-*. 0 — не слать:
@@ -55,6 +75,7 @@ contract_init() {
 contract_login() {
     if [ -z "$CONTRACT_REFRESH_TOKEN" ]; then
         echo "· CONTRACT_REFRESH_TOKEN не задан — пробы под токеном пропущены"
+        echo "::warning::авторизованные пробы НЕ выполнялись — CONTRACT_REFRESH_TOKEN не задан"
         return 0
     fi
     local body
@@ -70,14 +91,40 @@ contract_login() {
     # (AuthApi.kt), у него внутри TokenPairDto. jq глушится намеренно —
     # лежащий стенд отвечает HTML, на котором разбор иначе оборвёт прогон.
     ACCESS_TOKEN=$(printf '%s' "$out" | jq -r '.data.tokens.accessToken // empty' 2>/dev/null || true)
-    if [ -z "$ACCESS_TOKEN" ]; then
-        # Тело не печатаем: в удачном ответе лежат свежий access и уже
-        # провёрнутый refresh, а маскирует GitHub только исходный секрет.
-        echo "· refresh не дал токен — пробы под токеном пропущены. Причина:" \
-            "$(printf '%s' "$out" | jq -r '.error.code // .error.message // "ответ не разобрался"' 2>/dev/null || echo 'ответ не разобрался')"
+    if [ -n "$ACCESS_TOKEN" ]; then
+        echo "· токен получен"
         return 0
     fi
-    echo "· токен получен"
+
+    # Тело не печатаем: в удачном ответе лежат свежий access и уже
+    # провёрнутый refresh, а маскирует GitHub только исходный секрет.
+    local code why
+    code=$(printf '%s' "$out" | jq -r '.error.code // empty' 2>/dev/null || true)
+    case "$code" in
+        TOKEN_INVALID)
+            why="секрет одноразовый — бэкенд уже заменил этот refresh ротацией"\
+" (или подпись/тип не те). Перевыпустить токен под отпечатком харнесса — см."\
+" шапку contract/lib.sh — и обновить CONTRACT_REFRESH_TOKEN."
+            ;;
+        TOKEN_HIJACK)
+            why="отпечаток устройства (deviceId|platform|osVersion) не совпал"\
+" с тем, что был при выдаче токена — бэкенд отозвал сессию целиком. Нужен"\
+" токен, выпущенный именно под deviceId=contract-harness, platform=ANDROID,"\
+" без osVersion — см. шапку contract/lib.sh."
+            ;;
+        TOKEN_EXPIRED)
+            why="refresh истёк (срок жизни 30 дней) — перевыпустить токен и"\
+" обновить CONTRACT_REFRESH_TOKEN."
+            ;;
+        *)
+            why="причина: $(printf '%s' "$out" | \
+                jq -r '.error.code // .error.message // "ответ не разобрался"' \
+                2>/dev/null || echo 'ответ не разобрался')"
+            ;;
+    esac
+    echo "· refresh не дал токен — пробы под токеном пропущены. $why"
+    echo "::warning::авторизованные пробы НЕ выполнялись — refresh не сработал (${code:-ответ не разобрался})"
+    return 0
 }
 
 # probe <имя> <ожидаемый код> <метод> <путь> [тело]
