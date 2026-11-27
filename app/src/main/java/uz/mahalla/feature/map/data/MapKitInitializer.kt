@@ -64,7 +64,15 @@ enum class MapEngineState {
  */
 class MapKitInitializer(
     private val apiKey: String,
-    private val locale: String,
+    /**
+     * Не готовая строка, а провайдер: читается один раз, изнутри
+     * [initializeOnMainThread], в момент первого показа карты — а не при
+     * создании этого (как правило, `@Singleton`) объекта. `setLocale`
+     * действует только до `initialize()` и один раз за процесс, поэтому
+     * более поздняя смена языка здесь уже не отражается (см. KDoc в
+     * `MapModule.provideMapKitInitializer`).
+     */
+    private val localeProvider: () -> String,
     private val sdk: MapKitSdk,
     /**
      * MapKit требует главного потока: `setApiKey`/`setLocale`/`initialize` из
@@ -110,7 +118,7 @@ class MapKitInitializer(
     private fun initializeOnMainThread(): MapEngineState {
         val result = runCatchingMapKit {
             sdk.setApiKey(apiKey)
-            sdk.setLocale(locale)
+            sdk.setLocale(localeProvider())
             sdk.initialize()
         }.reportSwallowed("mapkit.initialize")
         // initialized выставляется только при успехе: MapKit не считает
